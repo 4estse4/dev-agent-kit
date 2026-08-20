@@ -30,6 +30,21 @@ jobs:
           find . -name package.json -not -path '*/node_modules/*' -maxdepth 3 | grep -q . \
             && echo "node=true" >> "$GITHUB_OUTPUT" || echo "node=false" >> "$GITHUB_OUTPUT"
 
+  vendored:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v5
+      # 로컬 훅은 clone 마다 활성화가 필요해 신뢰할 수 없다. 최소한 게이트가
+      # 레포에 vendor 돼 있는지는 CI 가 확인한다 — 없으면 CI 도 못 돈다.
+      - name: .ai-kit 게이트가 커밋돼 있는지
+        run: |
+          for f in .ai-kit/gate/gate.sh .ai-kit/gate/secrets.sh .ai-kit/gate/trace.sh \
+                   .ai-kit/git-hooks/pre-commit .ai-kit/git-hooks/pre-push; do
+            [ -f "$f" ] || { echo "::error::$f 가 없습니다 — install.sh 후 .ai-kit 를 커밋하세요"; exit 1; }
+          done
+          echo "vendor 버전: $(cat .ai-kit/VERSION 2>/dev/null || echo unknown)"
+
   gate:
     needs: detect
     runs-on: ubuntu-latest

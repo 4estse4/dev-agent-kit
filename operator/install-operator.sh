@@ -20,6 +20,16 @@ place() {
 place statusline-command.sh
 place CLAUDE.md
 place settings.json
+
+# 사용자 스킬 (디렉터리 단위)
+if [ -d "$SELF/skills" ]; then
+  for d in "$SELF"/skills/*/; do
+    [ -d "$d" ] || continue
+    name=$(basename "$d")
+    if [ -e "$DEST/skills/$name" ]; then SAME+=("skills/$name (이미 있음 — 건드리지 않음)"); continue; fi
+    mkdir -p "$DEST/skills" && cp -R "$d" "$DEST/skills/$name" && INSTALLED+=("skills/$name")
+  done
+fi
 chmod +x "$DEST/statusline-command.sh" 2>/dev/null
 
 echo "operator — 설치 ${#INSTALLED[@]} · 동일 ${#SAME[@]} · 충돌 ${#CONFLICT[@]}"

@@ -54,20 +54,27 @@ if [ "$DO_HOOKS" = 1 ]; then
   chmod +x "$vendor"/gate/*.sh "$vendor"/git-hooks/* 2>/dev/null
   INSTALLED+=(".ai-kit/ (게이트 vendor · $(cat "$vendor/VERSION"))")
 
-  hookdir="$TARGET/.git/hooks"; mkdir -p "$hookdir"
-  for h in pre-commit pre-push; do
-    if [ -e "$hookdir/$h" ] && ! grep -q "ai-kit" "$hookdir/$h" 2>/dev/null; then
-      mv "$hookdir/$h" "$hookdir/$h.pre-ai-kit"
-      CONFLICTS+=(".git/hooks/$h (기존 훅을 $h.pre-ai-kit 로 보존)")
-    fi
-    cat > "$hookdir/$h" <<EOF
-#!/usr/bin/env bash
-# ai-kit shim. 실제 로직은 레포에 vendor 된 .ai-kit/git-hooks/$h 에 있다.
-exec "\$(git rev-parse --show-toplevel)/.ai-kit/git-hooks/$h" "\$@"
-EOF
-    chmod +x "$hookdir/$h"
-    INSTALLED+=(".git/hooks/$h")
+  # 훅은 .git/hooks 에 두지 않는다 — 그 디렉터리는 clone 되지 않으므로
+  # 평가자가 레포를 받으면 강제가 통째로 사라진다.
+  # 대신 커밋되는 .ai-kit/git-hooks/ 를 core.hooksPath 로 가리킨다.
+  git -C "$TARGET" config core.hooksPath .ai-kit/git-hooks
+  INSTALLED+=("core.hooksPath → .ai-kit/git-hooks (커밋되는 훅)")
+
+  # 기존 .git/hooks 에 커스텀 훅이 있으면 알린다 — hooksPath 설정 시 무시된다.
+  for h in pre-commit pre-push commit-msg; do
+    f="$TARGET/.git/hooks/$h"
+    [ -f "$f" ] && ! grep -q 'ai-kit' "$f" 2>/dev/null \
+      && CONFLICTS+=(".git/hooks/$h (core.hooksPath 설정으로 이제 무시됨 — 필요하면 .ai-kit/git-hooks 로 옮기세요)")
   done
+
+  # ── git 신원 확인 ──
+  # 기존 커밋의 author 와 실효 설정이 다르면 기여 이력이 갈라진다.
+  hist=$(git -C "$TARGET" log --format='%ae' 2>/dev/null | sort -u | head -3)
+  eff=$(git -C "$TARGET" config user.email 2>/dev/null)
+  if [ -n "$hist" ] && [ -n "$eff" ] && ! printf '%s\n' "$hist" | grep -qx "$eff"; then
+    CONFLICTS+=("git 신원 불일치 — 기존 커밋: $(printf '%s ' $hist)/ 현재 설정: $eff")
+    CONFLICTS+=("  → git -C $TARGET config user.email '<쓸 이메일>' 로 레포에 고정하세요")
+  fi
 fi
 
 [ "$DO_TEMPLATES" = 1 ] && for f in "$KIT_ROOT"/core/templates/*; do
@@ -104,6 +111,19 @@ fi
 
 # ── 보고 (산출물 규칙 R1: 개수만, 문제만 자세히) ──
 echo "설치 ${#INSTALLED[@]}건 · 건너뜀 ${#SKIPPED[@]}건 · 충돌 ${#CONFLICTS[@]}건"
+if [ "$DO_HOOKS" = 1 ]; then
+  cat <<'MSG'
+
+.ai-kit/ 를 커밋하세요 — 게이트와 훅이 레포와 함께 버전 관리됩니다.
+
+  주의: core.hooksPath 는 로컬 설정이라 clone 을 따라가지 않습니다(git 의 보안 설계).
+  새로 clone 한 사람은 한 줄로 활성화합니다:
+
+      git config core.hooksPath .ai-kit/git-hooks
+
+  그래서 로컬 훅은 '조기 피드백'이고, 우회 불가능한 강제는 CI + 브랜치 보호입니다.
+MSG
+fi
 if [ ${#CONFLICTS[@]} -gt 0 ]; then
   echo ""; echo "충돌 — 기존 파일을 보존했습니다. 확인 후 병합하세요:"
   printf '  %s\n' "${CONFLICTS[@]}"
