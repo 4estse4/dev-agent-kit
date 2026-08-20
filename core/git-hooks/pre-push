@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# 설치: <kit>/install.sh 가 .git/hooks/pre-push 로 링크한다.
+# 푸시되는 범위에 대해 게이트(포맷·린트·타입·테스트)와 시크릿 스캔을 돌린다.
+# 에이전트 훅과 달리 사람이 손으로 푸시해도, 다른 에이전트를 써도 걸린다.
+set -uo pipefail
+KIT_ROOT="${AI_KIT_ROOT:-}"
+[ -z "$KIT_ROOT" ] && KIT_ROOT=$(cd "$(dirname "$(readlink "$0" || echo "$0")")/../.." && pwd)
+
+ZERO='0000000000000000000000000000000000000000'
+fail=0
+
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+  [ "$local_sha" = "$ZERO" ] && continue            # 브랜치 삭제 — 검사 없음
+  if [ "$remote_sha" = "$ZERO" ]; then
+    base=""                                          # 새 브랜치 → gate 기본(main 기준)
+  else
+    base="$remote_sha"
+  fi
+
+  if [ -n "$base" ]; then
+    bash "$KIT_ROOT/core/gate/secrets.sh" --range "${base}..${local_sha}" || fail=1
+    bash "$KIT_ROOT/core/gate/gate.sh" --base "$base" || fail=1
+  else
+    bash "$KIT_ROOT/core/gate/gate.sh" || fail=1
+  fi
+done
+
+[ $fail -ne 0 ] && { echo "" >&2; echo "pre-push 게이트 실패 — 푸시를 중단합니다." >&2; exit 1; }
+exit 0
