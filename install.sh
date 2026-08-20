@@ -86,9 +86,17 @@ if [ "$DO_LINT" = 1 ]; then
   [ -f "$TARGET/go.mod" ]         && place "$KIT_ROOT/core/lint/go/.golangci.yml" ".golangci.yml"
 fi
 
-[ "$DO_CI" = 1 ] && for f in "$KIT_ROOT"/core/ci/*.yml; do
-  [ -f "$f" ] || continue; place "$f" ".github/workflows/$(basename "$f")"
-done
+if [ "$DO_CI" = 1 ]; then
+  for f in "$KIT_ROOT"/core/ci/*.yml; do
+    [ -f "$f" ] || continue
+    b=$(basename "$f")
+    # dependabot.yml 은 워크플로가 아니라 .github/ 루트에 있어야 인식된다.
+    case "$b" in
+      dependabot.yml) place "$f" ".github/$b" ;;
+      *)              place "$f" ".github/workflows/$b" ;;
+    esac
+  done
+fi
 
 IFS=',' read -ra BL <<< "$BINDINGS"
 for b in "${BL[@]:-}"; do
