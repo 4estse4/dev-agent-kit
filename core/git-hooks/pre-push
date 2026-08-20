@@ -3,8 +3,10 @@
 # 푸시되는 범위에 대해 게이트(포맷·린트·타입·테스트)와 시크릿 스캔을 돌린다.
 # 에이전트 훅과 달리 사람이 손으로 푸시해도, 다른 에이전트를 써도 걸린다.
 set -uo pipefail
-KIT_ROOT="${AI_KIT_ROOT:-}"
-[ -z "$KIT_ROOT" ] && KIT_ROOT=$(cd "$(dirname "$(readlink "$0" || echo "$0")")/../.." && pwd)
+# 게이트는 대상 레포에 vendor 된 .ai-kit/ 에서 찾는다 — 다른 머신·CI 에서도 동일 경로.
+REPO=$(git rev-parse --show-toplevel) || exit 1
+KIT="${AI_KIT_DIR:-$REPO/.ai-kit}"
+[ -d "$KIT" ] || { echo "$(basename "$0"): .ai-kit 가 없습니다 — install.sh 를 다시 실행하세요" >&2; exit 1; }
 
 ZERO='0000000000000000000000000000000000000000'
 fail=0
@@ -18,10 +20,10 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
   fi
 
   if [ -n "$base" ]; then
-    bash "$KIT_ROOT/core/gate/secrets.sh" --range "${base}..${local_sha}" || fail=1
-    bash "$KIT_ROOT/core/gate/gate.sh" --base "$base" || fail=1
+    bash "$KIT/gate/secrets.sh" --range "${base}..${local_sha}" || fail=1
+    bash "$KIT/gate/gate.sh" --base "$base" || fail=1
   else
-    bash "$KIT_ROOT/core/gate/gate.sh" || fail=1
+    bash "$KIT/gate/gate.sh" || fail=1
   fi
 done
 

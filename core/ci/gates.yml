@@ -1,0 +1,136 @@
+# ai-kit 게이트 워크플로.
+# 게이트 명령을 여기 복붙하지 않는다 — 레포에 vendor 된 .ai-kit/gate/gate.sh 를
+# 부른다. 로컬 훅·CI 가 문자 그대로 같은 스크립트를 돌아야 드리프트가 없다.
+name: gates
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      go: ${{ steps.d.outputs.go }}
+      node: ${{ steps.d.outputs.node }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: d
+        run: |
+          find . -name go.mod -not -path '*/node_modules/*' -maxdepth 3 | grep -q . \
+            && echo "go=true" >> "$GITHUB_OUTPUT" || echo "go=false" >> "$GITHUB_OUTPUT"
+          find . -name package.json -not -path '*/node_modules/*' -maxdepth 3 | grep -q . \
+            && echo "node=true" >> "$GITHUB_OUTPUT" || echo "node=false" >> "$GITHUB_OUTPUT"
+
+  gate:
+    needs: detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+
+      - if: needs.detect.outputs.go == 'true'
+        uses: actions/setup-go@v6
+        with: { go-version-file: 'go.mod', cache: true }
+      - if: needs.detect.outputs.go == 'true'
+        run: |
+          go install golang.org/x/tools/cmd/goimports@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - if: needs.detect.outputs.go == 'true'
+        uses: golangci/golangci-lint-action@v7
+        with: { version: latest, install-mode: binary, args: --version }
+
+      - if: needs.detect.outputs.node == 'true'
+        uses: actions/setup-node@v5
+        with: { node-version-file: '.nvmrc', cache: npm }
+        continue-on-error: true
+      - if: needs.detect.outputs.node == 'true'
+        run: |
+          for d in $(dirname $(find . -name package.json -not -path '*/node_modules/*' -maxdepth 3)); do
+            (cd "$d" && npm ci --no-audit --no-fund)
+          done
+
+      # 게이트 본체 — 로컬 pre-push 와 같은 스크립트.
+      - run: bash .ai-kit/gate/gate.sh --all
+
+  coverage:
+    needs: detect
+    if: needs.detect.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with: { go-version-file: 'go.mod', cache: true }
+      # 먼저 측정하고 보이게 한다. 임계값은 COVER_MIN 을 설정할 때만 강제한다 —
+      # 첫날부터 실패하는 임계값은 결국 꺼진다.
+      - name: 패키지별 커버리지
+        env:
+          COVER_MIN: ${{ vars.COVER_MIN }}
+        run: |
+          go test -cover ./... 2>&1 | tee /tmp/cov.txt
+          {
+            echo "### 커버리지"
+            echo '```'
+            grep -E 'coverage:' /tmp/cov.txt || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          [ -z "$COVER_MIN" ] && { echo "COVER_MIN 미설정 — 보고만 합니다."; exit 0; }
+          low=$(grep -oE 'coverage: [0-9.]+' /tmp/cov.txt | awk -v m="$COVER_MIN" '{if ($2+0 < m) print}')
+          [ -n "$low" ] && { echo "::error::COVER_MIN=$COVER_MIN 미만 패키지가 있습니다"; echo "$low"; exit 1; }
+          exit 0
+
+  security:
+    needs: detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+
+      - name: 시크릿 스캔 (PR 범위)
+        run: |
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          if [ -n "$base" ] && [ -n "$head" ]; then
+            bash .ai-kit/gate/secrets.sh --range "${base}..${head}"
+          else
+            bash .ai-kit/gate/secrets.sh --range "HEAD~1..HEAD"
+          fi
+
+      - if: needs.detect.outputs.go == 'true'
+        uses: actions/setup-go@v6
+        with: { go-version-file: 'go.mod', cache: true }
+      - if: needs.detect.outputs.go == 'true'
+        name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          "$(go env GOPATH)/bin/govulncheck" ./...
+
+      - if: needs.detect.outputs.node == 'true'
+        uses: actions/setup-node@v5
+        with: { node-version-file: '.nvmrc' }
+        continue-on-error: true
+      - if: needs.detect.outputs.node == 'true'
+        name: npm audit (high 이상)
+        run: |
+          for d in $(dirname $(find . -name package-lock.json -not -path '*/node_modules/*' -maxdepth 3)); do
+            (cd "$d" && npm audit --audit-level=high)
+          done
+
+  trace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      # SPEC 요구가 추적표에서 조용히 사라지는 것을 막는다.
+      - run: bash .ai-kit/gate/trace.sh

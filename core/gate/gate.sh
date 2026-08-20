@@ -7,7 +7,9 @@
 #   gate.sh --all        전체 검사 (CI)
 set -uo pipefail
 
-KIT_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+# 형제 파일은 자기 디렉터리 기준으로 찾는다 — 킷 원본이든 대상 레포에 vendor 된
+# .ai-kit/gate/ 든 동일하게 동작한다.
+SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "gate: git 레포가 아님" >&2; exit 1; }
 cd "$REPO_ROOT" || exit 1
 
@@ -21,7 +23,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-source "$KIT_ROOT/core/gate/lib.sh"
+source "$SELF_DIR/lib.sh"
 
 # ── 변경 영역 판정 (판정 불가면 전체 검사로 폴백 — 조용히 통과시키지 않는다) ──
 CHANGED=""
@@ -58,7 +60,7 @@ fi
 # ── 실행: 어댑터를 source해서 결과를 한 프로세스에 모은다 ──
 for t in "${TARGETS[@]}"; do
   adapter=${t%%|*}; dir=${t#*|}
-  script="$KIT_ROOT/core/gate/adapters/${adapter}.sh"
+  script="$SELF_DIR/adapters/${adapter}.sh"
   [ -f "$script" ] || { gate_skip "$adapter(어댑터 없음)"; continue; }
   pushd "$dir" >/dev/null || continue
   # shellcheck source=/dev/null

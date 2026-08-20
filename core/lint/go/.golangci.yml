@@ -1,0 +1,79 @@
+# golangci-lint v2 설정.
+# 원칙: 리뷰 체크리스트에 문장으로 적히던 것을 여기로 내린다.
+# 각 린터 옆의 주석 = 이 린터가 대체하는 "리뷰에서 사람이 눈으로 보던 항목".
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    # ── 기본 정확성 ──
+    - govet
+    - staticcheck
+    - ineffassign
+    - unused
+    - revive
+
+    # ── 에러 취급 (리뷰: "에러를 삼키지 않았나 / %w 로 감쌌나") ──
+    - errcheck        # 무시된 에러 반환값
+    - errorlint       # %v 로 감싼 에러, errors.Is/As 미사용 비교
+    - nilerr          # err != nil 인데 nil 을 반환
+    - errchkjson      # 확인 안 된 json.Marshal 에러
+
+    # ── 자원 수명 (리뷰: "body·rows·파일을 닫았나") ──
+    - bodyclose       # HTTP response body 미close
+    - sqlclosecheck   # sql.Rows/Stmt 미close
+    - rowserrcheck    # rows.Err() 미확인
+
+    # ── context (리뷰: "context 를 전파·취소하나") ──
+    - contextcheck    # 상위 ctx 를 안 물려주고 Background 를 새로 만듦
+    - noctx           # ctx 없는 HTTP 요청·쿼리
+    - durationcheck   # 의심스러운 Duration 곱셈
+
+    # ── 동시성·메모리 ──
+    - copyloopvar
+    - makezero        # 길이가 있는 slice 에 append 하는 실수
+
+    # ── 보안 (리뷰: "시크릿·취약 패턴") ──
+    - gosec
+
+    # ── 프로젝트 하드룰 코드화 ──
+    # depguard·forbidigo 는 규칙이 비면 golangci-lint 가 에러를 낸다.
+    # 금지 대상이 생기면 아래 settings 를 채우고 여기서 주석을 푼다.
+    # - depguard      # 금지 라이브러리 (예: ORM 금지)
+    # - forbidigo     # 금지 호출 패턴 (예: fmt.Print 금지)
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+    gosec:
+      excludes:
+        - G104   # errcheck 와 중복
+    # 하드룰을 켤 때 채운다 (위 enable 주석도 함께 푼다):
+    # depguard:
+    #   rules:
+    #     main:
+    #       deny:
+    #         - pkg: "gorm.io/gorm"
+    #           desc: "ORM 금지 — pgx + sqlc 를 쓴다 (ADR-0003)"
+    # forbidigo:
+    #   forbid:
+    #     - p: '^fmt\.Print.*$'
+    #       msg: "구조화 로깅(log/slog)을 쓴다"
+    revive:
+      rules:
+        - name: exported
+          disabled: true   # 초기 단계에서 노이즈가 큼. 안정화 후 켠다.
+
+  exclusions:
+    rules:
+      # 테스트 코드는 보안·자원 규칙을 완화한다 — 의도적으로 실패를 만드는 코드가 많다.
+      - path: _test\.go
+        linters: [gosec, bodyclose, noctx, errcheck]
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports

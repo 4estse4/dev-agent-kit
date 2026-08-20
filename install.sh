@@ -42,18 +42,28 @@ place() { # $1=src $2=dst(대상 레포 상대)
   cp "$src" "$dst"; INSTALLED+=("$2")
 }
 
-# ── git 훅: 킷을 가리키는 shim 을 심는다(킷 갱신이 자동 반영) ──
+# ── 게이트 vendor: 대상 레포에 .ai-kit/ 로 복사한다 ──
+# 홈 디렉터리 경로를 훅·CI 에 박으면 다른 머신과 CI 에서 깨진다.
+# vendor 해서 레포에 커밋하면 어디서 clone 해도 같은 게이트가 돈다.
 if [ "$DO_HOOKS" = 1 ]; then
+  vendor="$TARGET/.ai-kit"
+  rm -rf "$vendor"
+  mkdir -p "$vendor"
+  cp -R "$KIT_ROOT/core/gate" "$KIT_ROOT/core/git-hooks" "$vendor/"
+  ( cd "$KIT_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo unknown ) > "$vendor/VERSION"
+  chmod +x "$vendor"/gate/*.sh "$vendor"/git-hooks/* 2>/dev/null
+  INSTALLED+=(".ai-kit/ (게이트 vendor · $(cat "$vendor/VERSION"))")
+
   hookdir="$TARGET/.git/hooks"; mkdir -p "$hookdir"
   for h in pre-commit pre-push; do
-    if [ -e "$hookdir/$h" ] && ! grep -q "AI_KIT_ROOT" "$hookdir/$h" 2>/dev/null; then
+    if [ -e "$hookdir/$h" ] && ! grep -q "ai-kit" "$hookdir/$h" 2>/dev/null; then
       mv "$hookdir/$h" "$hookdir/$h.pre-ai-kit"
       CONFLICTS+=(".git/hooks/$h (기존 훅을 $h.pre-ai-kit 로 보존)")
     fi
     cat > "$hookdir/$h" <<EOF
 #!/usr/bin/env bash
-export AI_KIT_ROOT="$KIT_ROOT"
-exec "\$AI_KIT_ROOT/core/git-hooks/$h" "\$@"
+# ai-kit shim. 실제 로직은 레포에 vendor 된 .ai-kit/git-hooks/$h 에 있다.
+exec "\$(git rev-parse --show-toplevel)/.ai-kit/git-hooks/$h" "\$@"
 EOF
     chmod +x "$hookdir/$h"
     INSTALLED+=(".git/hooks/$h")
