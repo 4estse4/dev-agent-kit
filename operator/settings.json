@@ -1,0 +1,11 @@
+{
+  "model": "opus",
+  "effortLevel": "xhigh",
+  "statusLine": {
+    "type": "command",
+    "command": "bash ~/.claude/statusline-command.sh"
+  },
+  "theme": "dark",
+  "tui": "fullscreen",
+  "agentPushNotifEnabled": true
+}
