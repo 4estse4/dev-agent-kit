@@ -29,7 +29,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-INSTALLED=(); SKIPPED=(); CONFLICTS=()
+INSTALLED=(); SKIPPED=(); CONFLICTS=(); WARNINGS=()
 
 # 기존 파일을 보존하며 복사한다.
 place() { # $1=src $2=dst(대상 레포 상대)
@@ -64,7 +64,7 @@ if [ "$DO_HOOKS" = 1 ]; then
   for h in pre-commit pre-push commit-msg; do
     f="$TARGET/.git/hooks/$h"
     [ -f "$f" ] && ! grep -q 'ai-kit' "$f" 2>/dev/null \
-      && CONFLICTS+=(".git/hooks/$h (core.hooksPath 설정으로 이제 무시됨 — 필요하면 .ai-kit/git-hooks 로 옮기세요)")
+      && WARNINGS+=(".git/hooks/$h 가 있지만 core.hooksPath 설정으로 무시됩니다 — 필요하면 .ai-kit/git-hooks 로 옮기세요")
   done
 
   # ── 신원 고정 파일 시드 ──
@@ -80,18 +80,32 @@ if [ "$DO_HOOKS" = 1 ]; then
   hist=$(git -C "$TARGET" log --format='%ae' 2>/dev/null | sort -u | head -3)
   eff=$(git -C "$TARGET" config user.email 2>/dev/null)
   if [ -n "$hist" ] && [ -n "$eff" ] && ! printf '%s\n' "$hist" | grep -qx "$eff"; then
-    CONFLICTS+=("git 신원 불일치 — 기존 커밋: $(printf '%s ' $hist)/ 현재 설정: $eff")
-    CONFLICTS+=("  → git -C $TARGET config user.email '<쓸 이메일>' 로 레포에 고정하세요")
+    WARNINGS+=("git 신원 불일치 — 기존 커밋: $(printf '%s ' $hist)/ 현재 설정: $eff")
+    WARNINGS+=("  → 이 레포에 고정: git config user.email '<쓸 이메일>'")
+    WARNINGS+=("  → 또는 ~/.gitconfig 의 includeIf 에 이 레포 경로를 추가")
   fi
 fi
 
-[ "$DO_TEMPLATES" = 1 ] && for f in "$KIT_ROOT"/core/templates/*; do
-  [ -f "$f" ] || continue; place "$f" "docs/$(basename "$f")"
-done
+# ── 템플릿: 파일마다 목적지가 다르므로 명시적으로 매핑한다 ──
+# 추측(전부 docs/ 로)하면 AGENTS.md·PR 템플릿이 엉뚱한 데로 간다.
+if [ "$DO_TEMPLATES" = 1 ]; then
+  T="$KIT_ROOT/core/templates"
+  place "$T/AGENTS.md"                 "AGENTS.md"
+  place "$T/CLAUDE.md"                 "CLAUDE.md"
+  place "$T/SPEC.md"                   "docs/SPEC.md"
+  place "$T/traceability.md"           "docs/traceability.md"
+  place "$T/dev-log.md"                "docs/dev-log.md"
+  place "$T/RUNBOOK.md"                "docs/RUNBOOK.md"
+  place "$T/adr.md"                    "docs/adr/0000-template.md"
+  place "$T/plan.md"                   "docs/plan/0000-template.md"
+  place "$T/PULL_REQUEST_TEMPLATE.md"  ".github/PULL_REQUEST_TEMPLATE.md"
+fi
 
 if [ "$DO_LINT" = 1 ]; then
   [ -f "$TARGET/backend/go.mod" ] && place "$KIT_ROOT/core/lint/go/.golangci.yml" "backend/.golangci.yml"
   [ -f "$TARGET/go.mod" ]         && place "$KIT_ROOT/core/lint/go/.golangci.yml" ".golangci.yml"
+  [ -f "$TARGET/frontend/package.json" ] && place "$KIT_ROOT/core/lint/ts/eslint.config.js" "frontend/eslint.config.js"
+  [ -f "$TARGET/package.json" ]          && place "$KIT_ROOT/core/lint/ts/eslint.config.js" "eslint.config.js"
 fi
 
 if [ "$DO_CI" = 1 ]; then
@@ -106,18 +120,25 @@ if [ "$DO_CI" = 1 ]; then
   done
 fi
 
+# ── 바인딩: 도구별 목적지가 다르다. README 같은 킷 문서는 설치하지 않는다. ──
 IFS=',' read -ra BL <<< "$BINDINGS"
 for b in "${BL[@]:-}"; do
   [ -z "$b" ] && continue
   bdir="$KIT_ROOT/bindings/$b"
   [ -d "$bdir" ] || { echo "install: 바인딩 없음 — $b" >&2; continue; }
-  while IFS= read -r f; do
-    rel=${f#"$bdir"/}
-    case "$b" in
-      claude-code) place "$f" ".claude/$rel" ;;
-      codex)       place "$f" "$rel" ;;
-    esac
-  done < <(find "$bdir" -type f)
+  case "$b" in
+    claude-code)
+      while IFS= read -r f; do
+        rel=${f#"$bdir"/}
+        [ "$rel" = "README.md" ] && continue
+        place "$f" ".claude/$rel"
+      done < <(find "$bdir" -type f)
+      ;;
+    codex)
+      [ -f "$bdir/config.toml" ] && place "$bdir/config.toml" ".codex/config.toml"
+      ;;
+    *) echo "install: 바인딩 배치 규칙 없음 — $b" >&2 ;;
+  esac
 done
 
 # ── 원격 변경: 브랜치 보호 ──
@@ -126,7 +147,7 @@ if [ "$DO_PROTECT" = 1 ]; then
 fi
 
 # ── 보고 (산출물 규칙 R1: 개수만, 문제만 자세히) ──
-echo "설치 ${#INSTALLED[@]}건 · 건너뜀 ${#SKIPPED[@]}건 · 충돌 ${#CONFLICTS[@]}건"
+echo "설치 ${#INSTALLED[@]}건 · 건너뜀 ${#SKIPPED[@]}건 · 충돌 ${#CONFLICTS[@]}건 · 확인필요 ${#WARNINGS[@]}건"
 if [ "$DO_HOOKS" = 1 ]; then
   cat <<'MSG'
 
@@ -141,6 +162,10 @@ if [ "$DO_HOOKS" = 1 ]; then
 MSG
 fi
 if [ ${#CONFLICTS[@]} -gt 0 ]; then
-  echo ""; echo "충돌 — 기존 파일을 보존했습니다. 확인 후 병합하세요:"
+  echo ""; echo "충돌 — 기존 파일을 보존했고 새 것은 .ai-kit-new 로 옆에 뒀습니다. 확인 후 병합하세요:"
   printf '  %s\n' "${CONFLICTS[@]}"
+fi
+if [ ${#WARNINGS[@]} -gt 0 ]; then
+  echo ""; echo "확인 필요:"
+  printf '  %s\n' "${WARNINGS[@]}"
 fi

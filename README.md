@@ -37,9 +37,11 @@ core/                  프로젝트 단위 — 이 킷의 본체
   ci/                  게이트 · 시크릿 스캔 · 취약점 스캔 · 배포 워크플로
 
 bindings/              에이전트별 바인딩 — 개념은 같고 형식만 다르다
-  claude-code/         CLAUDE.md · settings.json · skills/ · agents/
-  codex/               AGENTS.md · config.toml · hooks.json
+  claude-code/         settings.json · hooks/ · skills/ · agents/
+  codex/               config.toml (형식만 확인 · 미검증)
 ```
+
+이어서 작업하려면 [`HANDOFF.md`](HANDOFF.md) 를 읽는다.
 
 ### 규칙의 단일 출처는 `AGENTS.md`
 
