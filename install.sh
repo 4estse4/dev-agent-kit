@@ -50,6 +50,10 @@ if [ "$DO_HOOKS" = 1 ]; then
   rm -rf "$vendor"
   mkdir -p "$vendor"
   cp -R "$KIT_ROOT/core/gate" "$KIT_ROOT/core/git-hooks" "$vendor/"
+  # 활성화 절차가 레포 안에 있어야 한다 — install.sh 는 킷 레포에만 있으므로
+  # 이 레포만 clone 한 사람은 훅을 켜는 방법을 알 길이 없다.
+  cp "$KIT_ROOT/core/gate/VENDOR-README.md" "$vendor/README.md"
+  rm -f "$vendor/gate/VENDOR-README.md"
   chmod +x "$vendor"/gate/*.sh "$vendor"/git-hooks/* 2>/dev/null
   # VERSION 에 킷 커밋과 vendor 내용 체크섬을 함께 적는다.
   # 커밋만 적으면 파일을 손으로 고쳤을 때 버전 표시가 거짓말을 한다 —

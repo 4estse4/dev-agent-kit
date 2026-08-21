@@ -41,6 +41,7 @@ while IFS= read -r line; do
   id=$(printf '%s' "$line" | grep -oE "$ID_RE" | head -1)
   [ "${id:0:6}" = "R-XXX-" ] && continue
   impl=$(printf '%s' "$line" | awk -F'|' '{print $4}' | sed 's/^ *//;s/ *$//;s/`//g')
+  tests=$(printf '%s' "$line" | awk -F'|' '{print $5}' | sed 's/^ *//;s/ *$//;s/`//g')
   status=$(printf '%s' "$line" | awk -F'|' '{print $6}' | sed 's/^ *//;s/ *$//')
   case "$status" in
     구현됨) n_done+=1 ;;
@@ -50,16 +51,18 @@ while IFS= read -r line; do
     *) bad_status+="  $id → '${status}'"$'\n'; fail=1; continue ;;
   esac
   if [ "$status" = "구현됨" ] || [ "$status" = "부분" ]; then
-    for p in $impl; do
+    # 구현 칸과 테스트 칸 모두 실재를 확인한다. 테스트 칸을 검사하지 않으면
+    # 같은 PR 이 삭제한 파일을 근거로 걸어두고도 게이트가 통과한다.
+    for p in $impl $tests; do
       p=${p%%:*}                      # path:symbol 형태 허용
-      [ "$p" = "—" ] || [ "$p" = "-" ] && continue
+      case "$p" in ""|"—"|"-") continue ;; esac
       [ -e "$p" ] || { bad_path+="  $id → 없는 경로 '$p'"$'\n'; fail=1; }
     done
   fi
 done < "$MATRIX"
 
 [ -n "$bad_status" ] && report+=$'\n'"상태 칸이 비었거나 값이 잘못됨 (구현됨·부분·미구현·범위밖 중 하나):"$'\n'"$bad_status"
-[ -n "$bad_path" ]   && report+=$'\n'"구현됨/부분 인데 경로가 실재하지 않음:"$'\n'"$bad_path"
+[ -n "$bad_path" ]   && report+=$'\n'"구현됨/부분 인데 구현·테스트 경로가 실재하지 않음:"$'\n'"$bad_path"
 
 total=$(( n_done + n_part + n_todo + n_out ))
 summary="trace — 요구 ${total}건: 구현됨 ${n_done} · 부분 ${n_part} · 미구현 ${n_todo} · 범위밖 ${n_out}"
