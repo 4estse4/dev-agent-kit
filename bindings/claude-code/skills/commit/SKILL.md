@@ -23,3 +23,7 @@ $ARGUMENTS
 - 공개 인터페이스가 깨지면 `BREAKING CHANGE:` 푸터.
 
 커밋한다(`git commit`). **한 커밋 = 한 논리 변경.** 무관한 편집을 섞지 않는다.
+
+> 메시지가 `--no-verify` 같은 git 플래그를 **언급**하면 권한 deny 패턴이
+> 명령 전체 문자열을 보고 차단한다. 그럴 때는 파일로 넘긴다:
+> `git commit -F <file>`.

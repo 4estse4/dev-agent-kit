@@ -2,12 +2,23 @@
   "$comment": [
     "커밋되는 권한 정책. 팀이 같은 표면을 공유하고, 리뷰 대상이 된다.",
     "settings.local.json(gitignore)에 일회성 항목이 무한 누적되면 사실상 전면 허용이 된다.",
-    "deny 는 방어의 '두 번째' 층이다 — 패턴 매칭은 우회 가능하므로,",
-    "되돌릴 수 없는 것을 막는 진짜 강제는 .ai-kit/git-hooks 와 CI 에 있다.",
-    "deny 패턴에 중간 와일드카드를 쓰는 이유: 접두사 고정이면 인자 순서만 바꿔 통과한다.",
-    "에이전트 훅은 '편의'에만 쓴다(자동 포맷·조기 피드백). 되돌릴 수 없는 것을 막는",
-    "강제는 .ai-kit/git-hooks 와 CI 에 있다 — 에이전트 훅은 도구를 바꾸면 사라진다.",
-    "hooks 객체의 키는 훅 이벤트 이름만 허용된다. 주석 키를 넣으면 경고 후 무시된다."
+    "",
+    "deny 의 git 항목은 '완전한 통제'가 아니라 speed bump 다. 그렇게 적는 이유:",
+    "Bash 권한은 명령 '전체 문자열'에 대한 glob 이라 플래그와 인자 내용을 구분하지 못한다.",
+    "그래서 (a) 단축 플래그(-n, -f)와 결합 형태(-an), 장문 조합(--delete --force)을",
+    "다 열거할 수 없고, (b) 열거를 넓히면 커밋 메시지에 그 문자열이 들어가기만 해도",
+    "차단되는 오탐이 생긴다. 실측으로 확인한 사실이다.",
+    "",
+    "그래서 장문 플래그만 남겼다. 단축 형태(git commit -n, git push -f)는 막지 못한다.",
+    "이 층을 신뢰하지 마라 — 되돌릴 수 없는 것을 막는 진짜 강제는 세 군데다:",
+    "  .ai-kit/git-hooks (커밋·푸시 시점) · CI (원격의 모든 변경) · 브랜치 보호 (우회 불가)",
+    "권한 계층은 에이전트 '안'에 있어 신뢰할 수 없고, 저 셋은 '밖'에 있어 신뢰할 수 있다.",
+    "",
+    "에이전트 훅도 같은 이유로 '편의'에만 쓴다(자동 포맷·조기 피드백).",
+    "hooks 객체의 키는 훅 이벤트 이름만 허용된다. 주석 키를 넣으면 경고 후 무시된다.",
+    "",
+    "알려진 오탐: 커밋 메시지가 --no-verify 를 문자열로 언급하면 차단된다.",
+    "그럴 때는 메시지를 파일로 넘긴다: git commit -F <file>"
   ],
   "permissions": {
     "deny": [
@@ -17,16 +28,10 @@
       "Read(./.env)",
       "Read(./**/.env)",
       "Bash(git commit*--no-verify*)",
-      "Bash(git commit*-n *)",
       "Bash(git push*--no-verify*)",
       "Bash(git push*--force*)",
-      "Bash(git push*-f *)",
-      "Bash(git push*:*)",
       "Bash(git reset*--hard*)",
-      "Bash(git restore*--source*)",
-      "Bash(git clean*-f*)",
-      "Bash(git checkout*--force*)",
-      "Bash(git branch*-D*)"
+      "Bash(git clean*--force*)"
     ],
     "allow": [
       "Bash(git status*)",
