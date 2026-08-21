@@ -24,16 +24,23 @@ gate_run() {
 
 # gate_run_empty <표시이름> <명령...>
 # 출력이 비어야 통과인 검사용 (gofmt -l, goimports -l 등).
+#
+# 종료코드도 함께 본다. 출력만 보면 "명령이 실패했는데 아무것도 못 찍은" 경우가
+# 통과로 집계된다 — 검사가 고장 났을 때 조용히 green 을 보고하는 것은 검증
+# 시스템에서 가장 위험한 결함이다.
 gate_run_empty() {
   local name="$1"; shift
-  local out
-  out=$("$@" 2>&1)
-  if [ -z "$out" ]; then
+  local out rc
+  out=$("$@" 2>&1); rc=$?
+  if [ $rc -eq 0 ] && [ -z "$out" ]; then
     GATE_PASSED+=("$name")
-  else
-    GATE_FAILED+=("$name")
-    GATE_FAILOUT+=$'\n'"──── ${name} ────"$'\n'"${out}"$'\n'
+    return 0
   fi
+  GATE_FAILED+=("$name")
+  local detail="$out"
+  [ -z "$detail" ] && detail="(출력 없이 종료코드 ${rc} 로 실패 — 도구가 깨졌을 수 있습니다)"
+  GATE_FAILOUT+=$'\n'"──── ${name} ────"$'\n'"${detail}"$'\n'
+  return 0
 }
 
 gate_skip() { GATE_SKIPPED+=("$1"); }

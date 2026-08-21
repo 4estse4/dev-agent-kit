@@ -50,9 +50,14 @@ if [ "$DO_HOOKS" = 1 ]; then
   rm -rf "$vendor"
   mkdir -p "$vendor"
   cp -R "$KIT_ROOT/core/gate" "$KIT_ROOT/core/git-hooks" "$vendor/"
-  ( cd "$KIT_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo unknown ) > "$vendor/VERSION"
   chmod +x "$vendor"/gate/*.sh "$vendor"/git-hooks/* 2>/dev/null
-  INSTALLED+=(".ai-kit/ (게이트 vendor · $(cat "$vendor/VERSION"))")
+  # VERSION 에 킷 커밋과 vendor 내용 체크섬을 함께 적는다.
+  # 커밋만 적으면 파일을 손으로 고쳤을 때 버전 표시가 거짓말을 한다 —
+  # 체크섬이 있으면 CI 가 재계산해서 드리프트를 잡을 수 있다.
+  kit_rev=$( cd "$KIT_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo unknown )
+  sum=$(cd "$vendor" && find gate git-hooks -type f | LC_ALL=C sort | xargs shasum -a 256 | shasum -a 256 | cut -c1-16)
+  printf 'kit_rev=%s\nchecksum=%s\n' "$kit_rev" "$sum" > "$vendor/VERSION"
+  INSTALLED+=(".ai-kit/ (게이트 vendor · $kit_rev · $sum)")
 
   # 훅은 .git/hooks 에 두지 않는다 — 그 디렉터리는 clone 되지 않으므로
   # 평가자가 레포를 받으면 강제가 통째로 사라진다.
@@ -99,6 +104,12 @@ if [ "$DO_TEMPLATES" = 1 ]; then
   place "$T/adr.md"                    "docs/adr/0000-template.md"
   place "$T/plan.md"                   "docs/plan/0000-template.md"
   place "$T/PULL_REQUEST_TEMPLATE.md"  ".github/PULL_REQUEST_TEMPLATE.md"
+  # 설계 근거 문서는 프로젝트와 함께 다녀야 한다 — AGENTS.md 가 이것을 인용하는데
+  # 킷 레포 경로로 가리키면 레포만 clone 한 사람은 따라갈 수 없다.
+  for d in "$KIT_ROOT"/core/docs/*.md; do
+    [ -f "$d" ] || continue
+    place "$d" "docs/process/$(basename "$d")"
+  done
 fi
 
 if [ "$DO_LINT" = 1 ]; then

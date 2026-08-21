@@ -43,7 +43,16 @@ jobs:
                    .ai-kit/git-hooks/pre-commit .ai-kit/git-hooks/pre-push; do
             [ -f "$f" ] || { echo "::error::$f 가 없습니다 — install.sh 후 .ai-kit 를 커밋하세요"; exit 1; }
           done
-          echo "vendor 버전: $(cat .ai-kit/VERSION 2>/dev/null || echo unknown)"
+          cat .ai-kit/VERSION 2>/dev/null || echo "VERSION 없음"
+          # 체크섬 재계산 — vendor 파일을 손으로 고치면 여기서 드러난다.
+          # 버전 표시가 실제 내용과 어긋나면 디버깅이 헛다리를 짚는다.
+          recorded=$(grep -oE 'checksum=[0-9a-f]+' .ai-kit/VERSION 2>/dev/null | cut -d= -f2)
+          actual=$(cd .ai-kit && find gate git-hooks -type f | LC_ALL=C sort | xargs shasum -a 256 | shasum -a 256 | cut -c1-16)
+          if [ -n "$recorded" ] && [ "$recorded" != "$actual" ]; then
+            echo "::error::.ai-kit 내용이 기록된 체크섬과 다릅니다 (기록 $recorded, 실제 $actual)."
+            echo "손으로 고쳤다면 킷에 반영하고 install.sh 를 다시 실행하세요."
+            exit 1
+          fi
 
   gate:
     needs: detect
