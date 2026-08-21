@@ -87,6 +87,9 @@ jobs:
     if: needs.detect.outputs.go == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # ⚠️ 프로젝트에 env 게이트된 통합 테스트(DB 등)가 있다면 gate 잡과 같은
+    #    services 를 여기에도 붙여야 한다. 없으면 그 테스트가 skip 되어
+    #    커버리지가 과소 보고된다 — 틀린 숫자는 없느니만 못하다.
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
