@@ -38,7 +38,7 @@ core/                  프로젝트 단위 — 이 킷의 본체
 
 bindings/              에이전트별 바인딩 — 개념은 같고 형식만 다르다
   claude-code/         settings.json · hooks/ · skills/ · agents/
-  codex/               config.toml (형식만 확인 · 미검증)
+  codex/               개념 대응표 + 도입 절차 (설정 파일 없음 — 의도된 것)
 ```
 
 이어서 작업하려면 [`HANDOFF.md`](HANDOFF.md) 를 읽는다.
@@ -56,7 +56,7 @@ Codex · Cursor · Cline · Windsurf · Gemini CLI가 같은 형식을 읽는다
 |---|---|
 | `core/` 전부 | **검증됨** — 실제 프로젝트에 적용해 결함을 잡음 |
 | `bindings/claude-code/` | **검증됨** — 상시 사용 |
-| `bindings/codex/` | **형식만 확인** — 공식 문서 기준으로 작성, 실사용 미검증. 쓰기 전 확인 필요 |
+| `bindings/codex/` | **개념 대응표만** — 설정 파일은 두지 않는다(미검증 스텁 제거). 도입 절차는 그 README 에 |
 | `operator/` | **검증됨** — 상시 사용 중인 설정을 캡처 |
 
 ## 쓰는 법

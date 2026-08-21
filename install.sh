@@ -153,7 +153,9 @@ for b in "${BL[@]:-}"; do
       done < <(find "$bdir" -type f)
       ;;
     codex)
-      [ -f "$bdir/config.toml" ] && place "$bdir/config.toml" ".codex/config.toml"
+      # 설치할 설정 파일이 없다 — 검증 안 된 스텁을 두지 않기로 했다.
+      # bindings/codex/README.md 의 "실제로 Codex 를 도입할 때 할 일" 참조.
+      echo "install: codex 바인딩은 설정 파일을 설치하지 않습니다 — bindings/codex/README.md 를 보세요" >&2
       ;;
     *) echo "install: 바인딩 배치 규칙 없음 — $b" >&2 ;;
   esac
