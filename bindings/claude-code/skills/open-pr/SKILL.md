@@ -11,7 +11,7 @@ argument-hint: "[선택: 맥락·티켓]"
 !`git diff main...HEAD --stat`
 
 **게이트 실행 결과 (본문에 그대로 붙일 증거):**
-!`bash "${AI_KIT_ROOT:-$CLAUDE_PROJECT_DIR/.ai-kit}/core/gate/gate.sh" 2>&1 || true`
+!`bash .ai-kit/gate/gate.sh 2>&1 || true`
 
 새로 추가된 테스트:
 !`git diff main...HEAD -U0 -- '*_test.go' '*.test.ts' '*.test.tsx' '*_test.py' | grep -E '^\+\s*(func Test|it\(|test\(|describe\()' | sed 's/^+[[:space:]]*/  /' | head -40`
