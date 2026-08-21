@@ -30,6 +30,9 @@ export GATE_STRICT="${GATE_STRICT:-0}"
 
 source "$SELF_DIR/lib.sh"
 
+# 도구를 찾기 전에 PATH 를 넓힌다 — 어느 환경에서든 같은 검사가 돌아야 한다.
+gate_extend_path
+
 # ── 변경 영역 판정 (판정 불가면 전체 검사로 폴백 — 조용히 통과시키지 않는다) ──
 CHANGED=""
 if [ "$ALL" = 0 ]; then

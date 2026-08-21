@@ -59,7 +59,10 @@ if [ "$DO_HOOKS" = 1 ]; then
   # 커밋만 적으면 파일을 손으로 고쳤을 때 버전 표시가 거짓말을 한다 —
   # 체크섬이 있으면 CI 가 재계산해서 드리프트를 잡을 수 있다.
   kit_rev=$( cd "$KIT_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo unknown )
-  sum=$(cd "$vendor" && find gate git-hooks -type f | LC_ALL=C sort | xargs shasum -a 256 | shasum -a 256 | cut -c1-16)
+  # 체크섬 계산은 vendor 된 lib.sh 의 정의를 쓴다 — CI 도 같은 함수를 부른다.
+  # shellcheck source=/dev/null
+  . "$vendor/gate/lib.sh"
+  sum=$(gate_checksum "$vendor") || sum="no-hasher"
   printf 'kit_rev=%s\nchecksum=%s\n' "$kit_rev" "$sum" > "$vendor/VERSION"
   INSTALLED+=(".ai-kit/ (게이트 vendor · $kit_rev · $sum)")
 
