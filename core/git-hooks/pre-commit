@@ -30,5 +30,29 @@ MSG
   fi
 done
 
+# ── 신원 검증 ──
+# .ai-kit/identity 가 있으면 그 이메일로만 커밋할 수 있다.
+# includeIf 설정을 잊거나 새 머신에서 clone 했을 때 잘못된 신원으로
+# 커밋이 쌓이는 것을 막는다. 기억에 의존하지 않는다.
+idfile="$REPO/.ai-kit/identity"
+if [ -f "$idfile" ]; then
+  want=$(grep -v '^[[:space:]]*#' "$idfile" | grep -v '^[[:space:]]*$' | head -1 | tr -d '[:space:]')
+  have=$(git config user.email 2>/dev/null)
+  if [ -n "$want" ] && [ "$want" != "$have" ]; then
+    cat >&2 <<MSG
+
+커밋 신원이 이 레포의 기대값과 다릅니다.
+
+  기대: $want
+  현재: ${have:-(설정 없음)}
+
+  이 레포에만 지정:  git config user.email "$want"
+  또는 ~/.gitconfig 의 includeIf 에 이 레포 경로를 추가하세요.
+  기대값을 바꾸려면 .ai-kit/identity 를 수정합니다.
+MSG
+    exit 1
+  fi
+fi
+
 bash "$KIT/gate/secrets.sh" || exit 1
 exit 0

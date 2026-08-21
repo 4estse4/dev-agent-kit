@@ -67,6 +67,14 @@ if [ "$DO_HOOKS" = 1 ]; then
       && CONFLICTS+=(".git/hooks/$h (core.hooksPath 설정으로 이제 무시됨 — 필요하면 .ai-kit/git-hooks 로 옮기세요)")
   done
 
+  # ── 신원 고정 파일 시드 ──
+  # 현재 실효 신원을 기대값으로 기록해두면, 이후 잘못된 신원 커밋을 훅이 막는다.
+  eff_now=$(git -C "$TARGET" config user.email 2>/dev/null)
+  if [ -n "$eff_now" ] && [ ! -f "$vendor/identity" ]; then
+    printf '# 이 레포에서 커밋할 이메일. pre-commit 훅이 검증한다.\n%s\n' "$eff_now" > "$vendor/identity"
+    INSTALLED+=(".ai-kit/identity ($eff_now)")
+  fi
+
   # ── git 신원 확인 ──
   # 기존 커밋의 author 와 실효 설정이 다르면 기여 이력이 갈라진다.
   hist=$(git -C "$TARGET" log --format='%ae' 2>/dev/null | sort -u | head -3)
