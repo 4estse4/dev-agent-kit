@@ -11,7 +11,7 @@ argument-hint: "[선택: PR 번호]"
 !`git diff main...HEAD --stat`
 
 PR 본문과 리뷰:
-!`[ -n "$ARGUMENTS" ] && gh pr view $ARGUMENTS --json title,body,comments --jq '"TITLE: \(.title)\n\n== BODY ==\n\(.body)\n\n== COMMENTS ==\n\(.comments[].body)"' 2>/dev/null || echo "(PR 번호 미지정)"`
+!`[ -n "$ARGUMENTS" ] && gh pr view $ARGUMENTS --json title,body,comments --jq '"TITLE: \(.title)\n\n== BODY ==\n\(.body)\n\n== COMMENTS ==\n" + (.comments | map(.body) | join("\n\n---\n\n"))' 2>/dev/null || echo "(PR 번호 미지정)"`
 
 기존 dev-log 항목 순서 (위치 판단용 — 첫 항목과 마지막 항목의 날짜를 비교한다):
 !`grep -n '^## ' docs/dev-log.md 2>/dev/null | head -3; echo '   ...'; grep -n '^## ' docs/dev-log.md 2>/dev/null | tail -3`
