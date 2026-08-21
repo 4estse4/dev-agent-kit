@@ -14,10 +14,15 @@ MODE="staged"; RANGE=""
 FORBIDDEN_NAMES='(^|/)(\.env(\..*)?|.*-key\.json|.*\.pem|.*\.p12|.*\.pfx|id_rsa|id_ed25519|credentials\.json|service-account.*\.json)$'
 ALLOWED_NAMES='(\.env\.example|\.env\.sample|\.env\.template)$'
 
+# git 실패를 삼키면 DIFF 가 비어 "매치 없음 = 통과" 가 된다.
+# 범위 해석 실패(shallow clone·사라진 SHA·잘못된 인자)는 검사 불능이지 통과가 아니다.
 if [ "$MODE" = staged ]; then
-  FILES=$(git diff --cached --name-only --diff-filter=ACM)
+  FILES=$(git diff --cached --name-only --diff-filter=ACM) || {
+    echo "시크릿 스캔 오류: staged 목록을 읽지 못했습니다." >&2; exit 2; }
 else
-  FILES=$(git diff --name-only --diff-filter=ACM "$RANGE" 2>/dev/null)
+  FILES=$(git diff --name-only --diff-filter=ACM "$RANGE") || {
+    echo "시크릿 스캔 오류: 범위 '$RANGE' 를 해석하지 못했습니다 — 검사를 신뢰할 수 없어 중단합니다." >&2
+    exit 2; }
 fi
 
 BAD_NAMES=""
@@ -39,9 +44,11 @@ P_OPENAI='sk-[A-Za-z0-9_-]{20,}'
 PATTERNS="${P_PRIVKEY}|${P_JSONKEY}|${P_AWS}|${P_GH}|${P_SLACK}|${P_GCP}|${P_OPENAI}"
 
 if [ "$MODE" = staged ]; then
-  DIFF=$(git diff --cached -U0)
+  DIFF=$(git diff --cached -U0) || {
+    echo "시크릿 스캔 오류: staged diff 를 읽지 못했습니다." >&2; exit 2; }
 else
-  DIFF=$(git diff -U0 "$RANGE" 2>/dev/null)
+  DIFF=$(git diff -U0 "$RANGE") || {
+    echo "시크릿 스캔 오류: 범위 '$RANGE' diff 를 읽지 못했습니다." >&2; exit 2; }
 fi
 
 # 추가된 줄(+)만 본다. secret-ok 마커가 있으면 면제.

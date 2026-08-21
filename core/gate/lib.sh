@@ -43,7 +43,17 @@ gate_run_empty() {
   return 0
 }
 
-gate_skip() { GATE_SKIPPED+=("$1"); }
+# 도구가 없어 검사를 건너뛴 것을 기록한다.
+# GATE_STRICT=1 이면 건너뜀을 실패로 본다 — CI 에서 도구 부재는 "통과"가 아니라
+# "검사가 돌지 않았음"이고, 그것을 green 으로 보고하면 게이트가 거짓말을 한다.
+gate_skip() {
+  if [ "${GATE_STRICT:-0}" = "1" ]; then
+    GATE_FAILED+=("$1(건너뜀)")
+    GATE_FAILOUT+=$'\n'"──── $1 ────"$'\n'"도구가 없어 검사가 실행되지 않았습니다. GATE_STRICT=1 에서는 실패로 처리합니다."$'\n'
+  else
+    GATE_SKIPPED+=("$1")
+  fi
+}
 
 # gate_report → 실패가 있으면 1
 gate_report() {

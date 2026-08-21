@@ -67,7 +67,9 @@ jobs:
         with: { go-version-file: 'go.mod', cache: true }
       - if: needs.detect.outputs.go == 'true'
         run: |
-          go install golang.org/x/tools/cmd/goimports@latest
+          # 버전을 핀한다. @latest 는 코드 변경 없이 포맷 규칙이 바뀌어
+          # cold cache 에서 게이트가 빨개지는 재현성 구멍이다.
+          go install golang.org/x/tools/cmd/goimports@v0.45.0
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       # golangci-lint-action 은 스스로 lint 를 실행한다 — 게이트 단일 정의와
       # 충돌하므로 쓰지 않는다. 바이너리만 버전 핀해 설치하고 실행은 gate.sh 가 한다.
@@ -146,7 +148,9 @@ jobs:
         name: govulncheck
         # go.mod 가 루트에 없을 수 있다(모노레포). 모듈마다 실행한다.
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          # govulncheck 도 핀한다 — 취약점 DB 는 항상 최신을 받지만
+          # 도구 동작 자체가 조용히 바뀌는 것은 막는다.
+          go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
           export PATH="$(go env GOPATH)/bin:$PATH"
           fail=0
           while IFS= read -r mod; do

@@ -23,6 +23,11 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# --all 은 CI 에서 쓰인다. 거기서 도구 부재는 통과가 아니라 "검사 안 됨"이므로
+# 엄격 모드를 기본으로 켠다. 로컬 훅은 도구가 없을 수 있어 관대하게 둔다.
+[ "$ALL" = 1 ] && : "${GATE_STRICT:=1}"
+export GATE_STRICT="${GATE_STRICT:-0}"
+
 source "$SELF_DIR/lib.sh"
 
 # ── 변경 영역 판정 (판정 불가면 전체 검사로 폴백 — 조용히 통과시키지 않는다) ──

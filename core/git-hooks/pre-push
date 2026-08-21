@@ -14,17 +14,28 @@ fail=0
 while read -r _local_ref local_sha _remote_ref remote_sha; do
   [ "$local_sha" = "$ZERO" ] && continue            # 브랜치 삭제 — 검사 없음
   if [ "$remote_sha" = "$ZERO" ]; then
-    base=""                                          # 새 브랜치 → gate 기본(main 기준)
+    # 새 브랜치의 첫 푸시. 원격에 기준점이 없으므로 기본 브랜치와의 merge-base 를 쓴다.
+    # 이 경로를 건너뛰면 표준 워크플로(feature 브랜치 → 첫 푸시)에서 시크릿 스캔이
+    # 한 번도 돌지 않는다 — push 된 시크릿은 되돌릴 수 없으므로 여기가 마지막 방어선이다.
+    base=""
+    for ref in main master; do
+      if git rev-parse --verify -q "$ref" >/dev/null 2>&1; then
+        base=$(git merge-base "$ref" "$local_sha" 2>/dev/null) && break
+      fi
+    done
+    if [ -z "$base" ]; then
+      # 기준점을 못 구했다(고아 브랜치 등). 조용히 건너뛰지 않는다 —
+      # 검사가 고장 났을 때 통과시키는 것이 가장 위험하다.
+      echo "pre-push: 시크릿 스캔 기준점을 찾을 수 없습니다(main/master 없음)." >&2
+      echo "  전체 히스토리를 검사합니다." >&2
+      base=$(git rev-list --max-parents=0 "$local_sha" | tail -1)
+    fi
   else
     base="$remote_sha"
   fi
 
-  if [ -n "$base" ]; then
-    bash "$KIT/gate/secrets.sh" --range "${base}..${local_sha}" || fail=1
-    bash "$KIT/gate/gate.sh" --base "$base" || fail=1
-  else
-    bash "$KIT/gate/gate.sh" || fail=1
-  fi
+  bash "$KIT/gate/secrets.sh" --range "${base}..${local_sha}" || fail=1
+  bash "$KIT/gate/gate.sh" --base "$base" || fail=1
 done
 
 [ $fail -ne 0 ] && { echo "" >&2; echo "pre-push 게이트 실패 — 푸시를 중단합니다." >&2; exit 1; }
