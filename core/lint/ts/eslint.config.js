@@ -3,14 +3,34 @@
 // 리뷰 체크리스트에 문장으로 적히던 것을 여기로 내린다.
 //
 // 필요 패키지:
-//   eslint typescript-eslint @eslint/js eslint-plugin-react-hooks eslint-plugin-jsx-a11y
+//   eslint typescript-eslint @eslint/js eslint-plugin-react-hooks
+// 선택 패키지:
+//   eslint-plugin-jsx-a11y  ← 설치돼 있을 때만 접근성 규칙이 켜진다 (아래 참조)
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
-import jsxA11y from 'eslint-plugin-jsx-a11y';
+
+// 접근성 린트는 선택이다. eslint-plugin-jsx-a11y 6.10.2 는 peer 가 eslint ^9 까지라
+// eslint 10 에서는 --legacy-peer-deps 없이 설치되지 않는다(2026-08 확인).
+// 하드 의존으로 두면 설정 자체가 로드 실패하므로, 있으면 켜고 없으면 조용히 건너뛴다.
+// peer 범위가 갱신되면 devDependencies 에 추가하기만 하면 자동으로 켜진다.
+let jsxA11y = null;
+try {
+  jsxA11y = (await import('eslint-plugin-jsx-a11y')).default;
+} catch {
+  // 미설치 — 접근성 규칙 없이 진행한다.
+}
 
 export default tseslint.config(
-  { ignores: ['dist/**', 'build/**', 'coverage/**', 'node_modules/**', 'eslint.config.js'] },
+  {
+    ignores: [
+      'dist/**',
+      'build/**',
+      'coverage/**',
+      'node_modules/**',
+      'eslint.config.js',
+    ],
+  },
 
   js.configs.recommended,
   // strictTypeChecked 는 recommendedTypeChecked 보다 강하다. 초기 도입에서
@@ -19,13 +39,19 @@ export default tseslint.config(
 
   {
     languageOptions: {
-      parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
     },
-    plugins: { 'react-hooks': reactHooks, 'jsx-a11y': jsxA11y },
+    plugins: {
+      'react-hooks': reactHooks,
+      ...(jsxA11y ? { 'jsx-a11y': jsxA11y } : {}),
+    },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      // 접근성 — 리뷰에서 사람이 눈으로 보던 항목을 기계로 내린다.
-      ...jsxA11y.flatConfigs.recommended.rules,
+      // 접근성 — 리뷰에서 사람이 눈으로 보던 항목을 기계로 내린다(설치돼 있을 때만).
+      ...(jsxA11y ? jsxA11y.flatConfigs.recommended.rules : {}),
 
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/consistent-type-imports': [
@@ -45,9 +71,31 @@ export default tseslint.config(
             '문서 링크 등 예외는 이 줄에 eslint-disable-next-line 과 사유를 단다.',
         },
       ],
-      // 금지 라이브러리가 생기면 여기에 적는다.
-      // 'no-restricted-imports': ['error', { paths: [{ name: 'axios', message: 'fetch 를 쓴다' }] }],
+      // FE 경계: 프론트는 Vertex/GCP SDK 를 임포트하지 않는다.
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '@google-cloud/*',
+                '@google/genai',
+                'google-auth-library',
+                'googleapis',
+              ],
+              message:
+                'FE 는 외부 클라우드 SDK 를 직접 쓰지 않는다 — 모든 외부 호출·인증은 backend.',
+            },
+          ],
+        },
+      ],
     },
+  },
+
+  {
+    // 빌드 설정 파일은 절대 URL(dev 프록시 대상 등)이 정상이다.
+    files: ['*.config.{ts,js,mts,mjs}', 'vite.config.*', 'vitest.setup.*'],
+    rules: { 'no-restricted-syntax': 'off' },
   },
 
   {
