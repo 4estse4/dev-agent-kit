@@ -1,0 +1,27 @@
+# .codex/config.toml — 프로젝트 스코프 Codex 설정
+#
+# ⚠️ 미검증 stub. 쓰기 전에 현재 Codex 문서로 키 이름을 확인할 것.
+#    (learn.chatgpt.com/docs/config-file/config-reference)
+#
+# 원칙: 여기에 강제를 두지 않는다. 되돌릴 수 없는 것을 막는 강제는
+#       .ai-kit/git-hooks 와 CI 에 있다 — 도구를 바꿔도 남아야 하기 때문이다.
+#       이 파일은 '편의'(자동 포맷)와 '권한'만 다룬다.
+
+[hooks]
+# 편집 후 자동 포맷. Claude Code 바인딩의 post_edit.sh 를 그대로 재사용한다.
+[[hooks.PostToolUse]]
+command = "bash .claude/hooks/post_edit.sh"
+
+# 권한 프로파일 — Claude Code 바인딩 settings.json 의 deny 목록과 같은 의도.
+# 되돌릴 수 없는 것과 게이트 우회를 막는다.
+[permissions.default]
+deny = [
+  "read:secrets/**",
+  "read:**/*.pem",
+  "read:**/*-key.json",
+  "read:.env",
+  "exec:git commit --no-verify*",
+  "exec:git push --no-verify*",
+  "exec:git push --force*",
+  "exec:git reset --hard*",
+]
