@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # 대상 레포에 킷을 설치한다. 대상 레포 안에서 실행한다.
 #
-#   <kit>/install.sh [프로젝트경로]      로컬 전부 (훅·템플릿·린트·CI·도구설정)
-#   <kit>/install.sh --hooks --lint      선택 설치
+#   <kit>/install.sh <프로젝트경로>      로컬 전부 (훅·템플릿·린트·CI·도구설정)
+#                                        경로는 필수. 현재 위치면 "." 를 준다.
+#   <kit>/install.sh <경로> --hooks --lint   선택 설치
 #   <kit>/install.sh --protect           GitHub 브랜치 보호 설정 (원격 변경 — 별도 플래그)
 #   <kit>/install.sh --tools claude-code,codex
-#   <kit>/install.sh --update            설치된 킷을 갱신 (3-way 병합)
-#   <kit>/install.sh --update --dry-run  무엇이 바뀔지만 보고 아무것도 안 건드림
+#   <kit>/install.sh <경로> --update         설치된 킷을 갱신 (3-way 병합)
+#   <kit>/install.sh <경로> --update --dry-run   무엇이 바뀔지만 보고 아무것도 안 건드림
 #
 # 설치: 기존 파일은 절대 덮어쓰지 않는다. 충돌 시 .ai-kit-new 로 옆에 두고 알린다.
 # 갱신: 설치 시점의 킷 원본을 .ai-kit/baseline/ 에 남겨두고, 그것을 base 로 3-way
@@ -39,18 +40,23 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# 대상은 인자로 받는다. 없으면 CWD 로 폴백하되 **어디에 설치하는지 반드시 출력한다** —
-# cd 를 안 한 채 실행해 엉뚱한 레포에 설치하는 사고가 실제로 두 번 있었다.
-# git 루트 확인이 하는 일은 "여기가 레포냐" 뿐이라 인자를 받아도 똑같이 안전하고,
-# 인자를 받으면 CI 나 다른 스크립트에서 부를 수 있게 된다.
-if [ -n "$TARGET_ARG" ]; then
-  [ -d "$TARGET_ARG" ] || { echo "install: 그런 디렉터리가 없습니다 — $TARGET_ARG" >&2; exit 1; }
-  TARGET=$(git -C "$TARGET_ARG" rev-parse --show-toplevel 2>/dev/null) \
-    || { echo "install: git 레포가 아닙니다 — $TARGET_ARG" >&2; exit 1; }
-else
-  TARGET=$(git rev-parse --show-toplevel 2>/dev/null) \
-    || { echo "install: git 레포 안에서 실행하거나 경로를 넘기세요 — install.sh <프로젝트경로>" >&2; exit 1; }
+# 대상 경로는 **필수**다. CWD 로 폴백하지 않는다.
+#
+# 이 명령은 레포에 파일 30개 가까이를 쓰고 git config 를 바꾼다. 되돌리기 번거로운
+# 쓰기 작업에서 "아마 여기겠지" 를 추측하면 안 된다 — 실제로 두 번 물렸다(킷 레포에
+# 자기 자신을 설치, 엉뚱한 레포에 git add). 대상을 출력하는 것으로는 부족하다.
+# 출력하고 곧바로 설치하므로 사람이 읽었을 때는 이미 끝나 있다.
+#
+# 지금 있는 레포에 설치하려면 점 하나면 된다: install.sh .
+if [ -z "$TARGET_ARG" ]; then
+  echo "install: 프로젝트 경로가 필요합니다" >&2
+  echo "  <kit>/install.sh <프로젝트경로>     예: <kit>/install.sh ~/work/myproj" >&2
+  echo "  <kit>/install.sh .                   지금 있는 레포에 설치" >&2
+  exit 2
 fi
+[ -d "$TARGET_ARG" ] || { echo "install: 그런 디렉터리가 없습니다 — $TARGET_ARG" >&2; exit 1; }
+TARGET=$(git -C "$TARGET_ARG" rev-parse --show-toplevel 2>/dev/null) \
+  || { echo "install: git 레포가 아닙니다 — $TARGET_ARG" >&2; exit 1; }
 echo "install: 대상 $TARGET"
 echo "install: 킷   $KIT_ROOT"
 

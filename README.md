@@ -91,9 +91,13 @@ git log --format='%(trailers:key=Co-Authored-By,valueonly)' \
 ## 쓰는 법
 
 ```bash
-git clone <this-repo> && cd <target-project>
-<kit>/install.sh            # 훅 설치 · 템플릿 복사 · 브랜치 보호 설정
+git clone <this-repo> ~/git/ai-native-kit        # 킷은 아무 데나 한 번만
+~/git/ai-native-kit/install.sh ~/work/myproj     # 대상 프로젝트에 설치
 ```
+
+**대상 경로는 필수다.** 현재 레포에 설치하려면 `.` 를 준다. 이 명령은 파일 30개 가까이를
+쓰고 git config 를 바꾸므로, 어디에 쓰는지 추측하지 않는다 — `cd` 를 빠뜨려 엉뚱한 레포에
+설치하는 사고가 실제로 있었다.
 
 설치되는 강제 계층:
 
@@ -107,8 +111,8 @@ git clone <this-repo> && cd <target-project>
 ## 킷이 바뀌면 — 갱신
 
 ```bash
-<kit>/install.sh --update --dry-run   # 무엇이 바뀔지만 본다
-<kit>/install.sh --update             # 자동 병합, 충돌만 보고
+<kit>/install.sh <경로> --update --dry-run   # 무엇이 바뀔지만 본다
+<kit>/install.sh <경로> --update             # 자동 병합, 충돌만 보고
 ```
 
 설치할 때 킷 원본을 `.ai-kit/baseline/` 에 남겨두고, 갱신할 때 그것을 base 로 3-way
