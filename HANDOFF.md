@@ -2,7 +2,7 @@
 
 이 레포에서 새 Claude Code 세션을 열고 **"HANDOFF.md 읽고 이어서 하자"** 라고 하면 된다.
 
-**마지막 갱신**: 2026-08-21. 킷 `main` · `multimodal-asset-studio` `main` 둘 다 clean·푸시 완료.
+**마지막 갱신**: 2026-08-23. 킷 `main` · `multimodal-asset-studio` `main` 둘 다 clean·푸시 완료.
 
 ---
 
@@ -40,6 +40,20 @@
 
 ---
 
+## 이번에 구조가 바뀌었다 (2026-08-23)
+
+`operator/` 계층을 **해체했다.** `~/.claude` 는 정의상 레포와 함께 전달되지 않으므로
+"clone 하면 품질이 보장된다" 는 약속의 일부가 될 수 없었다. 그리고 그 계층은 애초에
+잘못된 전제 위에 있었다 — `statusLine` 은 프로젝트 설정에서도 되고(문서 확인),
+사용자 설정은 **우선순위 최하위**다. 머신 단위여야만 하는 것은 하나도 없었다.
+
+개인 취향(`model`·`effortLevel`·`theme`·`tui`·알림)은 옮기지 않고 **버렸다.**
+프로젝트 설정이 사용자 설정을 덮으므로 킷이 모델을 박으면 개발자의 `/model` 을 무력화한다.
+
+`bindings/` 도 없앴다. 도구 쪽 집합 명사를 다섯 번 시도해 다 실패했고, Claude Code 도
+Codex 도 그걸 부르는 이름이 없다(그냥 `.claude/`·`.codex/`). 붙일 개념이 아니라는 신호로 봤다.
+**`bindings/` 를 되살리지 마라.**
+
 ## 실증된 것
 
 - `main` 직접 커밋 차단 · 시크릿 커밋 차단 · 깨진 코드 push 차단 — **순수 `git` 명령으로 확인**(에이전트 없이)
@@ -48,6 +62,14 @@
 - vendor 체크섬 드리프트 검출 · 커밋 신원 불일치 검출
 - 린터 설정이 실 백엔드에서 14건, `govulncheck` 7건, `npm audit` 7건 검출
 - 브랜치 보호 6개 required check 적용(private 레포에서도 가능함을 확인)
+- **JVM·Python 어댑터** — Java+Gradle · Kotlin+Gradle+spotless · 2모듈 Gradle · Python
+  각각을 만들어 통과와 실패를 양쪽 다 재현. spotless 위반이 `gradle check` 에서 잡히는
+  것이 "품질 플러그인은 check 에 스스로 걸린다" 는 설계 근거의 증거다
+- **`install.sh --update`** — baseline + 3-way 병합. 프로젝트 수정과 킷 변경이 겹치지
+  않으면 둘 다 살아남고, 겹치면 충돌 마커를 남긴다. `--dry-run` 은 트리 해시 앞뒤 비교로
+  무변경 확인
+- **낡음 감지** — `SessionStart` 훅. 최신/낡음/모르는 rev/킷 없음 네 상태 실측
+- **`statusLine.command` 의 `$CLAUDE_PROJECT_DIR` 전개** — 문서에 없어서 직접 재봤다
 - `install-operator.sh` — 빈 홈 설치·재실행 멱등·기존 파일 보존(충돌은 `.ai-kit-new`)·
   소스 누락·복사 실패를 **격리된 `CLAUDE_HOME` 으로 확인**(실제 `~/.claude` 는 안 건드림)
 - 훅이 실행권한 없이 커밋되면 강제가 꺼진다 — `core.fileMode=false` · 편집기 재생성
@@ -105,14 +127,13 @@ CI 에 `[ -x ]` 를 넣었다. 게이트 스크립트는 훅이 `bash <경로>` 
 
 ## 열린 결정 (다음 세션에서 정할 것)
 
-1. **킷이 자기 자신에게 게이트를 걸 것인가.** 지금 안 걸려 있다. 걸면 `main` 직접 커밋이
-   막혀 지금 작업 흐름(킷 main 에 바로 커밋)이 바뀐다. 킷에 Go/TS 코드가 없어
-   게이트는 시크릿 스캔·브랜치 보호 정도만 의미가 있다.
+1. **킷이 자기 자신에게 게이트를 걸 것인가.** 규칙 파일(`AGENTS.md`)은 이제 있다 —
+   게이트·훅은 아직 안 걸려 있다. 걸면 `main` 직접 커밋이 막혀 지금 흐름이 바뀐다.
+   킷의 `AGENTS.md` 하드룰 표가 `[사람]` 투성이인 것이 이 결정이 열려 있다는 표시다.
 2. **`enforce_admins`** — 현재 `false`(레포 소유자는 우회 가능). `true` 면 본인도 예외
    없이 PR 을 거쳐야 해 더 강하지만, `main` 이 깨졌을 때 긴급 수정이 막힌다.
-3. **`operator/install-operator.sh` 를 실제 `~/.claude` 에 돌릴 것인가.** 동작은
-   검증했다(아래) — 남은 건 실제 홈에 적용할지의 결정뿐이다. 현재 `~/.claude` 와
-   내용이 다르면 전부 충돌로 잡혀 `.ai-kit-new` 로 옆에 놓이므로, 병합은 수동이다.
+3. **낡음 감지의 CI 계층** — 지금은 `SessionStart` 훅으로 로컬 전용이다. 킷을 public
+   으로 바꾸거나 deploy key 를 넣으면 CI 에서도 볼 수 있다. 구조는 그렇게 열어뒀다.
 
 ## 미검증으로 남긴 것 (숨기지 않고 기록)
 
@@ -128,8 +149,10 @@ CI 에 `[ -x ]` 를 넣었다. 게이트 스크립트는 훅이 `bash <경로>` 
 
 ## 다음에 할 만한 것
 
-- 그 레포의 vendor 된 `.claude/` 를 킷과 동기화(`trace` 스킬 수정이 아직 안 갔다).
-  선례: `chore(claude): sync agent config with the kit (#47)`
+- **`multimodal-asset-studio` 를 새 킷으로 갱신** — 그 레포는 `core/`·`bindings/` 시절
+  구조로 설치돼 있다. `install.sh --update --dry-run` 이 실제 레포에서 어떻게 나오는지
+  아직 안 봤다(데모 레포로만 실측했다).
+- 열린 PR 두 개(#48 추적표 기록 · #49 trace 스킬 동기화) 정리
 - e2e 스캐폴드 + "언제 e2e 를 쓸지" 판단 기준
 - 검증 이력 측정표 — 어느 계층이 무엇을 잡았나(dev-log 템플릿에 자리는 있다)
 - `.env.example` ↔ config 정합 테스트(죽은 설정값 부류를 기계로 닫기)
