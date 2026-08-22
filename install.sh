@@ -5,14 +5,18 @@
 #   <kit>/install.sh --hooks --lint      선택 설치
 #   <kit>/install.sh --protect           GitHub 브랜치 보호 설정 (원격 변경 — 별도 플래그)
 #   <kit>/install.sh --tools claude-code,codex
+#   <kit>/install.sh --update            설치된 킷을 갱신 (3-way 병합)
+#   <kit>/install.sh --update --dry-run  무엇이 바뀔지만 보고 아무것도 안 건드림
 #
-# 기존 파일은 절대 덮어쓰지 않는다. 충돌 시 .ai-kit-new 접미사로 옆에 두고 알린다.
+# 설치: 기존 파일은 절대 덮어쓰지 않는다. 충돌 시 .ai-kit-new 로 옆에 두고 알린다.
+# 갱신: 설치 시점의 킷 원본을 .ai-kit/baseline/ 에 남겨두고, 그것을 base 로 3-way
+#       병합한다. 프로젝트 수정과 킷 변경이 겹치지 않으면 조용히 둘 다 살아남는다.
 set -uo pipefail
 
 KIT_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 TARGET=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "install: git 레포 안에서 실행하세요" >&2; exit 1; }
 
-DO_HOOKS=0 DO_TEMPLATES=0 DO_LINT=0 DO_CI=0 DO_PROTECT=0 TOOLS=""
+DO_HOOKS=0 DO_TEMPLATES=0 DO_LINT=0 DO_CI=0 DO_PROTECT=0 TOOLS="" DO_UPDATE=0 DRY_RUN=0
 if [ $# -eq 0 ]; then
   DO_HOOKS=1 DO_TEMPLATES=1 DO_LINT=1 DO_CI=1; TOOLS="claude-code"
 fi
@@ -24,22 +28,81 @@ while [ $# -gt 0 ]; do
     --ci) DO_CI=1; shift ;;
     --protect) DO_PROTECT=1; shift ;;
     --tools) TOOLS="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,12p' "$0"; exit 0 ;;
+    --update) DO_UPDATE=1; DO_HOOKS=1 DO_TEMPLATES=1 DO_LINT=1 DO_CI=1; TOOLS="claude-code"; shift ;;
+    --dry-run) DRY_RUN=1; shift ;;
+    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
     *) echo "install: 알 수 없는 인자 $1" >&2; exit 2 ;;
   esac
 done
 
-INSTALLED=(); SKIPPED=(); CONFLICTS=(); WARNINGS=()
+INSTALLED=(); SKIPPED=(); CONFLICTS=(); WARNINGS=(); MERGED=(); UNCHANGED=()
 
-# 기존 파일을 보존하며 복사한다.
+BASELINE="$TARGET/.ai-kit/baseline"
+# 충돌 마커에 절대경로가 박히면 읽기 어렵다. 사람이 읽는 자리이므로 이름을 준다.
+MF_L='-L 이_레포 -L 설치시점_킷 -L 새_킷'
+
+# 설치 시점의 킷 원본을 남긴다. 이것이 없으면 나중에 "프로젝트가 고친 것"과
+# "킷이 바꾼 것"을 구분할 수 없어, 갱신이 덮어쓰기 아니면 포기 둘 중 하나가 된다.
+save_baseline() { # $1=src $2=dst(상대)
+  [ "$DRY_RUN" = 1 ] && return 0
+  mkdir -p "$BASELINE/$(dirname "$2")" && cp "$1" "$BASELINE/$2"
+}
+
+# 기존 파일을 보존하며 복사한다(설치).
 place() { # $1=src $2=dst(대상 레포 상대)
   local src="$1" dst="$TARGET/$2"
+  [ "$DO_UPDATE" = 1 ] && { merge_place "$1" "$2"; return; }
   mkdir -p "$(dirname "$dst")"
   if [ -e "$dst" ]; then
-    if cmp -s "$src" "$dst"; then SKIPPED+=("$2 (동일)"); return; fi
+    if cmp -s "$src" "$dst"; then SKIPPED+=("$2 (동일)"); save_baseline "$src" "$2"; return; fi
     cp "$src" "$dst.ai-kit-new"; CONFLICTS+=("$2"); return
   fi
-  cp "$src" "$dst"; INSTALLED+=("$2")
+  cp "$src" "$dst"; save_baseline "$src" "$2"; INSTALLED+=("$2")
+}
+
+# 갱신: base=설치 시점 킷 원본, ours=프로젝트 현재, theirs=킷 새 버전.
+merge_place() { # $1=src(킷 새 버전) $2=dst(상대)
+  local src="$1" rel="$2" dst="$TARGET/$2" base="$BASELINE/$2" rc
+
+  # baseline 이 없으면 이 파일은 킷이 설치한 적이 없다 — 갱신이 아니라 신규 설치다.
+  if [ ! -f "$base" ]; then
+    if [ -e "$dst" ]; then
+      cmp -s "$src" "$dst" && { SKIPPED+=("$rel (동일)"); save_baseline "$src" "$rel"; return; }
+      CONFLICTS+=("$rel (baseline 없음 — 손으로 확인)")
+      [ "$DRY_RUN" = 1 ] || cp "$src" "$dst.ai-kit-new"
+      return
+    fi
+    [ "$DRY_RUN" = 1 ] || { mkdir -p "$(dirname "$dst")"; cp "$src" "$dst"; }
+    save_baseline "$src" "$rel"; INSTALLED+=("$rel"); return
+  fi
+
+  # 킷 쪽이 그대로면 할 일이 없다. 프로젝트가 고쳤든 아니든 건드리지 않는다.
+  cmp -s "$base" "$src" && { UNCHANGED+=("$rel"); return; }
+
+  # 프로젝트가 손대지 않았으면 병합할 것이 없다 — 그냥 새 버전으로 간다.
+  if [ ! -e "$dst" ] || cmp -s "$base" "$dst"; then
+    [ "$DRY_RUN" = 1 ] || { mkdir -p "$(dirname "$dst")"; cp "$src" "$dst"; }
+    save_baseline "$src" "$rel"; INSTALLED+=("$rel (킷 변경 반영)"); return
+  fi
+
+  # 양쪽이 다 움직였다 — 3-way 병합. 종료코드가 곧 충돌 수다.
+  if [ "$DRY_RUN" = 1 ]; then
+    local tmp; tmp=$(mktemp); cp "$dst" "$tmp"
+    git merge-file -q $MF_L "$tmp" "$base" "$src" >/dev/null 2>&1; rc=$?
+    rm -f "$tmp"
+    [ "$rc" -eq 0 ] && MERGED+=("$rel") || CONFLICTS+=("$rel ($rc 곳 충돌)")
+    return
+  fi
+  # shellcheck disable=SC2086
+  git merge-file $MF_L "$dst" "$base" "$src" >/dev/null 2>&1; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    MERGED+=("$rel"); save_baseline "$src" "$rel"
+  else
+    # 충돌 마커를 파일에 남긴다. 에디터와 git 이 그대로 다루는 형식이라
+    # 별도 도구를 배울 필요가 없다. baseline 은 갱신하지 않는다 —
+    # 사람이 해소한 뒤 다시 돌려야 다음 갱신의 base 가 맞다.
+    CONFLICTS+=("$rel ($rc 곳 충돌 — 마커를 남겼습니다)")
+  fi
 }
 
 # ── 게이트 vendor: 대상 레포에 .ai-kit/ 로 복사한다 ──
@@ -47,7 +110,13 @@ place() { # $1=src $2=dst(대상 레포 상대)
 # vendor 해서 레포에 커밋하면 어디서 clone 해도 같은 게이트가 돈다.
 if [ "$DO_HOOKS" = 1 ]; then
   vendor="$TARGET/.ai-kit"
-  rm -rf "$vendor"
+  # .ai-kit/gate 와 git-hooks 는 킷 소유라 통째로 교체한다(프로젝트가 고치면 CI 가 잡는다).
+  # baseline/ 과 identity 는 그 아래 살지만 킷 소유가 아니므로 남긴다 —
+  # baseline 을 지우면 다음 갱신이 3-way 병합의 base 를 잃는다.
+  if [ "$DRY_RUN" = 1 ]; then
+    UNCHANGED+=(".ai-kit/gate · git-hooks (갱신 모드에서는 통째로 교체)")
+  else
+  rm -rf "$vendor/gate" "$vendor/git-hooks" "$vendor/README.md"
   mkdir -p "$vendor"
   cp -R "$KIT_ROOT/common/gate" "$KIT_ROOT/common/git-hooks" "$vendor/"
   # 활성화 절차가 레포 안에 있어야 한다 — install.sh 는 킷 레포에만 있으므로
@@ -66,11 +135,19 @@ if [ "$DO_HOOKS" = 1 ]; then
   printf 'kit_rev=%s\nchecksum=%s\n' "$kit_rev" "$sum" > "$vendor/VERSION"
   INSTALLED+=(".ai-kit/ (게이트 vendor · $kit_rev · $sum)")
 
+  fi
+
   # 훅은 .git/hooks 에 두지 않는다 — 그 디렉터리는 clone 되지 않으므로
   # 평가자가 레포를 받으면 강제가 통째로 사라진다.
   # 대신 커밋되는 .ai-kit/git-hooks/ 를 core.hooksPath 로 가리킨다.
   git -C "$TARGET" config core.hooksPath .ai-kit/git-hooks
   INSTALLED+=("core.hooksPath → .ai-kit/git-hooks (커밋되는 훅)")
+
+  # 킷 클론의 경로를 이 레포의 로컬 git config 에 적는다 — 커밋되지 않는다.
+  # SessionStart 훅이 이것으로 "설치된 킷이 낡았나" 를 판정한다. 커밋되는 파일에
+  # 넣지 않는 이유: 머신마다 경로가 다르고, 남의 절대경로가 레포에 박히면
+  # 그 사람 환경을 알려주는 것 말고는 아무 값도 없다.
+  git -C "$TARGET" config ai-kit.path "$KIT_ROOT" 2>/dev/null
 
   # 기존 .git/hooks 에 커스텀 훅이 있으면 알린다 — hooksPath 설정 시 무시된다.
   for h in pre-commit pre-push commit-msg; do
@@ -167,8 +244,15 @@ if [ "$DO_PROTECT" = 1 ]; then
 fi
 
 # ── 보고 (산출물 규칙 R1: 개수만, 문제만 자세히) ──
+if [ "$DO_UPDATE" = 1 ]; then
+  [ "$DRY_RUN" = 1 ] && echo "── dry-run: 아무것도 바꾸지 않았습니다 ──"
+  echo "갱신 ${#INSTALLED[@]}건 · 병합 ${#MERGED[@]}건 · 그대로 ${#UNCHANGED[@]}건 · 동일 ${#SKIPPED[@]}건 · 충돌 ${#CONFLICTS[@]}건"
+  if [ ${#INSTALLED[@]} -gt 0 ]; then echo ""; echo "킷 변경이 반영됨:"; printf '  %s\n' "${INSTALLED[@]}"; fi
+  if [ ${#MERGED[@]} -gt 0 ]; then echo ""; echo "프로젝트 수정과 함께 병합됨:"; printf '  %s\n' "${MERGED[@]}"; fi
+else
 echo "설치 ${#INSTALLED[@]}건 · 건너뜀 ${#SKIPPED[@]}건 · 충돌 ${#CONFLICTS[@]}건 · 확인필요 ${#WARNINGS[@]}건"
-if [ "$DO_HOOKS" = 1 ]; then
+fi
+if [ "$DO_HOOKS" = 1 ] && [ "$DO_UPDATE" = 0 ]; then
   cat <<'MSG'
 
 .ai-kit/ 를 커밋하세요 — 게이트와 훅이 레포와 함께 버전 관리됩니다.
@@ -182,7 +266,12 @@ if [ "$DO_HOOKS" = 1 ]; then
 MSG
 fi
 if [ ${#CONFLICTS[@]} -gt 0 ]; then
-  echo ""; echo "충돌 — 기존 파일을 보존했고 새 것은 .ai-kit-new 로 옆에 뒀습니다. 확인 후 병합하세요:"
+  echo ""
+  if [ "$DO_UPDATE" = 1 ]; then
+    echo "충돌 — 아래는 손으로 해소한 뒤 --update 를 다시 돌리세요(그래야 baseline 이 맞습니다):"
+  else
+    echo "충돌 — 기존 파일을 보존했고 새 것은 .ai-kit-new 로 옆에 뒀습니다. 확인 후 병합하세요:"
+  fi
   printf '  %s\n' "${CONFLICTS[@]}"
 fi
 if [ ${#WARNINGS[@]} -gt 0 ]; then
