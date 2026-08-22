@@ -154,8 +154,10 @@ fi
 add_group "$g"
 
 # 3) 모델: 이름 · effort · 기본값에서 벗어난 모드만
+# 라벨은 값만으로 모호할 때만 붙인다. xhigh 는 effort 말고 될 것이 없으므로 맨값으로
+# 두고, off 는 "무엇이 off 인지" 가 값에 없으므로 think: 를 붙인다.
 g="${model}"
-[ -n "$effort" ] && g="${g}${SUB}effort:${effort}"
+[ -n "$effort" ] && g="${g}${SUB}${effort}"
 [ -n "$thinking_off" ] && g="${g}${SUB}think:off"
 [ -n "$fast_mode" ] && g="${g}${SUB}fast"
 add_group "$g"

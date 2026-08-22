@@ -18,8 +18,17 @@
     "hooks 객체의 키는 훅 이벤트 이름만 허용된다. 주석 키를 넣으면 경고 후 무시된다.",
     "",
     "알려진 오탐: 커밋 메시지가 --no-verify 를 문자열로 언급하면 차단된다.",
-    "그럴 때는 메시지를 파일로 넘긴다: git commit -F <file>"
+    "그럴 때는 메시지를 파일로 넘긴다: git commit -F <file>",
+    "",
+    "statusLine 은 프로젝트 설정에서도 동작한다(공식 문서 확인). command 에서",
+    "$CLAUDE_PROJECT_DIR 이 전개되는 것은 실측으로 확인했다 — 문서에 없어서 직접 재봤다.",
+    "모델·effort·테마 같은 개인 취향은 여기 두지 않는다. 프로젝트 설정이 사용자 설정을",
+    "덮으므로 킷이 박으면 개발자의 /model 선택을 무력화한다."
   ],
+  "statusLine": {
+    "type": "command",
+    "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/statusline-command.sh\""
+  },
   "permissions": {
     "deny": [
       "Read(./secrets/**)",
