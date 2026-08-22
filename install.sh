@@ -60,7 +60,18 @@ TARGET=$(git -C "$TARGET_ARG" rev-parse --show-toplevel 2>/dev/null) \
 echo "install: 대상 $TARGET"
 echo "install: 킷   $KIT_ROOT"
 
-INSTALLED=(); SKIPPED=(); CONFLICTS=(); WARNINGS=(); MERGED=(); UNCHANGED=()
+INSTALLED=(); SKIPPED=(); CONFLICTS=(); WARNINGS=(); MERGED=(); UNCHANGED=(); SEEDED=()
+# 설치 시점 킷 리비전. baseline 이 없을 때 이것으로 원본을 복원한다.
+KIT_REV=""
+if [ -f "$TARGET/.ai-kit/VERSION" ]; then
+  KIT_REV=$(sed -n 's/^kit_rev=//p' "$TARGET/.ai-kit/VERSION" | head -1)
+  [ "$KIT_REV" = "unknown" ] && KIT_REV=""
+  if [ -n "$KIT_REV" ] && ! git -C "$KIT_ROOT" cat-file -e "${KIT_REV}^{commit}" 2>/dev/null; then
+    WARNINGS+=("기록된 킷 리비전 $KIT_REV 을 이 킷 클론에서 찾을 수 없습니다 — baseline 복원 불가")
+    WARNINGS+=("  킷 히스토리를 재작성했다면 그때 끊긴 것입니다. 해당 파일은 손으로 확인해야 합니다.")
+    KIT_REV=""
+  fi
+fi
 
 BASELINE="$TARGET/.ai-kit/baseline"
 # 충돌 마커에 절대경로가 박히면 읽기 어렵다. 사람이 읽는 자리이므로 이름을 준다.
@@ -85,11 +96,41 @@ place() { # $1=src $2=dst(대상 레포 상대)
   cp "$src" "$dst"; save_baseline "$src" "$2"; INSTALLED+=("$2")
 }
 
+# baseline 이 없는 레포(=baseline 기능 이전에 설치)에서, 기록된 kit_rev 로 그 시점
+# 킷 원본을 복원한다. 정보는 이미 .ai-kit/VERSION 에 있었고 쓰지 않았을 뿐이다.
+#
+# 경로는 하드코딩하지 않는다 — 킷 안에서 파일이 옮겨다니므로(core/ → common/ 등)
+# git 의 이름 추적에 맡긴다. 그 시점에 없던 파일은 "없음" 이 올바른 답이다.
+seed_baseline() { # $1=킷의 현재 경로 $2=써넣을 파일 → 성공 시 0
+  [ -n "$KIT_REV" ] || return 1
+  local old
+  old=$(git -C "$KIT_ROOT" log --follow --format='' --name-only "$KIT_REV..HEAD" -- "$1" 2>/dev/null \
+        | grep -v '^$' | tail -1)
+  [ -n "$old" ] || old="$1"
+  git -C "$KIT_ROOT" cat-file -e "$KIT_REV:$old" 2>/dev/null || return 1
+  mkdir -p "$(dirname "$2")" || return 1
+  git -C "$KIT_ROOT" show "$KIT_REV:$old" > "$2" 2>/dev/null
+}
+
 # 갱신: base=설치 시점 킷 원본, ours=프로젝트 현재, theirs=킷 새 버전.
-merge_place() { # $1=src(킷 새 버전) $2=dst(상대)
+merge_place() { local _r; _merge_place "$@"; _r=$?; [ -n "${MP_TMP:-}" ] && rm -f "$MP_TMP"; MP_TMP=""; return $_r; }
+_merge_place() { # $1=src(킷 새 버전) $2=dst(상대)
   local src="$1" rel="$2" dst="$TARGET/$2" base="$BASELINE/$2" rc
 
-  # baseline 이 없으면 이 파일은 킷이 설치한 적이 없다 — 갱신이 아니라 신규 설치다.
+  # baseline 이 없으면 기록된 kit_rev 로 복원해본다(baseline 기능 이전에 설치된 레포).
+  # dry-run 이면 임시 파일에 복원한다 — 판정은 똑같이 하되 레포는 안 건드린다.
+  local tmpbase=""
+  MP_TMP=""
+  if [ ! -f "$base" ] && [ -n "$KIT_REV" ]; then
+    if [ "$DRY_RUN" = 1 ]; then
+      tmpbase=$(mktemp)
+      if seed_baseline "$src" "$tmpbase"; then base="$tmpbase"; MP_TMP="$tmpbase"; SEEDED+=("$rel"); else rm -f "$tmpbase"; fi
+    else
+      seed_baseline "$src" "$base" && SEEDED+=("$rel")
+    fi
+  fi
+
+  # 복원도 안 되면 이 파일은 킷이 설치한 적이 없다 — 갱신이 아니라 신규 설치다.
   if [ ! -f "$base" ]; then
     if [ -e "$dst" ]; then
       cmp -s "$src" "$dst" && { SKIPPED+=("$rel (동일)"); save_baseline "$src" "$rel"; return; }
@@ -272,6 +313,7 @@ fi
 if [ "$DO_UPDATE" = 1 ]; then
   [ "$DRY_RUN" = 1 ] && echo "── dry-run: 아무것도 바꾸지 않았습니다 ──"
   echo "갱신 ${#INSTALLED[@]}건 · 병합 ${#MERGED[@]}건 · 그대로 ${#UNCHANGED[@]}건 · 동일 ${#SKIPPED[@]}건 · 충돌 ${#CONFLICTS[@]}건"
+  [ ${#SEEDED[@]} -gt 0 ] && echo "(baseline 이 없어 kit_rev $KIT_REV 로 ${#SEEDED[@]}건 복원했습니다)"
   if [ ${#INSTALLED[@]} -gt 0 ]; then echo ""; echo "킷 변경이 반영됨:"; printf '  %s\n' "${INSTALLED[@]}"; fi
   if [ ${#MERGED[@]} -gt 0 ]; then echo ""; echo "프로젝트 수정과 함께 병합됨:"; printf '  %s\n' "${MERGED[@]}"; fi
 else
