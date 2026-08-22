@@ -20,15 +20,19 @@
 2. **아래 계층이 잡을 수 있으면 위 계층에서 뺀다.** 린터가 잡는 걸 AI 리뷰에 맡기지 않는다.
 3. **못 찾은 것은 쓰지 않는다.** AI 산출물은 부피로 신뢰를 사칭한다.
 
-전문: `core/docs/artifact-rules.md`(R1~R7) · `core/docs/verification-layers.md`(L1~L3)
+전문: `common/docs/artifact-rules.md`(R1~R7) · `common/docs/verification-layers.md`(L1~L3)
 
 ## 구조
 
 | | |
 | --- | --- |
-| `operator/` | **머신 단위** → `~/.claude/`. statusline·전역 정책·전역 설정·goal 스킬 |
-| `core/` | **프로젝트 단위** → 대상 레포. 게이트·훅·린터·CI·템플릿·설계 문서 |
-| `bindings/` | **도구 단위**. `claude-code/`(검증됨) · `codex/`(개념 대응표만, 설정 파일 없음) |
+| `common/` | **에이전트 없이도 작동하는 것.** 게이트·훅·린터·CI·템플릿·설계 문서 |
+| `claude-code/` | **Claude Code 가 있어야 의미 있는 것.** 설정·훅·스킬·에이전트·statusline |
+| `codex/` | 개념 대응표만. 설정 파일 없음(의도된 것) |
+
+`operator/`(머신 단위 계층)는 **해체했다.** `~/.claude` 는 정의상 레포와 함께 전달되지
+않으므로 "clone 하면 품질이 보장된다"는 약속의 일부가 될 수 없었다. 개인 취향
+(theme·model·effort)은 킷이 다루지 않기로 했다.
 
 규칙 단일 출처는 `AGENTS.md`. `CLAUDE.md` 는 포인터 한 줄.
 **게이트 정의는 `.ai-kit/gate/` 에 vendor 되고, CI 워크플로·린터 설정은 프로젝트 소유**다
@@ -113,7 +117,7 @@ CI 에 `[ -x ]` 를 넣었다. 게이트 스크립트는 훅이 `bash <경로>` 
 ## 미검증으로 남긴 것 (숨기지 않고 기록)
 
 - **Codex 바인딩** — 설정 파일을 두지 않기로 했다(검증 안 된 스텁은 오해를 만든다).
-  `bindings/codex/README.md` 에 개념 대응표와 "도입할 때 할 일" 3단계가 있다.
+  `codex/README.md` 에 개념 대응표와 "도입할 때 할 일" 3단계가 있다.
 - **Bash 권한 매칭의 정규화 여부** — 공백 축약·따옴표 제거를 하는지 확인 못 했다.
   deny 우회 실증은 "전체 문자열 glob" 전제다.
 - **`git commit -m x -n` 이 실제로 프롬프트 없이 통과하는지** — 훅을 우회하는 명령을

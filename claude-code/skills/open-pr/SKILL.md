@@ -54,5 +54,5 @@ $ARGUMENTS
 - 본문이 화면 한 장을 넘으면 대부분 과하다.
 
 3. 리뷰: `review-diff` 스킬을 PR 번호와 함께 실행한다.
-   `core/docs/verification-layers.md` 의 콜드 리뷰어 발동 조건에 해당하면
+   `common/docs/verification-layers.md` 의 콜드 리뷰어 발동 조건에 해당하면
    `cold-reviewer` 에이전트도 함께 돌린다.

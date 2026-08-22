@@ -12,7 +12,7 @@
 
 ## 왜 이 바인딩이 존재하나
 
-킷의 본체(`core/`)는 도구와 무관하다. 게이트·훅·CI·템플릿은 어떤 에이전트를 쓰든,
+킷의 본체(`common/`)는 도구와 무관하다. 게이트·훅·CI·템플릿은 어떤 에이전트를 쓰든,
 사람이 손으로 해도 그대로 작동한다. 도구에 묶이는 것은 이 얇은 층뿐이다.
 
 조직에 전파할 표준이라면 한 도구에만 묶여선 안 된다 — 팀원마다 쓰는 도구가 다르다.
@@ -39,9 +39,9 @@
 순서대로 셋이면 된다. **그때의 공식 문서로 스키마를 확인하면서** 한다.
 
 1. **규칙은 손대지 않는다.** `AGENTS.md` 가 이미 Codex 가 읽는 형식이다
-   (`core/templates/AGENTS.md` 에서 설치된다). 규칙을 두 벌로 만들지 마라.
+   (`common/templates/AGENTS.md` 에서 설치된다). 규칙을 두 벌로 만들지 마라.
 2. **`.codex/config.toml` 을 만든다.** 위 대응표의 `[hooks]` · `[permissions.<name>]` 로
-   Claude Code 바인딩(`bindings/claude-code/settings.json`)과 **같은 의도**를 옮긴다 —
+   Claude Code 바인딩(`claude-code/settings.json`)과 **같은 의도**를 옮긴다 —
    편집 후 자동 포맷, 그리고 게이트 우회·파괴적 조작 deny.
 3. **게이트는 다시 구현하지 않는다.** Codex 에서도 `.ai-kit/gate/gate.sh` 를 그대로 부른다.
 

@@ -18,28 +18,33 @@ AI 코딩 에이전트와 함께 개발할 때 쓰는 **절차·검증 체계 �
    AI 산출물은 부피로 신뢰를 사칭한다. 검증 산출물은 발견만 기록하고,
    본 범위는 한 줄로 선언한다.
 
-자세한 근거: [`core/docs/artifact-rules.md`](core/docs/artifact-rules.md) ·
-[`core/docs/verification-layers.md`](core/docs/verification-layers.md)
+자세한 근거: [`common/docs/artifact-rules.md`](common/docs/artifact-rules.md) ·
+[`common/docs/verification-layers.md`](common/docs/verification-layers.md)
 
 ## 구조
 
 ```
-operator/              머신 단위 — ~/.claude 에 설치. 한 번만.
-  statusline-command.sh  세션 상태(리밋·컨텍스트·effort·PR) 한 줄 표시
-  CLAUDE.md              모든 프로젝트에 적용되는 작업 정책
-  settings.json          모델·effort·statusline 기본값
-
-core/                  프로젝트 단위 — 이 킷의 본체
-  docs/                산출물 규칙 · 검증 계층 (설계 근거)
-  templates/           SPEC · 추적 매트릭스 · ADR · dev-log · plan · PR 템플릿
+common/                에이전트 없이도 작동하는 것 — 킷의 본체
+  docs/                산출물 규칙(R1~R7) · 검증 계층 (설계 근거)
+  templates/           AGENTS.md · SPEC · 추적 매트릭스 · ADR · dev-log · plan · PR
   git-hooks/           pre-commit · pre-push  ← 진짜 강제가 사는 곳
+  gate/                게이트 본체 + 언어별 어댑터
   lint/                언어별 린터 설정 (하드룰을 린트 규칙으로 코드화)
-  ci/                  게이트 · 시크릿 스캔 · 취약점 스캔 · 배포 워크플로
+  ci/                  게이트 · 시크릿 스캔 · 취약점 스캔 워크플로
 
-bindings/              에이전트별 바인딩 — 개념은 같고 형식만 다르다
-  claude-code/         settings.json · hooks/ · skills/ · agents/
-  codex/               개념 대응표 + 도입 절차 (설정 파일 없음 — 의도된 것)
+claude-code/           Claude Code 가 있어야 의미 있는 것
+  settings.json · hooks/ · skills/ · agents/ · statusline-command.sh
+
+codex/                 개념 대응표 + 도입 절차 (설정 파일 없음 — 의도된 것)
 ```
+
+**`common/` 은 에이전트 없이도 작동한다** — git·CI·린터·사람이 그대로 실행한다.
+에이전트가 있어야 의미 있는 것만 도구 이름 디렉터리로 간다. 트리를 보면 도구 디렉터리가
+둘뿐이고 나머지가 전부 `common/` 이라는 게 드러나는데, 그것이 **설계 원칙 1의 시각적 증거**다.
+
+**테마·터미널 표시 모드·모델·effort 같은 개인 취향은 킷이 다루지 않는다.**
+`/config` 나 `~/.claude/settings.json` 에서 각자 정한다 — 킷이 박으면 개발자의
+`/model` 선택을 무력화한다.
 
 이어서 작업하려면 [`HANDOFF.md`](HANDOFF.md) 를 읽는다.
 
@@ -54,10 +59,9 @@ Codex · Cursor · Cline · Windsurf · Gemini CLI가 같은 형식을 읽는다
 
 | 부분 | 상태 |
 |---|---|
-| `core/` 전부 | **검증됨** — 실제 프로젝트에 적용해 결함을 잡음 |
-| `bindings/claude-code/` | **검증됨** — 상시 사용 |
-| `bindings/codex/` | **개념 대응표만** — 설정 파일은 두지 않는다(미검증 스텁 제거). 도입 절차는 그 README 에 |
-| `operator/` | **검증됨** — 상시 사용 중인 설정을 캡처 |
+| `common/` 전부 | **검증됨** — 실제 프로젝트에 적용해 결함을 잡음 |
+| `codex/` | **개념 대응표만** — 설정 파일은 두지 않는다(미검증 스텁 제거). 도입 절차는 그 README 에 |
+| `claude-code/` 의 statusline | **검증됨** — 상시 사용 중 |
 
 ## 누가 썼나 (정직하게)
 

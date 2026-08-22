@@ -26,7 +26,7 @@ $ARGUMENTS
 - **리뷰 반영 확인**: `review-diff` 가 남긴 `Request changes` 가 해소되지 않았으면 중단.
 
 > 이 확인은 편의이지 강제가 아니다. 진짜 강제는 GitHub 브랜치 보호다
-> (`core/ci/protect-branch.sh`). 브랜치 보호가 없는 레포라면 그 사실을 먼저 알린다.
+> (`common/ci/protect-branch.sh`). 브랜치 보호가 없는 레포라면 그 사실을 먼저 알린다.
 
 ## 3. 머지
 `git log main..HEAD --format='%s'` 로 커밋 제목을 보고 사소한 것(리뷰수정·fixup·포맷)을 뺀
