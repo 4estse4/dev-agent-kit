@@ -29,5 +29,19 @@ case "$file" in
   *.py)
     command -v ruff >/dev/null 2>&1 && ruff format "$file" >/dev/null 2>&1
     ;;
+  *.kt|*.kts)
+    # JVM 에는 gofmt 같은 "어디에나 있는 단일 파일 포매터" 가 없다. 있는 것만 쓰고
+    # 없으면 그냥 넘어간다 — 여기서 gradle spotlessApply 를 부르면 편집 한 번에
+    # JVM 기동 비용이 붙는다. 그건 편의가 아니라 세금이고, 게이트가 어차피 잡는다.
+    if command -v ktfmt >/dev/null 2>&1; then
+      ktfmt "$file" >/dev/null 2>&1
+    elif command -v ktlint >/dev/null 2>&1; then
+      ktlint -F "$file" >/dev/null 2>&1
+    fi
+    ;;
+  *.java)
+    command -v google-java-format >/dev/null 2>&1 \
+      && google-java-format -i "$file" >/dev/null 2>&1
+    ;;
 esac
 exit 0

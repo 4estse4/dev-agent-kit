@@ -59,6 +59,35 @@ discover() { # $1=마커파일 $2=어댑터명
 }
 discover go.mod       go
 discover package.json ts
+# JVM: 빌드 루트 마커를 먼저 본다. 멀티모듈이 기본이라 build.gradle 만 찾으면
+# 루트와 서브모듈이 모두 잡히는데, 서브모듈에서 빌드를 부르면 래퍼도 settings 도
+# 없어 깨진다. 루트에서 한 번 도는 것이 모든 모듈을 덮는다.
+discover settings.gradle     jvm
+discover settings.gradle.kts jvm
+discover build.gradle        jvm
+discover build.gradle.kts    jvm
+discover pom.xml             jvm
+discover pyproject.toml      py
+
+# 같은 어댑터가 조상 디렉터리에서 이미 돌면 자손은 뺀다.
+# (Gradle 루트 + 서브모듈, Maven 부모 + 자식, 한 디렉터리에 마커가 둘인 경우 모두)
+if [ ${#TARGETS[@]} -gt 1 ]; then
+  _kept=()
+  for t in "${TARGETS[@]}"; do
+    a=${t%%|*}; d=${t#*|}; drop=0
+    for u in "${TARGETS[@]}"; do
+      b=${u%%|*}; e=${u#*|}
+      [ "$a" = "$b" ] || continue
+      [ "$d" = "$e" ] && continue
+      case "$d/" in "$e"/*) drop=1; break ;; esac
+    done
+    if [ "$drop" = 0 ]; then
+      # 같은 디렉터리에 마커가 둘 이상이면(build.gradle + settings.gradle) 한 번만 남긴다.
+      case " ${_kept[*]:-} " in *" $a|$d "*) ;; *) _kept+=("$a|$d") ;; esac
+    fi
+  done
+  TARGETS=("${_kept[@]}")
+fi
 
 if [ ${#TARGETS[@]} -eq 0 ]; then
   echo "gate — 검사 대상 없음"
