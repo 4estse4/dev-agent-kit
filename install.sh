@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 대상 레포에 킷을 설치한다. 대상 레포 안에서 실행한다.
 #
-#   <kit>/install.sh                     로컬 전부 (훅·템플릿·린트·CI·도구설정)
+#   <kit>/install.sh [프로젝트경로]      로컬 전부 (훅·템플릿·린트·CI·도구설정)
 #   <kit>/install.sh --hooks --lint      선택 설치
 #   <kit>/install.sh --protect           GitHub 브랜치 보호 설정 (원격 변경 — 별도 플래그)
 #   <kit>/install.sh --tools claude-code,codex
@@ -14,12 +14,13 @@
 set -uo pipefail
 
 KIT_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-TARGET=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "install: git 레포 안에서 실행하세요" >&2; exit 1; }
 
-DO_HOOKS=0 DO_TEMPLATES=0 DO_LINT=0 DO_CI=0 DO_PROTECT=0 TOOLS="" DO_UPDATE=0 DRY_RUN=0
-if [ $# -eq 0 ]; then
-  DO_HOOKS=1 DO_TEMPLATES=1 DO_LINT=1 DO_CI=1; TOOLS="claude-code"
-fi
+DO_HOOKS=0 DO_TEMPLATES=0 DO_LINT=0 DO_CI=0 DO_PROTECT=0 TOOLS="" DO_UPDATE=0 DRY_RUN=0 TARGET_ARG=""
+# 플래그가 하나도 없으면(경로만 있거나 아무것도 없으면) 전부 설치한다.
+case " $* " in
+  *" --"*) ;;
+  *) DO_HOOKS=1 DO_TEMPLATES=1 DO_LINT=1 DO_CI=1; TOOLS="claude-code" ;;
+esac
 while [ $# -gt 0 ]; do
   case "$1" in
     --hooks) DO_HOOKS=1; shift ;;
@@ -31,9 +32,27 @@ while [ $# -gt 0 ]; do
     --update) DO_UPDATE=1; DO_HOOKS=1 DO_TEMPLATES=1 DO_LINT=1 DO_CI=1; TOOLS="claude-code"; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
-    *) echo "install: 알 수 없는 인자 $1" >&2; exit 2 ;;
+    -*) echo "install: 알 수 없는 인자 $1" >&2; exit 2 ;;
+    *)
+      [ -n "$TARGET_ARG" ] && { echo "install: 프로젝트 경로는 하나만 받습니다" >&2; exit 2; }
+      TARGET_ARG="$1"; shift ;;
   esac
 done
+
+# 대상은 인자로 받는다. 없으면 CWD 로 폴백하되 **어디에 설치하는지 반드시 출력한다** —
+# cd 를 안 한 채 실행해 엉뚱한 레포에 설치하는 사고가 실제로 두 번 있었다.
+# git 루트 확인이 하는 일은 "여기가 레포냐" 뿐이라 인자를 받아도 똑같이 안전하고,
+# 인자를 받으면 CI 나 다른 스크립트에서 부를 수 있게 된다.
+if [ -n "$TARGET_ARG" ]; then
+  [ -d "$TARGET_ARG" ] || { echo "install: 그런 디렉터리가 없습니다 — $TARGET_ARG" >&2; exit 1; }
+  TARGET=$(git -C "$TARGET_ARG" rev-parse --show-toplevel 2>/dev/null) \
+    || { echo "install: git 레포가 아닙니다 — $TARGET_ARG" >&2; exit 1; }
+else
+  TARGET=$(git rev-parse --show-toplevel 2>/dev/null) \
+    || { echo "install: git 레포 안에서 실행하거나 경로를 넘기세요 — install.sh <프로젝트경로>" >&2; exit 1; }
+fi
+echo "install: 대상 $TARGET"
+echo "install: 킷   $KIT_ROOT"
 
 INSTALLED=(); SKIPPED=(); CONFLICTS=(); WARNINGS=(); MERGED=(); UNCHANGED=()
 
