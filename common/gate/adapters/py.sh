@@ -27,7 +27,9 @@ fi
 # 그것은 실패가 아니라 "수집할 것이 없음" 이다 — `go test ./...` 가 테스트 없는
 # 패키지에서 통과하는 것과 같이 취급한다. Go 는 통과하고 Python 만 실패하면
 # 언어에 따라 기준이 달라지고, 그런 게이트는 신뢰를 잃는다.
-if gate_have pytest; then
+if [ "${GATE_LINT_ONLY:-0}" = 1 ]; then
+  :
+elif gate_have pytest; then
   # shellcheck disable=SC2086
   out=$(pytest -q ${AI_KIT_PYTEST_FLAGS:-} 2>&1); rc=$?
   case "$rc" in

@@ -25,6 +25,10 @@ if ls ./*.kt ./*.kts >/dev/null 2>&1 || find . -name '*.kt' -not -path './build/
   fi
 fi
 
+# --lint 모드는 여기서 끝난다 — gradle check / mvn verify 는 컴파일과 테스트라
+# 커밋 단계에 두기엔 비싸다. 린트(ktlint)는 위에서 이미 돌았다.
+[ "${GATE_LINT_ONLY:-0}" = 1 ] && { return 0 2>/dev/null || exit 0; }
+
 # 래퍼가 있으면 래퍼를 쓴다. 프로젝트가 래퍼를 커밋하는 이유가 버전 고정인데
 # 시스템 설치본을 쓰면 그 고정이 무의미해지고, 사람마다 다른 버전으로 검사하게 된다.
 if [ -x ./gradlew ]; then

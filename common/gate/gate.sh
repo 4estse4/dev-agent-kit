@@ -5,6 +5,7 @@
 #   gate.sh              변경 영역만 검사 (기본: main/master merge-base 기준)
 #   gate.sh --base <ref> 기준 ref 지정
 #   gate.sh --all        전체 검사 (CI)
+#   gate.sh --lint       린트·정적분석만 (테스트·빌드 제외) — pre-commit 이 쓴다
 set -uo pipefail
 
 # 형제 파일은 자기 디렉터리 기준으로 찾는다 — 킷 원본이든 대상 레포에 vendor 된
@@ -14,17 +15,23 @@ REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "gate: git 레�
 cd "$REPO_ROOT" || exit 1
 
 BASE=""; ALL=0
+# --lint: 린트·정적분석만 돌린다(테스트·빌드 제외). pre-commit 이 쓴다.
+# 게이트 정의를 훅에 복붙하지 않기 위한 모드다 — 검사 목록이 두 벌이 되면 어긋난다.
+GATE_LINT_ONLY=0
+
 while [ $# -gt 0 ]; do
   case "$1" in
     --base) BASE="${2:-}"; shift 2 ;;
     --all)  ALL=1; shift ;;
-    -h|--help) sed -n '2,9p' "$0"; exit 0 ;;
+    --lint) GATE_LINT_ONLY=1; shift ;;
+    -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
     *) echo "gate: 알 수 없는 인자 $1" >&2; exit 2 ;;
   esac
 done
 
 # --all 은 CI 에서 쓰인다. 거기서 도구 부재는 통과가 아니라 "검사 안 됨"이므로
 # 엄격 모드를 기본으로 켠다. 로컬 훅은 도구가 없을 수 있어 관대하게 둔다.
+export GATE_LINT_ONLY
 [ "$ALL" = 1 ] && : "${GATE_STRICT:=1}"
 export GATE_STRICT="${GATE_STRICT:-0}"
 

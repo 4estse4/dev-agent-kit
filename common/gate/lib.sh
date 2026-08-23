@@ -9,6 +9,23 @@ GATE_FAILOUT=""
 
 gate_have() { command -v "$1" >/dev/null 2>&1; }
 
+# Go 도구를 부르는 방법을 한 곳에서 정한다.
+#
+# go.mod 의 `tool` 지시어(Go 1.24+)가 선언한 도구는 `go tool <이름>` 으로 부를 수 있고,
+# 그러면 **로컬과 CI 가 반드시 같은 버전**을 쓴다. PATH 의 바이너리는 사람마다 버전이
+# 다르고, 아예 없으면 검사가 조용히 빠진다 — 실제로 이 킷을 쓰는 머신에 goimports 가
+# 없어서 편집 시 import 정렬이 안 되고 있었고 아무도 몰랐다.
+#
+# 선언돼 있으면 그것을 쓰고(버전 일치가 우선), 없으면 PATH 를 본다.
+# 출력: 실행할 명령을 배열로 echo. 못 찾으면 빈 문자열 + 실패.
+gate_go_tool() { # $1=도구 이름 (예: goimports)
+  if [ -f go.mod ] && grep -qE "^(tool[[:space:]]|[[:space:]]*).*/$1\$" go.mod 2>/dev/null; then
+    printf 'go tool %s' "$1"; return 0
+  fi
+  if gate_have "$1"; then printf '%s' "$1"; return 0; fi
+  return 1
+}
+
 # 도구 발견을 사용자의 셸 프로필에 의존하지 않는다.
 #
 # `go install` 로 받은 도구(goimports·govulncheck 등)는 GOPATH/bin 에 들어가는데
