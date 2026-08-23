@@ -6,6 +6,7 @@
 #   gate.sh --base <ref> 기준 ref 지정
 #   gate.sh --all        전체 검사 (CI)
 #   gate.sh --lint       린트·정적분석만 (테스트·빌드 제외) — pre-commit 이 쓴다
+#   gate.sh --staged     검사 범위를 스테이지된 파일로 (커밋하려는 그것)
 set -uo pipefail
 
 # 형제 파일은 자기 디렉터리 기준으로 찾는다 — 킷 원본이든 대상 레포에 vendor 된
@@ -18,12 +19,18 @@ BASE=""; ALL=0
 # --lint: 린트·정적분석만 돌린다(테스트·빌드 제외). pre-commit 이 쓴다.
 # 게이트 정의를 훅에 복붙하지 않기 위한 모드다 — 검사 목록이 두 벌이 되면 어긋난다.
 GATE_LINT_ONLY=0
+# --staged: 검사 범위를 "커밋하려는 것" 으로 잡는다.
+# 이게 없으면 pre-commit 이 엉뚱한 것을 검사한다 — 기본 범위는 main...HEAD 라서,
+# 브랜치에 커밋이 이미 하나라도 있으면 **지금 스테이지한 파일이 범위 밖**이 된다.
+# 킷이 강제하는 흐름(보호 브랜치 → feature 브랜치)에서는 두 번째 커밋부터 항상 그렇다.
+STAGED=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --base) BASE="${2:-}"; shift 2 ;;
     --all)  ALL=1; shift ;;
     --lint) GATE_LINT_ONLY=1; shift ;;
+    --staged) STAGED=1; shift ;;
     -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
     *) echo "gate: 알 수 없는 인자 $1" >&2; exit 2 ;;
   esac
@@ -59,8 +66,13 @@ if [ "$ALL" = 0 ]; then
       git rev-parse --verify -q "$ref" >/dev/null 2>&1 && { BASE="$ref"; break; }
     done
   fi
-  [ -n "$BASE" ] && CHANGED=$(git diff --name-only "$BASE...HEAD" 2>/dev/null || true)
-  [ -z "$CHANGED" ] && CHANGED=$(git diff --name-only HEAD 2>/dev/null || true)
+  if [ "$STAGED" = 1 ]; then
+    # quotePath 기본값(true)은 비ASCII 경로를 octal 로 이스케이프해 따옴표째 내보낸다.
+    # 그 이름으로는 파일을 못 찾는다 — 한국어 문서가 산출물인 이 킷에서 바로 물린다.
+    CHANGED=$(git -c core.quotePath=false diff --cached --name-only 2>/dev/null || true)
+  fi
+  [ -z "$CHANGED" ] && [ -n "$BASE" ] && CHANGED=$(git diff --name-only "$BASE...HEAD" 2>/dev/null || true)
+  [ -z "$CHANGED" ] && [ "$STAGED" != 1 ] && CHANGED=$(git diff --name-only HEAD 2>/dev/null || true)
   [ -z "$CHANGED" ] && ALL=1
 fi
 

@@ -5,9 +5,27 @@
 GATE_PASSED=()
 GATE_FAILED=()
 GATE_SKIPPED=()
+GATE_ABSENT=()
 GATE_FAILOUT=""
 
 gate_have() { command -v "$1" >/dev/null 2>&1; }
+
+# Go 도구를 부르는 방법을 한 곳에서 정한다.
+#
+# go.mod 의 `tool` 지시어(Go 1.24+)가 선언한 도구는 `go tool <이름>` 으로 부를 수 있고,
+# 그러면 **로컬과 CI 가 반드시 같은 버전**을 쓴다. PATH 의 바이너리는 사람마다 버전이
+# 다르고, 아예 없으면 검사가 조용히 빠진다 — 실제로 이 킷을 쓰는 머신에 goimports 가
+# 없어서 편집 시 import 정렬이 안 되고 있었고 아무도 몰랐다.
+#
+# 선언돼 있으면 그것을 쓰고(버전 일치가 우선), 없으면 PATH 를 본다.
+# 출력: 실행할 명령을 배열로 echo. 못 찾으면 빈 문자열 + 실패.
+gate_go_tool() { # $1=도구 이름 (예: goimports)
+  if [ -f go.mod ] && grep -qE "^(tool[[:space:]]|[[:space:]]*).*/$1\$" go.mod 2>/dev/null; then
+    printf 'go tool %s' "$1"; return 0
+  fi
+  if gate_have "$1"; then printf '%s' "$1"; return 0; fi
+  return 1
+}
 
 # 고정 버전을 읽는다. 버전은 tool-versions 한 곳에만 적는다 — 여기나 CI 에
 # 숫자를 박으면 반드시 갈라진다.
@@ -45,7 +63,7 @@ gate_install_hint() { # $1=도구 이름
         golangci-lint) echo "go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$v" ;;
         govulncheck)   echo "go install golang.org/x/vuln/cmd/govulncheck@$v" ;;
         ruff)          echo "uv tool install ruff==$v  (또는 pipx install ruff==$v)" ;;
-        ktlint)        echo "curl -fsSLo ktlint https://github.com/pinterest/ktlint/releases/download/$v/ktlint && chmod +x ktlint" ;;
+        ktlint)        echo "bash .ai-kit/gate/install-tools.sh  (수동: curl -fsSLo \"\$HOME/.local/bin/ktlint\" https://github.com/pinterest/ktlint/releases/download/$v/ktlint && chmod +x \"\$HOME/.local/bin/ktlint\")" ;;
       esac
       ;;
     mypy|pytest)          echo "프로젝트 의존성으로 설치한다(uv sync / pip install -e '.[dev]')" ;;
@@ -148,6 +166,13 @@ gate_checksum() {
     done | _gate_hash | cut -c1-16 )
 }
 
+# gate_absent: 도구는 있는데 **프로젝트가 그 단계를 선언하지 않은** 경우.
+# gate_skip 과 다르다 — 환경이 덜 갖춰진 게 아니라 프로젝트가 그렇게 구성한 것이고,
+# 이걸 실패로 만들면 평범한 JS 프로젝트가 쓰지도 않는 typecheck 스크립트를 억지로
+# 만들어야 한다. 그러면 사람은 AI_KIT_ALLOW_MISSING_TOOLS 를 상시로 켜게 되고,
+# 그 순간 진짜 도구 부재까지 함께 꺼진다. 보고는 하되 막지 않는다.
+gate_absent() { GATE_ABSENT+=("$1"); }
+
 gate_skip() {
   # 이름에서 도구를 뽑는다. "golangci-lint" · "ruff" · "gradle(미설치·래퍼없음)" 등.
   local tool="${1%%(*}"; tool="${tool%% *}"
@@ -170,6 +195,9 @@ gate_report() {
   # 빈 배열 전개는 set -u에서 터지므로 길이를 먼저 확인한다.
   if [ ${#GATE_PASSED[@]} -gt 0 ]; then
     joined=$(printf '%s · ' "${GATE_PASSED[@]}"); echo "gate ✓ ${joined% · }"
+  fi
+  if [ ${#GATE_ABSENT[@]} -gt 0 ]; then
+    joined=$(printf '%s · ' "${GATE_ABSENT[@]}"); echo "gate — 이 프로젝트에 없는 단계: ${joined% · }"
   fi
   if [ ${#GATE_SKIPPED[@]} -gt 0 ]; then
     joined=$(printf '%s · ' "${GATE_SKIPPED[@]}"); echo "gate — 건너뜀(도구 없음): ${joined% · }"

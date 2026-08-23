@@ -12,6 +12,9 @@ set -uo pipefail
 SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=/dev/null
 . "$SELF_DIR/lib.sh"
+# 게이트와 같은 PATH 로 판정한다. 안 그러면 게이트는 "있다" 하고 설치기는 "없다" 해서,
+# 이미 있는 도구를 다시 깔고 dry-run 이 거짓말을 한다.
+gate_extend_path
 
 DRY=0 ALL=0
 while [ $# -gt 0 ]; do

@@ -32,8 +32,14 @@ export PATH
 
 case "$file" in
   *.go)
-    command -v gofmt     >/dev/null 2>&1 && gofmt -w "$file" 2>/dev/null     || _missing="gofmt"
-    command -v goimports >/dev/null 2>&1 && goimports -w "$file" 2>/dev/null || _missing="${_missing:+$_missing, }goimports"
+    # 부재와 실행 실패를 구분한다. gofmt 는 구문 오류에 exit 2 를 내는데, 그것을
+    # "도구 없음" 으로 보고하면 에이전트가 자기가 만든 구문 오류 대신 설치 안내를 읽는다.
+    if command -v gofmt >/dev/null 2>&1; then
+      gofmt -w "$file" 2>/dev/null || _failed="gofmt"
+    else _missing="gofmt"; fi
+    if command -v goimports >/dev/null 2>&1; then
+      goimports -w "$file" 2>/dev/null || true
+    else _missing="${_missing:+$_missing, }goimports"; fi
     ;;
   *.ts|*.tsx|*.js|*.jsx|*.mjs|*.css|*.scss|*.json|*.md|*.html|*.yml|*.yaml)
     # package.json 이 있는 가장 가까운 조상에서 prettier 를 찾는다.
@@ -48,7 +54,9 @@ case "$file" in
     done
     ;;
   *.py)
-    command -v ruff >/dev/null 2>&1 && ruff format "$file" >/dev/null 2>&1 || _missing="ruff"
+    if command -v ruff >/dev/null 2>&1; then
+      ruff format "$file" >/dev/null 2>&1 || _failed="ruff"
+    else _missing="ruff"; fi
     ;;
   *.kt|*.kts)
     # JVM 에는 gofmt 같은 "어디에나 있는 단일 파일 포매터" 가 없다. 있는 것만 쓰고
@@ -66,6 +74,11 @@ esac
 
 # 포매터가 없으면 알린다. 예전에는 무음으로 넘어가서, 포맷이 안 된 채 진행되다가
 # 커밋·푸시에서야 드러났다. exit 2 는 stderr 를 에이전트에게 보여준다.
+# 실행 실패는 대개 편집 중간 상태의 구문 오류다 — 알리되 설치 안내를 붙이지 않는다.
+if [ -n "${_failed:-}" ]; then
+  echo "post_edit: ${_failed} 가 ${file##*/} 을 포맷하지 못했습니다 — 구문 오류일 수 있습니다." >&2
+  exit 2
+fi
 if [ -n "${_missing:-}" ]; then
   echo "post_edit: 포매터가 없어 ${file##*/} 을 포맷하지 못했습니다 — ${_missing}" >&2
   echo "  설치: bash .ai-kit/gate/install-tools.sh   (버전은 .ai-kit/gate/tool-versions)" >&2
