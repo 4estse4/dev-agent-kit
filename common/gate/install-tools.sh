@@ -48,20 +48,28 @@ for t in "${need[@]}"; do
   case "$t" in
     goimports|golangci-lint|govulncheck)
       gate_have go || { failed+=("$t (go 가 없습니다 — 런타임은 직접 설치하세요)"); continue; }
+      # hint 가 설치 명령이 아니라 안내문이면(버전을 못 읽은 경우) 실행하지 않는다.
+      case "$hint" in
+        "go install "*) ;;
+        *) failed+=("$t ($hint)"); continue ;;
+      esac
       # shellcheck disable=SC2086
       if eval "$hint"; then installed+=("$t"); else failed+=("$t"); fi
       ;;
     ruff)
+      v=$(gate_tool_version ruff)
+      [ -n "$v" ] || { failed+=("$t (고정 버전을 읽지 못했습니다)"); continue; }
       if gate_have uv; then
-        uv tool install "ruff==$(gate_tool_version ruff)" && installed+=("$t") || failed+=("$t")
+        uv tool install "ruff==$v" && installed+=("$t") || failed+=("$t")
       elif gate_have pipx; then
-        pipx install "ruff==$(gate_tool_version ruff)" && installed+=("$t") || failed+=("$t")
+        pipx install "ruff==$v" && installed+=("$t") || failed+=("$t")
       else
         failed+=("$t (uv 도 pipx 도 없습니다 — $hint)")
       fi
       ;;
     ktlint)
       v=$(gate_tool_version ktlint)
+      [ -n "$v" ] || { failed+=("$t (고정 버전을 읽지 못했습니다)"); continue; }
       dest="${AI_KIT_BIN_DIR:-$HOME/.local/bin}"
       mkdir -p "$dest" || { failed+=("$t ($dest 를 만들지 못했습니다)"); continue; }
       if curl -fsSL -o "$dest/ktlint" \

@@ -20,45 +20,41 @@ gate_tool_version() { # $1=키(goimports·golangci_lint·ruff·ktlint·govulnche
 }
 
 # 도구별 설치 명령. 안내가 없으면 사람은 검색부터 해야 하고, 그러면 버전이 갈라진다.
+#
+# **버전 폴백을 두지 않는다.** ${v:-1.8.0} 이나 ${v:-latest} 같은 기본값을 넣으면
+# tool-versions 를 못 읽었을 때 조용히 다른 버전을 안내하게 되고, 그 순간 단일 출처가
+# 둘이 된다. @latest 폴백은 더 나쁘다 — 재현성 때문에 핀해놓고 정반대를 시키는 꼴이다.
+# 못 읽으면 못 읽었다고 말한다.
 gate_install_hint() { # $1=도구 이름
   local v
   case "$1" in
-    goimports)      v=$(gate_tool_version goimports);     echo "go install golang.org/x/tools/cmd/goimports@${v:-latest}" ;;
-    golangci-lint)  v=$(gate_tool_version golangci_lint); echo "go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${v:-latest}" ;;
-    govulncheck)    v=$(gate_tool_version govulncheck);   echo "go install golang.org/x/vuln/cmd/govulncheck@${v:-latest}" ;;
-    ruff)           v=$(gate_tool_version ruff);          echo "pipx install ruff==${v:-} (또는 uv tool install ruff==${v:-})" ;;
-    ktlint)         v=$(gate_tool_version ktlint);        echo "curl -fsSLo ktlint https://github.com/pinterest/ktlint/releases/download/${v:-1.8.0}/ktlint && chmod +x ktlint" ;;
-    mypy)           echo "프로젝트 의존성으로 설치한다(uv sync / pip install -e '.[dev]')" ;;
-    pytest)         echo "프로젝트 의존성으로 설치한다(uv sync / pip install -e '.[dev]')" ;;
+    goimports|golangci-lint|govulncheck|ruff|ktlint)
+      case "$1" in
+        goimports)     v=$(gate_tool_version goimports) ;;
+        golangci-lint) v=$(gate_tool_version golangci_lint) ;;
+        govulncheck)   v=$(gate_tool_version govulncheck) ;;
+        ruff)          v=$(gate_tool_version ruff) ;;
+        ktlint)        v=$(gate_tool_version ktlint) ;;
+      esac
+      if [ -z "$v" ]; then
+        echo "고정 버전을 읽지 못했습니다 — $GATE_TOOL_VERSIONS 를 확인하세요"
+        return 0
+      fi
+      case "$1" in
+        goimports)     echo "go install golang.org/x/tools/cmd/goimports@$v" ;;
+        golangci-lint) echo "go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$v" ;;
+        govulncheck)   echo "go install golang.org/x/vuln/cmd/govulncheck@$v" ;;
+        ruff)          echo "uv tool install ruff==$v  (또는 pipx install ruff==$v)" ;;
+        ktlint)        echo "curl -fsSLo ktlint https://github.com/pinterest/ktlint/releases/download/$v/ktlint && chmod +x ktlint" ;;
+      esac
+      ;;
+    mypy|pytest)          echo "프로젝트 의존성으로 설치한다(uv sync / pip install -e '.[dev]')" ;;
     go|java|python3|node) echo "런타임이다 — 프로젝트가 요구하는 버전을 설치한다" ;;
-    gradle)         echo "프로젝트에 gradle 래퍼(./gradlew)를 커밋하는 것이 정석이다" ;;
-    *)              echo "" ;;
+    gradle)               echo "프로젝트에 gradle 래퍼(./gradlew)를 커밋하는 것이 정석이다" ;;
+    *)                    echo "" ;;
   esac
 }
 
-# Go 도구를 부르는 방법을 한 곳에서 정한다.
-#
-# go.mod 의 `tool` 지시어(Go 1.24+)가 선언한 도구는 `go tool <이름>` 으로 부를 수 있고,
-# 그러면 **로컬과 CI 가 반드시 같은 버전**을 쓴다. PATH 의 바이너리는 사람마다 버전이
-# 다르고, 아예 없으면 검사가 조용히 빠진다 — 실제로 이 킷을 쓰는 머신에 goimports 가
-# 없어서 편집 시 import 정렬이 안 되고 있었고 아무도 몰랐다.
-#
-# 선언돼 있으면 그것을 쓰고(버전 일치가 우선), 없으면 PATH 를 본다.
-# 출력: 실행할 명령을 배열로 echo. 못 찾으면 빈 문자열 + 실패.
-gate_go_tool() { # $1=도구 이름 (예: goimports)
-  if [ -f go.mod ] && grep -qE "^(tool[[:space:]]|[[:space:]]*).*/$1\$" go.mod 2>/dev/null; then
-    printf 'go tool %s' "$1"; return 0
-  fi
-  if gate_have "$1"; then printf '%s' "$1"; return 0; fi
-  return 1
-}
-
-# 도구 발견을 사용자의 셸 프로필에 의존하지 않는다.
-#
-# `go install` 로 받은 도구(goimports·govulncheck 등)는 GOPATH/bin 에 들어가는데
-# 그 경로를 PATH 에 넣어두지 않은 환경이 흔하다. 그러면 게이트는 "도구 없음"으로
-# 검사를 건너뛰고, 사람마다·머신마다 실제로 도는 검사가 달라진다.
-# 게이트가 자기 PATH 를 스스로 넓혀서 그 차이를 없앤다.
 gate_extend_path() {
   local d
   for d in \
