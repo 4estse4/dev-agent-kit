@@ -1,0 +1,62 @@
+# 킷 템플릿의 액션 핀이 뒤처졌는지 주기적으로 본다.
+#
+# Dependabot 은 .github/workflows/ 와 루트 action.yml 만 훑는다(공식 문서). 킷의
+# 워크플로 원본은 common/ci/gates.yml 이라 그 범위 밖이고, 그대로 두면 새 프로젝트가
+# 낡은 채로 시작한다. 이 잡이 Dependabot 이 못 가는 자리를 대신 본다.
+#
+# 이것은 킷에 게이트를 거는 것이 아니다 — required check 도 브랜치 보호도 아니고,
+# 뒤처짐을 알리기만 한다. "킷이 자기 자신에게 게이트를 걸 것인가" 는 여전히 열린 결정이다.
+name: template action pins
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"     # 매주 월요일 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check pinned action versions in the template
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          out=$(bash common/ci/check-action-pins.sh 2>&1); rc=$?
+          printf '%s\n' "$out"
+          {
+            echo "rc=$rc"
+            echo "out<<EOF_OUT"
+            printf '%s\n' "$out"
+            echo "EOF_OUT"
+          } >> "$GITHUB_OUTPUT"
+          exit 0
+
+      # 뒤처졌으면(rc=1) 이슈를 연다. 조회 실패(rc=2)는 잡을 실패로 남긴다 —
+      # 판정하지 못한 것을 "이상 없음" 으로 넘기지 않는다.
+      - name: Open an issue when pins are behind
+        if: steps.check.outputs.rc == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BODY: ${{ steps.check.outputs.out }}
+        run: |
+          title="template action pins are behind"
+          existing=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$BODY"
+          else
+            gh issue create --title "$title" --body "$BODY"
+          fi
+
+      - name: Fail when the check could not decide
+        if: steps.check.outputs.rc == '2'
+        run: |
+          echo "::error::액션 태그를 조회하지 못해 판정할 수 없습니다"
+          exit 1

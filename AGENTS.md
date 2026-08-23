@@ -69,3 +69,4 @@ push 해서** 설치된 프로젝트들이 baseline 을 잃지 않게 한다.
 | 데모 설치 검증 | 깨끗한 레포를 만들고 `install.sh <경로>` → 커밋 → clone → 훅 동작 확인 |
 | 갱신 검증 | `install.sh <경로> --update --dry-run` 전후 트리 해시 비교 |
 | 게이트 자체 | 이 레포에는 검사 대상 언어가 없다 — `gate.sh` 는 "검사 대상 없음" 이 정상 |
+| 템플릿 액션 핀 | `bash common/ci/check-action-pins.sh` (주간 워크플로가 자동으로 돈다) |
