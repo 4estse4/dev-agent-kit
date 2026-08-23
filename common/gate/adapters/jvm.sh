@@ -1,11 +1,29 @@
 #!/usr/bin/env bash
 # JVM 게이트. CWD = 빌드 루트(settings.gradle* 또는 pom.xml 이 있는 곳). lib.sh 는 이미 source 됨.
 #
-# 진입점이 언어가 아니라 빌드 도구다 — 그래서 이 어댑터 하나가 Kotlin 과 Java 를 함께 덮는다.
-# 개별 품질 도구(spotless·ktlint·detekt·checkstyle)를 여기서 열거하지 않는다.
-# 프로젝트가 무엇을 켰는지는 프로젝트가 안다. Gradle 의 `check` 와 Maven 의 `verify` 가
-# 그 도구들이 스스로 갈고리를 거는 표준 집계 지점이므로, 거기 한 번만 붙는다.
-# (킷이 도구를 열거하면 프로젝트가 도구를 바꿀 때마다 킷을 고쳐야 한다.)
+# 빌드는 빌드 도구가, 린트는 독립 바이너리가 맡는다 — Go 와 같은 모양이다.
+# 진입점이 언어가 아니라 빌드 도구라서, 이 어댑터 하나가 Kotlin 과 Java 를 함께 덮는다.
+#
+#   린트   ktlint 를 직접 부른다. 독립 실행 바이너리를 배포하고 .editorconfig 를 규칙
+#          소스로 읽으므로, 프로젝트가 빌드 스크립트에 무엇을 등록했든 킷이 린트를
+#          보장할 수 있다. (spotless 처럼 빌드에 붙는 도구는 아래 check/verify 가 잡는다.)
+#   빌드   Gradle 의 `check` · Maven 의 `verify` 한 곳에만 붙는다. 프로젝트가 켠 품질
+#          플러그인이 스스로 갈고리를 거는 표준 집계 지점이다.
+#
+# 린트가 빌드 도구 판정보다 **앞에** 있는 것은 의도다. gradle 이 없다고 린트까지
+# 건너뛰면, 빌드 도구가 없는 환경에서 게이트가 조용히 아무것도 안 하게 된다.
+
+# 린트는 빌드 도구를 거치지 않고 직접 돈다 — golangci-lint 와 같은 모양이다.
+# ktlint 는 독립 실행 바이너리를 배포하고 .editorconfig 를 규칙 소스로 읽으므로,
+# 프로젝트가 빌드 스크립트에 무엇을 등록했든 상관없이 킷이 린트를 보장할 수 있다.
+# (spotless 를 켠 프로젝트라면 그쪽은 아래 check/verify 로 함께 잡힌다.)
+if ls ./*.kt ./*.kts >/dev/null 2>&1 || find . -name '*.kt' -not -path './build/*' -print -quit 2>/dev/null | grep -q .; then
+  if gate_have ktlint; then
+    gate_run "ktlint" ktlint --relative
+  else
+    gate_skip "ktlint"
+  fi
+fi
 
 # 래퍼가 있으면 래퍼를 쓴다. 프로젝트가 래퍼를 커밋하는 이유가 버전 고정인데
 # 시스템 설치본을 쓰면 그 고정이 무의미해지고, 사람마다 다른 버전으로 검사하게 된다.

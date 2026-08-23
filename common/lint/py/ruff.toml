@@ -1,0 +1,23 @@
+# 시작 설정. 프로젝트가 고쳐 쓰라고 두는 것이지 킷이 강제하는 규칙이 아니다.
+# (게이트는 이 파일이 있든 없든 ruff 를 돌린다 — 없으면 ruff 기본값으로 돈다.)
+line-length = 100
+target-version = "py312"
+
+[lint]
+# 기본(E,F)에 더해 실제로 버그를 잡는 것들만 켠다. 스타일 취향 규칙은 넣지 않는다 —
+# 규칙이 많을수록 끄게 되고, 끄는 린터는 없는 린터다.
+select = [
+  "E", "F",      # pycodestyle 오류 · pyflakes
+  "B",           # flake8-bugbear — 실수하기 쉬운 패턴
+  "I",           # isort — import 정렬
+  "UP",          # pyupgrade — 낡은 문법
+  "SIM",         # flake8-simplify
+  "RUF",         # ruff 고유 규칙
+]
+ignore = [
+  "E501",        # 줄 길이는 formatter 가 맡는다. 린터가 또 잡으면 중복이다.
+]
+
+[lint.per-file-ignores]
+# 테스트는 assert 와 픽스처 관용구가 많다.
+"tests/**" = ["B011"]

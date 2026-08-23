@@ -23,13 +23,20 @@ if [ -n "$_py_typed" ]; then
   gate_have mypy && gate_run "mypy" mypy . || gate_skip "mypy(설정은 있으나 미설치)"
 fi
 
-# pytest 도 테스트가 실재할 때만. 테스트 없는 디렉터리에서 pytest 는 exit 5 를 내는데
-# 그것을 실패로 보고하면 "테스트를 아직 안 썼다" 가 게이트 실패가 된다.
-if gate_have pytest && { [ -d tests ] || [ -d test ] || ls -1 test_*.py *_test.py >/dev/null 2>&1; }; then
+# pytest 는 있으면 무조건 돈다. 테스트가 하나도 없으면 pytest 는 exit 5 를 내는데,
+# 그것은 실패가 아니라 "수집할 것이 없음" 이다 — `go test ./...` 가 테스트 없는
+# 패키지에서 통과하는 것과 같이 취급한다. Go 는 통과하고 Python 만 실패하면
+# 언어에 따라 기준이 달라지고, 그런 게이트는 신뢰를 잃는다.
+if gate_have pytest; then
   # shellcheck disable=SC2086
-  gate_run "pytest" pytest -q ${AI_KIT_PYTEST_FLAGS:-}
-elif gate_have pytest; then
-  gate_skip "pytest(테스트 없음)"
+  out=$(pytest -q ${AI_KIT_PYTEST_FLAGS:-} 2>&1); rc=$?
+  case "$rc" in
+    0) GATE_PASSED+=("pytest") ;;
+    5) GATE_PASSED+=("pytest(테스트 없음)") ;;
+    *) GATE_FAILED+=("pytest")
+       GATE_FAILOUT+=$'\n'"──── pytest ────"$'\n'"$out"$'\n' ;;
+  esac
+  unset out rc
 else
   gate_skip "pytest"
 fi

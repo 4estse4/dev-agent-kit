@@ -267,6 +267,15 @@ if [ "$DO_LINT" = 1 ]; then
   [ -f "$TARGET/go.mod" ]         && place "$KIT_ROOT/common/lint/go/.golangci.yml" ".golangci.yml"
   [ -f "$TARGET/frontend/package.json" ] && place "$KIT_ROOT/common/lint/ts/eslint.config.js" "frontend/eslint.config.js"
   [ -f "$TARGET/package.json" ]          && place "$KIT_ROOT/common/lint/ts/eslint.config.js" "eslint.config.js"
+  # Python: ruff 는 ruff.toml 을 읽는다. pyproject 에 [tool.ruff] 가 이미 있으면
+  # 프로젝트가 그쪽을 쓰는 것이므로 건드리지 않는다(두 벌이 되면 어느 쪽이 이기는지 헷갈린다).
+  if [ -f "$TARGET/pyproject.toml" ] && ! grep -q '^\[tool\.ruff' "$TARGET/pyproject.toml" 2>/dev/null; then
+    place "$KIT_ROOT/common/lint/py/ruff.toml" "ruff.toml"
+  fi
+  # JVM: ktlint 는 .editorconfig 를 규칙 소스로 읽는다.
+  for m in settings.gradle settings.gradle.kts build.gradle build.gradle.kts pom.xml; do
+    [ -f "$TARGET/$m" ] && { place "$KIT_ROOT/common/lint/jvm/.editorconfig" ".editorconfig"; break; }
+  done
 fi
 
 if [ "$DO_CI" = 1 ]; then

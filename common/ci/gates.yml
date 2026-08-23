@@ -21,14 +21,25 @@ jobs:
     outputs:
       go: ${{ steps.d.outputs.go }}
       node: ${{ steps.d.outputs.node }}
+      jvm: ${{ steps.d.outputs.jvm }}
+      py: ${{ steps.d.outputs.py }}
     steps:
       - uses: actions/checkout@v7
       - id: d
+        # 여기서 감지하지 못한 언어는 gate 잡의 모든 단계가 건너뛰어지고
+        # 잡이 초록으로 끝난다 — 아무것도 검사하지 않은 채로. 어댑터를 추가하면
+        # 반드시 여기도 같이 추가해야 한다.
         run: |
           find . -name go.mod -not -path '*/node_modules/*' -maxdepth 3 | grep -q . \
             && echo "go=true" >> "$GITHUB_OUTPUT" || echo "go=false" >> "$GITHUB_OUTPUT"
           find . -name package.json -not -path '*/node_modules/*' -maxdepth 3 | grep -q . \
             && echo "node=true" >> "$GITHUB_OUTPUT" || echo "node=false" >> "$GITHUB_OUTPUT"
+          find . \( -name 'settings.gradle' -o -name 'settings.gradle.kts' \
+                    -o -name 'build.gradle' -o -name 'build.gradle.kts' -o -name 'pom.xml' \) \
+               -not -path '*/build/*' -maxdepth 3 | grep -q . \
+            && echo "jvm=true" >> "$GITHUB_OUTPUT" || echo "jvm=false" >> "$GITHUB_OUTPUT"
+          find . -name pyproject.toml -not -path '*/.venv/*' -maxdepth 3 | grep -q . \
+            && echo "py=true" >> "$GITHUB_OUTPUT" || echo "py=false" >> "$GITHUB_OUTPUT"
 
   vendored:
     runs-on: ubuntu-latest
@@ -89,6 +100,38 @@ jobs:
         run: |
           go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.1
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      # JVM: 빌드는 래퍼가 맡으므로 JDK 만 있으면 된다. 버전은 프로젝트가 정한다.
+      - if: needs.detect.outputs.jvm == 'true'
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.AI_KIT_JAVA_VERSION || '21' }}
+          cache: gradle
+      - if: needs.detect.outputs.jvm == 'true'
+        name: install ktlint
+        # 린트는 빌드 도구를 거치지 않고 직접 돈다 — golangci-lint 와 같은 모양이다.
+        # 버전을 핀한다. @latest 는 코드 변경 없이 규칙이 바뀌어 게이트가 빨개진다.
+        run: |
+          curl -fsSL -o /tmp/ktlint \
+            https://github.com/pinterest/ktlint/releases/download/1.8.0/ktlint
+          chmod +x /tmp/ktlint && sudo mv /tmp/ktlint /usr/local/bin/ktlint
+          ktlint --version
+
+      # Python: 도구는 프로젝트 환경의 것을 쓰는 것이 원칙이지만, ruff 는
+      # 프로젝트 의존성과 무관한 독립 바이너리라 버전을 핀해 설치한다.
+      # mypy·pytest 는 프로젝트가 자기 의존성으로 설치해야 한다(아래 주석 참조).
+      - if: needs.detect.outputs.py == 'true'
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: pyproject.toml
+      - if: needs.detect.outputs.py == 'true'
+        name: install ruff
+        run: pipx install ruff==0.15.6 && ruff --version
+      # 프로젝트가 mypy·pytest 를 쓰면 여기에 자기 의존성 설치 단계를 추가한다.
+      # 킷은 그것이 uv 인지 pip 인지 poetry 인지 알 수 없다 — 워크플로는 프로젝트 소유다.
+      #   - if: needs.detect.outputs.py == 'true'
+      #     run: uv sync --group dev   (또는 pip install -e '.[dev]')
 
       - if: needs.detect.outputs.node == 'true'
         uses: actions/setup-node@v7
