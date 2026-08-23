@@ -1,5 +1,11 @@
 # actions 를 major 태그로 쓰되 Dependabot 이 갱신을 열게 한다.
 # SHA 핀이 더 엄격하지만 사람이 손으로 갱신하면 결국 낡는다 — 자동 PR 이 실질적이다.
+#
+# 주의: github-actions 생태계는 `.github/workflows/` 만 훑는다. 킷의 템플릿 원본
+# (common/ci/gates.yml)은 그 경로가 아니므로 **Dependabot 이 갱신하지 않는다.**
+# 그래서 템플릿의 액션 버전은 시간이 지나면 뒤처지고, 새 프로젝트는 조금 낡은 상태로
+# 시작해 설치 직후 Dependabot PR 몇 개를 받는다(설치된 뒤에는 스스로 최신이 된다).
+# 킷 템플릿 쪽은 사람이 가끔 올려야 한다 — 자동화가 닿지 않는 범위다(산출물 규칙 R6).
 version: 2
 updates:
   - package-ecosystem: github-actions

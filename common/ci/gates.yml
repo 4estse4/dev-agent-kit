@@ -22,7 +22,7 @@ jobs:
       go: ${{ steps.d.outputs.go }}
       node: ${{ steps.d.outputs.node }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - id: d
         run: |
           find . -name go.mod -not -path '*/node_modules/*' -maxdepth 3 | grep -q . \
@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       # 로컬 훅은 clone 마다 활성화가 필요해 신뢰할 수 없다. 최소한 게이트가
       # 레포에 vendor 돼 있는지는 CI 가 확인한다 — 없으면 CI 도 못 돈다.
       - name: .ai-kit 게이트가 커밋돼 있는지
@@ -69,11 +69,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
 
       - if: needs.detect.outputs.go == 'true'
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with: { go-version-file: 'go.mod', cache: true }
       - if: needs.detect.outputs.go == 'true'
         run: |
@@ -91,7 +91,7 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - if: needs.detect.outputs.node == 'true'
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with: { node-version-file: '.nvmrc', cache: npm }
         continue-on-error: true
       - if: needs.detect.outputs.node == 'true'
@@ -112,8 +112,8 @@ jobs:
     #    services 를 여기에도 붙여야 한다. 없으면 그 테스트가 skip 되어
     #    커버리지가 과소 보고된다 — 틀린 숫자는 없느니만 못하다.
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with: { go-version-file: 'go.mod', cache: true }
       # 먼저 측정하고 보이게 한다. 임계값은 COVER_MIN 을 설정할 때만 강제한다 —
       # 첫날부터 실패하는 임계값은 결국 꺼진다.
@@ -138,7 +138,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
 
       - name: 시크릿 스캔 (PR 범위)
@@ -152,7 +152,7 @@ jobs:
           fi
 
       - if: needs.detect.outputs.go == 'true'
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with: { go-version-file: 'go.mod', cache: true }
       - if: needs.detect.outputs.go == 'true'
         name: govulncheck
@@ -171,7 +171,7 @@ jobs:
           exit $fail
 
       - if: needs.detect.outputs.node == 'true'
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with: { node-version-file: '.nvmrc' }
         continue-on-error: true
       - if: needs.detect.outputs.node == 'true'
@@ -185,6 +185,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       # SPEC 요구가 추적표에서 조용히 사라지는 것을 막는다.
       - run: bash .ai-kit/gate/trace.sh
