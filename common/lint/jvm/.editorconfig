@@ -1,5 +1,7 @@
 # ktlint 는 .editorconfig 를 규칙 소스로 읽는다 — 별도 설정 파일이 없다.
 # 시작 설정이고, 프로젝트가 고쳐 쓴다.
+#
+# Java 는 킷이 다루지 않는다 — jvm.sh 의 설명 참조.
 root = true
 
 [*]
@@ -14,9 +16,6 @@ max_line_length = 120
 ktlint_code_style = intellij_idea
 # import 순서를 강제하면 IDE 설정과 싸우는 일이 잦다 — 포맷터에 맡긴다.
 ktlint_standard_import-ordering = disabled
-
-[*.java]
-indent_size = 4
 
 [*.{yml,yaml,json}]
 indent_size = 2

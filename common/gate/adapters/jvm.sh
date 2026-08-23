@@ -2,7 +2,13 @@
 # JVM 게이트. CWD = 빌드 루트(settings.gradle* 또는 pom.xml 이 있는 곳). lib.sh 는 이미 source 됨.
 #
 # 빌드는 빌드 도구가, 린트는 독립 바이너리가 맡는다 — Go 와 같은 모양이다.
-# 진입점이 언어가 아니라 빌드 도구라서, 이 어댑터 하나가 Kotlin 과 Java 를 함께 덮는다.
+# 진입점이 언어가 아니라 빌드 도구(Gradle·Maven)라서 어댑터가 하나다.
+#
+# **린트가 보장되는 것은 Kotlin 뿐이다.** Java 는 지금 다루지 않는다 — 킷이 린터를
+# 꽂아주는 다른 언어들(Go·TS·Kotlin·Python)과 달리 Java 는 빈 채로 두었다.
+# Java 소스가 있어도 gradle check / mvn verify 로 **컴파일과 테스트는** 돌지만,
+# 프로젝트가 checkstyle 등을 스스로 켜지 않았다면 린트는 0이다.
+# 필요해지면 checkstyle 독립 CLI 를 ktlint 와 같은 모양으로 붙이면 된다.
 #
 #   린트   ktlint 를 직접 부른다. 독립 실행 바이너리를 배포하고 .editorconfig 를 규칙
 #          소스로 읽으므로, 프로젝트가 빌드 스크립트에 무엇을 등록했든 킷이 린트를

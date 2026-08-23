@@ -129,4 +129,11 @@ Co-Authored-By: Claude Opus 5 (xhigh) <noreply@anthropic.com>
 | 실행 | |
 | 테스트 | |
 | 게이트 전체 | `bash .ai-kit/gate/gate.sh` |
+| 린트만(빠름) | `bash .ai-kit/gate/gate.sh --lint` — 커밋 훅이 이것을 부른다 |
 | 요구 추적 검사 | `bash .ai-kit/gate/trace.sh` |
+| 게이트 도구 설치 | `bash .ai-kit/gate/install-tools.sh` (버전은 `.ai-kit/gate/tool-versions`) |
+
+> **도구가 없으면 검사는 실패한다** — 로컬도 CI 와 같은 기준이다. 도구 부재는 통과가
+> 아니라 "검사되지 않았다" 이고, 로컬만 관대하면 로컬에서 통과한 것이 CI 에서 실패해
+> 공용 자원과 사람 시간을 왕복에 쓴다. 불가피할 때만 `AI_KIT_ALLOW_MISSING_TOOLS=1` 로
+> 내리고, 그때 무엇이 검사되지 않는지 출력된다.

@@ -12,6 +12,9 @@ set -uo pipefail
 SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=/dev/null
 . "$SELF_DIR/lib.sh"
+# 게이트와 같은 PATH 로 판정한다. 안 그러면 게이트는 "있다" 하고 설치기는 "없다" 해서,
+# 이미 있는 도구를 다시 깔고 dry-run 이 거짓말을 한다.
+gate_extend_path
 
 DRY=0 ALL=0
 while [ $# -gt 0 ]; do
@@ -32,8 +35,9 @@ else
   find . -name go.mod -not -path '*/node_modules/*' -maxdepth 3 2>/dev/null | grep -q . \
     && { add goimports; add golangci-lint; add govulncheck; }
   find . -name pyproject.toml -maxdepth 3 2>/dev/null | grep -q . && add ruff
-  find . \( -name 'build.gradle*' -o -name 'settings.gradle*' -o -name pom.xml \) -maxdepth 3 2>/dev/null | grep -q . \
-    && add ktlint
+  # ktlint 는 Kotlin 린터다. 빌드 파일만 보고 넣으면 Java 전용 프로젝트에 쓸모없는
+  # 도구를 깔게 된다 — 실제 .kt 파일이 있을 때만 넣는다.
+  find . -name '*.kt' -not -path '*/build/*' -print -quit 2>/dev/null | grep -q . && add ktlint
 fi
 
 [ ${#need[@]} -eq 0 ] && { echo "install-tools — 이 레포에 필요한 도구가 없습니다."; exit 0; }
