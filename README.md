@@ -28,8 +28,11 @@ common/                에이전트 없이도 작동하는 것 — 킷의 본체
   docs/                산출물 규칙(R1~R7) · 검증 계층 (설계 근거)
   templates/           AGENTS.md · SPEC · 추적 매트릭스 · ADR · dev-log · plan · PR
   git-hooks/           pre-commit · pre-push  ← 진짜 강제가 사는 곳
-  gate/                게이트 본체 + 언어별 어댑터
+  gate/                게이트 본체 · 언어별 어댑터 · 도구 설치기
+    tool-versions      게이트 도구의 고정 버전 — **단일 출처**(CI·로컬·안내가 함께 읽음)
+    install-tools.sh   그 버전대로 설치
   lint/                언어별 린터 설정 (하드룰을 린트 규칙으로 코드화)
+                       go · ts · py · jvm(Kotlin). **Java 는 다루지 않는다**
   ci/                  게이트 · 시크릿 스캔 · 취약점 스캔 워크플로
 
 claude-code/           Claude Code 가 있어야 의미 있는 것

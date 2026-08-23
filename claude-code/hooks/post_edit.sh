@@ -62,10 +62,6 @@ case "$file" in
       _missing="ktlint"
     fi
     ;;
-  *.java)
-    command -v google-java-format >/dev/null 2>&1 \
-      && google-java-format -i "$file" >/dev/null 2>&1 || _missing="google-java-format"
-    ;;
 esac
 
 # 포매터가 없으면 알린다. 예전에는 무음으로 넘어가서, 포맷이 안 된 채 진행되다가
