@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 설치: <kit>/install.sh 가 .git/hooks/pre-commit 으로 링크한다.
-# 막는 것: (1) 보호 브랜치 직접 커밋  (2) 시크릿
+# 막는 것: (1) 보호 브랜치 직접 커밋  (2) 잘못된 신원  (3) 충돌 마커  (4) 시크릿
 #
 # 주의: `git commit --no-verify` 로 우회 가능하다. 그래서 이 훅은 '조기 피드백'이고,
 # 진짜 backstop 은 CI + 브랜치 보호다. (core/docs/verification-layers.md 참조)
@@ -49,6 +49,41 @@ if [ -f "$idfile" ]; then
   이 레포에만 지정:  git config user.email "$want"
   또는 ~/.gitconfig 의 includeIf 에 이 레포 경로를 추가하세요.
   기대값을 바꾸려면 .ai-kit/identity 를 수정합니다.
+MSG
+    exit 1
+  fi
+fi
+
+# ── 충돌 마커 ──
+# install.sh --update 는 3-way 병합이 실패하면 파일에 마커를 **일부러 남긴다**.
+# 즉 킷 자신이 이 사고 경로를 만든다. 마커가 든 파일이 커밋되면 설정·훅·워크플로가
+# 조용히 망가지고(JSON·YAML 은 파싱부터 실패한다) 아무도 바로 눈치채지 못한다.
+#
+# 스테이지된 내용만 본다 — 작업트리에 해소 중인 파일이 있어도 커밋 대상이 아니면
+# 막지 않는다. 진단 자체가 실패하면 통과시키지 않는다(검사가 고장 나면 조용히 통과 금지).
+staged=$(git diff --cached --name-only --diff-filter=ACM) || {
+  echo "pre-commit: 스테이지 목록을 읽지 못했습니다" >&2; exit 1; }
+if [ -n "$staged" ]; then
+  bad=""
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    # 텍스트가 아닌 파일은 건너뛴다.
+    git diff --cached --numstat -- "$f" | grep -q '^-' && continue
+    # `=======` 는 보지 않는다 — 마크다운 setext 제목 밑줄과 구분되지 않는다.
+    # 진짜 충돌에는 항상 세 마커가 다 있으므로, 뒤에 라벨이 붙어 모호하지 않은
+    # 두 개만으로 충분하다.
+    if git show ":$f" 2>/dev/null | grep -qE '^(<<<<<<< |>>>>>>> )'; then
+      bad="${bad}  $f"$'\n'
+    fi
+  done <<< "$staged"
+  if [ -n "$bad" ]; then
+    cat >&2 <<MSG
+
+병합 충돌 마커가 남은 채로 커밋하려 합니다:
+
+${bad}
+  해소한 뒤 다시 스테이지하세요. 킷 갱신 중이라면 해소 후
+  install.sh <경로> --update 를 다시 돌려야 baseline 이 맞습니다.
 MSG
     exit 1
   fi
