@@ -9,6 +9,33 @@ GATE_FAILOUT=""
 
 gate_have() { command -v "$1" >/dev/null 2>&1; }
 
+# 고정 버전을 읽는다. 버전은 tool-versions 한 곳에만 적는다 — 여기나 CI 에
+# 숫자를 박으면 반드시 갈라진다.
+# 경로는 gate.sh 가 이미 계산한 SELF_DIR 을 쓰고, 없으면 BASH_SOURCE 로 되짚는다.
+# (BASH_SOURCE 는 셸에 따라 다르게 잡히므로 여기에만 의존하지 않는다.)
+GATE_TOOL_VERSIONS="${GATE_TOOL_VERSIONS:-${SELF_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]:-.}")" 2>/dev/null && pwd)}/tool-versions}"
+gate_tool_version() { # $1=키(goimports·golangci_lint·ruff·ktlint·govulncheck)
+  [ -f "$GATE_TOOL_VERSIONS" ] || return 1
+  sed -n "s/^$1=//p" "$GATE_TOOL_VERSIONS" | head -1
+}
+
+# 도구별 설치 명령. 안내가 없으면 사람은 검색부터 해야 하고, 그러면 버전이 갈라진다.
+gate_install_hint() { # $1=도구 이름
+  local v
+  case "$1" in
+    goimports)      v=$(gate_tool_version goimports);     echo "go install golang.org/x/tools/cmd/goimports@${v:-latest}" ;;
+    golangci-lint)  v=$(gate_tool_version golangci_lint); echo "go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${v:-latest}" ;;
+    govulncheck)    v=$(gate_tool_version govulncheck);   echo "go install golang.org/x/vuln/cmd/govulncheck@${v:-latest}" ;;
+    ruff)           v=$(gate_tool_version ruff);          echo "pipx install ruff==${v:-} (또는 uv tool install ruff==${v:-})" ;;
+    ktlint)         v=$(gate_tool_version ktlint);        echo "curl -fsSLo ktlint https://github.com/pinterest/ktlint/releases/download/${v:-1.8.0}/ktlint && chmod +x ktlint" ;;
+    mypy)           echo "프로젝트 의존성으로 설치한다(uv sync / pip install -e '.[dev]')" ;;
+    pytest)         echo "프로젝트 의존성으로 설치한다(uv sync / pip install -e '.[dev]')" ;;
+    go|java|python3|node) echo "런타임이다 — 프로젝트가 요구하는 버전을 설치한다" ;;
+    gradle)         echo "프로젝트에 gradle 래퍼(./gradlew)를 커밋하는 것이 정석이다" ;;
+    *)              echo "" ;;
+  esac
+}
+
 # Go 도구를 부르는 방법을 한 곳에서 정한다.
 #
 # go.mod 의 `tool` 지시어(Go 1.24+)가 선언한 도구는 `go tool <이름>` 으로 부를 수 있고,
@@ -126,9 +153,16 @@ gate_checksum() {
 }
 
 gate_skip() {
+  # 이름에서 도구를 뽑는다. "golangci-lint" · "ruff" · "gradle(미설치·래퍼없음)" 등.
+  local tool="${1%%(*}"; tool="${tool%% *}"
+  local hint; hint=$(gate_install_hint "$tool")
   if [ "${GATE_STRICT:-0}" = "1" ]; then
     GATE_FAILED+=("$1(건너뜀)")
-    GATE_FAILOUT+=$'\n'"──── $1 ────"$'\n'"도구를 찾지 못해 이 검사가 실행되지 않았습니다."$'\n'"게이트는 GOPATH/bin·/usr/local/bin·/opt/homebrew/bin 을 자동으로 찾습니다 —"$'\n'"여기까지 왔다면 도구가 설치되지 않았거나 버전 매니저(nvm·asdf 등) 안에 있습니다."$'\n'"GATE_STRICT=0 으로 건너뛸 수 있으나, 그러면 이 검사는 돌지 않은 채 통과합니다."$'\n'
+    GATE_FAILOUT+=$'\n'"──── $1 ────"$'\n'"이 검사를 돌릴 도구가 없어 **검사되지 않았습니다.**"$'\n'
+    if [ -n "$hint" ]; then
+      GATE_FAILOUT+=$'\n'"  설치:  $hint"$'\n'
+    fi
+    GATE_FAILOUT+=$'\n'"  전부 설치:  bash .ai-kit/gate/install-tools.sh"$'\n'"  버전은 .ai-kit/gate/tool-versions 가 단일 출처입니다."$'\n'$'\n'"  불가피하게 건너뛰려면(그 검사는 돌지 않은 채 통과합니다):"$'\n'"    AI_KIT_ALLOW_MISSING_TOOLS=1 <명령>"$'\n'
   else
     GATE_SKIPPED+=("$1")
   fi

@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # PostToolUse: 편집한 파일을 자동 포맷한다.
-# 포맷만 한다 — 진단은 LSP, 전체 게이트는 git 훅과 CI 가 맡는다.
-# 절대 차단하지 않는다. 필요: jq
+# 포맷만 한다 — 진단은 LSP, 전체 게이트는 git 훅과 CI 가 맡는다. 필요: jq
+#
+# **이 훅은 차단할 수 없다** — PostToolUse 는 도구가 이미 실행된 뒤에 돈다(공식 문서).
+# 그래서 포매터가 없을 때 할 수 있는 최선은 exit 2 로 에이전트에게 알리는 것이다.
+# 실제로 막는 것은 pre-commit 의 게이트다(포맷 검사가 거기서 돈다).
 input=$(cat)
 file=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty')
 [ -z "$file" ] && exit 0
@@ -29,8 +32,8 @@ export PATH
 
 case "$file" in
   *.go)
-    command -v gofmt     >/dev/null 2>&1 && gofmt -w "$file" 2>/dev/null
-    command -v goimports >/dev/null 2>&1 && goimports -w "$file" 2>/dev/null
+    command -v gofmt     >/dev/null 2>&1 && gofmt -w "$file" 2>/dev/null     || _missing="gofmt"
+    command -v goimports >/dev/null 2>&1 && goimports -w "$file" 2>/dev/null || _missing="${_missing:+$_missing, }goimports"
     ;;
   *.ts|*.tsx|*.js|*.jsx|*.mjs|*.css|*.scss|*.json|*.md|*.html|*.yml|*.yaml)
     # package.json 이 있는 가장 가까운 조상에서 prettier 를 찾는다.
@@ -45,7 +48,7 @@ case "$file" in
     done
     ;;
   *.py)
-    command -v ruff >/dev/null 2>&1 && ruff format "$file" >/dev/null 2>&1
+    command -v ruff >/dev/null 2>&1 && ruff format "$file" >/dev/null 2>&1 || _missing="ruff"
     ;;
   *.kt|*.kts)
     # JVM 에는 gofmt 같은 "어디에나 있는 단일 파일 포매터" 가 없다. 있는 것만 쓰고
@@ -55,11 +58,21 @@ case "$file" in
       ktfmt "$file" >/dev/null 2>&1
     elif command -v ktlint >/dev/null 2>&1; then
       ktlint -F "$file" >/dev/null 2>&1
+    else
+      _missing="ktlint"
     fi
     ;;
   *.java)
     command -v google-java-format >/dev/null 2>&1 \
-      && google-java-format -i "$file" >/dev/null 2>&1
+      && google-java-format -i "$file" >/dev/null 2>&1 || _missing="google-java-format"
     ;;
 esac
+
+# 포매터가 없으면 알린다. 예전에는 무음으로 넘어가서, 포맷이 안 된 채 진행되다가
+# 커밋·푸시에서야 드러났다. exit 2 는 stderr 를 에이전트에게 보여준다.
+if [ -n "${_missing:-}" ]; then
+  echo "post_edit: 포매터가 없어 ${file##*/} 을 포맷하지 못했습니다 — ${_missing}" >&2
+  echo "  설치: bash .ai-kit/gate/install-tools.sh   (버전은 .ai-kit/gate/tool-versions)" >&2
+  exit 2
+fi
 exit 0

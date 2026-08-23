@@ -29,11 +29,22 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# --all 은 CI 에서 쓰인다. 거기서 도구 부재는 통과가 아니라 "검사 안 됨"이므로
-# 엄격 모드를 기본으로 켠다. 로컬 훅은 도구가 없을 수 있어 관대하게 둔다.
+# 도구가 없으면 "검사되지 않았다" 이지 "통과" 가 아니다. **로컬도 CI 와 같은 기준**이다.
+#
+# 예전에는 로컬만 관대했는데, 그러면 로컬에서 통과한 것이 CI 에서 실패한다.
+# 그 왕복(푸시 → 몇 분 대기 → 실패 확인 → 로컬 수정 → 다시 푸시)은 로컬에서
+# 30초면 끝날 일을 공용 자원과 사람 시간으로 치르는 것이다.
+#
+# 불가피할 때만 AI_KIT_ALLOW_MISSING_TOOLS=1 로 관대 모드로 내린다.
+# 조용히 내려가지 않는다 — 무엇이 검사되지 않는지 크게 찍는다.
 export GATE_LINT_ONLY
-[ "$ALL" = 1 ] && : "${GATE_STRICT:=1}"
-export GATE_STRICT="${GATE_STRICT:-0}"
+if [ "${AI_KIT_ALLOW_MISSING_TOOLS:-0}" = "1" ]; then
+  GATE_STRICT=0
+  echo "gate — AI_KIT_ALLOW_MISSING_TOOLS=1: 도구가 없는 검사는 건너뜁니다(통과가 아닙니다)." >&2
+else
+  : "${GATE_STRICT:=1}"
+fi
+export GATE_STRICT
 
 source "$SELF_DIR/lib.sh"
 

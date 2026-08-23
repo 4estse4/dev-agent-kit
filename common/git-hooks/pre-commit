@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 설치: <kit>/install.sh 가 .git/hooks/pre-commit 으로 링크한다.
-# 막는 것: (1) 보호 브랜치 직접 커밋  (2) 잘못된 신원  (3) 충돌 마커  (4) 시크릿
+# 막는 것: (1) 보호 브랜치 직접 커밋  (2) 잘못된 신원  (3) 충돌 마커  (4) 시크릿  (5) 린트
 #
 # 주의: `git commit --no-verify` 로 우회 가능하다. 그래서 이 훅은 '조기 피드백'이고,
 # 진짜 backstop 은 CI + 브랜치 보호다. (core/docs/verification-layers.md 참조)
@@ -90,4 +90,10 @@ MSG
 fi
 
 bash "$KIT/gate/secrets.sh" || exit 1
+
+# ── 린트 ──
+# 커밋은 의미 단위라 수 분~수 시간 작업의 끝에 온다. 거기에 린트 시간을 붙이는 것은
+# 감당되고, 얻는 것이 크다 — 위반을 그 커밋에서 잡으면 푸시할 때 커밋 여러 개를
+# 되짚지 않아도 된다. 테스트·빌드는 여기서 돌지 않는다(그건 pre-push 가 한다).
+bash "$KIT/gate/gate.sh" --lint || exit 1
 exit 0

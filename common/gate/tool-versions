@@ -1,0 +1,26 @@
+# 게이트가 쓰는 도구의 고정 버전. **단일 출처다.**
+#
+# 이 값을 읽는 곳:
+#   common/gate/lib.sh          도구가 없을 때 설치 안내에 버전을 넣는다
+#   common/gate/install-tools.sh 이 버전대로 설치한다
+#   common/ci/gates.yml         CI 가 이 버전대로 설치한다
+#
+# 여기 없는 도구(gradle·java·node·python3 런타임)는 프로젝트가 자기 방식으로 고정한다
+# — gradle 래퍼, .nvmrc, pyproject 의 requires-python. 킷이 이중으로 정하지 않는다.
+#
+# 형식: <이름>=<버전>  (셸이 source 할 수 있게 공백 없이)
+
+# Go — go install 로 받는다. go.mod 의 tool 지시어를 쓰는 프로젝트는 그쪽이 우선한다.
+goimports=v0.45.0
+golangci_lint=v2.13.1
+govulncheck=v1.7.0
+
+# Python — 독립 바이너리. 프로젝트 의존성과 무관하다.
+ruff=0.15.6
+
+# JVM — 독립 실행 바이너리(GitHub 릴리즈).
+ktlint=1.8.0
+
+# TypeScript 도구(eslint·prettier·tsc·vitest)는 여기 없다.
+# 프로젝트의 package.json + 락파일이 이미 버전을 고정하고, 게이트는 npm run 으로
+# 그것을 부른다 — 킷이 따로 핀하면 락파일과 두 벌이 되어 반드시 어긋난다.

@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# 게이트가 쓰는 도구를 tool-versions 에 적힌 버전으로 설치한다.
+#
+#   install-tools.sh              이 레포에 필요한 것만 (언어 감지)
+#   install-tools.sh --all        전부
+#   install-tools.sh --dry-run    무엇을 설치할지만 출력
+#
+# 버전을 여기 적지 않는다 — tool-versions 가 단일 출처다.
+# 런타임(go·java·node·python3)은 설치하지 않는다. 그건 프로젝트가 요구하는 버전이 있고,
+# 킷이 남의 머신에 런타임을 까는 것은 선을 넘는다.
+set -uo pipefail
+SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=/dev/null
+. "$SELF_DIR/lib.sh"
+
+DRY=0 ALL=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dry-run) DRY=1; shift ;;
+    --all) ALL=1; shift ;;
+    -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
+    *) echo "install-tools: 알 수 없는 인자 $1" >&2; exit 2 ;;
+  esac
+done
+
+need=()
+add() { case " ${need[*]:-} " in *" $1 "*) ;; *) need+=("$1") ;; esac; }
+
+if [ "$ALL" = 1 ]; then
+  add goimports; add golangci-lint; add govulncheck; add ruff; add ktlint
+else
+  find . -name go.mod -not -path '*/node_modules/*' -maxdepth 3 2>/dev/null | grep -q . \
+    && { add goimports; add golangci-lint; add govulncheck; }
+  find . -name pyproject.toml -maxdepth 3 2>/dev/null | grep -q . && add ruff
+  find . \( -name 'build.gradle*' -o -name 'settings.gradle*' -o -name pom.xml \) -maxdepth 3 2>/dev/null | grep -q . \
+    && add ktlint
+fi
+
+[ ${#need[@]} -eq 0 ] && { echo "install-tools — 이 레포에 필요한 도구가 없습니다."; exit 0; }
+
+installed=(); skipped=(); failed=()
+for t in "${need[@]}"; do
+  if gate_have "$t"; then skipped+=("$t (이미 있음: $(command -v "$t"))"); continue; fi
+  hint=$(gate_install_hint "$t")
+  if [ "$DRY" = 1 ]; then echo "  설치 예정  $t → $hint"; continue; fi
+
+  echo "── $t 설치 ──"
+  case "$t" in
+    goimports|golangci-lint|govulncheck)
+      gate_have go || { failed+=("$t (go 가 없습니다 — 런타임은 직접 설치하세요)"); continue; }
+      # shellcheck disable=SC2086
+      if eval "$hint"; then installed+=("$t"); else failed+=("$t"); fi
+      ;;
+    ruff)
+      if gate_have uv; then
+        uv tool install "ruff==$(gate_tool_version ruff)" && installed+=("$t") || failed+=("$t")
+      elif gate_have pipx; then
+        pipx install "ruff==$(gate_tool_version ruff)" && installed+=("$t") || failed+=("$t")
+      else
+        failed+=("$t (uv 도 pipx 도 없습니다 — $hint)")
+      fi
+      ;;
+    ktlint)
+      v=$(gate_tool_version ktlint)
+      dest="${AI_KIT_BIN_DIR:-$HOME/.local/bin}"
+      mkdir -p "$dest" || { failed+=("$t ($dest 를 만들지 못했습니다)"); continue; }
+      if curl -fsSL -o "$dest/ktlint" \
+           "https://github.com/pinterest/ktlint/releases/download/${v}/ktlint" \
+         && chmod +x "$dest/ktlint"; then
+        installed+=("$t → $dest/ktlint")
+        case ":$PATH:" in *":$dest:"*) ;; *) echo "  주의: $dest 가 PATH 에 없습니다." ;; esac
+      else failed+=("$t"); fi
+      ;;
+    *) failed+=("$t (설치 방법이 정의돼 있지 않습니다)") ;;
+  esac
+done
+
+[ "$DRY" = 1 ] && exit 0
+echo ""
+echo "install-tools — 설치 ${#installed[@]} · 이미있음 ${#skipped[@]} · 실패 ${#failed[@]}"
+[ ${#installed[@]} -gt 0 ] && printf '  ✓ %s\n' "${installed[@]}"
+[ ${#skipped[@]}   -gt 0 ] && printf '  · %s\n' "${skipped[@]}"
+if [ ${#failed[@]} -gt 0 ]; then printf '  ✗ %s\n' "${failed[@]}" >&2; exit 1; fi
+exit 0
