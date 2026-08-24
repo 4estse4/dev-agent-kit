@@ -138,17 +138,48 @@ jobs:
       # Python: 도구는 프로젝트 환경의 것을 쓰는 것이 원칙이지만, ruff 는
       # 프로젝트 의존성과 무관한 독립 바이너리라 버전을 핀해 설치한다.
       # mypy·pytest 는 프로젝트가 자기 의존성으로 설치해야 한다(아래 주석 참조).
+      # python-version-file 을 쓰지 않는다. 그것은 pyproject.toml 이 **레포 루트에**
+      # 있다고 가정하는데, 게이트는 마커를 어느 깊이에서든 찾으므로 py/pyproject.toml
+      # 같은 배치에서 "지정한 파일이 없다" 로 잡이 죽는다(실제로 러너에서 그랬다).
+      # 버전은 프로젝트가 pyproject 의 requires-python 으로 정하고, 여기서는 러너에
+      # 파이썬이 있게만 한다.
       - if: needs.detect.outputs.py == 'true'
         uses: actions/setup-python@v7
         with:
-          python-version-file: pyproject.toml
+          python-version: ${{ env.AI_KIT_PYTHON_VERSION || '3.12' }}
       - if: needs.detect.outputs.py == 'true'
         name: install ruff
         run: pipx install ruff==${{ steps.tv.outputs.ruff }} && ruff --version
-      # 프로젝트가 mypy·pytest 를 쓰면 여기에 자기 의존성 설치 단계를 추가한다.
-      # 킷은 그것이 uv 인지 pip 인지 poetry 인지 알 수 없다 — 워크플로는 프로젝트 소유다.
-      #   - if: needs.detect.outputs.py == 'true'
-      #     run: uv sync --group dev   (또는 pip install -e '.[dev]')
+      # 프로젝트의 개발 의존성(pytest·mypy 등)을 설치한다.
+      #
+      # 킷이 도구 이름을 정하지 않는다 — **프로젝트가 남긴 증거**로 방식을 고른다.
+      # 증거가 없으면 설치하지 않고 그 사실을 말한다. 추측해서 설치하면 프로젝트가
+      # 의도한 것과 다른 환경에서 테스트가 돌고, 그 차이는 조용히 숨는다.
+      - if: needs.detect.outputs.py == 'true'
+        name: install project dev dependencies
+        run: |
+          set -e
+          d=$(find . -name pyproject.toml -not -path '*/node_modules/*' \
+                -not -path '*/.venv/*' -print -quit | xargs -r dirname)
+          [ -n "$d" ] || { echo "pyproject.toml 을 찾지 못했습니다"; exit 0; }
+          cd "$d"
+          if [ -f uv.lock ]; then
+            pipx install uv && uv sync --all-groups
+            echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          elif [ -f poetry.lock ]; then
+            pipx install poetry && poetry install --with dev --no-root || poetry install
+            poetry env info --path >/dev/null && echo "$(poetry env info --path)/bin" >> "$GITHUB_PATH"
+          elif grep -q '^\[dependency-groups\]' pyproject.toml 2>/dev/null; then
+            python -m pip install --upgrade pip && python -m pip install --group dev . || python -m pip install -e .
+          elif grep -qE '^\[project\.optional-dependencies\]' pyproject.toml 2>/dev/null; then
+            python -m pip install -e '.[dev]'
+          elif [ -f requirements-dev.txt ]; then
+            python -m pip install -r requirements-dev.txt
+          else
+            echo "::notice::개발 의존성 선언을 찾지 못했습니다 — pytest·mypy 가 있는" \
+                 "프로젝트라면 uv.lock · poetry.lock · [dependency-groups] ·" \
+                 "[project.optional-dependencies] · requirements-dev.txt 중 하나로 선언하세요."
+          fi
 
       - if: needs.detect.outputs.node == 'true'
         uses: actions/setup-node@v7
