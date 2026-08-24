@@ -263,18 +263,35 @@ if [ "$DO_TEMPLATES" = 1 ]; then
 fi
 
 if [ "$DO_LINT" = 1 ]; then
-  [ -f "$TARGET/backend/go.mod" ] && place "$KIT_ROOT/common/lint/go/.golangci.yml" "backend/.golangci.yml"
-  [ -f "$TARGET/go.mod" ]         && place "$KIT_ROOT/common/lint/go/.golangci.yml" ".golangci.yml"
-  [ -f "$TARGET/frontend/package.json" ] && place "$KIT_ROOT/common/lint/ts/eslint.config.js" "frontend/eslint.config.js"
-  [ -f "$TARGET/package.json" ]          && place "$KIT_ROOT/common/lint/ts/eslint.config.js" "eslint.config.js"
-  # Python: ruff 는 ruff.toml 을 읽는다. pyproject 에 [tool.ruff] 가 이미 있으면
-  # 프로젝트가 그쪽을 쓰는 것이므로 건드리지 않는다(두 벌이 되면 어느 쪽이 이기는지 헷갈린다).
-  if [ -f "$TARGET/pyproject.toml" ] && ! grep -q '^\[tool\.ruff' "$TARGET/pyproject.toml" 2>/dev/null; then
-    place "$KIT_ROOT/common/lint/py/ruff.toml" "ruff.toml"
-  fi
-  # JVM: ktlint 는 .editorconfig 를 규칙 소스로 읽는다.
+  # 게이트와 **같은 방식**으로 찾는다. 예전에는 여기서 backend/·frontend/ 라는
+  # 디렉터리 이름을 가정했는데, 게이트는 마커 파일로 찾으므로 둘이 어긋났다 —
+  # services/api/pyproject.toml 같은 구조에서 게이트는 ruff 를 돌리는데 킷 설정이
+  # 그 자리에 없어 도구 기본값으로 돌았다. 찾은 자리마다 설정을 놓으면 이름을 몰라도 된다.
+  LINT_PRUNE=".git node_modules vendor build dist out target .venv venv .gradle .tox __pycache__ .next .nuxt coverage"
+  lint_prune=(); for d in $LINT_PRUNE; do lint_prune+=(-name "$d" -o); done
+  unset 'lint_prune[${#lint_prune[@]}-1]'
+
+  # $4 는 선택 인자다 — set -u 하에서는 ${4:-} 로 받아야 미설정일 때 안 터진다.
+  place_beside() { # $1=마커 $2=킷 설정 파일 $3=놓을 이름 $4=마커에 이 문자열이 있으면 건너뜀(선택)
+    local marker dir rel skip="${4:-}"
+    while IFS= read -r marker; do
+      dir=$(dirname "$marker"); rel=${dir#./}; [ "$rel" = "." ] && rel=""
+      # 프로젝트가 마커 안에 이미 설정을 갖고 있으면 두 벌을 만들지 않는다.
+      if [ -n "$skip" ] && grep -q "$skip" "$TARGET/${rel:+$rel/}$(basename "$marker")" 2>/dev/null; then
+        continue
+      fi
+      place "$2" "${rel:+$rel/}$3"
+    done < <(cd "$TARGET" && find . \( "${lint_prune[@]}" \) -prune -o -name "$1" -print 2>/dev/null)
+  }
+
+  place_beside go.mod         "$KIT_ROOT/common/lint/go/.golangci.yml"    ".golangci.yml"
+  place_beside package.json   "$KIT_ROOT/common/lint/ts/eslint.config.js" "eslint.config.js"
+  # pyproject 에 [tool.ruff] 가 이미 있으면 그쪽이 설정이다 — 두 벌을 만들지 않는다.
+  place_beside pyproject.toml "$KIT_ROOT/common/lint/py/ruff.toml"        "ruff.toml" \
+    '^\[tool\.ruff'
+  # JVM: 빌드 루트마다 .editorconfig. 마커가 여럿이면 같은 자리에 한 번만 놓인다(place 가 동일 파일을 건너뜀).
   for m in settings.gradle settings.gradle.kts build.gradle build.gradle.kts pom.xml; do
-    [ -f "$TARGET/$m" ] && { place "$KIT_ROOT/common/lint/jvm/.editorconfig" ".editorconfig"; break; }
+    place_beside "$m" "$KIT_ROOT/common/lint/jvm/.editorconfig" ".editorconfig"
   done
 fi
 
