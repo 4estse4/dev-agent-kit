@@ -8,6 +8,13 @@ on:
   push:
     branches: [main, master]
 
+# 워크플로 레벨 기본값. ${{ env.X }} 는 여기 선언된 것만 읽는다 —
+# env 블록 없이 `${{ env.X || '기본' }}` 을 쓰면 **항상 기본값**이 되고,
+# "오버라이드 가능" 은 거짓말이 된다. 프로젝트는 이 값을 고쳐서 바꾼다.
+env:
+  AI_KIT_JAVA_VERSION: "21"
+  AI_KIT_PYTHON_VERSION: "3.12"
+
 permissions:
   contents: read
 
@@ -113,7 +120,27 @@ jobs:
           go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${{ steps.tv.outputs.golangci_lint }}
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
-      # JVM: 빌드는 래퍼가 맡으므로 JDK 만 있으면 된다. 버전은 프로젝트가 정한다.
+      # JVM: 빌드는 래퍼가 맡으므로 JDK 만 있으면 된다.
+      #
+      # 래퍼가 없으면 **여기서 실패시킨다.** ubuntu 러너 이미지에는 gradle 이 들어
+      # 있어서 래퍼 없이도 CI 는 통과하는데, 그러면 (a) gradle 버전이 러너 이미지에
+      # 묶여 고정되지 않고 — ktlint·ruff·golangci-lint 를 핀한 이유와 정면으로
+      # 어긋난다 — (b) gradle 이 없는 개발자 머신에서는 로컬이 빨갛고 CI 만 초록이 된다.
+      # 그 드리프트가 이 워크플로가 존재하는 이유다.
+      - if: needs.detect.outputs.jvm == 'true'
+        name: require a committed build wrapper
+        run: |
+          if find . \( -name gradlew -o -name mvnw \) -not -path '*/node_modules/*' \
+               -print -quit | grep -q .; then
+            echo "빌드 래퍼를 찾았습니다."
+          else
+            echo "::error::Gradle/Maven 래퍼(./gradlew · ./mvnw)가 커밋돼 있지 않습니다."
+            echo "래퍼가 없으면 빌드 도구 버전이 러너 이미지에 묶여 고정되지 않고,"
+            echo "래퍼를 쓰지 않는 개발자 머신과 CI 가 서로 다른 버전으로 검사합니다."
+            echo "  gradle wrapper   (또는 mvn -N wrapper:wrapper) 후 커밋하세요."
+            exit 1
+          fi
+
       #
       # 이 액션 이름은 setup-java 지만 **Java 언어 지원이 아니라 JDK(자바 가상 머신)
       # 설치기**다. Kotlin 이 JVM 위에서 도는 언어라 컴파일에 JDK 가 필요하다.
@@ -141,8 +168,10 @@ jobs:
       # python-version-file 을 쓰지 않는다. 그것은 pyproject.toml 이 **레포 루트에**
       # 있다고 가정하는데, 게이트는 마커를 어느 깊이에서든 찾으므로 py/pyproject.toml
       # 같은 배치에서 "지정한 파일이 없다" 로 잡이 죽는다(실제로 러너에서 그랬다).
-      # 버전은 프로젝트가 pyproject 의 requires-python 으로 정하고, 여기서는 러너에
-      # 파이썬이 있게만 한다.
+      #
+      # 대신 워크플로 env 의 AI_KIT_PYTHON_VERSION 을 쓴다. **이것은 킷이 정한 기본값**
+      # 이고 requires-python 을 읽지 않는다 — 프로젝트가 다른 버전을 쓰면 위 env 를
+      # 고쳐야 한다. 워크플로는 프로젝트 소유이므로 그것이 정상 경로다.
       - if: needs.detect.outputs.py == 'true'
         uses: actions/setup-python@v7
         with:
@@ -159,27 +188,47 @@ jobs:
         name: install project dev dependencies
         run: |
           set -e
-          d=$(find . -name pyproject.toml -not -path '*/node_modules/*' \
-                -not -path '*/.venv/*' -print -quit | xargs -r dirname)
-          [ -n "$d" ] || { echo "pyproject.toml 을 찾지 못했습니다"; exit 0; }
-          cd "$d"
-          if [ -f uv.lock ]; then
-            pipx install uv && uv sync --all-groups
-            echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
-          elif [ -f poetry.lock ]; then
-            pipx install poetry && poetry install --with dev --no-root || poetry install
-            poetry env info --path >/dev/null && echo "$(poetry env info --path)/bin" >> "$GITHUB_PATH"
-          elif grep -q '^\[dependency-groups\]' pyproject.toml 2>/dev/null; then
-            python -m pip install --upgrade pip && python -m pip install --group dev . || python -m pip install -e .
-          elif grep -qE '^\[project\.optional-dependencies\]' pyproject.toml 2>/dev/null; then
-            python -m pip install -e '.[dev]'
-          elif [ -f requirements-dev.txt ]; then
-            python -m pip install -r requirements-dev.txt
-          else
-            echo "::notice::개발 의존성 선언을 찾지 못했습니다 — pytest·mypy 가 있는" \
-                 "프로젝트라면 uv.lock · poetry.lock · [dependency-groups] ·" \
-                 "[project.optional-dependencies] · requirements-dev.txt 중 하나로 선언하세요."
-          fi
+          # **모든** pyproject 를 돈다. 게이트는 마커가 있는 모든 디렉터리에서 py
+          # 어댑터를 돌리므로(조상-자손 제거는 jvm 에만 적용된다), 첫 하나만 설치하면
+          # 나머지는 도구 없이 검사되거나 남의 의존성으로 테스트가 돈다.
+          # 바로 아래 node 단계도 같은 이유로 전부 순회한다.
+          while IFS= read -r f; do
+            d=$(dirname "$f")          # xargs 를 쓰지 않는다 — 공백 있는 경로에서 깨진다
+            echo "── $d ──"
+            ( cd "$d"
+              if [ -f uv.lock ]; then
+                pipx install uv >/dev/null 2>&1 || true
+                # --locked: 락과 pyproject 가 어긋나면 조용히 갱신하지 말고 실패한다.
+                # 커밋된 락과 다른 해상도로 CI 가 통과하면 그 차이는 아무도 못 본다.
+                uv sync --locked --all-groups
+                echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+              elif [ -f poetry.lock ]; then
+                pipx install poetry >/dev/null 2>&1 || true
+                poetry install --with dev --no-root
+                echo "$(poetry env info --path)/bin" >> "$GITHUB_PATH"
+              elif python - <<'PYCHK'
+          import sys,tomllib,pathlib
+          d=tomllib.loads(pathlib.Path("pyproject.toml").read_text())
+          sys.exit(0 if "dev" in (d.get("dependency-groups") or {}) else 1)
+          PYCHK
+              then
+                python -m pip install --group dev -e .
+              elif python - <<'PYCHK'
+          import sys,tomllib,pathlib
+          d=tomllib.loads(pathlib.Path("pyproject.toml").read_text())
+          sys.exit(0 if "dev" in ((d.get("project") or {}).get("optional-dependencies") or {}) else 1)
+          PYCHK
+              then
+                python -m pip install -e '.[dev]'
+              elif [ -f requirements-dev.txt ]; then
+                python -m pip install -r requirements-dev.txt
+              else
+                echo "::notice::$d 에 dev 의존성 선언이 없습니다 — pytest·mypy 를 쓴다면" \
+                     "uv.lock · poetry.lock · [dependency-groups].dev ·" \
+                     "[project.optional-dependencies].dev · requirements-dev.txt 중 하나로 선언하세요."
+              fi
+            )
+          done < <(find . -name pyproject.toml -not -path '*/node_modules/*' -not -path '*/.venv/*')
 
       - if: needs.detect.outputs.node == 'true'
         uses: actions/setup-node@v7

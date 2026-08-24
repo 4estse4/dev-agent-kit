@@ -21,8 +21,12 @@ cd "$REPO" || exit 1
 
 ID_RE='R-[A-Z][A-Z0-9]*-[0-9]+'
 
-# 템플릿 자리표시자(R-XXX-nn, R-<AREA>-nn)는 제외한다.
-spec_ids=$(grep -oE "$ID_RE" "$SPEC" | grep -v 'R-XXX-' | sort -u)
+# SPEC 에서 ID 를 긁을 때 **HTML 주석 안은 제외한다.**
+# 예전에는 파일 전체를 긁어서, ID 형식을 설명하는 산문의 예시까지 요구로 읽혔다 —
+# 킷을 갓 설치한 레포가 CI 에서 바로 실패했다. 주석 안에 적으면 설명용임이 분명하고
+# 기계가 구분할 수 있다. (자리표시자 R-XXX-nn 도 계속 제외한다.)
+_spec_body=$(sed 's/<!--/\n<!--/g; s/-->/-->\n/g' "$SPEC" | grep -v '^<!--')
+spec_ids=$(printf '%s\n' "$_spec_body" | grep -oE "$ID_RE" | grep -v 'R-XXX-' | sort -u)
 mx_ids=$(grep -oE "^\| *$ID_RE" "$MATRIX" | grep -oE "$ID_RE" | grep -v 'R-XXX-' | sort -u)
 
 fail=0; report=""
