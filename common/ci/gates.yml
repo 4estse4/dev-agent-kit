@@ -128,24 +128,42 @@ jobs:
       # 어긋난다 — (b) gradle 이 없는 개발자 머신에서는 로컬이 빨갛고 CI 만 초록이 된다.
       # 그 드리프트가 이 워크플로가 존재하는 이유다.
       - if: needs.detect.outputs.jvm == 'true'
-        name: require a committed build wrapper
+        name: require an executable wrapper at every build root
         run: |
-          if find . \( -name gradlew -o -name mvnw \) -not -path '*/node_modules/*' \
-               -print -quit | grep -q .; then
-            echo "빌드 래퍼를 찾았습니다."
-          else
-            echo "::error::Gradle/Maven 래퍼(./gradlew · ./mvnw)가 커밋돼 있지 않습니다."
+          # 어댑터(adapters/jvm.sh)의 판정과 **같은 기준**으로 본다.
+          # 존재만 확인하면 두 판정이 어긋난다 — 실행권한 없는 gradlew 는 어댑터가
+          # `[ -x ./gradlew ]` 에서 거짓으로 보고 시스템 gradle 로 내려가는데,
+          # 러너 이미지에는 gradle 이 있어서 초록으로 끝난다. 훅에 대해 vendored 잡이
+          # 이미 하는 것과 같은 검사를 래퍼에도 한다.
+          #
+          # 빌드 루트마다 본다. 레포 어딘가에 래퍼가 하나만 있으면 통과시키면,
+          # 래퍼 없는 다른 빌드 루트가 시스템 gradle 로 조용히 검사된다.
+          fail=0
+          while IFS= read -r m; do
+            d=$(dirname "$m")
+            case "$(basename "$m")" in
+              pom.xml) w="$d/mvnw" ;;
+              *)       w="$d/gradlew" ;;
+            esac
+            if [ ! -f "$w" ]; then
+              echo "::error::$d 에 빌드 래퍼($(basename "$w"))가 없습니다."
+              fail=1
+            elif [ ! -x "$w" ]; then
+              echo "::error::$w 에 실행권한이 없습니다 — 어댑터가 시스템 빌드 도구로 내려갑니다."
+              echo "  git update-index --chmod=+x $w 로 고치고 커밋하세요."
+              fail=1
+            fi
+          done < <(find . \( -name 'settings.gradle' -o -name 'settings.gradle.kts' \
+                             -o -name pom.xml \) -not -path '*/node_modules/*' \
+                       -not -path '*/build/*' -not -path '*/target/*')
+          if [ "$fail" = 1 ]; then
             echo "래퍼가 없으면 빌드 도구 버전이 러너 이미지에 묶여 고정되지 않고,"
             echo "래퍼를 쓰지 않는 개발자 머신과 CI 가 서로 다른 버전으로 검사합니다."
             echo "  gradle wrapper   (또는 mvn -N wrapper:wrapper) 후 커밋하세요."
             exit 1
           fi
+          echo "모든 빌드 루트에 실행 가능한 래퍼가 있습니다."
 
-      #
-      # 이 액션 이름은 setup-java 지만 **Java 언어 지원이 아니라 JDK(자바 가상 머신)
-      # 설치기**다. Kotlin 이 JVM 위에서 도는 언어라 컴파일에 JDK 가 필요하다.
-      # 킷은 Java 소스를 검사하지 않는다 — ktlint 는 .kt 만 보고, Java 포매터·린터는
-      # 두지 않았다(common/gate/adapters/jvm.sh 의 설명 참조). 여기 있는 것은 런타임뿐이다.
       - if: needs.detect.outputs.jvm == 'true'
         uses: actions/setup-java@v5
         with:
@@ -196,16 +214,29 @@ jobs:
             d=$(dirname "$f")          # xargs 를 쓰지 않는다 — 공백 있는 경로에서 깨진다
             echo "── $d ──"
             ( cd "$d"
+              # $GITHUB_PATH 에 venv 를 얹지 않는다. 그것은 잡 전체에 prepend 되므로
+              # 패키지가 여럿이면 **어느 하나의 venv 가 전부를 이긴다** — 남의 의존성으로
+              # 테스트가 돌고, 핀해 설치한 ruff 도 프로젝트 것에 가려진다.
+              # 대신 어댑터가 자기 디렉터리의 .venv/bin 을 먼저 본다(adapters/py.sh).
               if [ -f uv.lock ]; then
                 pipx install uv >/dev/null 2>&1 || true
                 # --locked: 락과 pyproject 가 어긋나면 조용히 갱신하지 말고 실패한다.
                 # 커밋된 락과 다른 해상도로 CI 가 통과하면 그 차이는 아무도 못 본다.
                 uv sync --locked --all-groups
-                echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
               elif [ -f poetry.lock ]; then
                 pipx install poetry >/dev/null 2>&1 || true
-                poetry install --with dev --no-root
-                echo "$(poetry env info --path)/bin" >> "$GITHUB_PATH"
+                # in-project venv 로 강제해 어댑터가 .venv/bin 에서 찾게 한다.
+                poetry config virtualenvs.in-project true --local
+                # 그룹 이름을 추측하지 않는다 — `--with dev` 는 dev 그룹이 없으면
+                # exit 1 이라 set -e 아래에서 잡이 죽는다. 있을 때만 붙인다.
+                # --no-root 도 쓰지 않는다: 형제 분기(pip -e . · uv sync)는 루트를
+                # 설치하므로, 여기만 빼면 테스트가 자기 패키지를 import 하지 못한다.
+                if poetry check --quiet 2>/dev/null && \
+                   python -c "import sys,tomllib,pathlib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text()); sys.exit(0 if 'dev' in (((d.get('tool') or {}).get('poetry') or {}).get('group') or {}) else 1)"; then
+                  poetry install --with dev
+                else
+                  poetry install
+                fi
               elif python - <<'PYCHK'
           import sys,tomllib,pathlib
           d=tomllib.loads(pathlib.Path("pyproject.toml").read_text())

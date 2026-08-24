@@ -23,10 +23,28 @@ ID_RE='R-[A-Z][A-Z0-9]*-[0-9]+'
 
 # SPEC 에서 ID 를 긁을 때 **HTML 주석 안은 제외한다.**
 # 예전에는 파일 전체를 긁어서, ID 형식을 설명하는 산문의 예시까지 요구로 읽혔다 —
-# 킷을 갓 설치한 레포가 CI 에서 바로 실패했다. 주석 안에 적으면 설명용임이 분명하고
-# 기계가 구분할 수 있다. (자리표시자 R-XXX-nn 도 계속 제외한다.)
-_spec_body=$(sed 's/<!--/\n<!--/g; s/-->/-->\n/g' "$SPEC" | grep -v '^<!--')
-spec_ids=$(printf '%s\n' "$_spec_body" | grep -oE "$ID_RE" | grep -v 'R-XXX-' | sort -u)
+# 킷을 갓 설치한 레포가 CI 에서 바로 실패했다.
+#
+# 여러 줄 주석을 처리해야 한다. sed 로 한 줄씩 거르는 방식은 `<!--` 로 시작하는 줄만
+# 지워서 둘째 줄부터 살아남고, 정작 이 킷의 SPEC 템플릿이 여러 줄 주석을 쓴다.
+_strip_comments() { # stdin -> stdout, <!-- ... --> 안을 제거(같은 줄 열고닫기 포함)
+  awk '
+    { line = $0; out = ""
+      while (1) {
+        if (inc) {
+          e = index(line, "-->")
+          if (e == 0) { line = ""; break }
+          line = substr(line, e + 3); inc = 0
+        } else {
+          b = index(line, "<!--")
+          if (b == 0) { out = out line; break }
+          out = out substr(line, 1, b - 1); line = substr(line, b + 4); inc = 1
+        }
+      }
+      print out }
+  '
+}
+spec_ids=$(_strip_comments < "$SPEC" | grep -oE "$ID_RE" | grep -v 'R-XXX-' | sort -u)
 mx_ids=$(grep -oE "^\| *$ID_RE" "$MATRIX" | grep -oE "$ID_RE" | grep -v 'R-XXX-' | sort -u)
 
 fail=0; report=""
