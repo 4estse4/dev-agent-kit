@@ -78,26 +78,20 @@ fi
 
 # ── 어댑터 자동 발견: 마커 파일이 있는 디렉터리 = 그 언어의 루트 ──
 TARGETS=()
-# 마커를 찾을 때 건너뛸 디렉터리. 의존성·빌드 산출물이라 그 안의 마커는 우리 것이 아니다.
-# 이 목록이 정확하면 깊이 제한이 필요 없다 — 실측: 이 레포에서 package.json 이
-# 제한 없이 265개 걸리는데 node_modules 를 쳐내면 1개다.
-GATE_PRUNE_DIRS="${AI_KIT_PRUNE_DIRS:-.git node_modules vendor build dist out target .venv venv .gradle .tox __pycache__ .next .nuxt coverage}"
-
 discover() { # $1=마커파일 $2=어댑터명
   local marker dir rel
   # 깊이를 제한하지 않는다. 예전에는 maxdepth 3 이었는데 apps/svc/api/go.mod 같은
-  # 구조에서 마커를 못 찾고 "검사 대상 없음" 으로 **조용히 통과**했다 — 이 킷이 가장
-  # 경계하는 실패 형태다. 노이즈는 깊이가 아니라 위 목록으로 막는다.
-  local prune=() d
-  for d in $GATE_PRUNE_DIRS; do prune+=(-name "$d" -o); done
-  unset 'prune[${#prune[@]}-1]'
+  # 구조에서 마커를 못 찾고 "검사 대상 없음" 으로 **조용히 통과**했다.
+  # 노이즈는 깊이가 아니라 lib.sh 의 GATE_PRUNE_DIRS 로 막는다.
+  # shellcheck disable=SC2046
   while IFS= read -r marker; do
     dir=$(dirname "$marker"); rel=${dir#./}; [ "$rel" = "." ] && rel=""
     if [ "$ALL" = 1 ] || [ -z "$rel" ] || printf '%s\n' "$CHANGED" | grep -q "^${rel}/"; then
       TARGETS+=("$2|$dir")
     fi
-  done < <(find . \( "${prune[@]}" \) -prune -o -name "$1" -print 2>/dev/null)
+  done < <(find . \( $(gate_prune_expr) \) -prune -o -name "$1" -print 2>/dev/null)
 }
+
 discover go.mod       go
 discover package.json ts
 # JVM: 빌드 루트 마커를 먼저 본다. 멀티모듈이 기본이라 build.gradle 만 찾으면
@@ -110,8 +104,16 @@ discover build.gradle.kts    jvm
 discover pom.xml             jvm
 discover pyproject.toml      py
 
-# 같은 어댑터가 조상 디렉터리에서 이미 돌면 자손은 뺀다.
-# (Gradle 루트 + 서브모듈, Maven 부모 + 자식, 한 디렉터리에 마커가 둘인 경우 모두)
+# 조상 디렉터리에서 이미 도는 자손을 뺀다 — **JVM 에만 적용한다.**
+#
+# Gradle·Maven 은 루트에서 한 번 부르면 서브모듈을 다 덮으므로 자손을 또 부르면
+# 낭비이고, 서브모듈엔 래퍼도 settings 도 없어 깨진다.
+#
+# Go·TS·Python 은 다르다. 중첩된 go.mod 는 **독립 모듈**이라 조상에서 `go vet ./...`
+# 을 돌려도 자손에 닿지 않는다. 여기에 같은 규칙을 적용했다가 중첩 모듈이 통째로
+# 검사에서 빠졌고(콜드 리뷰가 잡음), 그건 깊이 제한을 없앤 이유와 정확히 같은 실패다.
+# 같은 디렉터리에 마커가 둘인 경우(build.gradle + settings.gradle)는 어댑터와
+# 무관하게 한 번만 남긴다.
 if [ ${#TARGETS[@]} -gt 1 ]; then
   _kept=()
   for t in "${TARGETS[@]}"; do
@@ -119,6 +121,7 @@ if [ ${#TARGETS[@]} -gt 1 ]; then
     for u in "${TARGETS[@]}"; do
       b=${u%%|*}; e=${u#*|}
       [ "$a" = "$b" ] || continue
+      [ "$a" = "jvm" ] || continue
       [ "$d" = "$e" ] && continue
       case "$d/" in "$e"/*) drop=1; break ;; esac
     done
