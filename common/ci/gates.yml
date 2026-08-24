@@ -114,6 +114,11 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       # JVM: 빌드는 래퍼가 맡으므로 JDK 만 있으면 된다. 버전은 프로젝트가 정한다.
+      #
+      # 이 액션 이름은 setup-java 지만 **Java 언어 지원이 아니라 JDK(자바 가상 머신)
+      # 설치기**다. Kotlin 이 JVM 위에서 도는 언어라 컴파일에 JDK 가 필요하다.
+      # 킷은 Java 소스를 검사하지 않는다 — ktlint 는 .kt 만 보고, Java 포매터·린터는
+      # 두지 않았다(common/gate/adapters/jvm.sh 의 설명 참조). 여기 있는 것은 런타임뿐이다.
       - if: needs.detect.outputs.jvm == 'true'
         uses: actions/setup-java@v5
         with:
