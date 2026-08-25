@@ -8,6 +8,13 @@ on:
   push:
     branches: [main, master]
 
+# 워크플로 레벨 기본값. ${{ env.X }} 는 여기 선언된 것만 읽는다 —
+# env 블록 없이 `${{ env.X || '기본' }}` 을 쓰면 **항상 기본값**이 되고,
+# "오버라이드 가능" 은 거짓말이 된다. 프로젝트는 이 값을 고쳐서 바꾼다.
+env:
+  AI_KIT_JAVA_VERSION: "21"
+  AI_KIT_PYTHON_VERSION: "3.12"
+
 permissions:
   contents: read
 
@@ -113,17 +120,67 @@ jobs:
           go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${{ steps.tv.outputs.golangci_lint }}
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
-      # JVM: 빌드는 래퍼가 맡으므로 JDK 만 있으면 된다. 버전은 프로젝트가 정한다.
+      # JVM: 빌드는 래퍼가 맡으므로 JDK 만 있으면 된다.
       #
-      # 이 액션 이름은 setup-java 지만 **Java 언어 지원이 아니라 JDK(자바 가상 머신)
-      # 설치기**다. Kotlin 이 JVM 위에서 도는 언어라 컴파일에 JDK 가 필요하다.
-      # 킷은 Java 소스를 검사하지 않는다 — ktlint 는 .kt 만 보고, Java 포매터·린터는
-      # 두지 않았다(common/gate/adapters/jvm.sh 의 설명 참조). 여기 있는 것은 런타임뿐이다.
+      # 래퍼가 없으면 **여기서 실패시킨다.** ubuntu 러너 이미지에는 gradle 이 들어
+      # 있어서 래퍼 없이도 CI 는 통과하는데, 그러면 (a) gradle 버전이 러너 이미지에
+      # 묶여 고정되지 않고 — ktlint·ruff·golangci-lint 를 핀한 이유와 정면으로
+      # 어긋난다 — (b) gradle 이 없는 개발자 머신에서는 로컬이 빨갛고 CI 만 초록이 된다.
+      # 그 드리프트가 이 워크플로가 존재하는 이유다.
+      - if: needs.detect.outputs.jvm == 'true'
+        name: require an executable wrapper at every build root
+        run: |
+          # 어댑터(adapters/jvm.sh)의 판정과 **같은 기준**으로 본다.
+          # 존재만 확인하면 두 판정이 어긋난다 — 실행권한 없는 gradlew 는 어댑터가
+          # `[ -x ./gradlew ]` 에서 거짓으로 보고 시스템 gradle 로 내려가는데,
+          # 러너 이미지에는 gradle 이 있어서 초록으로 끝난다. 훅에 대해 vendored 잡이
+          # 이미 하는 것과 같은 검사를 래퍼에도 한다.
+          #
+          # 빌드 루트마다 본다. 레포 어딘가에 래퍼가 하나만 있으면 통과시키면,
+          # 래퍼 없는 다른 빌드 루트가 시스템 gradle 로 조용히 검사된다.
+          fail=0
+          while IFS= read -r m; do
+            d=$(dirname "$m")
+            case "$(basename "$m")" in
+              pom.xml) w="$d/mvnw" ;;
+              *)       w="$d/gradlew" ;;
+            esac
+            if [ ! -f "$w" ]; then
+              echo "::error::$d 에 빌드 래퍼($(basename "$w"))가 없습니다."
+              fail=1
+            elif [ ! -x "$w" ]; then
+              echo "::error::$w 에 실행권한이 없습니다 — 어댑터가 시스템 빌드 도구로 내려갑니다."
+              echo "  git update-index --chmod=+x $w 로 고치고 커밋하세요."
+              fail=1
+            fi
+          # 빌드 루트는 **조상 하나**다 — gate.sh 의 판정과 같아야 한다.
+          # 마커가 있는 모든 디렉터리를 빌드 루트로 보면 표준 멀티모듈 레포(루트에만
+          # gradlew, 서브모듈마다 build.gradle)가 여기서 죽는다. 어댑터는 그 서브모듈에
+          # 들어가지도 않는데 CI 만 실패한다.
+          done < <(find . \( -name 'settings.gradle' -o -name 'settings.gradle.kts' \
+                             -o -name 'build.gradle' -o -name 'build.gradle.kts' \
+                             -o -name pom.xml \) -not -path '*/node_modules/*' \
+                       -not -path '*/build/*' -not -path '*/target/*' \
+                   | while IFS= read -r m; do printf '%s|%s\n' "$(dirname "$m")" "$m"; done \
+                   | sort -u -t'|' -k1,1 \
+                   | awk -F'|' '{
+                       keep = 1
+                       for (i = 1; i <= n; i++) if (index($1 "/", roots[i] "/") == 1 && $1 != roots[i]) keep = 0
+                       if (keep) { roots[++n] = $1; print $2 }
+                     }' )
+          if [ "$fail" = 1 ]; then
+            echo "래퍼가 없으면 빌드 도구 버전이 러너 이미지에 묶여 고정되지 않고,"
+            echo "래퍼를 쓰지 않는 개발자 머신과 CI 가 서로 다른 버전으로 검사합니다."
+            echo "  gradle wrapper   (또는 mvn -N wrapper:wrapper) 후 커밋하세요."
+            exit 1
+          fi
+          echo "모든 빌드 루트에 실행 가능한 래퍼가 있습니다."
+
       - if: needs.detect.outputs.jvm == 'true'
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: ${{ env.AI_KIT_JAVA_VERSION || '21' }}
+          java-version: ${{ env.AI_KIT_JAVA_VERSION }}
           cache: gradle
       - if: needs.detect.outputs.jvm == 'true'
         name: install ktlint
@@ -135,20 +192,88 @@ jobs:
           chmod +x /tmp/ktlint && sudo mv /tmp/ktlint /usr/local/bin/ktlint
           ktlint --version
 
-      # Python: 도구는 프로젝트 환경의 것을 쓰는 것이 원칙이지만, ruff 는
-      # 프로젝트 의존성과 무관한 독립 바이너리라 버전을 핀해 설치한다.
+      # Python: ruff 를 핀해 설치한다. 다만 이것은 **프로젝트가 ruff 를 선언하지 않았을
+      # 때의 바닥값**이다 — 선언했다면 어댑터가 그 venv 의 것을 먼저 쓴다(adapters/py.sh).
+      # 린트 규칙은 프로젝트 설정이 정하므로 버전도 프로젝트가 정하는 것이 맞고,
+      # 킷의 핀은 아무것도 선언하지 않은 레포가 검사 없이 지나가지 않게 하는 장치다.
       # mypy·pytest 는 프로젝트가 자기 의존성으로 설치해야 한다(아래 주석 참조).
+      # python-version-file 을 쓰지 않는다. 그것은 pyproject.toml 이 **레포 루트에**
+      # 있다고 가정하는데, 게이트는 마커를 어느 깊이에서든 찾으므로 py/pyproject.toml
+      # 같은 배치에서 "지정한 파일이 없다" 로 잡이 죽는다(실제로 러너에서 그랬다).
+      #
+      # 대신 워크플로 env 의 AI_KIT_PYTHON_VERSION 을 쓴다. **이것은 킷이 정한 기본값**
+      # 이고 requires-python 을 읽지 않는다 — 프로젝트가 다른 버전을 쓰면 위 env 를
+      # 고쳐야 한다. 워크플로는 프로젝트 소유이므로 그것이 정상 경로다.
       - if: needs.detect.outputs.py == 'true'
         uses: actions/setup-python@v7
         with:
-          python-version-file: pyproject.toml
+          python-version: ${{ env.AI_KIT_PYTHON_VERSION }}
       - if: needs.detect.outputs.py == 'true'
         name: install ruff
         run: pipx install ruff==${{ steps.tv.outputs.ruff }} && ruff --version
-      # 프로젝트가 mypy·pytest 를 쓰면 여기에 자기 의존성 설치 단계를 추가한다.
-      # 킷은 그것이 uv 인지 pip 인지 poetry 인지 알 수 없다 — 워크플로는 프로젝트 소유다.
-      #   - if: needs.detect.outputs.py == 'true'
-      #     run: uv sync --group dev   (또는 pip install -e '.[dev]')
+      # 프로젝트의 개발 의존성(pytest·mypy 등)을 설치한다.
+      #
+      # 킷이 도구 이름을 정하지 않는다 — **프로젝트가 남긴 증거**로 방식을 고른다.
+      # 증거가 없으면 설치하지 않고 그 사실을 말한다. 추측해서 설치하면 프로젝트가
+      # 의도한 것과 다른 환경에서 테스트가 돌고, 그 차이는 조용히 숨는다.
+      - if: needs.detect.outputs.py == 'true'
+        name: install project dev dependencies
+        run: |
+          set -e
+          # **모든** pyproject 를 돈다. 게이트는 마커가 있는 모든 디렉터리에서 py
+          # 어댑터를 돌리므로(조상-자손 제거는 jvm 에만 적용된다), 첫 하나만 설치하면
+          # 나머지는 도구 없이 검사되거나 남의 의존성으로 테스트가 돈다.
+          # 바로 아래 node 단계도 같은 이유로 전부 순회한다.
+          while IFS= read -r f; do
+            d=$(dirname "$f")          # xargs 를 쓰지 않는다 — 공백 있는 경로에서 깨진다
+            echo "── $d ──"
+            ( cd "$d"
+              # $GITHUB_PATH 에 venv 를 얹지 않는다. 그것은 잡 전체에 prepend 되므로
+              # 패키지가 여럿이면 **어느 하나의 venv 가 전부를 이긴다** — 남의 의존성으로
+              # 테스트가 돌고, 어느 패키지의 도구가 이길지도 순서에 좌우된다.
+              # 대신 어댑터가 자기 디렉터리의 .venv/bin 을 먼저 본다(adapters/py.sh).
+              if [ -f uv.lock ]; then
+                pipx install uv >/dev/null 2>&1 || true
+                # --locked: 락과 pyproject 가 어긋나면 조용히 갱신하지 말고 실패한다.
+                # 커밋된 락과 다른 해상도로 CI 가 통과하면 그 차이는 아무도 못 본다.
+                uv sync --locked --all-extras --all-groups   # extras 로 dev 를 선언한 레포도 덮는다
+              elif [ -f poetry.lock ]; then
+                pipx install poetry >/dev/null 2>&1 || true
+                # in-project venv 로 강제해 어댑터가 .venv/bin 에서 찾게 한다.
+                poetry config virtualenvs.in-project true --local
+                # 그룹 이름을 추측하지 않는다 — `--with dev` 는 dev 그룹이 없으면
+                # exit 1 이라 set -e 아래에서 잡이 죽는다. 있을 때만 붙인다.
+                # --no-root 도 쓰지 않는다: 형제 분기(pip -e . · uv sync)는 루트를
+                # 설치하므로, 여기만 빼면 테스트가 자기 패키지를 import 하지 못한다.
+                if poetry check --quiet 2>/dev/null && \
+                   python -c "import sys,tomllib,pathlib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text()); sys.exit(0 if 'dev' in (((d.get('tool') or {}).get('poetry') or {}).get('group') or {}) else 1)"; then
+                  poetry install --with dev
+                else
+                  poetry install
+                fi
+              elif python - <<'PYCHK'
+          import sys,tomllib,pathlib
+          d=tomllib.loads(pathlib.Path("pyproject.toml").read_text())
+          sys.exit(0 if "dev" in (d.get("dependency-groups") or {}) else 1)
+          PYCHK
+              then
+                python -m pip install --group dev -e .
+              elif python - <<'PYCHK'
+          import sys,tomllib,pathlib
+          d=tomllib.loads(pathlib.Path("pyproject.toml").read_text())
+          sys.exit(0 if "dev" in ((d.get("project") or {}).get("optional-dependencies") or {}) else 1)
+          PYCHK
+              then
+                python -m pip install -e '.[dev]'
+              elif [ -f requirements-dev.txt ]; then
+                python -m pip install -r requirements-dev.txt
+              else
+                echo "::notice::$d 에 dev 의존성 선언이 없습니다 — pytest·mypy 를 쓴다면" \
+                     "uv.lock · poetry.lock · [dependency-groups].dev ·" \
+                     "[project.optional-dependencies].dev · requirements-dev.txt 중 하나로 선언하세요."
+              fi
+            )
+          done < <(find . -name pyproject.toml -not -path '*/node_modules/*' -not -path '*/.venv/*')
 
       - if: needs.detect.outputs.node == 'true'
         uses: actions/setup-node@v7
