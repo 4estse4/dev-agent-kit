@@ -177,7 +177,7 @@ jobs:
           echo "모든 빌드 루트에 실행 가능한 래퍼가 있습니다."
 
       - if: needs.detect.outputs.jvm == 'true'
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: ${{ env.AI_KIT_JAVA_VERSION }}
