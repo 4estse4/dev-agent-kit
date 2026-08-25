@@ -153,9 +153,16 @@ jobs:
               echo "  git update-index --chmod=+x $w 로 고치고 커밋하세요."
               fail=1
             fi
+          # detect 와 **같은 마커 목록**을 본다. settings.gradle 만 보면
+          # settings 없는 단일모듈 Gradle 프로젝트(build.gradle 만 있는 흔한 형태)를
+          # 통째로 빠뜨려, 게이트는 jvm 어댑터를 돌리는데 래퍼 검사는 통과시킨다.
+          # 같은 디렉터리에 마커가 여럿이면 한 번만 본다.
           done < <(find . \( -name 'settings.gradle' -o -name 'settings.gradle.kts' \
+                             -o -name 'build.gradle' -o -name 'build.gradle.kts' \
                              -o -name pom.xml \) -not -path '*/node_modules/*' \
-                       -not -path '*/build/*' -not -path '*/target/*')
+                       -not -path '*/build/*' -not -path '*/target/*' \
+                   | while IFS= read -r m; do printf '%s|%s\n' "$(dirname "$m")" "$m"; done \
+                   | sort -u -t'|' -k1,1 | cut -d'|' -f2)
           if [ "$fail" = 1 ]; then
             echo "래퍼가 없으면 빌드 도구 버전이 러너 이미지에 묶여 고정되지 않고,"
             echo "래퍼를 쓰지 않는 개발자 머신과 CI 가 서로 다른 버전으로 검사합니다."
