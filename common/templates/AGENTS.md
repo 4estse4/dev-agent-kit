@@ -3,6 +3,10 @@
 > **규칙의 단일 출처.** Codex · Cursor · Cline · Windsurf · Gemini CLI 가 이 형식을 읽고,
 > Claude Code 는 `CLAUDE.md` 가 이 파일을 가리킨다. 규칙을 도구별로 갈라 쓰지 않는다.
 
+> **처음이면 [`docs/process/kit-guide.md`](docs/process/kit-guide.md) 를 먼저 읽어라.**
+> 킷이 자동으로 해주는 것 · **이 파일에서 네가 채워야 하는 것** · 킷이 못 하는 것이
+> 구분돼 있다. 아래 `<...>` 자리표시자가 남아 있으면 아직 안 채운 것이다.
+
 ## 이 문서를 쓰는 규칙
 
 1. **규칙마다 집행자를 표시한다** — `[hook]` `[lint]` `[CI]` `[test]` `[review]` `[사람]`
