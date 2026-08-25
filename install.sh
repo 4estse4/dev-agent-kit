@@ -256,6 +256,7 @@ if [ "$DO_TEMPLATES" = 1 ]; then
   place "$T/PULL_REQUEST_TEMPLATE.md"  ".github/PULL_REQUEST_TEMPLATE.md"
   # 설계 근거 문서는 프로젝트와 함께 다녀야 한다 — AGENTS.md 가 이것을 인용하는데
   # 킷 레포 경로로 가리키면 레포만 clone 한 사람은 따라갈 수 없다.
+  # kit-guide 는 설치 직후 한 번 읽는 문서다. 나머지 설계 근거 문서와 같은 자리에 둔다.
   for d in "$KIT_ROOT"/common/docs/*.md; do
     [ -f "$d" ] || continue
     place "$d" "docs/process/$(basename "$d")"
