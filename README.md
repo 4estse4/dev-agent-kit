@@ -53,10 +53,10 @@ codex/                 개념 대응표 + 도입 절차 (설정 파일 없음 �
 
 ### 규칙의 단일 출처는 `AGENTS.md`
 
-`AGENTS.md`는 Agentic AI Foundation(Linux Foundation) 산하 중립 표준이고
-Codex · Cursor · Cline · Windsurf · Gemini CLI가 같은 형식을 읽는다.
-그래서 **프로젝트 규칙은 `AGENTS.md`에 한 번만 쓰고**, `CLAUDE.md`는 그것을
-가리키는 얇은 파일로 둔다. 규칙이 도구별로 갈라지지 않는다.
+**프로젝트 규칙은 `AGENTS.md`에 한 번만 쓰고**, `CLAUDE.md`는 그것을 가리키는 얇은
+파일로 둔다. 규칙이 두 벌이 되면 반드시 어긋난다.
+
+킷이 설치하는 훅·스킬·서브에이전트는 Claude Code 전용이다.
 
 ## 검증 상태 (정직하게)
 

@@ -1,7 +1,6 @@
 # AGENTS.md — <프로젝트명>
 
-> **규칙의 단일 출처.** Codex · Cursor · Cline · Gemini CLI 가 이 파일명을 읽고,
-> Claude Code 는 `CLAUDE.md` 가 이 파일을 가리킨다. 규칙을 도구별로 갈라 쓰지 않는다.
+> **규칙의 단일 출처.** `CLAUDE.md` 가 이 파일을 가리킨다.
 > 처음이면 [`docs/process/kit-guide.md`](docs/process/kit-guide.md) 를 먼저 읽어라.
 
 ## 이 문서를 쓰는 규칙

@@ -5,7 +5,6 @@
 #                                        경로는 필수. 현재 위치면 "." 를 준다.
 #   <kit>/install.sh <경로> --hooks --lint   선택 설치
 #   <kit>/install.sh --protect           GitHub 브랜치 보호 설정 (원격 변경 — 별도 플래그)
-#   <kit>/install.sh --tools claude-code,codex
 #   <kit>/install.sh <경로> --update         설치된 킷을 갱신 (3-way 병합)
 #   <kit>/install.sh <경로> --update --dry-run   무엇이 바뀔지만 보고 아무것도 안 건드림
 #
@@ -16,11 +15,11 @@ set -uo pipefail
 
 KIT_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
-DO_HOOKS=0 DO_TEMPLATES=0 DO_LINT=0 DO_CI=0 DO_PROTECT=0 TOOLS="" DO_UPDATE=0 DRY_RUN=0 TARGET_ARG=""
+DO_HOOKS=0 DO_TEMPLATES=0 DO_LINT=0 DO_CI=0 DO_PROTECT=0 DO_AGENT=0 DO_UPDATE=0 DRY_RUN=0 TARGET_ARG=""
 # 플래그가 하나도 없으면(경로만 있거나 아무것도 없으면) 전부 설치한다.
 case " $* " in
   *" --"*) ;;
-  *) DO_HOOKS=1 DO_TEMPLATES=1 DO_LINT=1 DO_CI=1; TOOLS="claude-code" ;;
+  *) DO_HOOKS=1 DO_TEMPLATES=1 DO_LINT=1 DO_CI=1 DO_AGENT=1 ;;
 esac
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -29,8 +28,7 @@ while [ $# -gt 0 ]; do
     --lint) DO_LINT=1; shift ;;
     --ci) DO_CI=1; shift ;;
     --protect) DO_PROTECT=1; shift ;;
-    --tools) TOOLS="${2:-}"; shift 2 ;;
-    --update) DO_UPDATE=1; DO_HOOKS=1 DO_TEMPLATES=1 DO_LINT=1 DO_CI=1; TOOLS="claude-code"; shift ;;
+    --update) DO_UPDATE=1; DO_HOOKS=1 DO_TEMPLATES=1 DO_LINT=1 DO_CI=1 DO_AGENT=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
     -*) echo "install: 알 수 없는 인자 $1" >&2; exit 2 ;;
@@ -327,28 +325,15 @@ if [ "$DO_CI" = 1 ]; then
   done
 fi
 
-# ── 도구별 설정: 목적지가 다르다. README 같은 킷 문서는 설치하지 않는다. ──
-IFS=',' read -ra BL <<< "$TOOLS"
-for b in "${BL[@]:-}"; do
-  [ -z "$b" ] && continue
-  bdir="$KIT_ROOT/$b"
-  [ -d "$bdir" ] || { echo "install: 그런 도구가 없음 — $b" >&2; continue; }
-  case "$b" in
-    claude-code)
-      while IFS= read -r f; do
-        rel=${f#"$bdir"/}
-        [ "$rel" = "README.md" ] && continue
-        place "$f" ".claude/$rel"
-      done < <(find "$bdir" -type f)
-      ;;
-    codex)
-      # 설치할 설정 파일이 없다 — 검증 안 된 스텁을 두지 않기로 했다.
-      # codex/README.md 의 "실제로 Codex 를 도입할 때 할 일" 참조.
-      echo "install: codex 는 설치할 설정 파일이 없습니다 — codex/README.md 를 보세요" >&2
-      ;;
-    *) echo "install: 배치 규칙 없음 — $b" >&2 ;;
-  esac
-done
+# ── Claude Code 설정: 목적지가 다르다. README 같은 킷 문서는 설치하지 않는다. ──
+if [ "$DO_AGENT" = 1 ]; then
+  cc="$KIT_ROOT/claude-code"
+  while IFS= read -r f; do
+    rel=${f#"$cc"/}
+    [ "$rel" = "README.md" ] && continue
+    place "$f" ".claude/$rel"
+  done < <(find "$cc" -type f)
+fi
 
 # ── 원격 변경: 브랜치 보호 ──
 if [ "$DO_PROTECT" = 1 ]; then
