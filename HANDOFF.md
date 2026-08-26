@@ -34,7 +34,7 @@
 않으므로 "clone 하면 품질이 보장된다"는 약속의 일부가 될 수 없었다. 개인 취향
 (theme·model·effort)은 킷이 다루지 않기로 했다.
 
-규칙 단일 출처는 `AGENTS.md`. `CLAUDE.md` 는 포인터 한 줄.
+규칙 단일 출처는 `CLAUDE.md` 한 파일.
 **게이트 정의는 `.ai-kit/gate/` 에 vendor 되고, CI 워크플로·린터 설정은 프로젝트 소유**다
 (서비스 컨테이너·하드룰은 프로젝트마다 다르므로). 소유 경계는 README 참조.
 
@@ -91,8 +91,9 @@ CI 에서 실패해 공용 자원과 사람 시간을 왕복에 쓴다. 탈출�
   무변경 확인
 - **낡음 감지** — `SessionStart` 훅. 최신/낡음/모르는 rev/킷 없음 네 상태 실측
 - **`statusLine.command` 의 `$CLAUDE_PROJECT_DIR` 전개** — 문서에 없어서 직접 재봤다
-- **`@AGENTS.md` 임포트가 실제로 로드된다** — `/context` 의 Memory files 에
-  `CLAUDE.md 76 tokens · AGENTS.md 2k tokens` 로 잡혔다. 킷의 "규칙 단일 출처" 주장이
+- **규칙 파일이 실제로 로드된다** — `/context` 의 Memory files 에
+  `CLAUDE.md 76 tokens · AGENTS.md 2k tokens` 로 잡혔다(당시엔 두 파일이었다).
+  킷의 "규칙 단일 출처" 주장이
   문서 인용이 아니라 증거를 갖게 됐다
 - **검사별 실소요**(실 모노레포): eslint 6.5s · vitest 7.8s · tsc 2.5s · prettier 1.7s ·
   golangci-lint 0.9s · go test 0.3s(캐시 없으면 3.6s) · 전체 37~42s ·
@@ -207,5 +208,5 @@ gh issue list -R 4estse4/ai-native-kit
 - **킷 변경도 브랜치 → PR → 콜드 리뷰 → 머지다.** `main` 직접 커밋은 하지 않는다.
   게이트·훅을 킷에 설치할지는 여전히 열린 결정이지만, 작업 흐름은 이미 바꿨다(PR #1).
 - **킷 히스토리를 재작성하지 마라.** `.ai-kit/VERSION` 의 `kit_rev` 가 고아가 되고,
-  그 킷으로 설치한 모든 프로젝트가 자동 병합 능력을 잃는다. 자세한 것은 `AGENTS.md`.
+  그 킷으로 설치한 모든 프로젝트가 자동 병합 능력을 잃는다. 자세한 것은 `CLAUDE.md`.
 - **레포를 오갈 때 `git -C <path>` 를 써라.** `cd` 가 유지돼 엉뚱한 레포에 명령이 간 적이 두 번 있다.

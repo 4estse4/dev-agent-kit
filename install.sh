@@ -271,11 +271,15 @@ if [ "$DO_HOOKS" = 1 ]; then
 fi
 
 # ── 템플릿: 파일마다 목적지가 다르므로 명시적으로 매핑한다 ──
-# 추측(전부 docs/ 로)하면 AGENTS.md·PR 템플릿이 엉뚱한 데로 간다.
+# 추측(전부 docs/ 로)하면 CLAUDE.md·PR 템플릿이 엉뚱한 데로 간다.
 if [ "$DO_TEMPLATES" = 1 ]; then
   T="$KIT_ROOT/common/templates"
-  place "$T/AGENTS.md"                 "AGENTS.md"
   place "$T/CLAUDE.md"                 "CLAUDE.md"
+  # 옛 킷은 규칙을 AGENTS.md 에 두고 CLAUDE.md 를 포인터로 뒀다. 그 파일이 남아 있으면
+  # 규칙이 두 벌이 된다 — 지우지는 않는다(프로젝트가 고쳐 썼을 수 있다).
+  if [ -f "$TARGET/AGENTS.md" ]; then
+    WARNINGS+=("AGENTS.md 가 남아 있습니다 — 규칙은 이제 CLAUDE.md 한 곳입니다. 내용을 옮긴 뒤 지우세요")
+  fi
   place "$T/SPEC.md"                   "docs/SPEC.md"
   place "$T/traceability.md"           "docs/traceability.md"
   place "$T/dev-log.md"                "docs/dev-log.md"
@@ -283,7 +287,7 @@ if [ "$DO_TEMPLATES" = 1 ]; then
   place "$T/adr.md"                    "docs/adr/0000-template.md"
   place "$T/plan.md"                   "docs/plan/0000-template.md"
   place "$T/PULL_REQUEST_TEMPLATE.md"  ".github/PULL_REQUEST_TEMPLATE.md"
-  # 설계 근거 문서는 프로젝트와 함께 다녀야 한다 — AGENTS.md 가 이것을 인용하는데
+  # 설계 근거 문서는 프로젝트와 함께 다녀야 한다 — CLAUDE.md 가 이것을 인용하는데
   # 킷 레포 경로로 가리키면 레포만 clone 한 사람은 따라갈 수 없다.
   # kit-guide 는 설치 직후 한 번 읽는 문서다. 나머지 설계 근거 문서와 같은 자리에 둔다.
   for d in "$KIT_ROOT"/common/docs/*.md; do
@@ -393,7 +397,7 @@ if [ "$DO_HOOKS" = 1 ] && [ "$DO_UPDATE" = 0 ]; then
 ── 이제 할 일 ──
   1. .ai-kit/ 을 커밋하세요. 커밋하지 않으면 CI 도, 이 레포를 clone 한 사람도
      게이트를 갖지 못합니다.
-  2. docs/process/kit-guide.md 를 읽으세요. 무엇이 자동으로 돌고, AGENTS.md 에서
+  2. docs/process/kit-guide.md 를 읽으세요. 무엇이 자동으로 돌고, CLAUDE.md 에서
      무엇을 채워야 하고, 킷이 무엇을 안 하는지 적혀 있습니다.
 
 ── 참고 ──

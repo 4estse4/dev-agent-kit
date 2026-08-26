@@ -26,7 +26,7 @@ AI 코딩 에이전트와 함께 개발할 때 쓰는 **절차·검증 체계 �
 ```
 common/                에이전트 없이도 작동하는 것 — 킷의 본체
   docs/                산출물 규칙(R1~R7) · 검증 계층 (설계 근거)
-  templates/           AGENTS.md · SPEC · 추적 매트릭스 · ADR · dev-log · plan · PR
+  templates/           CLAUDE.md · SPEC · 추적 매트릭스 · ADR · dev-log · plan · PR
   git-hooks/           pre-commit · pre-push  ← 진짜 강제가 사는 곳
   gate/                게이트 본체 · 언어별 어댑터 · 도구 설치기
     tool-versions      게이트 도구의 고정 버전 — **단일 출처**(CI·로컬·안내가 함께 읽음)
@@ -51,12 +51,12 @@ codex/                 개념 대응표 + 도입 절차 (설정 파일 없음 �
 
 이어서 작업하려면 [`HANDOFF.md`](HANDOFF.md) 를 읽는다.
 
-### 규칙의 단일 출처는 `AGENTS.md`
+### 규칙의 단일 출처는 `CLAUDE.md`
 
-**프로젝트 규칙은 `AGENTS.md`에 한 번만 쓰고**, `CLAUDE.md`는 그것을 가리키는 얇은
-파일로 둔다. 규칙이 두 벌이 되면 반드시 어긋난다.
+**프로젝트 규칙은 `CLAUDE.md` 한 파일에만 쓴다.** 두 벌이 되면 반드시 어긋나고,
+어느 쪽이 진짜인지 아무도 모르게 된다.
 
-킷이 설치하는 훅·스킬·서브에이전트는 Claude Code 전용이다.
+이 킷은 Claude Code 용이다 — 훅·스킬·서브에이전트가 모두 Claude Code 기능이다.
 
 ## 검증 상태 (정직하게)
 
@@ -159,7 +159,7 @@ CI 가 같은 검사를 다시 도는 이유는 **로컬이 안 돌 수 있기 �
 | 대상 | 갱신 방식 |
 |---|---|
 | `.ai-kit/gate/` · `git-hooks/` | 킷 소유 — 통째로 교체 (프로젝트가 고치면 CI 체크섬이 잡는다) |
-| `AGENTS.md` · CI · 린터 · 스킬 | 프로젝트 소유 — 3-way 병합 |
+| `CLAUDE.md` · CI · 린터 · 스킬 | 프로젝트 소유 — 3-way 병합 |
 
 낡았는지는 `SessionStart` 훅이 한 줄로 알린다. CI 가 아니라 로컬인 이유: CI 에서 하려면
 러너가 킷 레포를 읽어야 하는데, **킷과 프로젝트가 같은 사람의 private 레포여도** Actions 의

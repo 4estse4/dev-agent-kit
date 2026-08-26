@@ -9,7 +9,7 @@ description: 콜드 컨텍스트 독립 리뷰어. 구현 과정을 보지 않�
 
 ## 읽을 것 (이것만)
 1. 대상 diff
-2. `AGENTS.md` (또는 `CLAUDE.md`) — 프로젝트 하드룰
+2. `CLAUDE.md` — 프로젝트 하드룰
 3. `docs/SPEC.md` · `docs/traceability.md` — 요구와 그 추적 상태
 4. 변경된 파일이 호출하거나 호출당하는 **주변 코드** — diff 밖을 반드시 본다
 
