@@ -81,7 +81,9 @@ MF_L='-L 이_레포 -L 설치시점_킷 -L 새_킷'
 # "킷이 바꾼 것"을 구분할 수 없어, 갱신이 덮어쓰기 아니면 포기 둘 중 하나가 된다.
 save_baseline() { # $1=src $2=dst(상대)
   [ "$DRY_RUN" = 1 ] && return 0
-  mkdir -p "$BASELINE/$(dirname "$2")" && cp "$1" "$BASELINE/$2"
+  mkdir -p "$BASELINE/$(dirname "$2")" && cp "$1" "$BASELINE/$2" || return 1
+  # 27개 파일이 설명 없이 복제되면 실수처럼 보인다 — 실제로 그렇게 읽혔다.
+  [ -f "$BASELINE/README.md" ] || cp "$KIT_ROOT/common/gate/BASELINE-README.md" "$BASELINE/README.md"
 }
 
 # 기존 파일을 보존하며 복사한다(설치).
@@ -232,12 +234,16 @@ if [ "$DO_HOOKS" = 1 ]; then
 
   # ── git 신원 확인 ──
   # 기존 커밋의 author 와 실효 설정이 다르면 기여 이력이 갈라진다.
+  # 기존 커밋의 저자와 현재 설정이 다르면 알린다. 다만 **다른 것이 정상인 경우가 많다**
+  # — 남이 만든 레포에 초대받으면 첫 커밋은 당연히 남의 것이다. 그래서 "고쳐라" 가
+  # 아니라 "이 값이 맞는지 확인하라" 로 묻고, 맞으면 할 일이 없다고 먼저 말한다.
   hist=$(git -C "$TARGET" log --format='%ae' 2>/dev/null | sort -u | head -3)
   eff=$(git -C "$TARGET" config user.email 2>/dev/null)
   if [ -n "$hist" ] && [ -n "$eff" ] && ! printf '%s\n' "$hist" | grep -qx "$eff"; then
-    WARNINGS+=("git 신원 불일치 — 기존 커밋: $(printf '%s ' $hist)/ 현재 설정: $eff")
-    WARNINGS+=("  → 이 레포에 고정: git config user.email '<쓸 이메일>'")
-    WARNINGS+=("  → 또는 ~/.gitconfig 의 includeIf 에 이 레포 경로를 추가")
+    WARNINGS+=("이 레포에서 커밋할 이메일이 '$eff' 가 맞습니까?")
+    WARNINGS+=("  맞으면 할 일 없습니다 — .ai-kit/identity 에 그 값으로 기록했고 훅이 그것을 검증합니다.")
+    WARNINGS+=("  아니면: git config user.email '<쓸 이메일>' 후 .ai-kit/identity 를 지우고 다시 설치하세요.")
+    WARNINGS+=("  (참고: 기존 커밋의 저자는 $(printf '%s ' $hist)입니다 — 남이 만든 레포라면 다른 것이 정상입니다.)")
   fi
 fi
 
@@ -362,16 +368,27 @@ fi
 if [ "$DO_HOOKS" = 1 ] && [ "$DO_UPDATE" = 0 ]; then
   cat <<'MSG'
 
-.ai-kit/ 를 커밋하세요 — 게이트와 훅이 레포와 함께 버전 관리됩니다.
+── 설치기가 한 일 ──
+  ✓ 게이트·훅을 .ai-kit/ 에 넣었습니다
+  ✓ 훅을 켰습니다 (core.hooksPath → .ai-kit/git-hooks)
 
-  주의: core.hooksPath 는 로컬 설정이라 clone 을 따라가지 않습니다(git 의 보안 설계).
-  새로 clone 한 사람은 한 줄로 활성화합니다:
+── 이제 할 일 ──
+  1. .ai-kit/ 을 커밋하세요. 커밋하지 않으면 CI 도, 이 레포를 clone 한 사람도
+     게이트를 갖지 못합니다.
+  2. docs/process/kit-guide.md 를 읽으세요. 무엇이 자동으로 돌고, AGENTS.md 에서
+     무엇을 채워야 하고, 킷이 무엇을 안 하는지 적혀 있습니다.
+
+── 참고 ──
+  core.hooksPath 는 git 이 clone 에 담지 않는 로컬 설정입니다(보안상 의도된 동작).
+  나중에 이 레포를 새로 clone 하는 사람은 한 줄이 필요합니다:
 
       git config core.hooksPath .ai-kit/git-hooks
 
-  그래서 로컬 훅은 '조기 피드백'이고, 우회 불가능한 강제는 CI + 브랜치 보호입니다.
+  그래서 로컬 훅은 우회 가능한 '조기 피드백' 이고, 우회할 수 없는 강제는 CI 입니다.
+  둘이 같은 gate.sh 를 부르는 이유가 그것입니다.
 MSG
 fi
+
 if [ ${#CONFLICTS[@]} -gt 0 ]; then
   echo ""
   if [ "$DO_UPDATE" = 1 ]; then
