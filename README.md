@@ -38,7 +38,6 @@ common/                에이전트 없이도 작동하는 것 — 킷의 본체
 claude-code/           Claude Code 가 있어야 의미 있는 것
   settings.json · hooks/ · skills/ · agents/ · statusline-command.sh
 
-codex/                 개념 대응표 + 도입 절차 (설정 파일 없음 — 의도된 것)
 ```
 
 **`common/` 은 에이전트 없이도 작동한다** — git·CI·린터·사람이 그대로 실행한다.
@@ -48,8 +47,6 @@ codex/                 개념 대응표 + 도입 절차 (설정 파일 없음 �
 **테마·터미널 표시 모드·모델·effort 같은 개인 취향은 킷이 다루지 않는다.**
 `/config` 나 `~/.claude/settings.json` 에서 각자 정한다 — 킷이 박으면 개발자의
 `/model` 선택을 무력화한다.
-
-이어서 작업하려면 [`HANDOFF.md`](HANDOFF.md) 를 읽는다.
 
 ### 규칙의 단일 출처는 `CLAUDE.md`
 
@@ -63,8 +60,9 @@ codex/                 개념 대응표 + 도입 절차 (설정 파일 없음 �
 | 부분 | 상태 |
 |---|---|
 | `common/` 전부 | **검증됨** — 실제 프로젝트에 적용해 결함을 잡음 |
-| `codex/` | **개념 대응표만** — 설정 파일은 두지 않는다(미검증 스텁 제거). 도입 절차는 그 README 에 |
 | `claude-code/` 의 statusline | **검증됨** — 상시 사용 중 |
+
+무엇을 어떻게 확인했고 무엇이 실제로 깨졌는지는 [`docs/evidence.md`](docs/evidence.md) 에 있다.
 
 ## 누가 썼나 (정직하게)
 

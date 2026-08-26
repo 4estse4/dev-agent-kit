@@ -33,8 +33,8 @@ bash .ai-kit/gate/gate.sh --all                 # 전부 (CI 가 부르는 것)
 | `docs/SPEC.md` | 요구 ID(`R-<영역>-<번호>`) | 추적표가 빈 채로 통과한다 |
 | `docs/traceability.md` | SPEC 의 모든 요구에 한 행 | CI 의 `trace` 잡이 실패한다 |
 
-> **하드룰의 집행자를 반드시 적는다** — `[hook]` `[lint]` `[CI]` `[test]` `[review]` `[사람]`.
-> **집행자가 `[사람]` 뿐인 규칙은 지켜지지 않는다고 가정하라.** 불편하면 기계로 바꾼다.
+> **하드룰의 집행자를 반드시 적는다** — `[hook]` `[lint]` `[CI]` `[test]` `[review]` `[human]`.
+> **집행자가 `[human]` 뿐인 규칙은 지켜지지 않는다고 가정하라.** 불편하면 기계로 바꾼다.
 
 `docs/process/` 의 두 문서가 그 이유를 설명한다 — `artifact-rules.md`(R1~R7)와
 `verification-layers.md`(어느 검사를 어디에 둘지, 실측 수치 포함).

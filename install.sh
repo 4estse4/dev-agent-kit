@@ -275,11 +275,6 @@ fi
 if [ "$DO_TEMPLATES" = 1 ]; then
   T="$KIT_ROOT/common/templates"
   place "$T/CLAUDE.md"                 "CLAUDE.md"
-  # 옛 킷은 규칙을 AGENTS.md 에 두고 CLAUDE.md 를 포인터로 뒀다. 그 파일이 남아 있으면
-  # 규칙이 두 벌이 된다 — 지우지는 않는다(프로젝트가 고쳐 썼을 수 있다).
-  if [ -f "$TARGET/AGENTS.md" ]; then
-    WARNINGS+=("AGENTS.md 가 남아 있습니다 — 규칙은 이제 CLAUDE.md 한 곳입니다. 내용을 옮긴 뒤 지우세요")
-  fi
   place "$T/SPEC.md"                   "docs/SPEC.md"
   place "$T/traceability.md"           "docs/traceability.md"
   place "$T/dev-log.md"                "docs/dev-log.md"
