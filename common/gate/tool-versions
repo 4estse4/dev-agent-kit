@@ -30,3 +30,6 @@ ktlint=1.8.0
 # TypeScript 도구(eslint·prettier·tsc·vitest)는 여기 없다.
 # 프로젝트의 package.json + 락파일이 이미 버전을 고정하고, 게이트는 npm run 으로
 # 그것을 부른다 — 킷이 따로 핀하면 락파일과 두 벌이 되어 반드시 어긋난다.
+
+# Python — PyPA 공식 취약점 감사 도구.
+pip_audit=2.9.0

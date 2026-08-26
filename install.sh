@@ -67,8 +67,8 @@ INSTALLED=(); SKIPPED=(); CONFLICTS=(); WARNINGS=(); MERGED=(); UNCHANGED=(); SE
 ALL_LANGS="go ts jvm py"
 # 갱신 시 --lang 을 안 주면 설치 당시 선택을 이어받는다 — 안 그러면 갱신이
 # 조용히 언어를 도로 넣고 체크섬만 바뀐다.
-if [ -z "$LANGS" ] && [ -f "$TARGET/.ai-kit/VERSION" ]; then
-  LANGS=$(sed -n 's/^langs=//p' "$TARGET/.ai-kit/VERSION" | head -1)
+if [ -z "$LANGS" ] && [ -f "$TARGET/.ai-kit/INSTALLED-FROM" ]; then
+  LANGS=$(sed -n 's/^langs=//p' "$TARGET/.ai-kit/INSTALLED-FROM" | head -1)
 fi
 [ -z "$LANGS" ] && LANGS=$(echo "$ALL_LANGS" | tr ' ' ',')
 LANGS=$(echo "$LANGS" | tr -d ' ')
@@ -83,8 +83,8 @@ for _l in $ALL_LANGS; do
 done
 
 KIT_REV=""
-if [ -f "$TARGET/.ai-kit/VERSION" ]; then
-  KIT_REV=$(sed -n 's/^kit_rev=//p' "$TARGET/.ai-kit/VERSION" | head -1)
+if [ -f "$TARGET/.ai-kit/INSTALLED-FROM" ]; then
+  KIT_REV=$(sed -n 's/^kit_rev=//p' "$TARGET/.ai-kit/INSTALLED-FROM" | head -1)
   [ "$KIT_REV" = "unknown" ] && KIT_REV=""
   if [ -n "$KIT_REV" ] && ! git -C "$KIT_ROOT" cat-file -e "${KIT_REV}^{commit}" 2>/dev/null; then
     WARNINGS+=("기록된 킷 리비전 $KIT_REV 을 이 킷 클론에서 찾을 수 없습니다 — baseline 복원 불가")
@@ -119,16 +119,20 @@ place() { # $1=src $2=dst(대상 레포 상대)
 }
 
 # baseline 이 없는 레포(=baseline 기능 이전에 설치)에서, 기록된 kit_rev 로 그 시점
-# 킷 원본을 복원한다. 정보는 이미 .ai-kit/VERSION 에 있었고 쓰지 않았을 뿐이다.
+# 킷 원본을 복원한다. 정보는 이미 .ai-kit/INSTALLED-FROM 에 있었고 쓰지 않았을 뿐이다.
 #
 # 경로는 하드코딩하지 않는다 — 킷 안에서 파일이 옮겨다니므로(core/ → common/ 등)
 # git 의 이름 추적에 맡긴다. 그 시점에 없던 파일은 "없음" 이 올바른 답이다.
-seed_baseline() { # $1=킷의 현재 경로 $2=써넣을 파일 → 성공 시 0
+seed_baseline() { # $1=킷의 현재 경로(절대) $2=써넣을 파일 → 성공 시 0
   [ -n "$KIT_REV" ] || return 1
-  local old
-  old=$(git -C "$KIT_ROOT" log --follow --format='' --name-only "$KIT_REV..HEAD" -- "$1" 2>/dev/null \
+  local rel old
+  # git tree 경로는 레포 루트 기준 상대경로다. 절대경로를 넘기면 항상 빗나가는데,
+  # 이름 추적이 성공하면 상대경로가 나와서 가려진다 — kit_rev 이후 킷에서 바뀐 적
+  # 없는 파일에서만 폴백을 타고, 거기서만 조용히 실패했다.
+  rel=${1#"$KIT_ROOT"/}
+  old=$(git -C "$KIT_ROOT" log --follow --format='' --name-only "$KIT_REV..HEAD" -- "$rel" 2>/dev/null \
         | grep -v '^$' | tail -1)
-  [ -n "$old" ] || old="$1"
+  [ -n "$old" ] || old="$rel"
   git -C "$KIT_ROOT" cat-file -e "$KIT_REV:$old" 2>/dev/null || return 1
   mkdir -p "$(dirname "$2")" || return 1
   git -C "$KIT_ROOT" show "$KIT_REV:$old" > "$2" 2>/dev/null
@@ -210,12 +214,12 @@ if [ "$DO_HOOKS" = 1 ]; then
   # 활성화 절차가 레포 안에 있어야 한다 — install.sh 는 킷 레포에만 있으므로
   # 이 레포만 clone 한 사람은 훅을 켜는 방법을 알 길이 없다.
   cp "$KIT_ROOT/common/gate/VENDOR-README.md" "$vendor/README.md"
-  rm -f "$vendor/gate/VENDOR-README.md"
+  rm -f "$vendor/gate/VENDOR-README.md" "$vendor/gate/BASELINE-README.md"
   # 고르지 않은 언어의 어댑터는 vendor 하지 않는다 — 설치 뒤에 지우면
   # 체크섬이 어긋나 CI 가 "손으로 고쳤다" 로 죽는다.
   for _l in $(echo "$DROP" | tr ',' ' '); do rm -f "$vendor/gate/adapters/$_l.sh"; done
   chmod +x "$vendor"/gate/*.sh "$vendor"/git-hooks/* 2>/dev/null
-  # VERSION 에 킷 커밋과 vendor 내용 체크섬을 함께 적는다.
+  # INSTALLED-FROM 에 킷 커밋과 vendor 내용 체크섬을 함께 적는다.
   # 커밋만 적으면 파일을 손으로 고쳤을 때 버전 표시가 거짓말을 한다 —
   # 체크섬이 있으면 CI 가 재계산해서 드리프트를 잡을 수 있다.
   kit_rev=$( cd "$KIT_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo unknown )
@@ -223,7 +227,7 @@ if [ "$DO_HOOKS" = 1 ]; then
   # shellcheck source=/dev/null
   . "$vendor/gate/lib.sh"
   sum=$(gate_checksum "$vendor") || sum="no-hasher"
-  printf 'kit_rev=%s\nchecksum=%s\nlangs=%s\n' "$kit_rev" "$sum" "$LANGS" > "$vendor/VERSION"
+  printf 'kit_rev=%s\nchecksum=%s\nlangs=%s\n' "$kit_rev" "$sum" "$LANGS" > "$vendor/INSTALLED-FROM"
   INSTALLED+=(".ai-kit/ (게이트 vendor · $kit_rev · $sum · $LANGS)")
 
   fi

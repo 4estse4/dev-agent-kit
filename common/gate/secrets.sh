@@ -20,7 +20,11 @@ if [ "$MODE" = staged ]; then
   FILES=$(git diff --cached --name-only --diff-filter=ACM) || {
     echo "시크릿 스캔 오류: staged 목록을 읽지 못했습니다." >&2; exit 2; }
 else
-  FILES=$(git diff --name-only --diff-filter=ACM "$RANGE") || {
+  # `git diff A..B` 는 두 끝점의 차이만 본다 — 범위 안에서 추가됐다가 지워진 파일은
+  # 보이지 않는다. 시크릿을 커밋했다가 다음 커밋에서 지우는 것은 사람이 "고쳤다" 고
+  # 믿는 가장 흔한 복구 동작이고, 그때 원격에는 그대로 남는다(재현함).
+  # 그래서 커밋 단위로 훑는다.
+  FILES=$(git log --name-only --diff-filter=ACM --pretty=format: "$RANGE" | sort -u | sed '/^$/d') || {
     echo "시크릿 스캔 오류: 범위 '$RANGE' 를 해석하지 못했습니다 — 검사를 신뢰할 수 없어 중단합니다." >&2
     exit 2; }
 fi
@@ -47,7 +51,8 @@ if [ "$MODE" = staged ]; then
   DIFF=$(git diff --cached -U0) || {
     echo "시크릿 스캔 오류: staged diff 를 읽지 못했습니다." >&2; exit 2; }
 else
-  DIFF=$(git diff -U0 "$RANGE") || {
+  # 위와 같은 이유로 diff 도 커밋 단위로 본다.
+  DIFF=$(git log -p -U0 --pretty=format: "$RANGE") || {
     echo "시크릿 스캔 오류: 범위 '$RANGE' diff 를 읽지 못했습니다." >&2; exit 2; }
 fi
 

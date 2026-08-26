@@ -15,7 +15,7 @@
 # 절대 차단하지 않는다. 알 수 없으면 조용히 넘어간다.
 set -uo pipefail
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
-[ -f .ai-kit/VERSION ] || exit 0
+[ -f .ai-kit/INSTALLED-FROM ] || exit 0
 
 # 킷 경로는 install.sh 가 이 레포의 로컬 git config 에 적어둔다.
 # 커밋되는 파일에 넣지 않는 이유: 머신마다 경로가 다르고, 남의 절대경로가
@@ -23,7 +23,7 @@ cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
 kit=$(git config --get ai-kit.path 2>/dev/null) || exit 0
 [ -n "$kit" ] && [ -d "$kit/.git" ] || exit 0
 
-recorded=$(sed -n 's/^kit_rev=//p' .ai-kit/VERSION | head -1)
+recorded=$(sed -n 's/^kit_rev=//p' .ai-kit/INSTALLED-FROM | head -1)
 [ -n "$recorded" ] && [ "$recorded" != "unknown" ] || exit 0
 latest=$(git -C "$kit" rev-parse --short HEAD 2>/dev/null) || exit 0
 [ "$recorded" = "$latest" ] && exit 0

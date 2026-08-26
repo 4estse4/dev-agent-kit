@@ -68,10 +68,10 @@ jobs:
           for f in .ai-kit/git-hooks/pre-commit .ai-kit/git-hooks/pre-push; do
             [ -x "$f" ] || { echo "::error::$f 에 실행권한이 없습니다 — 훅이 조용히 건너뛰어집니다. git update-index --chmod=+x $f 로 고치고 커밋하세요"; exit 1; }
           done
-          cat .ai-kit/VERSION 2>/dev/null || echo "VERSION 없음"
+          cat .ai-kit/INSTALLED-FROM 2>/dev/null || echo "INSTALLED-FROM 없음"
           # 체크섬 재계산 — vendor 파일을 손으로 고치면 여기서 드러난다.
           # 버전 표시가 실제 내용과 어긋나면 디버깅이 헛다리를 짚는다.
-          recorded=$(grep -oE 'checksum=[0-9a-f]+' .ai-kit/VERSION 2>/dev/null | cut -d= -f2)
+          recorded=$(grep -oE 'checksum=[0-9a-f]+' .ai-kit/INSTALLED-FROM 2>/dev/null | cut -d= -f2)
           # 체크섬 정의는 vendor 된 lib.sh 한 곳에만 있다 — 여기서 복붙하면 드리프트한다.
           . .ai-kit/gate/lib.sh
           actual=$(gate_checksum .ai-kit)
@@ -298,33 +298,113 @@ jobs:
 
   coverage:
     needs: detect
-    if: needs.detect.outputs.go == 'true'
+    # 잡 수준 언어 조건을 두지 않는다 — 스텝마다 조건이 붙어 있고, 잡 수준에 OR 로
+    # 묶으면 --lang 필터가 그 표현식을 줄여야 해서 부서지기 쉽다(실제로 부서졌다).
+    # 대상이 없으면 모든 스텝이 skip 되고 잡은 조용히 끝난다 — gate 잡과 같은 모양이다.
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     # ⚠️ 프로젝트에 env 게이트된 통합 테스트(DB 등)가 있다면 gate 잡과 같은
     #    services 를 여기에도 붙여야 한다. 없으면 그 테스트가 skip 되어
     #    커버리지가 과소 보고된다 — 틀린 숫자는 없느니만 못하다.
+    #
+    # **커버리지 도구는 프로젝트가 자기 의존성으로 갖춰야 한다.** 내장인 언어도 있고
+    # 아닌 언어도 있으며, 아닌 쪽은 프로젝트가 선언해야 돈다(각 스텝 주석 참조).
+    # 킷이 그것을 대신 넣지 않는다 — 그러면 킷이 프로젝트의 의존성을 정하게 된다.
+    # 대신 **없으면 없다고 말한다.** 조용히 0 으로 지나가지 않는 것이 이 잡의 일이다.
+    env:
+      COVER_MIN: ${{ vars.COVER_MIN }}
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+
+      - if: needs.detect.outputs.go == 'true'
+        uses: actions/setup-go@v7
         with: { go-version-file: 'go.mod', cache: true }
-      # 먼저 측정하고 보이게 한다. 임계값은 COVER_MIN 을 설정할 때만 강제한다 —
-      # 첫날부터 실패하는 임계값은 결국 꺼진다.
-      - name: 패키지별 커버리지
-        env:
-          COVER_MIN: ${{ vars.COVER_MIN }}
+      - if: needs.detect.outputs.go == 'true'
+        name: coverage (go)
         run: |
-          go test -cover ./... 2>&1 | tee /tmp/cov.txt
+          go test -cover ./... 2>&1 | tee /tmp/cov-go.txt
           {
-            echo "### 커버리지"
-            echo '```'
-            grep -E 'coverage:' /tmp/cov.txt || true
+            echo "### 커버리지 — go"; echo '```'
+            grep -E 'coverage:' /tmp/cov-go.txt || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          [ -z "$COVER_MIN" ] && { echo "COVER_MIN 미설정 — 보고만 합니다."; exit 0; }
-          low=$(grep -oE 'coverage: [0-9.]+' /tmp/cov.txt | awk -v m="$COVER_MIN" '{if ($2+0 < m) print}')
-          [ -n "$low" ] && { echo "::error::COVER_MIN=$COVER_MIN 미만 패키지가 있습니다"; echo "$low"; exit 1; }
+          [ -z "$COVER_MIN" ] && exit 0
+          low=$(grep -oE 'coverage: [0-9.]+' /tmp/cov-go.txt | awk -v m="$COVER_MIN" '{if ($2+0 < m) print}')
+          [ -n "$low" ] && { echo "::error::go — COVER_MIN=$COVER_MIN 미만"; echo "$low"; exit 1; }
           exit 0
+
+      - if: needs.detect.outputs.py == 'true'
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: .python-version
+      - if: needs.detect.outputs.py == 'true'
+        name: coverage (python)
+        # pytest-cov 가 프로젝트 의존성에 있어야 돈다. 없으면 notice 로 알린다.
+        run: |
+          fail=0
+          while IFS= read -r f; do
+            d=$(dirname "$f"); echo "── $d ──"
+            ( cd "$d"
+              python -m venv .venv >/dev/null 2>&1 || true
+              . .venv/bin/activate
+              python -m pip install -q -e . 2>/dev/null || python -m pip install -q . 2>/dev/null || true
+              if ! python -c "import pytest_cov" 2>/dev/null; then
+                echo "::notice::$d — pytest-cov 가 없어 커버리지를 재지 못했습니다. dev 의존성에 추가하세요"
+                exit 0
+              fi
+              python -m pytest --cov --cov-report=term 2>&1 | tee /tmp/cov-py.txt
+              { echo "### 커버리지 — python ($d)"; echo '```'
+                grep -E '^TOTAL|^Name' /tmp/cov-py.txt || true; echo '```'
+              } >> "$GITHUB_STEP_SUMMARY"
+              [ -z "$COVER_MIN" ] && exit 0
+              pct=$(grep -E '^TOTAL' /tmp/cov-py.txt | awk '{print $NF}' | tr -d '%')
+              [ -n "$pct" ] && [ "${pct%%.*}" -lt "$COVER_MIN" ] && \
+                { echo "::error::$d — COVER_MIN=$COVER_MIN 미만 ($pct%)"; exit 1; }
+              exit 0
+            ) || fail=1
+          done < <(find . -name pyproject.toml -not -path '*/node_modules/*' -not -path '*/.venv/*')
+          exit $fail
+
+      - if: needs.detect.outputs.node == 'true'
+        uses: actions/setup-node@v7
+        with: { node-version-file: '.nvmrc', cache: npm }
+      - if: needs.detect.outputs.node == 'true'
+        name: coverage (node)
+        # package.json 에 coverage 스크립트가 있어야 돈다. 커버리지 provider
+        # (@vitest/coverage-v8 등)도 프로젝트 의존성이다.
+        run: |
+          fail=0
+          for d in $(dirname $(find . -name package.json -not -path '*/node_modules/*' -maxdepth 3)); do
+            echo "── $d ──"
+            ( cd "$d"
+              if ! node -e 'process.exit(require("./package.json").scripts?.coverage?0:1)' 2>/dev/null; then
+                echo "::notice::$d — package.json 에 coverage 스크립트가 없어 재지 못했습니다"
+                exit 0
+              fi
+              npm ci --no-audit --no-fund
+              npm run coverage
+            ) || fail=1
+          done
+          exit $fail
+
+      - if: needs.detect.outputs.jvm == 'true'
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: ${{ env.AI_KIT_JAVA_VERSION }}
+          cache: gradle
+      - if: needs.detect.outputs.jvm == 'true'
+        name: coverage (kotlin — Kover)
+        # Kover 는 JetBrains 의 Kotlin 커버리지 도구다. 이 킷의 JVM 어댑터가
+        # Kotlin 전용이므로 JaCoCo 가 아니라 Kover 를 본다.
+        # 플러그인은 프로젝트 빌드 스크립트에 있어야 한다 — 킷이 넣지 않는다.
+        run: |
+          if ! grep -rqE 'kotlinx[.-]kover|org\.jetbrains\.kotlinx\.kover' --include='build.gradle*' --include='settings.gradle*' .; then
+            echo "::notice::Kover 플러그인이 없어 커버리지를 재지 못했습니다. 빌드 스크립트에 추가하세요"
+            exit 0
+          fi
+          [ -x ./gradlew ] || { echo "::error::gradlew 가 없습니다"; exit 1; }
+          ./gradlew koverXmlReport
 
   security:
     needs: detect
@@ -375,6 +455,37 @@ jobs:
           done < <(find . -name go.mod -not -path '*/node_modules/*' -maxdepth 3)
           exit $fail
 
+      - if: needs.detect.outputs.py == 'true'
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: .python-version
+      - if: needs.detect.outputs.py == 'true'
+        name: pip-audit
+        # PyPA 공식 도구. 락파일이나 requirements 를 읽는다 —
+        # 선언이 없으면 감사할 목록 자체가 없으므로 그렇다고 말한다.
+        run: |
+          pipx install pip-audit==${{ steps.tv.outputs.pip_audit }} && pip-audit --version
+          fail=0
+          while IFS= read -r f; do
+            d=$(dirname "$f"); echo "── pip-audit $d ──"
+            ( cd "$d"
+              if [ -f uv.lock ]; then
+                pipx install uv >/dev/null 2>&1 || true
+                uv export --frozen --no-dev --format requirements-txt 2>/dev/null > /tmp/req.txt \
+                  && pip-audit -r /tmp/req.txt
+              elif [ -f poetry.lock ]; then
+                pipx install poetry >/dev/null 2>&1 || true
+                poetry export -f requirements.txt --without-hashes 2>/dev/null > /tmp/req.txt \
+                  && pip-audit -r /tmp/req.txt
+              elif [ -f requirements.txt ]; then
+                pip-audit -r requirements.txt
+              else
+                echo "::notice::$d — 락파일도 requirements.txt 도 없어 감사할 목록이 없습니다"
+              fi
+            ) || fail=1
+          done < <(find . -name pyproject.toml -not -path '*/node_modules/*' -not -path '*/.venv/*')
+          exit $fail
+
       - if: needs.detect.outputs.node == 'true'
         uses: actions/setup-node@v7
         with: { node-version-file: '.nvmrc' }
@@ -385,6 +496,24 @@ jobs:
           for d in $(dirname $(find . -name package-lock.json -not -path '*/node_modules/*' -maxdepth 3)); do
             (cd "$d" && npm audit --audit-level=high)
           done
+
+      - if: needs.detect.outputs.jvm == 'true'
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: ${{ env.AI_KIT_JAVA_VERSION }}
+          cache: gradle
+      - if: needs.detect.outputs.jvm == 'true'
+        name: OWASP Dependency-Check
+        # 플러그인은 프로젝트 빌드 스크립트에 있어야 한다 — 킷이 넣지 않는다.
+        # 첫 실행은 NVD 데이터베이스를 받느라 수 분 걸린다. 그래서 캐시한다.
+        run: |
+          if ! grep -rqE 'dependencycheck|dependency-check' --include='build.gradle*' --include='settings.gradle*' .; then
+            echo "::notice::OWASP Dependency-Check 플러그인이 없어 취약점 스캔을 하지 못했습니다"
+            exit 0
+          fi
+          [ -x ./gradlew ] || { echo "::error::gradlew 가 없습니다"; exit 1; }
+          ./gradlew dependencyCheckAnalyze
 
   trace:
     runs-on: ubuntu-latest
