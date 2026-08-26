@@ -5,8 +5,14 @@
 #   common/gate/install-tools.sh 이 버전대로 설치한다
 #   common/ci/gates.yml         CI 가 이 버전대로 설치한다
 #
-# 여기 없는 도구(gradle·java·node·python3 런타임)는 프로젝트가 자기 방식으로 고정한다
-# — gradle 래퍼, .nvmrc, pyproject 의 requires-python. 킷이 이중으로 정하지 않는다.
+# 런타임은 여기 없다. **프로젝트가 자기 파일에 적고 CI 가 그것을 읽는다:**
+#   go      go.mod 의 go 지시어
+#   node    .nvmrc
+#   python  .python-version   (`uv python pin 3.12` 이 만든다)
+# 킷이 버전을 고르면 프로젝트가 정한 값과 두 벌이 되므로 고르지 않는다.
+#
+# java 만 예외다 — Gradle 래퍼는 Gradle 을 핀하지 JDK 를 핀하지 않고, 표준 핀 파일이
+# 없다. 그래서 워크플로의 AI_KIT_JAVA_VERSION 이 정한다(워크플로는 프로젝트 소유다).
 #
 # 형식: <이름>=<버전>  (셸이 source 할 수 있게 공백 없이)
 

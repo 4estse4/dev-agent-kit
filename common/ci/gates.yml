@@ -13,7 +13,6 @@ on:
 # "오버라이드 가능" 은 거짓말이 된다. 프로젝트는 이 값을 고쳐서 바꾼다.
 env:
   AI_KIT_JAVA_VERSION: "21"
-  AI_KIT_PYTHON_VERSION: "3.12"
 
 permissions:
   contents: read
@@ -124,7 +123,7 @@ jobs:
       #
       # 래퍼가 없으면 **여기서 실패시킨다.** ubuntu 러너 이미지에는 gradle 이 들어
       # 있어서 래퍼 없이도 CI 는 통과하는데, 그러면 (a) gradle 버전이 러너 이미지에
-      # 묶여 고정되지 않고 — ktlint·ruff·golangci-lint 를 핀한 이유와 정면으로
+      # 묶여 고정되지 않고 — 린터 버전을 핀한 이유와 정면으로
       # 어긋난다 — (b) gradle 이 없는 개발자 머신에서는 로컬이 빨갛고 CI 만 초록이 된다.
       # 그 드리프트가 이 워크플로가 존재하는 이유다.
       - if: needs.detect.outputs.jvm == 'true'
@@ -197,17 +196,26 @@ jobs:
       # 린트 규칙은 프로젝트 설정이 정하므로 버전도 프로젝트가 정하는 것이 맞고,
       # 킷의 핀은 아무것도 선언하지 않은 레포가 검사 없이 지나가지 않게 하는 장치다.
       # mypy·pytest 는 프로젝트가 자기 의존성으로 설치해야 한다(아래 주석 참조).
-      # python-version-file 을 쓰지 않는다. 그것은 pyproject.toml 이 **레포 루트에**
-      # 있다고 가정하는데, 게이트는 마커를 어느 깊이에서든 찾으므로 py/pyproject.toml
-      # 같은 배치에서 "지정한 파일이 없다" 로 잡이 죽는다(실제로 러너에서 그랬다).
+      # 런타임 버전은 **프로젝트의 `.python-version`** 이 정한다 — node 가 `.nvmrc` 를
+      # 쓰는 것과 같은 모양이고, `uv python pin 3.12` 가 그 파일을 만든다.
+      # 킷이 버전을 고르지 않는다. 고르면 프로젝트가 정한 값과 두 벌이 된다.
       #
-      # 대신 워크플로 env 의 AI_KIT_PYTHON_VERSION 을 쓴다. **이것은 킷이 정한 기본값**
-      # 이고 requires-python 을 읽지 않는다 — 프로젝트가 다른 버전을 쓰면 위 env 를
-      # 고쳐야 한다. 워크플로는 프로젝트 소유이므로 그것이 정상 경로다.
+      # `pyproject.toml` 의 `requires-python` 은 쓰지 않는다. 범위(`>=3.12`)라 핀이
+      # 아니어서 CI 가 어느 날 다른 인터프리터로 돈다. 위치도 문제다 — 게이트는 마커를
+      # 어느 깊이에서든 찾으므로 `py/pyproject.toml` 같은 배치에서 "지정한 파일이 없다"
+      # 로 잡이 죽는다(실제로 러너에서 그랬다). `.python-version` 은 잡 하나에
+      # 인터프리터 하나이므로 레포 루트에 둔다.
+      - if: needs.detect.outputs.py == 'true'
+        name: check .python-version
+        # 없으면 setup-python 이 알아보기 어려운 오류로 죽는다. 여기서 먼저 말한다.
+        run: |
+          [ -f .python-version ] && exit 0
+          echo "::error::.python-version 이 없습니다 — 레포 루트에서 'uv python pin 3.12' 로 만들고 커밋하세요(또는 그 파일에 버전 한 줄)"
+          exit 1
       - if: needs.detect.outputs.py == 'true'
         uses: actions/setup-python@v7
         with:
-          python-version: ${{ env.AI_KIT_PYTHON_VERSION }}
+          python-version-file: .python-version
       - if: needs.detect.outputs.py == 'true'
         name: install ruff
         run: pipx install ruff==${{ steps.tv.outputs.ruff }} && ruff --version
@@ -221,7 +229,7 @@ jobs:
         run: |
           set -e
           # **모든** pyproject 를 돈다. 게이트는 마커가 있는 모든 디렉터리에서 py
-          # 어댑터를 돌리므로(조상-자손 제거는 jvm 에만 적용된다), 첫 하나만 설치하면
+          # 어댑터를 돌리므로(조상-자손 제거는 빌드 도구가 있는 언어에만 적용된다), 첫 하나만 설치하면
           # 나머지는 도구 없이 검사되거나 남의 의존성으로 테스트가 돈다.
           # 바로 아래 node 단계도 같은 이유로 전부 순회한다.
           while IFS= read -r f; do
