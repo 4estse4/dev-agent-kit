@@ -1,6 +1,6 @@
 # <단계명> 계획
 
-> 참조: `docs/SPEC.md` <해당 요구 ID 들> · `AGENTS.md` 하드룰 · 직전 계획의 위험 표
+> 참조: `docs/SPEC.md` <해당 요구 ID 들> · `CLAUDE.md` 하드룰 · 직전 계획의 위험 표
 
 ## 맥락
 
