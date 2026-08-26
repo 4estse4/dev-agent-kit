@@ -4,7 +4,7 @@
 #   <kit>/install.sh <프로젝트경로>      로컬 전부 (훅·템플릿·린트·CI·도구설정)
 #                                        경로는 필수. 현재 위치면 "." 를 준다.
 #   <kit>/install.sh <경로> [--lang py,ts] --hooks --lint   선택 설치
-#   <kit>/install.sh --protect           GitHub 브랜치 보호 설정 (원격 변경 — 별도 플래그)
+#   <kit>/install.sh <경로> --protect           GitHub 브랜치 보호 설정 (원격 변경 — 별도 플래그)
 #   <kit>/install.sh <경로> [--lang py,ts] --update         설치된 킷을 갱신 (3-way 병합)
 #   <kit>/install.sh <경로> [--lang py,ts] --update --dry-run   무엇이 바뀔지만 보고 아무것도 안 건드림
 #
@@ -67,8 +67,13 @@ INSTALLED=(); SKIPPED=(); CONFLICTS=(); WARNINGS=(); MERGED=(); UNCHANGED=(); SE
 ALL_LANGS="go ts jvm py"
 # 갱신 시 --lang 을 안 주면 설치 당시 선택을 이어받는다 — 안 그러면 갱신이
 # 조용히 언어를 도로 넣고 체크섬만 바뀐다.
-if [ -z "$LANGS" ] && [ -f "$TARGET/.ai-kit/INSTALLED-FROM" ]; then
-  LANGS=$(sed -n 's/^langs=//p' "$TARGET/.ai-kit/INSTALLED-FROM" | head -1)
+# 옛 이름은 VERSION 이었다. 개명만 하고 폴백을 안 두면 **이미 설치된 모든 프로젝트가
+# 조용히 망가진다** — langs 를 못 읽어 빼놓은 언어가 도로 들어오고, kit_rev 를 못 읽어
+# baseline 복원이 멈추고, CI 의 체크섬 검사가 조용히 꺼진다(전부 재현함).
+STAMP="$TARGET/.ai-kit/INSTALLED-FROM"
+[ -f "$STAMP" ] || STAMP="$TARGET/.ai-kit/VERSION"
+if [ -z "$LANGS" ] && [ -f "$STAMP" ]; then
+  LANGS=$(sed -n 's/^langs=//p' "$STAMP" | head -1)
 fi
 [ -z "$LANGS" ] && LANGS=$(echo "$ALL_LANGS" | tr ' ' ',')
 LANGS=$(echo "$LANGS" | tr -d ' ')
@@ -83,8 +88,8 @@ for _l in $ALL_LANGS; do
 done
 
 KIT_REV=""
-if [ -f "$TARGET/.ai-kit/INSTALLED-FROM" ]; then
-  KIT_REV=$(sed -n 's/^kit_rev=//p' "$TARGET/.ai-kit/INSTALLED-FROM" | head -1)
+if [ -f "$STAMP" ]; then
+  KIT_REV=$(sed -n 's/^kit_rev=//p' "$STAMP" | head -1)
   [ "$KIT_REV" = "unknown" ] && KIT_REV=""
   if [ -n "$KIT_REV" ] && ! git -C "$KIT_ROOT" cat-file -e "${KIT_REV}^{commit}" 2>/dev/null; then
     WARNINGS+=("기록된 킷 리비전 $KIT_REV 을 이 킷 클론에서 찾을 수 없습니다 — baseline 복원 불가")
@@ -107,9 +112,9 @@ save_baseline() { # $1=src $2=dst(상대)
 }
 
 # 기존 파일을 보존하며 복사한다(설치).
-place() { # $1=src $2=dst(대상 레포 상대)
+place() { # $1=src $2=dst(대상 레포 상대) [$3=킷 원본 경로 — src 가 임시 파일일 때]
   local src="$1" dst="$TARGET/$2"
-  [ "$DO_UPDATE" = 1 ] && { merge_place "$1" "$2"; return; }
+  [ "$DO_UPDATE" = 1 ] && { merge_place "$1" "$2" "${3:-}"; return; }
   mkdir -p "$(dirname "$dst")"
   if [ -e "$dst" ]; then
     if cmp -s "$src" "$dst"; then SKIPPED+=("$2 (동일)"); save_baseline "$src" "$2"; return; fi
@@ -130,6 +135,8 @@ seed_baseline() { # $1=킷의 현재 경로(절대) $2=써넣을 파일 → 성�
   # 이름 추적이 성공하면 상대경로가 나와서 가려진다 — kit_rev 이후 킷에서 바뀐 적
   # 없는 파일에서만 폴백을 타고, 거기서만 조용히 실패했다.
   rel=${1#"$KIT_ROOT"/}
+  # 킷 밖의 경로가 오면 git tree 에 없다 — 조용히 빗나가느니 실패로 끝낸다.
+  case "$rel" in /*) return 1 ;; esac
   old=$(git -C "$KIT_ROOT" log --follow --format='' --name-only "$KIT_REV..HEAD" -- "$rel" 2>/dev/null \
         | grep -v '^$' | tail -1)
   [ -n "$old" ] || old="$rel"
@@ -140,8 +147,10 @@ seed_baseline() { # $1=킷의 현재 경로(절대) $2=써넣을 파일 → 성�
 
 # 갱신: base=설치 시점 킷 원본, ours=프로젝트 현재, theirs=킷 새 버전.
 merge_place() { local _r; _merge_place "$@"; _r=$?; [ -n "${MP_TMP:-}" ] && rm -f "$MP_TMP"; MP_TMP=""; return $_r; }
-_merge_place() { # $1=src(킷 새 버전) $2=dst(상대)
-  local src="$1" rel="$2" dst="$TARGET/$2" base="$BASELINE/$2" rc
+_merge_place() { # $1=src(킷 새 버전) $2=dst(상대) [$3=킷 원본 경로]
+  # $1 이 임시 파일일 수 있다(--lang 필터가 만든 gates.yml). git tree 에는 킷 원본
+  # 경로만 있으므로 baseline 복원에는 $3 을 쓴다 — 없으면 $1 이 곧 원본이다.
+  local src="$1" rel="$2" dst="$TARGET/$2" base="$BASELINE/$2" rc origin="${3:-$1}"
 
   # baseline 이 없으면 기록된 kit_rev 로 복원해본다(baseline 기능 이전에 설치된 레포).
   # dry-run 이면 임시 파일에 복원한다 — 판정은 똑같이 하되 레포는 안 건드린다.
@@ -150,9 +159,9 @@ _merge_place() { # $1=src(킷 새 버전) $2=dst(상대)
   if [ ! -f "$base" ] && [ -n "$KIT_REV" ]; then
     if [ "$DRY_RUN" = 1 ]; then
       tmpbase=$(mktemp)
-      if seed_baseline "$src" "$tmpbase"; then base="$tmpbase"; MP_TMP="$tmpbase"; SEEDED+=("$rel"); else rm -f "$tmpbase"; fi
+      if seed_baseline "$origin" "$tmpbase"; then base="$tmpbase"; MP_TMP="$tmpbase"; SEEDED+=("$rel"); else rm -f "$tmpbase"; fi
     else
-      seed_baseline "$src" "$base" && SEEDED+=("$rel")
+      seed_baseline "$origin" "$base" && SEEDED+=("$rel")
     fi
   fi
 
@@ -228,6 +237,8 @@ if [ "$DO_HOOKS" = 1 ]; then
   . "$vendor/gate/lib.sh"
   sum=$(gate_checksum "$vendor") || sum="no-hasher"
   printf 'kit_rev=%s\nchecksum=%s\nlangs=%s\n' "$kit_rev" "$sum" "$LANGS" > "$vendor/INSTALLED-FROM"
+  # 옛 이름이 남아 있으면 서로 다른 값을 말하는 파일이 두 벌 커밋된다.
+  rm -f "$vendor/VERSION"
   INSTALLED+=(".ai-kit/ (게이트 vendor · $kit_rev · $sum · $LANGS)")
 
   fi
@@ -351,7 +362,7 @@ if [ "$DO_CI" = 1 ]; then
       gates.yml)
         if [ -n "$DROP" ]; then
           tmp=$(mktemp) && awk -v drop="$DROP" -f "$KIT_ROOT/common/ci/filter-langs.awk" "$f" > "$tmp" \
-            && place "$tmp" ".github/workflows/$b" && rm -f "$tmp"
+            && place "$tmp" ".github/workflows/$b" "$f" && rm -f "$tmp"
         else
           place "$f" ".github/workflows/$b"
         fi

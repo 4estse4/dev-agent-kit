@@ -24,7 +24,9 @@ else
   # 보이지 않는다. 시크릿을 커밋했다가 다음 커밋에서 지우는 것은 사람이 "고쳤다" 고
   # 믿는 가장 흔한 복구 동작이고, 그때 원격에는 그대로 남는다(재현함).
   # 그래서 커밋 단위로 훑는다.
-  FILES=$(git log --name-only --diff-filter=ACM --pretty=format: "$RANGE" | sort -u | sed '/^$/d') || {
+  # --diff-merges=first-parent: git log 는 기본적으로 머지 커밋의 diff 를 내지 않는다.
+  # 충돌 해소 중에 써넣은 시크릿이 그래서 통째로 안 보인다(재현함).
+  FILES=$(git log --name-only --diff-filter=ACM --diff-merges=first-parent --pretty=format: "$RANGE" | sort -u | sed '/^$/d') || {
     echo "시크릿 스캔 오류: 범위 '$RANGE' 를 해석하지 못했습니다 — 검사를 신뢰할 수 없어 중단합니다." >&2
     exit 2; }
 fi
@@ -52,7 +54,7 @@ if [ "$MODE" = staged ]; then
     echo "시크릿 스캔 오류: staged diff 를 읽지 못했습니다." >&2; exit 2; }
 else
   # 위와 같은 이유로 diff 도 커밋 단위로 본다.
-  DIFF=$(git log -p -U0 --pretty=format: "$RANGE") || {
+  DIFF=$(git log -p -U0 --diff-merges=first-parent --pretty=format: "$RANGE") || {
     echo "시크릿 스캔 오류: 범위 '$RANGE' diff 를 읽지 못했습니다." >&2; exit 2; }
 fi
 
@@ -73,16 +75,34 @@ if [ -z "$BAD_NAMES" ] && [ -z "$BAD_CONTENT" ]; then
 fi
 
 echo "" >&2
-echo "시크릿 스캔 실패 — 커밋을 중단합니다." >&2
+if [ "$MODE" = range ]; then
+  echo "시크릿 스캔 실패 — 이 범위의 커밋 중 하나가 시크릿을 들여왔습니다." >&2
+else
+  echo "시크릿 스캔 실패 — 커밋을 중단합니다." >&2
+fi
 [ -n "$BAD_NAMES" ] && { echo "" >&2; echo "금지된 파일:" >&2; printf '%s' "$BAD_NAMES" >&2; }
 if [ -n "$BAD_CONTENT" ]; then
   echo "" >&2; echo "시크릿 패턴이 포함된 추가 줄:" >&2
   printf '%s\n' "$BAD_CONTENT" | sed 's/^/  /' >&2
 fi
-cat >&2 <<'MSG'
+if [ "$MODE" = range ]; then
+  # 범위 모드는 이미 커밋된 것을 본다. 스테이지에서 빼라는 안내는 여기서 통하지 않고,
+  # 지금 지워도 히스토리에 남아 계속 걸린다.
+  cat >&2 <<'MSG'
+
+조치 — 이미 커밋된 것이라 **지금 지우는 것으로는 해소되지 않습니다.**
+  · 실제 시크릿이면: 먼저 그 키를 폐기·재발급하세요. 되돌릴 수 없습니다.
+    그 뒤 히스토리에서 지웁니다 — git rebase -i 로 해당 커밋을 고치거나,
+    브랜치를 다시 만들어 깨끗한 커밋으로 옮깁니다.
+  · 테스트용 더미면: 그 줄 끝에 secret-ok 주석을 달되, **그 커밋 자체를 고쳐야**
+    합니다. 뒤 커밋에서 주석만 추가하면 범위 스캔은 계속 실패합니다.
+MSG
+else
+  cat >&2 <<'MSG'
 
 조치:
   · 실제 시크릿이면 파일을 스테이지에서 빼고 .gitignore에 넣는다.
   · 테스트용 더미면 같은 줄 끝에 secret-ok 주석을 단다.
 MSG
+fi
 exit 1

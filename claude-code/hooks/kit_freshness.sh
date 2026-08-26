@@ -15,15 +15,25 @@
 # 절대 차단하지 않는다. 알 수 없으면 조용히 넘어간다.
 set -uo pipefail
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
-[ -f .ai-kit/INSTALLED-FROM ] || exit 0
+STAMP=.ai-kit/INSTALLED-FROM
+[ -f "$STAMP" ] || STAMP=.ai-kit/VERSION      # 옛 이름
+[ -f "$STAMP" ] || exit 0
 
 # 킷 경로는 install.sh 가 이 레포의 로컬 git config 에 적어둔다.
 # 커밋되는 파일에 넣지 않는 이유: 머신마다 경로가 다르고, 남의 절대경로가
 # 레포에 박히면 그 사람 환경을 알려주는 것 외에 아무 값도 없다.
 kit=$(git config --get ai-kit.path 2>/dev/null) || exit 0
-[ -n "$kit" ] && [ -d "$kit/.git" ] || exit 0
+[ -n "$kit" ] || exit 0
+# 경로가 적혀 있는데 그것이 사라진 경우와, 애초에 킷 설정이 없는 경우는 다르다.
+# 전자를 조용히 넘기면 낡음 감지가 꺼진 것을 아무도 모른다 — 사용자 눈에는
+# "킷이 최신이다" 와 구분되지 않는다.
+if [ ! -d "$kit/.git" ]; then
+  echo "킷 클론을 찾을 수 없습니다 ($kit) — 낡음 감지가 꺼져 있습니다."
+  echo "  다시 clone 하거나 install.sh 를 다시 돌리면 경로가 갱신됩니다."
+  exit 0
+fi
 
-recorded=$(sed -n 's/^kit_rev=//p' .ai-kit/INSTALLED-FROM | head -1)
+recorded=$(sed -n 's/^kit_rev=//p' "$STAMP" | head -1)
 [ -n "$recorded" ] && [ "$recorded" != "unknown" ] || exit 0
 latest=$(git -C "$kit" rev-parse --short HEAD 2>/dev/null) || exit 0
 [ "$recorded" = "$latest" ] && exit 0

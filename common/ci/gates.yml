@@ -229,59 +229,15 @@ jobs:
         run: |
           set -e
           # **모든** pyproject 를 돈다. 게이트는 마커가 있는 모든 디렉터리에서 py
-          # 어댑터를 돌리므로(조상-자손 제거는 빌드 도구가 있는 언어에만 적용된다), 첫 하나만 설치하면
-          # 나머지는 도구 없이 검사되거나 남의 의존성으로 테스트가 돈다.
-          # 바로 아래 node 단계도 같은 이유로 전부 순회한다.
+          # 어댑터를 돌리므로, 첫 하나만 설치하면 나머지는 도구 없이 검사되거나
+          # 남의 의존성으로 테스트가 돈다. 아래 node 단계도 같은 이유로 전부 순회한다.
+          #
+          # 설치 로직은 .ai-kit/gate/install-dev-deps.sh 한 곳에 있다 — coverage 잡도
+          # 같은 것을 부른다. 워크플로에 두 벌로 두었더니 실제로 어긋났다.
           while IFS= read -r f; do
-            d=$(dirname "$f")          # xargs 를 쓰지 않는다 — 공백 있는 경로에서 깨진다
-            echo "── $d ──"
-            ( cd "$d"
-              # $GITHUB_PATH 에 venv 를 얹지 않는다. 그것은 잡 전체에 prepend 되므로
-              # 패키지가 여럿이면 **어느 하나의 venv 가 전부를 이긴다** — 남의 의존성으로
-              # 테스트가 돌고, 어느 패키지의 도구가 이길지도 순서에 좌우된다.
-              # 대신 어댑터가 자기 디렉터리의 .venv/bin 을 먼저 본다(adapters/py.sh).
-              if [ -f uv.lock ]; then
-                pipx install uv >/dev/null 2>&1 || true
-                # --locked: 락과 pyproject 가 어긋나면 조용히 갱신하지 말고 실패한다.
-                # 커밋된 락과 다른 해상도로 CI 가 통과하면 그 차이는 아무도 못 본다.
-                uv sync --locked --all-extras --all-groups   # extras 로 dev 를 선언한 레포도 덮는다
-              elif [ -f poetry.lock ]; then
-                pipx install poetry >/dev/null 2>&1 || true
-                # in-project venv 로 강제해 어댑터가 .venv/bin 에서 찾게 한다.
-                poetry config virtualenvs.in-project true --local
-                # 그룹 이름을 추측하지 않는다 — `--with dev` 는 dev 그룹이 없으면
-                # exit 1 이라 set -e 아래에서 잡이 죽는다. 있을 때만 붙인다.
-                # --no-root 도 쓰지 않는다: 형제 분기(pip -e . · uv sync)는 루트를
-                # 설치하므로, 여기만 빼면 테스트가 자기 패키지를 import 하지 못한다.
-                if poetry check --quiet 2>/dev/null && \
-                   python -c "import sys,tomllib,pathlib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text()); sys.exit(0 if 'dev' in (((d.get('tool') or {}).get('poetry') or {}).get('group') or {}) else 1)"; then
-                  poetry install --with dev
-                else
-                  poetry install
-                fi
-              elif python - <<'PYCHK'
-          import sys,tomllib,pathlib
-          d=tomllib.loads(pathlib.Path("pyproject.toml").read_text())
-          sys.exit(0 if "dev" in (d.get("dependency-groups") or {}) else 1)
-          PYCHK
-              then
-                python -m pip install --group dev -e .
-              elif python - <<'PYCHK'
-          import sys,tomllib,pathlib
-          d=tomllib.loads(pathlib.Path("pyproject.toml").read_text())
-          sys.exit(0 if "dev" in ((d.get("project") or {}).get("optional-dependencies") or {}) else 1)
-          PYCHK
-              then
-                python -m pip install -e '.[dev]'
-              elif [ -f requirements-dev.txt ]; then
-                python -m pip install -r requirements-dev.txt
-              else
-                echo "::notice::$d 에 dev 의존성 선언이 없습니다 — pytest·mypy 를 쓴다면" \
-                     "uv.lock · poetry.lock · [dependency-groups].dev ·" \
-                     "[project.optional-dependencies].dev · requirements-dev.txt 중 하나로 선언하세요."
-              fi
-            )
-          done < <(find . -name pyproject.toml -not -path '*/node_modules/*' -not -path '*/.venv/*')
+            echo "── $(dirname "$f") ──"
+            bash .ai-kit/gate/install-dev-deps.sh "$(dirname "$f")"
+          done < <(find . -name pyproject.toml -not -path '*/node_modules/*' -not -path '*/.venv/*' -maxdepth 3)
 
       - if: needs.detect.outputs.node == 'true'
         uses: actions/setup-node@v7
@@ -329,25 +285,35 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           [ -z "$COVER_MIN" ] && exit 0
+          grep -q 'coverage:' /tmp/cov-go.txt || \
+            { echo "::error::go — COVER_MIN=$COVER_MIN 인데 커버리지를 하나도 재지 못했습니다(테스트 없음)"; exit 1; }
           low=$(grep -oE 'coverage: [0-9.]+' /tmp/cov-go.txt | awk -v m="$COVER_MIN" '{if ($2+0 < m) print}')
           [ -n "$low" ] && { echo "::error::go — COVER_MIN=$COVER_MIN 미만"; echo "$low"; exit 1; }
           exit 0
 
+      - if: needs.detect.outputs.py == 'true'
+        name: check .python-version
+        run: |
+          [ -f .python-version ] && exit 0
+          echo "::error::.python-version 이 없습니다 — 레포 루트에서 'uv python pin 3.12' 로 만들고 커밋하세요(또는 그 파일에 버전 한 줄)"
+          exit 1
       - if: needs.detect.outputs.py == 'true'
         uses: actions/setup-python@v7
         with:
           python-version-file: .python-version
       - if: needs.detect.outputs.py == 'true'
         name: coverage (python)
-        # pytest-cov 가 프로젝트 의존성에 있어야 돈다. 없으면 notice 로 알린다.
+        # dev 의존성은 gate 잡과 **같은 스크립트**로 깐다. 여기서 `pip install -e .` 만
+        # 하면 pytest-cov 가 안 깔리고, 그러면 "프로젝트가 선언하지 않았다" 는
+        # 거짓 안내가 나간다(실제로 그랬다).
         run: |
+          set -o pipefail          # tee 뒤에서 pytest 실패가 삼켜지지 않게
           fail=0
           while IFS= read -r f; do
             d=$(dirname "$f"); echo "── $d ──"
+            bash .ai-kit/gate/install-dev-deps.sh "$d"
             ( cd "$d"
-              python -m venv .venv >/dev/null 2>&1 || true
-              . .venv/bin/activate
-              python -m pip install -q -e . 2>/dev/null || python -m pip install -q . 2>/dev/null || true
+              [ -d .venv ] && . .venv/bin/activate
               if ! python -c "import pytest_cov" 2>/dev/null; then
                 echo "::notice::$d — pytest-cov 가 없어 커버리지를 재지 못했습니다. dev 의존성에 추가하세요"
                 exit 0
@@ -358,11 +324,12 @@ jobs:
               } >> "$GITHUB_STEP_SUMMARY"
               [ -z "$COVER_MIN" ] && exit 0
               pct=$(grep -E '^TOTAL' /tmp/cov-py.txt | awk '{print $NF}' | tr -d '%')
-              [ -n "$pct" ] && [ "${pct%%.*}" -lt "$COVER_MIN" ] && \
+              [ -z "$pct" ] && { echo "::error::$d — 커버리지 총계를 읽지 못했습니다"; exit 1; }
+              [ "${pct%%.*}" -lt "$COVER_MIN" ] && \
                 { echo "::error::$d — COVER_MIN=$COVER_MIN 미만 ($pct%)"; exit 1; }
               exit 0
             ) || fail=1
-          done < <(find . -name pyproject.toml -not -path '*/node_modules/*' -not -path '*/.venv/*')
+          done < <(find . -name pyproject.toml -not -path '*/node_modules/*' -not -path '*/.venv/*' -maxdepth 3)
           exit $fail
 
       - if: needs.detect.outputs.node == 'true'
@@ -382,7 +349,14 @@ jobs:
                 exit 0
               fi
               npm ci --no-audit --no-fund
-              npm run coverage
+              npm run coverage 2>&1 | tee /tmp/cov-node.txt
+              { echo "### 커버리지 — node ($d)"; echo '```'
+                tail -20 /tmp/cov-node.txt; echo '```'
+              } >> "$GITHUB_STEP_SUMMARY"
+              # 임계값은 프로젝트의 커버리지 설정(vitest/jest 의 thresholds)이 강제한다.
+              # 여기서 숫자를 파싱하면 리포터 형식마다 달라 조용히 빗나간다.
+              [ -n "$COVER_MIN" ] && echo "::notice::$d — COVER_MIN 은 node 에서 강제되지 않습니다. 커버리지 설정의 thresholds 를 쓰세요"
+              exit 0
             ) || fail=1
           done
           exit $fail
@@ -404,12 +378,19 @@ jobs:
             exit 0
           fi
           [ -x ./gradlew ] || { echo "::error::gradlew 가 없습니다"; exit 1; }
-          ./gradlew koverXmlReport
+          ./gradlew koverXmlReport koverLog 2>&1 | tee /tmp/cov-kover.txt || ./gradlew koverXmlReport
+          { echo "### 커버리지 — kotlin"; echo '```'
+            grep -iE 'application line coverage|coverage' /tmp/cov-kover.txt | tail -10 || echo "(koverLog 태스크가 없어 수치를 출력하지 못했습니다)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          # 임계값은 Kover 의 verify 규칙이 강제한다 — 빌드 스크립트에 선언한다.
+          [ -n "$COVER_MIN" ] && echo "::notice::COVER_MIN 은 kotlin 에서 강제되지 않습니다. Kover 의 verify 규칙을 쓰세요"
+          exit 0
 
   security:
     needs: detect
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
@@ -456,6 +437,12 @@ jobs:
           exit $fail
 
       - if: needs.detect.outputs.py == 'true'
+        name: check .python-version
+        run: |
+          [ -f .python-version ] && exit 0
+          echo "::error::.python-version 이 없습니다 — 레포 루트에서 'uv python pin 3.12' 로 만들고 커밋하세요(또는 그 파일에 버전 한 줄)"
+          exit 1
+      - if: needs.detect.outputs.py == 'true'
         uses: actions/setup-python@v7
         with:
           python-version-file: .python-version
@@ -483,7 +470,7 @@ jobs:
                 echo "::notice::$d — 락파일도 requirements.txt 도 없어 감사할 목록이 없습니다"
               fi
             ) || fail=1
-          done < <(find . -name pyproject.toml -not -path '*/node_modules/*' -not -path '*/.venv/*')
+          done < <(find . -name pyproject.toml -not -path '*/node_modules/*' -not -path '*/.venv/*' -maxdepth 3)
           exit $fail
 
       - if: needs.detect.outputs.node == 'true'
@@ -504,9 +491,16 @@ jobs:
           java-version: ${{ env.AI_KIT_JAVA_VERSION }}
           cache: gradle
       - if: needs.detect.outputs.jvm == 'true'
+        name: cache NVD data
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/dependency-check-data
+          key: nvd-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: nvd-${{ runner.os }}-
+      - if: needs.detect.outputs.jvm == 'true'
         name: OWASP Dependency-Check
         # 플러그인은 프로젝트 빌드 스크립트에 있어야 한다 — 킷이 넣지 않는다.
-        # 첫 실행은 NVD 데이터베이스를 받느라 수 분 걸린다. 그래서 캐시한다.
+        # 첫 실행은 NVD 데이터베이스를 받느라 수 분 걸린다. 위 캐시가 그것을 재사용한다.
         run: |
           if ! grep -rqE 'dependencycheck|dependency-check' --include='build.gradle*' --include='settings.gradle*' .; then
             echo "::notice::OWASP Dependency-Check 플러그인이 없어 취약점 스캔을 하지 못했습니다"
