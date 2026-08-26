@@ -3,10 +3,10 @@
 #
 #   <kit>/install.sh <프로젝트경로>      로컬 전부 (훅·템플릿·린트·CI·도구설정)
 #                                        경로는 필수. 현재 위치면 "." 를 준다.
-#   <kit>/install.sh <경로> --hooks --lint   선택 설치
+#   <kit>/install.sh <경로> [--lang py,ts] --hooks --lint   선택 설치
 #   <kit>/install.sh --protect           GitHub 브랜치 보호 설정 (원격 변경 — 별도 플래그)
-#   <kit>/install.sh <경로> --update         설치된 킷을 갱신 (3-way 병합)
-#   <kit>/install.sh <경로> --update --dry-run   무엇이 바뀔지만 보고 아무것도 안 건드림
+#   <kit>/install.sh <경로> [--lang py,ts] --update         설치된 킷을 갱신 (3-way 병합)
+#   <kit>/install.sh <경로> [--lang py,ts] --update --dry-run   무엇이 바뀔지만 보고 아무것도 안 건드림
 #
 # 설치: 기존 파일은 절대 덮어쓰지 않는다. 충돌 시 .ai-kit-new 로 옆에 두고 알린다.
 # 갱신: 설치 시점의 킷 원본을 .ai-kit/baseline/ 에 남겨두고, 그것을 base 로 3-way
@@ -15,10 +15,12 @@ set -uo pipefail
 
 KIT_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
-DO_HOOKS=0 DO_TEMPLATES=0 DO_LINT=0 DO_CI=0 DO_PROTECT=0 DO_AGENT=0 DO_UPDATE=0 DRY_RUN=0 TARGET_ARG=""
-# 플래그가 하나도 없으면(경로만 있거나 아무것도 없으면) 전부 설치한다.
+DO_HOOKS=0 DO_TEMPLATES=0 DO_LINT=0 DO_CI=0 DO_PROTECT=0 DO_AGENT=0 DO_UPDATE=0 DRY_RUN=0 TARGET_ARG="" LANGS=""
+# 설치할 항목을 고르지 않았으면 전부 설치한다.
+# --lang·--dry-run 은 항목이 아니라 수식이므로 여기서 세지 않는다 —
+# 세면 `install.sh <경로> --lang py` 가 아무것도 설치하지 않고 끝난다.
 case " $* " in
-  *" --"*) ;;
+  *" --hooks"*|*" --templates"*|*" --lint"*|*" --ci"*|*" --protect"*|*" --update"*) ;;
   *) DO_HOOKS=1 DO_TEMPLATES=1 DO_LINT=1 DO_CI=1 DO_AGENT=1 ;;
 esac
 while [ $# -gt 0 ]; do
@@ -27,6 +29,8 @@ while [ $# -gt 0 ]; do
     --templates) DO_TEMPLATES=1; shift ;;
     --lint) DO_LINT=1; shift ;;
     --ci) DO_CI=1; shift ;;
+    --lang) LANGS="${2:-}"; shift 2 ;;
+    --lang=*) LANGS="${1#--lang=}"; shift ;;
     --protect) DO_PROTECT=1; shift ;;
     --update) DO_UPDATE=1; DO_HOOKS=1 DO_TEMPLATES=1 DO_LINT=1 DO_CI=1 DO_AGENT=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
@@ -60,6 +64,24 @@ echo "install: 킷   $KIT_ROOT"
 
 INSTALLED=(); SKIPPED=(); CONFLICTS=(); WARNINGS=(); MERGED=(); UNCHANGED=(); SEEDED=()
 # 설치 시점 킷 리비전. baseline 이 없을 때 이것으로 원본을 복원한다.
+ALL_LANGS="go ts jvm py"
+# 갱신 시 --lang 을 안 주면 설치 당시 선택을 이어받는다 — 안 그러면 갱신이
+# 조용히 언어를 도로 넣고 체크섬만 바뀐다.
+if [ -z "$LANGS" ] && [ -f "$TARGET/.ai-kit/VERSION" ]; then
+  LANGS=$(sed -n 's/^langs=//p' "$TARGET/.ai-kit/VERSION" | head -1)
+fi
+[ -z "$LANGS" ] && LANGS=$(echo "$ALL_LANGS" | tr ' ' ',')
+LANGS=$(echo "$LANGS" | tr -d ' ')
+for _l in $(echo "$LANGS" | tr ',' ' '); do
+  case " $ALL_LANGS " in *" $_l "*) ;;
+    *) echo "install: 그런 언어가 없음 — $_l (가능: ${ALL_LANGS// /, })" >&2; exit 2 ;;
+  esac
+done
+DROP=""
+for _l in $ALL_LANGS; do
+  case ",$LANGS," in *",$_l,"*) ;; *) DROP="${DROP:+$DROP,}$_l" ;; esac
+done
+
 KIT_REV=""
 if [ -f "$TARGET/.ai-kit/VERSION" ]; then
   KIT_REV=$(sed -n 's/^kit_rev=//p' "$TARGET/.ai-kit/VERSION" | head -1)
@@ -189,6 +211,9 @@ if [ "$DO_HOOKS" = 1 ]; then
   # 이 레포만 clone 한 사람은 훅을 켜는 방법을 알 길이 없다.
   cp "$KIT_ROOT/common/gate/VENDOR-README.md" "$vendor/README.md"
   rm -f "$vendor/gate/VENDOR-README.md"
+  # 고르지 않은 언어의 어댑터는 vendor 하지 않는다 — 설치 뒤에 지우면
+  # 체크섬이 어긋나 CI 가 "손으로 고쳤다" 로 죽는다.
+  for _l in $(echo "$DROP" | tr ',' ' '); do rm -f "$vendor/gate/adapters/$_l.sh"; done
   chmod +x "$vendor"/gate/*.sh "$vendor"/git-hooks/* 2>/dev/null
   # VERSION 에 킷 커밋과 vendor 내용 체크섬을 함께 적는다.
   # 커밋만 적으면 파일을 손으로 고쳤을 때 버전 표시가 거짓말을 한다 —
@@ -198,8 +223,8 @@ if [ "$DO_HOOKS" = 1 ]; then
   # shellcheck source=/dev/null
   . "$vendor/gate/lib.sh"
   sum=$(gate_checksum "$vendor") || sum="no-hasher"
-  printf 'kit_rev=%s\nchecksum=%s\n' "$kit_rev" "$sum" > "$vendor/VERSION"
-  INSTALLED+=(".ai-kit/ (게이트 vendor · $kit_rev · $sum)")
+  printf 'kit_rev=%s\nchecksum=%s\nlangs=%s\n' "$kit_rev" "$sum" "$LANGS" > "$vendor/VERSION"
+  INSTALLED+=(".ai-kit/ (게이트 vendor · $kit_rev · $sum · $LANGS)")
 
   fi
 
@@ -320,6 +345,14 @@ if [ "$DO_CI" = 1 ]; then
     # dependabot.yml 은 워크플로가 아니라 .github/ 루트에 있어야 인식된다.
     case "$b" in
       dependabot.yml) place "$f" ".github/$b" ;;
+      gates.yml)
+        if [ -n "$DROP" ]; then
+          tmp=$(mktemp) && awk -v drop="$DROP" -f "$KIT_ROOT/common/ci/filter-langs.awk" "$f" > "$tmp" \
+            && place "$tmp" ".github/workflows/$b" && rm -f "$tmp"
+        else
+          place "$f" ".github/workflows/$b"
+        fi
+        ;;
       *)              place "$f" ".github/workflows/$b" ;;
     esac
   done
