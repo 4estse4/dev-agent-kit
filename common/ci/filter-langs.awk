@@ -30,10 +30,18 @@ function flush_job() { if (job != "" && !jobdrop) printf "%s", job; job = ""; jo
 
 /^jobs:$/ { injobs = 1 }
 
-# 5) 워크플로 env — 한 언어만 쓰는 변수
-!injobs && /^  [A-Z_]+:/ {
-  k = $0; sub(/^ +/, "", k); sub(/:.*/, "", k)
-  if (k in ENVOF && ENVOF[k] in X) next
+# 5) 워크플로 env — 한 언어만 쓰는 변수. 다 빠지면 블록째 지운다.
+!injobs && /^env:$/ { inenv = 1; envhdr = $0; nenv = 0; next }
+!injobs && inenv {
+  if ($0 ~ /^  [A-Z_]+:/) {
+    k = $0; sub(/^ +/, "", k); sub(/:.*/, "", k)
+    if (k in ENVOF && ENVOF[k] in X) next
+    ebuf[++nenv] = $0; next
+  }
+  # 블록 끝 — 남은 항목이 있을 때만 헤더와 함께 되살린다
+  if (nenv > 0) { flush_c(); print envhdr; for (i = 1; i <= nenv; i++) print ebuf[i] }
+  else { nc = 0 }                      # 앞서 모아둔 설명 주석도 함께 버린다
+  inenv = 0
 }
 
 injobs && /^  [a-z_-]+:$/ { flush_c(); flush_job() }
@@ -58,6 +66,11 @@ infind {
   }
   next
 }
+
+# 최상위 주석은 버퍼에 모은다 — 뒤따르는 블록이 지워지면 함께 지운다.
+!injobs && /^#/ { cbuf[++nc] = $0; next }
+!injobs && $0 == "" && nc > 0 { cbuf[++nc] = $0; next }
+!injobs && nc > 0 { flush_c() }
 
 {
   # 2) 스텝 — 앞선 주석 묶음까지 함께 판정한다
