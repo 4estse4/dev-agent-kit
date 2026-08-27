@@ -8,8 +8,19 @@
 #
 # `git commit` 은 막지 않는다. 빈도가 높아 막으면 우회 습관이 생긴다.
 set -uo pipefail
+
+# python3 가 없으면 이 훅은 아무것도 못 한다. 조용히 통과시키면 강제 계층이
+# 사라진 것을 아무도 모른다 — stderr 로 말하고 통과한다(차단은 못 하므로).
+command -v python3 >/dev/null 2>&1 || {
+  echo "use_skill 훅: python3 이 없어 검사하지 못했습니다" >&2; exit 0; }
+
 cmd=$(python3 -c 'import json,sys; print((json.load(sys.stdin).get("tool_input") or {}).get("command",""))' 2>/dev/null) || exit 0
 [ -n "$cmd" ] || exit 0
+
+# **스킬 자신이 이 명령들을 실행한다**(open-pr/SKILL.md · merge-pr/SKILL.md).
+# 훅은 누가 불렀는지 모르므로 스킬 안의 호출도 막아 루프가 된다.
+# 그래서 스킬은 AI_KIT_SKILL=1 을 앞에 붙여 통과시킨다.
+case "$cmd" in *AI_KIT_SKILL=1*) exit 0 ;; esac
 
 deny() {
   python3 - "$1" <<'PY'

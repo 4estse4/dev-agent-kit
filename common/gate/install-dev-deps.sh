@@ -39,12 +39,12 @@ PYCHK
 }
 
 if [ -f uv.lock ]; then
-  pipx install uv >/dev/null 2>&1 || true
+  pipx install "uv==${AI_KIT_UV_VERSION:-0.9.7}" >/dev/null 2>&1 || pipx install uv >/dev/null 2>&1 || true
   # --locked: 락과 pyproject 가 어긋나면 조용히 갱신하지 말고 실패한다.
   # 커밋된 락과 다른 해상도로 CI 가 통과하면 그 차이는 아무도 못 본다.
   uv sync --locked --all-extras --all-groups   # extras 로 dev 를 선언한 레포도 덮는다
 elif [ -f poetry.lock ]; then
-  pipx install poetry >/dev/null 2>&1 || true
+  pipx install "poetry==${AI_KIT_POETRY_VERSION:-2.2.1}" >/dev/null 2>&1 || pipx install poetry >/dev/null 2>&1 || true
   # in-project venv 로 강제해 어댑터가 .venv/bin 에서 찾게 한다.
   poetry config virtualenvs.in-project true --local
   # 그룹 이름을 추측하지 않는다 — `--with dev` 는 dev 그룹이 없으면 exit 1 이다.

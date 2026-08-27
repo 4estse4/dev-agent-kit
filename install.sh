@@ -14,7 +14,7 @@ set -uo pipefail
 KIT_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 PROTECT_FAILED=0
-DO_HOOKS=0 DO_TEMPLATES=0 DO_LINT=0 DO_CI=0 DO_PROTECT=0 DO_AGENT=0 DRY_RUN=0 TARGET_ARG="" LANGS=""
+DO_HOOKS=0 DO_TEMPLATES=0 DO_LINT=0 DO_CI=0 DO_PROTECT=0 DO_AGENT=0 DRY_RUN=0 TARGET_ARG="" LANGS="" LANGS_GIVEN=""
 # 설치할 항목을 고르지 않았으면 전부 설치한다.
 # --lang·--dry-run 은 항목이 아니라 수식이므로 여기서 세지 않는다 —
 # 세면 `install.sh <경로> --lang py` 가 아무것도 설치하지 않고 끝난다.
@@ -28,8 +28,8 @@ while [ $# -gt 0 ]; do
     --templates) DO_TEMPLATES=1; shift ;;
     --lint) DO_LINT=1; shift ;;
     --ci) DO_CI=1; shift ;;
-    --lang) LANGS="${2:-}"; shift 2 ;;
-    --lang=*) LANGS="${1#--lang=}"; shift ;;
+    --lang) LANGS="${2:-}"; LANGS_GIVEN=1; shift 2 ;;
+    --lang=*) LANGS="${1#--lang=}"; LANGS_GIVEN=1; shift ;;
     --protect) DO_PROTECT=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
@@ -60,43 +60,14 @@ TARGET=$(git -C "$TARGET_ARG" rev-parse --show-toplevel 2>/dev/null) \
 echo "설치할 레포  $TARGET"
 echo "킷           $KIT_ROOT"
 
-INSTALLED=(); NOOP=(); DIVERGED=(); WARNINGS=()
+INSTALLED=(); NOOP=(); DIVERGED=(); DIV_SRC=(); WARNINGS=()
 # 굵게는 터미널일 때만. 파이프·CI 로그에는 이스케이프가 그대로 찍힌다.
 if [ -t 1 ]; then B=$'\033[1m'; N=$'\033[0m'; else B=""; N=""; fi
 ALL_LANGS="go ts jvm py"
-# 갱신 시 --lang 을 안 주면 설치 당시 선택을 이어받는다 — 안 그러면 갱신이
-# 조용히 언어를 도로 넣고 체크섬만 바뀐다.
-# 옛 킷은 이 정보를 .ai-kit/VERSION 에 두었다. 그 이름을 읽어주지는 않는다 —
-# 대신 **반쯤 갱신하고 레포를 부수지 않도록 멈춘다.** 그대로 진행하면 kit_rev·langs
-# 를 못 읽어 뺀 언어가 되살아나고, 옛 워크플로가 새 vendor 를 체크섬 불일치로
-# 잡아 CI 가 죽고, 그 오류 메시지가 시키는 재실행으로는 고쳐지지 않는다.
-if [ -f "$TARGET/.ai-kit/VERSION" ] && [ ! -f "$TARGET/.ai-kit/install-manifest" ]; then
-  cat >&2 <<MSG
-install.sh: 이 레포는 옛 킷으로 설치됐습니다(.ai-kit/VERSION).
-  지금 킷은 그 파일을 읽지 않습니다. 이대로 갱신하면 고른 언어가 되살아나고
-  CI 가 체크섬 불일치로 죽습니다.
-
-  .ai-kit/ 을 통째로 지우고 새로 설치하세요.
-
-    \$ rm -rf $TARGET/.ai-kit
-    \$ $0 $TARGET [--lang ...]
-MSG
-  exit 2
-fi
-
 STAMP="$TARGET/.ai-kit/install-manifest"
-# 교체 직전 **디스크** 를 해시한다. 매니페스트에 적힌 값을 쓰면, 사람이 손으로 고친
-# 게이트를 조용히 되돌려놓고 "변경 없음" 이라고 보고한다(재현함).
-KIT_REV=""
-if [ -f "$STAMP" ]; then
-  KIT_REV=$(sed -n 's/^kit_rev=//p' "$STAMP" | head -1)
-  if [ -n "$KIT_REV" ] && ! git -C "$KIT_ROOT" cat-file -e "${KIT_REV}^{commit}" 2>/dev/null; then
-    # dry-run 에서도 받는다. 이것은 **킷 클론**을 최신으로 만드는 읽기이지 대상
-    # 레포의 상태가 아니다. 건너뛰면 예측이 실제 실행과 달라진다(재현함).
-    git -C "$KIT_ROOT" fetch -q --all 2>/dev/null || true
-  fi
-  git -C "$KIT_ROOT" cat-file -e "${KIT_REV}^{commit}" 2>/dev/null || KIT_REV=""
-fi
+
+# --lang 을 안 주면 설치 당시 선택을 이어받는다 — 안 그러면 재설치가 조용히
+# 뺐던 언어를 도로 넣는다.
 if [ -z "$LANGS" ] && [ -f "$STAMP" ]; then
   LANGS=$(sed -n 's/^langs=//p' "$STAMP" | head -1)
 fi
@@ -107,12 +78,19 @@ for _l in $(echo "$LANGS" | tr ',' ' '); do
     *) echo "install: 그런 언어가 없음 — $_l (가능: ${ALL_LANGS// /, })" >&2; exit 2 ;;
   esac
 done
-# 설치 때 고른 언어와 지금 요청이 다르면 gates.yml 은 다시 걸러야 한다.
+
+# --lang 은 어댑터(--hooks)·워크플로(--ci)·기록(--hooks)을 함께 정한다. 일부만 주면
+# 셋이 갈라져 로컬 게이트와 CI 가 다른 언어를 검사한다(재현함).
+if [ -n "$LANGS_GIVEN" ] && { [ "$DO_HOOKS" = 0 ] || [ "$DO_CI" = 0 ]; }; then
+  echo "install: --lang 은 --hooks 와 --ci 를 함께 설치할 때만 쓸 수 있습니다." >&2
+  echo "  (플래그를 아무것도 주지 않으면 전부 설치됩니다)" >&2
+  exit 2
+fi
+
 DROP=""
 for _l in $ALL_LANGS; do
   case ",$LANGS," in *",$_l,"*) ;; *) DROP="${DROP:+$DROP,}$_l" ;; esac
 done
-
 
 # 킷 소유 파일. 프로젝트가 고쳤든 아니든 항상 교체한다.
 replace() { # $1=src $2=dst(대상 레포 상대)
@@ -122,13 +100,13 @@ replace() { # $1=src $2=dst(대상 레포 상대)
   INSTALLED+=("$2")
 }
 
-place() { # $1=src $2=dst(대상 레포 상대) [$3=킷 원본 경로 — src 가 임시 파일일 때]
-  local src="$1" dst="$TARGET/$2" origin="${3:-$1}"
+place() { # $1=src $2=dst(대상 레포 상대)
+  local src="$1" dst="$TARGET/$2" origin="$1"
   if [ -e "$dst" ]; then
     cmp -s "$src" "$dst" && { NOOP+=("$2"); return; }
     # 이미 있고 내용이 다르면 프로젝트가 채운 것이다. 덮지도, 옆에 복사본을 놓지도
     # 않는다 — 이름만 알리고 사람이 킷 원본과 비교할지 정한다.
-    DIVERGED+=("$2|$origin"); return
+    DIVERGED+=("$2"); DIV_SRC+=("$origin"); return
   fi
   [ "$DRY_RUN" = 1 ] || { mkdir -p "$(dirname "$dst")"; cp "$src" "$dst"; }
   INSTALLED+=("$2")
@@ -174,9 +152,11 @@ if [ "$DO_HOOKS" = 1 ]; then
   #
   # kit_rev 는 출처만 뜻한다 — 어느 킷 커밋에서 왔나. 나중에 그 커밋과 diff 를 떠서
   # 이 프로젝트가 킷에서 무엇을 고쳐 썼는지 본다.
+  # 옛 킷은 이 기록을 .ai-kit/VERSION 에 두었다. 남겨두면 서로 다른 값을 말하는
+  # 파일이 두 벌 커밋된다. CI 의 드리프트 검사도 그 옛 파일을 읽는 버전일 수 있다.
+  rm -f "$vendor/VERSION"
   printf 'kit_repo=%s\nkit_rev=%s\nchecksum=%s\nlangs=%s\n' \
     "$kit_repo" "$kit_rev" "$sum" "$LANGS" > "$vendor/install-manifest"
-  # 항상 다시 복사하지만, 내용이 같으면 "바뀜" 이라고 말하지 않는다.
   INSTALLED+=(".ai-kit/")
 
   fi
@@ -207,9 +187,13 @@ if [ "$DO_HOOKS" = 1 ]; then
   # 현재 실효 신원을 기대값으로 기록해두면, 이후 잘못된 신원 커밋을 훅이 막는다.
   eff_now=$(git -C "$TARGET" config user.email 2>/dev/null)
   # dry-run 도 **예측은 한다** — 쓰지만 않는다. 안 그러면 예측이 실제와 1건 어긋난다.
+  # 이 파일은 pre-commit 이 검증하는 신원 앵커다. 지우고 다시 설치하면 **그 명령을
+  # 실행한 사람의** 이메일로 다시 시드된다 — 그래서 새로 만들 때는 반드시 알린다.
   if [ -n "$eff_now" ] && [ ! -f "$vendor/identity" ]; then
     [ "$DRY_RUN" = 1 ] || printf '# 이 레포에서 커밋할 이메일. pre-commit 훅이 검증한다.\n%s\n' "$eff_now" > "$vendor/identity"
     INSTALLED+=(".ai-kit/identity ($eff_now)")
+    WARNINGS+=(".ai-kit/identity 를 $eff_now 로 새로 만들었습니다 — 이 레포가 기대하는")
+    WARNINGS+=("  커밋 이메일입니다. 다른 사람 것이면 지우고 올바른 신원으로 다시 설치하세요.")
   fi
 
   # ── git 신원 확인 ──
@@ -238,13 +222,13 @@ if [ "$DO_TEMPLATES" = 1 ]; then
   place "$T/RUNBOOK.md"                "docs/RUNBOOK.md"
   place "$T/adr.md"                    "docs/adr/0000-template.md"
   place "$T/plan.md"                   "docs/plan/0000-template.md"
-  place "$T/PULL_REQUEST_TEMPLATE.md"  ".github/PULL_REQUEST_TEMPLATE.md"
+  replace "$T/PULL_REQUEST_TEMPLATE.md"  ".github/PULL_REQUEST_TEMPLATE.md"
   # 설계 근거 문서는 프로젝트와 함께 다녀야 한다 — CLAUDE.md 가 이것을 인용하는데
   # 킷 레포 경로로 가리키면 레포만 clone 한 사람은 따라갈 수 없다.
   # kit-guide 는 설치 직후 한 번 읽는 문서다. 나머지 설계 근거 문서와 같은 자리에 둔다.
   for d in "$KIT_ROOT"/common/docs/*.md; do
     [ -f "$d" ] || continue
-    place "$d" "docs/process/$(basename "$d")"
+    replace "$d" "docs/process/$(basename "$d")"
   done
 fi
 
@@ -299,7 +283,7 @@ if [ "$DO_CI" = 1 ]; then
     b=$(basename "$f")
     # dependabot.yml 은 워크플로가 아니라 .github/ 루트에 있어야 인식된다.
     case "$b" in
-      dependabot.yml) place "$f" ".github/$b" ;;
+      dependabot.yml) replace "$f" ".github/$b" ;;
       gates.yml)
         # gates.yml 은 --lang 으로 **생성되는 파생물**이다. 프로젝트 소유로 두면
         # --lang 을 바꿔도 워크플로만 옛 언어로 남아, 로컬 게이트와 CI 가 서로 다른
@@ -308,13 +292,21 @@ if [ "$DO_CI" = 1 ]; then
         # 프로젝트가 여기에 손댈 실제 이유는 하나다 — DB 통합 테스트의 `services:`
         # (아래 잡 주석 참조). 이 파일은 커밋되므로 설치 후 `git diff` 에 그 손실이
         # 그대로 보인다. 다시 붙이면 된다.
+        tmp=""
         if [ -n "$DROP" ]; then
           tmp=$(mktemp); awk -v drop="$DROP" -f "$KIT_ROOT/common/ci/filter-langs.awk" "$f" > "$tmp"
-          replace "$tmp" ".github/workflows/$b"
-          rm -f "$tmp"
+          src="$tmp"
         else
-          replace "$f" ".github/workflows/$b"
+          src="$f"
         fi
+        # 킷 소유라 교체하지만, 프로젝트가 고쳤다면 **무엇을 잃는지 말한다.**
+        # 여기에 손댈 실제 이유는 DB 통합 테스트의 services: 하나다(아래 잡 주석).
+        if [ -e "$TARGET/.github/workflows/$b" ] && ! cmp -s "$src" "$TARGET/.github/workflows/$b"; then
+          WARNINGS+=(".github/workflows/$b 를 킷의 것으로 교체했습니다 — 고쳐 쓴 것이 있으면")
+          WARNINGS+=("  git diff 로 확인하고 다시 붙이세요(services: 등).")
+        fi
+        replace "$src" ".github/workflows/$b"
+        [ -n "$tmp" ] && rm -f "$tmp"
         ;;
       *)              place "$f" ".github/workflows/$b" ;;
     esac
@@ -327,7 +319,7 @@ if [ "$DO_AGENT" = 1 ]; then
   while IFS= read -r f; do
     rel=${f#"$cc"/}
     [ "$rel" = "README.md" ] && continue
-    place "$f" ".claude/$rel"
+    replace "$f" ".claude/$rel"
   done < <(find "$cc" -type f)
 fi
 
@@ -382,8 +374,10 @@ if [ ${#DIVERGED[@]} -gt 0 ]; then
   echo "  아래는 이미 있고 킷의 것과 내용이 다릅니다. 건드리지 않았습니다."
   echo "  이 레포가 채운 것이면 그대로 두면 되고, 킷이 개선한 것을 가져오려면 비교하세요."
   echo ""
-  for d in "${DIVERGED[@]}"; do
-    echo "    \$ diff ${d%%|*} ${d#*|}"
+  i=0
+  while [ "$i" -lt "${#DIVERGED[@]}" ]; do
+    echo "    \$ diff $TARGET/${DIVERGED[$i]} ${DIV_SRC[$i]}"
+    i=$((i+1))
   done
 fi
 if [ ${#WARNINGS[@]} -gt 0 ]; then

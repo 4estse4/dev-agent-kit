@@ -24,7 +24,7 @@ $ARGUMENTS
 
 1. 푸시: `git push -u origin HEAD`
 
-2. `gh pr create` 로 PR 을 연다. 제목은 브랜치 전체의 목적을 Conventional Commits 스타일로.
+2. `AI_KIT_SKILL=1 gh pr create` 로 PR 을 연다(접두어는 훅을 통과시키는 표시다). 제목은 브랜치 전체의 목적을 Conventional Commits 스타일로.
    본문은 **아래 네 절만** 쓴다. 브랜치 전체를 요약하되, 각 절의 성격을 지킨다.
 
 ```

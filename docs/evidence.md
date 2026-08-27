@@ -125,8 +125,7 @@ PR 없이·콜드 리뷰 없이 8커밋을 넣었고, 뒤늦게 콜드 리뷰를
 - **JVM·Python 어댑터** — Java+Gradle · Kotlin+Gradle+spotless · 2모듈 Gradle · Python
   각각을 만들어 통과와 실패를 양쪽 다 재현. spotless 위반이 `gradle check` 에서 잡히는
   것이 "품질 플러그인은 check 에 스스로 걸린다" 는 설계 근거의 증거다
-- **`install.sh --update`** — 킷 소유 파일 교체 · 나머지는 `.ai-kit-new` 로 보고.
-  `--dry-run` 은 트리 해시 앞뒤 비교로 무변경 확인
+- **`install.sh --dry-run`** — 예측 건수 = 실제 설치 건수. 대상 레포에 아무것도 안 쓴다
 - **낡음 감지** — `SessionStart` 훅. 최신/낡음/모르는 rev/킷 없음 네 상태 실측
 - **`statusLine.command` 의 `$CLAUDE_PROJECT_DIR` 전개** — 문서에 없어서 직접 재봤다
 - **규칙 파일이 실제로 로드된다** — `/context` 의 Memory files 에

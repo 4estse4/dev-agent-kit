@@ -32,7 +32,7 @@ $ARGUMENTS
 `git log main..HEAD --format='%s'` 로 커밋 제목을 보고 사소한 것(리뷰수정·fixup·포맷)을 뺀
 목록을 만든 뒤:
 
-`gh pr merge <N> --squash --delete-branch --body "<추린 목록, 없으면 빈 문자열>"`
+`AI_KIT_SKILL=1 gh pr merge <N> --squash --delete-branch --body "<추린 목록, 없으면 빈 문자열>"`
 
 `git branch -d` 를 따로 실행하지 않는다 — `--delete-branch` 가 처리한다.
 

@@ -72,6 +72,9 @@ jobs:
           # 체크섬 재계산 — vendor 파일을 손으로 고치면 여기서 드러난다.
           # 버전 표시가 실제 내용과 어긋나면 디버깅이 헛다리를 짚는다.
           recorded=$(grep -oE 'checksum=[0-9a-f]+' .ai-kit/install-manifest 2>/dev/null | cut -d= -f2)
+          # 기록이 없으면 대조할 것이 없다. 통과시키면 드리프트 검사가 조용히
+          # 꺼진 채 초록이 된다 — 이 킷이 세 번 놓친 부류다.
+          [ -n "$recorded" ] || { echo "::error::.ai-kit/install-manifest 에 checksum 이 없습니다 — install.sh 를 다시 실행하세요"; exit 1; }
           # 체크섬 정의는 vendor 된 lib.sh 한 곳에만 있다 — 여기서 복붙하면 드리프트한다.
           . .ai-kit/gate/lib.sh
           actual=$(gate_checksum .ai-kit)
