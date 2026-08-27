@@ -24,9 +24,13 @@ else
   # 보이지 않는다. 시크릿을 커밋했다가 다음 커밋에서 지우는 것은 사람이 "고쳤다" 고
   # 믿는 가장 흔한 복구 동작이고, 그때 원격에는 그대로 남는다(재현함).
   # 그래서 커밋 단위로 훑는다.
-  # --diff-merges=first-parent: git log 는 기본적으로 머지 커밋의 diff 를 내지 않는다.
-  # 충돌 해소 중에 써넣은 시크릿이 그래서 통째로 안 보인다(재현함).
-  FILES=$(git log --name-only --diff-filter=ACM --diff-merges=first-parent --pretty=format: "$RANGE" | sort -u | sed '/^$/d') || {
+  # git log 는 기본적으로 머지 커밋의 diff 를 내지 않아, 충돌 해소 중에 써넣은
+  # 시크릿이 통째로 안 보인다. --diff-merges=cc(combined) 는 **어느 부모와도 다른**
+  # 내용만 낸다 — 즉 머지가 스스로 만들어낸 것만 본다.
+  # first-parent 를 쓰면 안 된다: `git merge main` 이 들여온 main 의 내용 전부가
+  # 이번 푸시의 추가 줄로 잡혀, 자기 커밋이 깨끗한 브랜치가 차단된다(재현함).
+  # git 2.31+ 필요(상정 환경은 macOS 로컬 + ubuntu CI 둘뿐이라 충족된다).
+  FILES=$(git log --name-only --diff-filter=ACM --diff-merges=cc --pretty=format: "$RANGE" | sort -u | sed '/^$/d') || {
     echo "시크릿 스캔 오류: 범위 '$RANGE' 를 해석하지 못했습니다 — 검사를 신뢰할 수 없어 중단합니다." >&2
     exit 2; }
 fi
@@ -54,7 +58,7 @@ if [ "$MODE" = staged ]; then
     echo "시크릿 스캔 오류: staged diff 를 읽지 못했습니다." >&2; exit 2; }
 else
   # 위와 같은 이유로 diff 도 커밋 단위로 본다.
-  DIFF=$(git log -p -U0 --diff-merges=first-parent --pretty=format: "$RANGE") || {
+  DIFF=$(git log -p -U0 --diff-merges=cc --pretty=format: "$RANGE") || {
     echo "시크릿 스캔 오류: 범위 '$RANGE' diff 를 읽지 못했습니다." >&2; exit 2; }
 fi
 

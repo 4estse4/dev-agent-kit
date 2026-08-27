@@ -13,6 +13,17 @@ set -euo pipefail
 cd "${1:-.}"
 [ -f pyproject.toml ] || { echo "install-dev-deps: pyproject.toml 이 없습니다 — $(pwd)" >&2; exit 1; }
 
+# venv 를 만들면 **활성화까지 한다.** 만들기만 하면 이어지는 pip 는 바깥
+# 인터프리터에 깔고 .venv 는 빈 채 남는데, coverage 잡은 그 빈 venv 를 켜고
+# "pytest-cov 가 없다" 는 거짓 안내를 낸다(재현함).
+# uv·poetry 분기는 자기가 venv 를 만들고 채우므로 이 함수를 쓰지 않는다.
+_venv() {
+  python -m venv .venv
+  # shellcheck source=/dev/null
+  . .venv/bin/activate
+  python -m pip install -q --upgrade pip >/dev/null 2>&1 || true
+}
+
 _has() { # $1=tomllib 로 확인할 파이썬 식
   python - "$1" <<'PYCHK'
 import sys, tomllib, pathlib
@@ -40,14 +51,11 @@ elif [ -f poetry.lock ]; then
     poetry install
   fi
 elif _has "'dev' in (d.get('dependency-groups') or {})"; then
-  python -m venv .venv 2>/dev/null || true
-  python -m pip install --group dev -e .
+  _venv; python -m pip install --group dev -e .
 elif _has "'dev' in ((d.get('project') or {}).get('optional-dependencies') or {})"; then
-  python -m venv .venv 2>/dev/null || true
-  python -m pip install -e '.[dev]'
+  _venv; python -m pip install -e '.[dev]'
 elif [ -f requirements-dev.txt ]; then
-  python -m venv .venv 2>/dev/null || true
-  python -m pip install -r requirements-dev.txt
+  _venv; python -m pip install -r requirements-dev.txt
 else
   echo "::notice::$(pwd) 에 dev 의존성 선언이 없습니다 — pytest·mypy 를 쓴다면" \
        "uv.lock · poetry.lock · [dependency-groups].dev ·" \

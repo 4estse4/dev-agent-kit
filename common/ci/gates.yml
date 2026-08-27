@@ -341,8 +341,8 @@ jobs:
         # (@vitest/coverage-v8 등)도 프로젝트 의존성이다.
         run: |
           fail=0
-          for d in $(dirname $(find . -name package.json -not -path '*/node_modules/*' -maxdepth 3)); do
-            echo "── $d ──"
+          while IFS= read -r f; do
+            d=$(dirname "$f"); echo "── $d ──"
             ( cd "$d"
               if ! node -e 'process.exit(require("./package.json").scripts?.coverage?0:1)' 2>/dev/null; then
                 echo "::notice::$d — package.json 에 coverage 스크립트가 없어 재지 못했습니다"
@@ -358,7 +358,7 @@ jobs:
               [ -n "$COVER_MIN" ] && echo "::notice::$d — COVER_MIN 은 node 에서 강제되지 않습니다. 커버리지 설정의 thresholds 를 쓰세요"
               exit 0
             ) || fail=1
-          done
+          done < <(find . -name package.json -not -path '*/node_modules/*' -maxdepth 3)
           exit $fail
 
       - if: needs.detect.outputs.jvm == 'true'
@@ -458,12 +458,19 @@ jobs:
             ( cd "$d"
               if [ -f uv.lock ]; then
                 pipx install uv >/dev/null 2>&1 || true
-                uv export --frozen --no-dev --format requirements-txt 2>/dev/null > /tmp/req.txt \
-                  && pip-audit -r /tmp/req.txt
+                if uv export --frozen --no-dev --format requirements-txt > /tmp/req.txt; then
+                  pip-audit -r /tmp/req.txt
+                else
+                  echo "::error::$d — uv export 가 실패했습니다(위 오류 참조)"; exit 1
+                fi
               elif [ -f poetry.lock ]; then
                 pipx install poetry >/dev/null 2>&1 || true
-                poetry export -f requirements.txt --without-hashes 2>/dev/null > /tmp/req.txt \
-                  && pip-audit -r /tmp/req.txt
+                # Poetry 2.x 는 export 를 코어에서 뺐다(poetry-plugin-export 가 필요).
+                if poetry export -f requirements.txt --without-hashes > /tmp/req.txt; then
+                  pip-audit -r /tmp/req.txt
+                else
+                  echo "::error::$d — poetry export 가 실패했습니다. Poetry 2.x 라면 poetry-plugin-export 를 설치하세요"; exit 1
+                fi
               elif [ -f requirements.txt ]; then
                 pip-audit -r requirements.txt
               else
@@ -491,16 +498,13 @@ jobs:
           java-version: ${{ env.AI_KIT_JAVA_VERSION }}
           cache: gradle
       - if: needs.detect.outputs.jvm == 'true'
-        name: cache NVD data
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle/dependency-check-data
-          key: nvd-${{ runner.os }}-${{ github.run_id }}
-          restore-keys: nvd-${{ runner.os }}-
-      - if: needs.detect.outputs.jvm == 'true'
         name: OWASP Dependency-Check
         # 플러그인은 프로젝트 빌드 스크립트에 있어야 한다 — 킷이 넣지 않는다.
-        # 첫 실행은 NVD 데이터베이스를 받느라 수 분 걸린다. 위 캐시가 그것을 재사용한다.
+        #
+        # **NVD 데이터베이스 캐시는 프로젝트가 붙여야 한다.** 첫 실행은 그것을 받느라
+        # 수 분 걸리는데, 데이터 위치가 플러그인 설정(`data.directory`)에 좌우되므로
+        # 킷이 경로를 추측해 캐시하면 매번 빈 디렉터리를 저장하고도 캐시하는 척한다.
+        # 프로젝트가 자기 설정을 알고 있으니 그쪽에서 actions/cache 를 붙인다.
         run: |
           if ! grep -rqE 'dependencycheck|dependency-check' --include='build.gradle*' --include='settings.gradle*' .; then
             echo "::notice::OWASP Dependency-Check 플러그인이 없어 취약점 스캔을 하지 못했습니다"
