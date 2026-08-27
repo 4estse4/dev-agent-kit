@@ -15,8 +15,7 @@
 # 절대 차단하지 않는다. 알 수 없으면 조용히 넘어간다.
 set -uo pipefail
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
-STAMP=.ai-kit/INSTALLED-FROM
-[ -f "$STAMP" ] || STAMP=.ai-kit/VERSION      # 옛 이름
+STAMP=.ai-kit/install-manifest
 [ -f "$STAMP" ] || exit 0
 
 # 킷 경로는 install.sh 가 이 레포의 로컬 git config 에 적어둔다.

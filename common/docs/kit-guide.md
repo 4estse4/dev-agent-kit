@@ -73,12 +73,12 @@ git config user.email      # 이 레포에서 쓸 이메일이 맞는지 먼저 
 
 ```bash
 <kit>/install.sh <이 레포 경로> --update --dry-run   # 무엇이 바뀔지만
-<kit>/install.sh <이 레포 경로> --update             # 3-way 병합
+<kit>/install.sh <이 레포 경로> --update             # 킷 소유는 교체, 나머지는 충돌 보고
 ```
 
 `.ai-kit/gate/`·`git-hooks/` 는 킷 소유라 통째로 교체된다. `CLAUDE.md`·CI·린터 설정은
-**프로젝트 소유**라 3-way 병합하고, 겹치면 충돌 마커를 남긴다 — 해소한 뒤 다시 돌려야
-baseline 이 맞는다. **킷 파일로 덮지 마라**: 그 파일들엔 프로젝트 고유 설정이 들어 있다.
+**프로젝트 소유**라 덮지 않는다 — 킷의 새 버전을 `<파일>.ai-kit-new` 로 옆에 놓고
+충돌로 보고하므로, 둘을 비교해 합치고 `.ai-kit-new` 를 지운다.
 
 ## 6. 킷 자체의 미결 항목
 

@@ -68,10 +68,10 @@ jobs:
           for f in .ai-kit/git-hooks/pre-commit .ai-kit/git-hooks/pre-push; do
             [ -x "$f" ] || { echo "::error::$f 에 실행권한이 없습니다 — 훅이 조용히 건너뛰어집니다. git update-index --chmod=+x $f 로 고치고 커밋하세요"; exit 1; }
           done
-          cat .ai-kit/INSTALLED-FROM 2>/dev/null || echo "INSTALLED-FROM 없음"
+          cat .ai-kit/install-manifest 2>/dev/null || echo "install-manifest 없음"
           # 체크섬 재계산 — vendor 파일을 손으로 고치면 여기서 드러난다.
           # 버전 표시가 실제 내용과 어긋나면 디버깅이 헛다리를 짚는다.
-          recorded=$(grep -oE 'checksum=[0-9a-f]+' .ai-kit/INSTALLED-FROM 2>/dev/null | cut -d= -f2)
+          recorded=$(grep -oE 'checksum=[0-9a-f]+' .ai-kit/install-manifest 2>/dev/null | cut -d= -f2)
           # 체크섬 정의는 vendor 된 lib.sh 한 곳에만 있다 — 여기서 복붙하면 드리프트한다.
           . .ai-kit/gate/lib.sh
           actual=$(gate_checksum .ai-kit)
