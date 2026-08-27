@@ -60,10 +60,12 @@ fi
 [ -d "$TARGET_ARG" ] || { echo "install: 그런 디렉터리가 없습니다 — $TARGET_ARG" >&2; exit 1; }
 TARGET=$(git -C "$TARGET_ARG" rev-parse --show-toplevel 2>/dev/null) \
   || { echo "install: git 레포가 아닙니다 — $TARGET_ARG" >&2; exit 1; }
-echo "설치 대상   $TARGET"
-echo "사용한 킷   $KIT_ROOT"
+if [ "$DO_UPDATE" = 1 ]; then echo "갱신할 레포  $TARGET"; else echo "설치할 레포  $TARGET"; fi
+echo "킷           $KIT_ROOT"
 
 INSTALLED=(); NOOP=(); CONFLICTS=(); WARNINGS=()
+# 굵게는 터미널일 때만. 파이프·CI 로그에는 이스케이프가 그대로 찍힌다.
+if [ -t 1 ]; then B=$'\033[1m'; N=$'\033[0m'; else B=""; N=""; fi
 ALL_LANGS="go ts jvm py"
 # 갱신 시 --lang 을 안 주면 설치 당시 선택을 이어받는다 — 안 그러면 갱신이
 # 조용히 언어를 도로 넣고 체크섬만 바뀐다.
@@ -375,24 +377,24 @@ fi
 if [ "$DO_UPDATE" = 1 ]; then
   # 리비전 범위는 이번 갱신 전체의 성질이다. 개별 파일에 붙일 것이 아니다.
   if [ -n "$KIT_REV" ] && [ -n "${MANIFEST_REV_NEW:-}" ]; then
-    echo "킷 리비전   $KIT_REV → $MANIFEST_REV_NEW"
+    echo "킷 리비전    $KIT_REV → $MANIFEST_REV_NEW"
   elif [ -z "$KIT_REV" ]; then
-    echo "킷 리비전   설치 시점을 알 수 없어 무엇이 바뀌었는지 대조하지 못했습니다"
+    echo "킷 리비전    설치 시점을 알 수 없어 무엇이 바뀌었는지 대조하지 못했습니다"
   fi
   echo ""
-  echo "변경됨 ${#INSTALLED[@]}건 · 변경 없음 ${#NOOP[@]}건 · 확인 필요 ${#CONFLICTS[@]}건"
+  echo "${B}변경됨 ${#INSTALLED[@]}건 · 변경 없음 ${#NOOP[@]}건 · 확인 필요 ${#CONFLICTS[@]}건${N}"
   if [ ${#INSTALLED[@]} -gt 0 ]; then
     echo ""; echo "변경됨"
     printf '  %s\n' "${INSTALLED[@]}"
   fi
 else
 echo ""
-echo "설치됨 ${#INSTALLED[@]}건 · 이미 있음 ${#NOOP[@]}건 · 확인 필요 ${#CONFLICTS[@]}건"
+echo "${B}설치됨 ${#INSTALLED[@]}건 · 이미 있음 ${#NOOP[@]}건 · 확인 필요 ${#CONFLICTS[@]}건${N}"
 fi
 if [ "$DO_HOOKS" = 1 ] && [ "$DO_UPDATE" = 0 ]; then
   cat <<'MSG'
 
-설치기가 한 일
+install.sh 가 한 일
   게이트와 훅을 .ai-kit/ 에 넣었습니다.
   git 이 그 훅을 보도록 core.hooksPath 를 설정했습니다.
 
@@ -404,14 +406,10 @@ if [ "$DO_HOOKS" = 1 ] && [ "$DO_UPDATE" = 0 ]; then
   무엇을 채워야 하고, 킷이 무엇을 안 하는지 적혀 있습니다.
 
 참고
-  core.hooksPath 는 git 이 clone 에 담지 않는 로컬 설정입니다. 보안상 의도된
-  동작입니다 — clone 만으로 남의 스크립트가 돌면 안 되니까요.
-  그래서 이 레포를 새로 clone 하는 사람은 한 줄이 필요합니다.
+  훅은 이 머신에서만 켜져 있습니다. core.hooksPath 는 git 이 clone 에 담지 않기
+  때문입니다. 이 레포를 새로 clone 하는 사람은 이 한 줄이 필요합니다.
 
     $ git config core.hooksPath .ai-kit/git-hooks
-
-  로컬 훅은 우회할 수 있는 조기 피드백이고, 우회할 수 없는 강제는 CI 입니다.
-  둘이 같은 gate.sh 를 부르는 이유가 그것입니다.
 MSG
 fi
 
@@ -429,7 +427,7 @@ if [ ${#CONFLICTS[@]} -gt 0 ]; then
   cat <<'MSG'
 
   둘을 비교해 킷이 개선한 것만 가져오고, 이 레포가 채운 내용은 그대로 두세요.
-  끝나면 .ai-kit-new 를 지웁니다.
+  다 옮긴 뒤 .ai-kit-new 를 직접 지우세요. install.sh 는 지우지 않습니다.
 
     $ diff CLAUDE.md CLAUDE.md.ai-kit-new
 
