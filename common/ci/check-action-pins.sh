@@ -44,15 +44,6 @@ for f in "${FILES[@]}"; do
            | sed 's/uses: *//' | sort -u)
 done
 
-if [ "$failed" = 1 ]; then
-  echo "check-action-pins — 조회 실패가 있어 판정할 수 없습니다" >&2; exit 2
-fi
-if [ "$behind" = 1 ]; then
-  echo ""
-  echo "위 핀이 뒤처졌습니다. 템플릿을 올리고 커밋하세요 —"
-  echo "Dependabot 은 common/ci/ 를 보지 않으므로 아무도 대신 해주지 않습니다." >&2
-  exit 1
-fi
 # ── 게이트 도구 핀 ───────────────────────────────────────────────────────────
 # 도구마다 "최신" 을 어디서 읽는지가 다르다. releases/latest 가 옳은 곳과 tags 를
 # 봐야 하는 곳이 갈린다 — golang/tools 의 최신 릴리즈는 gopls 이고, golang/vuln 은

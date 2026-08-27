@@ -72,7 +72,7 @@ KC_TMP=$(mktemp); trap 'rm -f "$KC_TMP"' EXIT
 if [ -f "$STAMP" ]; then
   KIT_REV=$(sed -n 's/^kit_rev=//p' "$STAMP" | head -1)
   if [ -n "$KIT_REV" ] && ! git -C "$KIT_ROOT" cat-file -e "${KIT_REV}^{commit}" 2>/dev/null; then
-    git -C "$KIT_ROOT" fetch -q --all 2>/dev/null || true
+    [ "$DRY_RUN" = 1 ] || git -C "$KIT_ROOT" fetch -q --all 2>/dev/null || true
   fi
   git -C "$KIT_ROOT" cat-file -e "${KIT_REV}^{commit}" 2>/dev/null || KIT_REV=""
 fi
@@ -86,6 +86,13 @@ for _l in $(echo "$LANGS" | tr ',' ' '); do
     *) echo "install: 그런 언어가 없음 — $_l (가능: ${ALL_LANGS// /, })" >&2; exit 2 ;;
   esac
 done
+# 설치 때 고른 언어와 지금 요청이 다르면 gates.yml 은 다시 걸러야 한다.
+# kit_changed() 는 킷 원본의 변경만 보므로 이 경우를 못 잡는다(필터 결과가 달라진다).
+LANG_WAS=""
+[ -f "$STAMP" ] && LANG_WAS=$(sed -n 's/^langs=//p' "$STAMP" | head -1)
+LANG_CHANGED=0
+[ -n "$LANG_WAS" ] && [ "$LANG_WAS" != "$LANGS" ] && LANG_CHANGED=1
+
 DROP=""
 for _l in $ALL_LANGS; do
   case ",$LANGS," in *",$_l,"*) ;; *) DROP="${DROP:+$DROP,}$_l" ;; esac
@@ -102,19 +109,32 @@ done
 # 이것이 없으면 프로젝트가 채운 파일이 전부 충돌로 뜬다 — "프로젝트가 채웠다" 와
 # "킷이 바꿨다" 가 구분되지 않기 때문이다. base 파일을 들고 있을 필요는 없고,
 # **킷 안에서** 그 시점과 지금을 비교하면 된다.
+# $KC_TMP 에는 호출 후 kit_rev 시점의 킷 원본이 담긴다(성공 시).
 kit_changed() { # $1=킷 상대경로
+  KC_OK=0
   [ -n "$KIT_REV" ] || return 0
   git -C "$KIT_ROOT" show "$KIT_REV:$1" 2>/dev/null > "$KC_TMP" || return 0
+  KC_OK=1
   cmp -s "$KC_TMP" "$KIT_ROOT/$1" && return 1
   return 0
 }
 
-place() { # $1=src $2=dst(대상 레포 상대) [$3=킷 상대경로 — src 가 임시 파일일 때]
-  local src="$1" dst="$TARGET/$2" krel="${3:-${1#"$KIT_ROOT"/}}"
+place() { # $1=src $2=dst(대상 레포 상대) [$3=킷 상대경로 — 빈 값이면 항상 "바뀜"]
+  local src="$1" dst="$TARGET/$2" krel
+  if [ $# -ge 3 ]; then krel="$3"; else krel="${1#"$KIT_ROOT"/}"; fi
   if [ -e "$dst" ]; then
     cmp -s "$src" "$dst" && { SKIPPED+=("$2 (동일)"); return; }
-    # 갱신 중이고 킷이 이 파일을 안 바꿨으면 프로젝트가 채운 것이다. 건드리지 않는다.
-    if [ "$DO_UPDATE" = 1 ] && ! kit_changed "$krel"; then UNCHANGED+=("$2"); return; fi
+    if [ "$DO_UPDATE" = 1 ]; then
+      # 킷이 안 바꿨으면 프로젝트가 채운 것이다. 건드리지 않는다.
+      if [ -n "$krel" ] && ! kit_changed "$krel"; then UNCHANGED+=("$2"); return; fi
+      [ -n "$krel" ] || KC_OK=0
+      # 킷은 바꿨는데 프로젝트는 설치 때 그대로면 합칠 것이 없다 — 그냥 새 버전으로.
+      # (KC_TMP 에 설치 시점 원본이 있으므로 "프로젝트가 손댔나" 를 여기서 알 수 있다.)
+      if [ "$KC_OK" = 1 ] && cmp -s "$KC_TMP" "$dst"; then
+        [ "$DRY_RUN" = 1 ] || cp "$src" "$dst"
+        INSTALLED+=("$2 (킷 변경 반영)"); return
+      fi
+    fi
     [ "$DRY_RUN" = 1 ] || { mkdir -p "$(dirname "$dst")"; cp "$src" "$dst.ai-kit-new"; }
     CONFLICTS+=("$2"); return
   fi
@@ -153,10 +173,17 @@ if [ "$DO_HOOKS" = 1 ]; then
   sum=$(gate_checksum "$vendor") || sum="no-hasher"
   # 해시만 적으면 어느 레포의 해시인지 알 수 없다. 원격 주소를 함께 적는다 —
   # 로컬 경로는 적지 않는다(머신마다 다르고 남의 파일 배치를 레포에 박는 것이다).
-  kit_repo=$( git -C "$KIT_ROOT" remote get-url origin 2>/dev/null || basename "$KIT_ROOT" )
-  printf 'kit_repo=%s\nkit_rev=%s\nchecksum=%s\nlangs=%s\n' \
-    "$kit_repo" "$kit_rev" "$sum" "$LANGS" > "$vendor/install-manifest"
+  kit_repo=$( git -C "$KIT_ROOT" remote get-url origin 2>/dev/null || echo "" )
+  # 로컬 미러에서 clone 했으면 origin 이 경로다. 그것을 레포에 박지 않는다 —
+  # 머신마다 다르고 남의 파일 배치를 알려주는 것 말고는 값이 없다.
+  case "$kit_repo" in /*|"") kit_repo=$(basename "$KIT_ROOT") ;; esac
+  # 충돌이 남은 채 kit_rev 를 올리면, 다음 --update 가 그 킷 변경을 "이미 반영됨" 으로
+  # 보고 통째로 삼킨다(.ai-kit-new 만 방치된다). 그래서 여기서 값을 정해두고
+  # **파일 배치가 끝난 뒤** 충돌이 없을 때만 쓴다.
+  MANIFEST_REPO="$kit_repo"; MANIFEST_REV="$kit_rev"
+  MANIFEST_SUM="$sum"; MANIFEST_LANGS="$LANGS"
   INSTALLED+=(".ai-kit/ (게이트 vendor · $kit_rev · $sum · $LANGS)")
+  MANIFEST_PATH="$vendor/install-manifest"
 
   fi
 
@@ -279,7 +306,9 @@ if [ "$DO_CI" = 1 ]; then
       gates.yml)
         if [ -n "$DROP" ]; then
           tmp=$(mktemp) && awk -v drop="$DROP" -f "$KIT_ROOT/common/ci/filter-langs.awk" "$f" > "$tmp" \
-            && place "$tmp" ".github/workflows/$b" "common/ci/$b" && rm -f "$tmp"
+            && place "$tmp" ".github/workflows/$b" \
+                 "$( [ "$LANG_CHANGED" = 1 ] && echo "" || echo "common/ci/$b" )" \
+            && rm -f "$tmp"
         else
           place "$f" ".github/workflows/$b"
         fi
@@ -300,13 +329,34 @@ if [ "$DO_AGENT" = 1 ]; then
 fi
 
 # ── 원격 변경: 브랜치 보호 ──
+# langs·checksum 은 **디스크에 실제로 놓인 것**을 적으므로 항상 쓴다.
+# kit_rev 는 "킷 변경을 어디까지 흡수했나" 이므로 **충돌이 남으면 올리지 않는다** —
+# 올려버리면 다음 --update 가 그 변경을 "이미 반영됨" 으로 보고 통째로 삼킨다.
+if [ -n "${MANIFEST_PATH:-}" ] && [ "$DRY_RUN" = 0 ]; then
+  rev="$MANIFEST_REV"
+  if [ ${#CONFLICTS[@]} -gt 0 ] && [ -n "$KIT_REV" ]; then
+    rev="$KIT_REV"
+    WARNINGS+=("충돌이 남아 kit_rev 를 $KIT_REV 로 둡니다 — .ai-kit-new 를 합쳐 지운 뒤")
+    WARNINGS+=("  --update 를 다시 돌리세요. 그래야 나머지 킷 변경이 보고됩니다.")
+  fi
+  printf 'kit_repo=%s\nkit_rev=%s\nchecksum=%s\nlangs=%s\n' \
+    "$MANIFEST_REPO" "$rev" "$MANIFEST_SUM" "$MANIFEST_LANGS" > "$MANIFEST_PATH"
+fi
+
 if [ "$DO_PROTECT" = 1 ]; then
-  bash "$KIT_ROOT/common/ci/protect-branch.sh" || echo "install: 브랜치 보호 설정 실패" >&2
+  # protect-branch.sh 는 `gh repo view` 로 **현재 디렉터리**의 레포를 정한다.
+  # cd 없이 부르면 킷 레포에 보호를 걸어버린다(원격 쓰기라 되돌리기도 번거롭다).
+  if [ "$DRY_RUN" = 1 ]; then
+    echo "install: --dry-run 이므로 브랜치 보호는 건드리지 않습니다"
+  else
+    ( cd "$TARGET" && bash "$KIT_ROOT/common/ci/protect-branch.sh" ) \
+      || echo "install: 브랜치 보호 설정 실패" >&2
+  fi
 fi
 
 # ── 보고 (산출물 규칙 R1: 개수만, 문제만 자세히) ──
+[ "$DRY_RUN" = 1 ] && echo "── dry-run: 아무것도 바꾸지 않았습니다. 아래는 무엇이 바뀔지입니다 ──"
 if [ "$DO_UPDATE" = 1 ]; then
-  [ "$DRY_RUN" = 1 ] && echo "── dry-run: 아무것도 바꾸지 않았습니다 ──"
   echo "갱신 ${#INSTALLED[@]}건 · 그대로 ${#UNCHANGED[@]}건 · 동일 ${#SKIPPED[@]}건 · 충돌 ${#CONFLICTS[@]}건"
   if [ ${#INSTALLED[@]} -gt 0 ]; then echo ""; echo "킷 변경이 반영됨:"; printf '  %s\n' "${INSTALLED[@]}"; fi
 else

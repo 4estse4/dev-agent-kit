@@ -237,7 +237,7 @@ jobs:
           while IFS= read -r f; do
             echo "── $(dirname "$f") ──"
             bash .ai-kit/gate/install-dev-deps.sh "$(dirname "$f")"
-          done < <(find . -name pyproject.toml -not -path '*/node_modules/*' -not -path '*/.venv/*' -maxdepth 3)
+          done < <(find . -name pyproject.toml -not -path '*/node_modules/*' -not -path '*/.venv/*')
 
       - if: needs.detect.outputs.node == 'true'
         uses: actions/setup-node@v7
@@ -311,8 +311,8 @@ jobs:
           fail=0
           while IFS= read -r f; do
             d=$(dirname "$f"); echo "── $d ──"
-            bash .ai-kit/gate/install-dev-deps.sh "$d"
-            ( cd "$d"
+            ( bash .ai-kit/gate/install-dev-deps.sh "$d"
+              cd "$d"
               [ -d .venv ] && . .venv/bin/activate
               if ! python -c "import pytest_cov" 2>/dev/null; then
                 echo "::notice::$d — pytest-cov 가 없어 커버리지를 재지 못했습니다. dev 의존성에 추가하세요"
@@ -329,7 +329,7 @@ jobs:
                 { echo "::error::$d — COVER_MIN=$COVER_MIN 미만 ($pct%)"; exit 1; }
               exit 0
             ) || fail=1
-          done < <(find . -name pyproject.toml -not -path '*/node_modules/*' -not -path '*/.venv/*' -maxdepth 3)
+          done < <(find . -name pyproject.toml -not -path '*/node_modules/*' -not -path '*/.venv/*')
           exit $fail
 
       - if: needs.detect.outputs.node == 'true'
@@ -477,7 +477,7 @@ jobs:
                 echo "::notice::$d — 락파일도 requirements.txt 도 없어 감사할 목록이 없습니다"
               fi
             ) || fail=1
-          done < <(find . -name pyproject.toml -not -path '*/node_modules/*' -not -path '*/.venv/*' -maxdepth 3)
+          done < <(find . -name pyproject.toml -not -path '*/node_modules/*' -not -path '*/.venv/*')
           exit $fail
 
       - if: needs.detect.outputs.node == 'true'
