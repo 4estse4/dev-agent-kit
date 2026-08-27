@@ -69,8 +69,32 @@ if [ -t 1 ]; then B=$'\033[1m'; N=$'\033[0m'; else B=""; N=""; fi
 ALL_LANGS="go ts jvm py"
 # 갱신 시 --lang 을 안 주면 설치 당시 선택을 이어받는다 — 안 그러면 갱신이
 # 조용히 언어를 도로 넣고 체크섬만 바뀐다.
+# 옛 킷은 이 정보를 .ai-kit/VERSION 에 두었다. 그 이름을 읽어주지는 않는다 —
+# 대신 **반쯤 갱신하고 레포를 부수지 않도록 멈춘다.** 그대로 진행하면 kit_rev·langs
+# 를 못 읽어 뺀 언어가 되살아나고, 옛 워크플로가 새 vendor 를 체크섬 불일치로
+# 잡아 CI 가 죽고, 그 오류 메시지가 시키는 재실행으로는 고쳐지지 않는다.
+if [ -f "$TARGET/.ai-kit/VERSION" ] && [ ! -f "$TARGET/.ai-kit/install-manifest" ]; then
+  cat >&2 <<MSG
+install.sh: 이 레포는 옛 킷으로 설치됐습니다(.ai-kit/VERSION).
+  지금 킷은 그 파일을 읽지 않습니다. 이대로 갱신하면 고른 언어가 되살아나고
+  CI 가 체크섬 불일치로 죽습니다.
+
+  .ai-kit/ 을 통째로 지우고 새로 설치하세요.
+
+    \$ rm -rf $TARGET/.ai-kit
+    \$ $0 $TARGET [--lang ...]
+MSG
+  exit 2
+fi
+
 STAMP="$TARGET/.ai-kit/install-manifest"
-SUM_BEFORE=$(sed -n 's/^checksum=//p' "$STAMP" 2>/dev/null | head -1)
+# 교체 직전 **디스크** 를 해시한다. 매니페스트에 적힌 값을 쓰면, 사람이 손으로 고친
+# 게이트를 조용히 되돌려놓고 "변경 없음" 이라고 보고한다(재현함).
+SUM_BEFORE=""
+if [ -d "$TARGET/.ai-kit/gate" ]; then
+  # shellcheck source=/dev/null
+  . "$TARGET/.ai-kit/gate/lib.sh" 2>/dev/null && SUM_BEFORE=$(gate_checksum "$TARGET/.ai-kit" 2>/dev/null)
+fi
 KIT_REV=""
 KC_TMP=$(mktemp); trap 'rm -f "$KC_TMP"' EXIT
 if [ -f "$STAMP" ]; then
@@ -125,7 +149,7 @@ kit_changed() { # $1=킷 상대경로
   return 0
 }
 
-place() { # $1=src $2=dst(대상 레포 상대) [$3=킷 상대경로 — 빈 값이면 항상 "바뀜"]
+place() { # $1=src $2=dst(상대) [$3=킷 상대경로, 빈 값이면 항상 "바뀜"] [$4=설치 당시 내용]
   local src="$1" dst="$TARGET/$2" krel
   if [ $# -ge 3 ]; then krel="$3"; else krel="${1#"$KIT_ROOT"/}"; fi
   if [ -e "$dst" ]; then
@@ -133,7 +157,11 @@ place() { # $1=src $2=dst(대상 레포 상대) [$3=킷 상대경로 — 빈 값
     if [ "$DO_UPDATE" = 1 ]; then
       # 킷이 안 바꿨으면 프로젝트가 채운 것이다. 건드리지 않는다.
       if [ -n "$krel" ] && ! kit_changed "$krel"; then NOOP+=("$2"); return; fi
-      [ -n "$krel" ] || KC_OK=0
+      # krel 이 비면 킷 원본 대조를 못 한다. 대신 호출자가 $4 로 "설치 당시 이 자리에
+      # 있었을 내용" 을 줄 수 있다 — 언어 선택이 바뀐 gates.yml 이 그 경우다.
+      if [ -z "$krel" ]; then
+        if [ -n "${4:-}" ] && [ -f "$4" ]; then cp "$4" "$KC_TMP"; KC_OK=1; else KC_OK=0; fi
+      fi
       # 킷은 바꿨는데 프로젝트는 설치 때 그대로면 합칠 것이 없다 — 그냥 새 버전으로.
       # (KC_TMP 에 설치 시점 원본이 있으므로 "프로젝트가 손댔나" 를 여기서 알 수 있다.)
       if [ "$KC_OK" = 1 ] && cmp -s "$KC_TMP" "$dst"; then
@@ -156,7 +184,13 @@ if [ "$DO_HOOKS" = 1 ]; then
   # .ai-kit/gate 와 git-hooks 는 킷 소유라 통째로 교체한다(프로젝트가 고치면 CI 가 잡는다).
   # identity 는 그 아래 살지만 킷 소유가 아니므로 남긴다.
   if [ "$DRY_RUN" = 1 ]; then
-    INSTALLED+=(".ai-kit/  (게이트·훅 통째로 교체)")
+    MANIFEST_REV_NEW=$( cd "$KIT_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo unknown )
+    # 실제 실행과 같은 기준으로 판정한다 — dry-run 이 틀린 예측을 하면 볼 이유가 없다.
+    dry_sum=$( tmpv=$(mktemp -d); cp -R "$KIT_ROOT/common/gate" "$KIT_ROOT/common/git-hooks" "$tmpv/" 2>/dev/null
+               rm -f "$tmpv/gate/VENDOR-README.md"
+               for _l in $(echo "$DROP" | tr ',' ' '); do rm -f "$tmpv/gate/adapters/$_l.sh"; done
+               ( . "$KIT_ROOT/common/gate/lib.sh"; gate_checksum "$tmpv" ); rm -rf "$tmpv" )
+    if [ "$SUM_BEFORE" = "$dry_sum" ]; then NOOP+=(".ai-kit/"); else INSTALLED+=(".ai-kit/  (게이트·훅 통째로 교체)"); fi
   else
   rm -rf "$vendor/gate" "$vendor/git-hooks" "$vendor/README.md"
   mkdir -p "$vendor"
@@ -323,13 +357,21 @@ if [ "$DO_CI" = 1 ]; then
       gates.yml)
         # LANG_CHANGED 면 필터 결과가 달라지므로 킷 원본의 변경 여부로 판정하면 안 된다.
         # krel 을 비워 넘겨 "킷이 바꿨다" 로 취급한다 — DROP 이 비는(전 언어) 쪽도 같다.
-        if [ -n "$DROP" ]; then
-          tmp=$(mktemp) && awk -v drop="$DROP" -f "$KIT_ROOT/common/ci/filter-langs.awk" "$f" > "$tmp" \
-            && place "$tmp" ".github/workflows/$b" \
-                 "$( [ "$LANG_CHANGED" = 1 ] && echo "" || echo "common/ci/$b" )" \
-            && rm -f "$tmp"
-        elif [ "$LANG_CHANGED" = 1 ]; then
-          place "$f" ".github/workflows/$b" ""
+        if [ -n "$DROP" ] || [ "$LANG_CHANGED" = 1 ]; then
+          tmp=$(mktemp); awk -v drop="$DROP" -f "$KIT_ROOT/common/ci/filter-langs.awk" "$f" > "$tmp"
+          krel="common/ci/$b"; was=""
+          if [ "$LANG_CHANGED" = 1 ]; then
+            # 언어 선택이 바뀌면 필터 결과가 달라지므로 킷 원본의 변경 여부로는 판정할 수
+            # 없다. 대신 **설치 당시 언어로 거른 것을 재현해** 프로젝트가 손댔는지 본다.
+            krel=""
+            wdrop=""
+            for _l in $ALL_LANGS; do
+              case ",$LANG_WAS," in *",$_l,"*) ;; *) wdrop="${wdrop:+$wdrop,}$_l" ;; esac
+            done
+            was=$(mktemp); awk -v drop="$wdrop" -f "$KIT_ROOT/common/ci/filter-langs.awk" "$f" > "$was"
+          fi
+          place "$tmp" ".github/workflows/$b" "$krel" "$was"
+          rm -f "$tmp" "$was"
         else
           place "$f" ".github/workflows/$b"
         fi
@@ -382,7 +424,8 @@ if [ "$DO_UPDATE" = 1 ]; then
     echo "킷 리비전    설치 시점을 알 수 없어 무엇이 바뀌었는지 대조하지 못했습니다"
   fi
   echo ""
-  echo "${B}변경됨 ${#INSTALLED[@]}건 · 변경 없음 ${#NOOP[@]}건 · 확인 필요 ${#CONFLICTS[@]}건${N}"
+  need=$(( ${#CONFLICTS[@]} + ${#STALE[@]} ))
+  echo "${B}변경됨 ${#INSTALLED[@]}건 · 변경 없음 ${#NOOP[@]}건 · 확인 필요 ${need}건${N}"
   if [ ${#INSTALLED[@]} -gt 0 ]; then
     echo ""; echo "변경됨"
     printf '  %s\n' "${INSTALLED[@]}"
@@ -391,7 +434,7 @@ else
 echo ""
 echo "${B}설치됨 ${#INSTALLED[@]}건 · 이미 있음 ${#NOOP[@]}건 · 확인 필요 ${#CONFLICTS[@]}건${N}"
 fi
-if [ "$DO_HOOKS" = 1 ] && [ "$DO_UPDATE" = 0 ]; then
+if [ "$DO_HOOKS" = 1 ] && [ "$DO_UPDATE" = 0 ] && [ "$DRY_RUN" = 0 ]; then
   cat <<'MSG'
 
 install.sh 가 한 일
@@ -447,7 +490,7 @@ if [ ${#STALE[@]:-0} -gt 0 ]; then
 fi
 if [ ${#WARNINGS[@]} -gt 0 ]; then
   echo ""
-  echo "참고"
+  echo "확인해 주세요"
   printf '  %s\n' "${WARNINGS[@]}"
 fi
 
