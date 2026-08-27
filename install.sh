@@ -15,6 +15,7 @@ set -uo pipefail
 
 KIT_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
+PROTECT_FAILED=0
 DO_HOOKS=0 DO_TEMPLATES=0 DO_LINT=0 DO_CI=0 DO_PROTECT=0 DO_AGENT=0 DO_UPDATE=0 DRY_RUN=0 TARGET_ARG="" LANGS=""
 # 설치할 항목을 고르지 않았으면 전부 설치한다.
 # --lang·--dry-run 은 항목이 아니라 수식이므로 여기서 세지 않는다 —
@@ -72,7 +73,9 @@ KC_TMP=$(mktemp); trap 'rm -f "$KC_TMP"' EXIT
 if [ -f "$STAMP" ]; then
   KIT_REV=$(sed -n 's/^kit_rev=//p' "$STAMP" | head -1)
   if [ -n "$KIT_REV" ] && ! git -C "$KIT_ROOT" cat-file -e "${KIT_REV}^{commit}" 2>/dev/null; then
-    [ "$DRY_RUN" = 1 ] || git -C "$KIT_ROOT" fetch -q --all 2>/dev/null || true
+    # dry-run 에서도 받는다. 이것은 **킷 클론**을 최신으로 만드는 읽기이지 대상
+    # 레포의 상태가 아니다. 건너뛰면 예측이 실제 실행과 달라진다(재현함).
+    git -C "$KIT_ROOT" fetch -q --all 2>/dev/null || true
   fi
   git -C "$KIT_ROOT" cat-file -e "${KIT_REV}^{commit}" 2>/dev/null || KIT_REV=""
 fi
@@ -177,13 +180,16 @@ if [ "$DO_HOOKS" = 1 ]; then
   # 로컬 미러에서 clone 했으면 origin 이 경로다. 그것을 레포에 박지 않는다 —
   # 머신마다 다르고 남의 파일 배치를 알려주는 것 말고는 값이 없다.
   case "$kit_repo" in /*|"") kit_repo=$(basename "$KIT_ROOT") ;; esac
-  # 충돌이 남은 채 kit_rev 를 올리면, 다음 --update 가 그 킷 변경을 "이미 반영됨" 으로
-  # 보고 통째로 삼킨다(.ai-kit-new 만 방치된다). 그래서 여기서 값을 정해두고
-  # **파일 배치가 끝난 뒤** 충돌이 없을 때만 쓴다.
-  MANIFEST_REPO="$kit_repo"; MANIFEST_REV="$kit_rev"
-  MANIFEST_SUM="$sum"; MANIFEST_LANGS="$LANGS"
+  # vendor 를 교체한 **직후** 쓴다. 나중으로 미루면 그 사이에 죽었을 때
+  # 내용은 새 것 · checksum 은 옛 값이 되어 CI 가 "손으로 고쳤다" 로 오진한다.
+  #
+  # kit_rev 는 **출처 하나만** 뜻한다 — 어느 킷 커밋에서 왔나. 여기에 "충돌을
+  # 어디까지 흡수했나" 를 겸하게 했더니, 프로젝트가 채운 CLAUDE.md 처럼 킷 원본과
+  # 영원히 달라지는 파일에서 rev 가 동결돼 빠져나올 수 없었다(재현함).
+  # 미해결 병합은 rev 로 추론하지 않고 **.ai-kit-new 가 실재하는지**로 본다.
+  printf 'kit_repo=%s\nkit_rev=%s\nchecksum=%s\nlangs=%s\n' \
+    "$kit_repo" "$kit_rev" "$sum" "$LANGS" > "$vendor/install-manifest"
   INSTALLED+=(".ai-kit/ (게이트 vendor · $kit_rev · $sum · $LANGS)")
-  MANIFEST_PATH="$vendor/install-manifest"
 
   fi
 
@@ -304,11 +310,15 @@ if [ "$DO_CI" = 1 ]; then
     case "$b" in
       dependabot.yml) place "$f" ".github/$b" ;;
       gates.yml)
+        # LANG_CHANGED 면 필터 결과가 달라지므로 킷 원본의 변경 여부로 판정하면 안 된다.
+        # krel 을 비워 넘겨 "킷이 바꿨다" 로 취급한다 — DROP 이 비는(전 언어) 쪽도 같다.
         if [ -n "$DROP" ]; then
           tmp=$(mktemp) && awk -v drop="$DROP" -f "$KIT_ROOT/common/ci/filter-langs.awk" "$f" > "$tmp" \
             && place "$tmp" ".github/workflows/$b" \
                  "$( [ "$LANG_CHANGED" = 1 ] && echo "" || echo "common/ci/$b" )" \
             && rm -f "$tmp"
+        elif [ "$LANG_CHANGED" = 1 ]; then
+          place "$f" ".github/workflows/$b" ""
         else
           place "$f" ".github/workflows/$b"
         fi
@@ -329,19 +339,11 @@ if [ "$DO_AGENT" = 1 ]; then
 fi
 
 # ── 원격 변경: 브랜치 보호 ──
-# langs·checksum 은 **디스크에 실제로 놓인 것**을 적으므로 항상 쓴다.
-# kit_rev 는 "킷 변경을 어디까지 흡수했나" 이므로 **충돌이 남으면 올리지 않는다** —
-# 올려버리면 다음 --update 가 그 변경을 "이미 반영됨" 으로 보고 통째로 삼킨다.
-if [ -n "${MANIFEST_PATH:-}" ] && [ "$DRY_RUN" = 0 ]; then
-  rev="$MANIFEST_REV"
-  if [ ${#CONFLICTS[@]} -gt 0 ] && [ -n "$KIT_REV" ]; then
-    rev="$KIT_REV"
-    WARNINGS+=("충돌이 남아 kit_rev 를 $KIT_REV 로 둡니다 — .ai-kit-new 를 합쳐 지운 뒤")
-    WARNINGS+=("  --update 를 다시 돌리세요. 그래야 나머지 킷 변경이 보고됩니다.")
-  fi
-  printf 'kit_repo=%s\nkit_rev=%s\nchecksum=%s\nlangs=%s\n' \
-    "$MANIFEST_REPO" "$rev" "$MANIFEST_SUM" "$MANIFEST_LANGS" > "$MANIFEST_PATH"
-fi
+# 지난 실행에서 남긴 병합거리가 아직 있나. rev 로 추론하지 않고 파일로 확인한다 —
+# 사람이 합쳤는지 아닌지는 그 파일이 남아 있는지가 말해준다.
+while IFS= read -r leftover; do
+  WARNINGS+=("${leftover#"$TARGET/"} — 아직 합치지 않았습니다. 원본과 비교해 합치고 지우세요.")
+done < <(find "$TARGET" -name '*.ai-kit-new' -not -path '*/.git/*' 2>/dev/null)
 
 if [ "$DO_PROTECT" = 1 ]; then
   # protect-branch.sh 는 `gh repo view` 로 **현재 디렉터리**의 레포를 정한다.
@@ -349,8 +351,10 @@ if [ "$DO_PROTECT" = 1 ]; then
   if [ "$DRY_RUN" = 1 ]; then
     echo "install: --dry-run 이므로 브랜치 보호는 건드리지 않습니다"
   else
-    ( cd "$TARGET" && bash "$KIT_ROOT/common/ci/protect-branch.sh" ) \
-      || echo "install: 브랜치 보호 설정 실패" >&2
+    if ! ( cd "$TARGET" && bash "$KIT_ROOT/common/ci/protect-branch.sh" ); then
+      echo "install: 브랜치 보호 설정 실패" >&2
+      PROTECT_FAILED=1
+    fi
   fi
 fi
 
@@ -399,3 +403,8 @@ if [ ${#WARNINGS[@]} -gt 0 ]; then
   echo ""; echo "확인 필요:"
   printf '  %s\n' "${WARNINGS[@]}"
 fi
+
+# 브랜치 보호는 원격 쓰기다. 실패했는데 0 으로 끝나면 부르는 쪽(merge-pr 스킬)이
+# 보호가 걸렸다고 결론짓는다.
+[ "$PROTECT_FAILED" = 1 ] && exit 1
+exit 0

@@ -11,6 +11,12 @@
 # 대신 어댑터가 자기 디렉터리의 .venv/bin 을 먼저 본다(adapters/py.sh).
 set -euo pipefail
 cd "${1:-.}"
+
+# macOS 에는 `python` 이 없고 `python3` 만 있다. 없는 채로 흘려보내면 _has() 가
+# 127 을 반환하고 그것이 elif 조건이라 다음 분기로 새서, **선언이 있는데도**
+# "dev 의존성 선언이 없습니다" 로 끝난다. 이 스크립트가 없애려던 그 거짓 안내다.
+PY=$(command -v python3 || command -v python) || {
+  echo "install-dev-deps: python3 이 없습니다 — 검사할 수 없습니다" >&2; exit 1; }
 [ -f pyproject.toml ] || { echo "install-dev-deps: pyproject.toml 이 없습니다 — $(pwd)" >&2; exit 1; }
 
 # venv 를 만들면 **활성화까지 한다.** 만들기만 하면 이어지는 pip 는 바깥
@@ -18,14 +24,14 @@ cd "${1:-.}"
 # "pytest-cov 가 없다" 는 거짓 안내를 낸다(재현함).
 # uv·poetry 분기는 자기가 venv 를 만들고 채우므로 이 함수를 쓰지 않는다.
 _venv() {
-  python -m venv .venv
+  "$PY" -m venv .venv
   # shellcheck source=/dev/null
   . .venv/bin/activate
   python -m pip install -q --upgrade pip >/dev/null 2>&1 || true
 }
 
 _has() { # $1=tomllib 로 확인할 파이썬 식
-  python - "$1" <<'PYCHK'
+  "$PY" - "$1" <<'PYCHK'
 import sys, tomllib, pathlib
 d = tomllib.loads(pathlib.Path("pyproject.toml").read_text())
 sys.exit(0 if eval(sys.argv[1], {"d": d}) else 1)

@@ -69,12 +69,16 @@ if [ -f "$TV" ]; then
                | sed 's/^v//' | grep -E '^[0-9]+\.[0-9]+(\.[0-9]+)?$' | sort -V | tail -1)
     fi
     latest=${latest#v}
-    if [ -z "$latest" ]; then
+    # tool-versions 는 도구마다 v 접두 유무가 다르고(goimports=v0.45.0 · ruff=0.15.6),
+    # gates.yml·lib.sh 가 그 값을 `@$v` 로 그대로 이어 붙인다. 벗긴 값을 안내하면
+    # 시키는 대로 고쳤을 때 `go install …@0.49.0` 이 해석할 대상을 못 찾는다.
+    case "$cur" in v*) latest="v$latest" ;; esac
+    if [ -z "${latest#v}" ]; then
       echo "  ? $key ($repo) — 최신 버전을 조회하지 못했습니다" >&2; failed=1; continue
     fi
     checked=$((checked+1))
-    if [ "${cur#v}" != "$latest" ]; then
-      echo "  ✗ $key  ${cur#v} → $latest"; behind=1
+    if [ "${cur#v}" != "${latest#v}" ]; then
+      echo "  ✗ $key  $cur → $latest"; behind=1
     fi
   done
 else
