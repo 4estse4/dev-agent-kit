@@ -42,8 +42,8 @@ latest=$(git -C "$kit" rev-parse --short HEAD 2>/dev/null) || exit 0
 if git -C "$kit" cat-file -e "${recorded}^{commit}" 2>/dev/null; then
   behind=$(git -C "$kit" rev-list --count "${recorded}..HEAD" 2>/dev/null || echo "")
   [ -n "$behind" ] && [ "$behind" != "0" ] \
-    && echo "ai-kit: 설치된 킷이 ${behind}개 커밋 낡았습니다 (${recorded} → ${latest}). 확인: ${kit}/install.sh . --update --dry-run"
+    && echo "ai-kit: 설치된 킷이 ${behind}개 커밋 낡았습니다 (${recorded} → ${latest}). 확인: ${kit}/install.sh . --dry-run"
 else
-  echo "ai-kit: 설치된 킷 리비전 ${recorded} 을 로컬 킷에서 찾을 수 없습니다 (현재 ${latest}). 확인: ${kit}/install.sh . --update --dry-run"
+  echo "ai-kit: 설치된 킷 리비전 ${recorded} 을 로컬 킷에서 찾을 수 없습니다 (현재 ${latest}). 확인: ${kit}/install.sh . --dry-run"
 fi
 exit 0

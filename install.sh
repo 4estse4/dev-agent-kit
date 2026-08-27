@@ -5,23 +5,21 @@
 #                                        경로는 필수. 현재 위치면 "." 를 준다.
 #   <kit>/install.sh <경로> [--lang py,ts] --hooks --lint   선택 설치
 #   <kit>/install.sh <경로> --protect           GitHub 브랜치 보호 설정 (원격 변경 — 별도 플래그)
-#   <kit>/install.sh <경로> [--lang py,ts] --update         설치된 킷을 갱신
-#   <kit>/install.sh <경로> [--lang py,ts] --update --dry-run   무엇이 바뀔지만 보고 아무것도 안 건드림
+#   <kit>/install.sh <경로> [--lang py,ts] --dry-run   무엇이 놓일지만 보고 아무것도 안 건드림
 #
-# 설치: 기존 파일은 절대 덮어쓰지 않는다. 충돌 시 .ai-kit-new 로 옆에 두고 알린다.
-# 갱신: 킷 소유 파일(.ai-kit/gate·git-hooks)은 통째로 교체한다. 그 밖의 파일은
-#       **킷이 그것을 바꿨을 때만** .ai-kit-new 로 옆에 놓고 알린다.
+# 킷 소유(.ai-kit/gate·git-hooks)는 항상 통째로 교체한다. 그 밖의 파일은 없으면 놓고,
+# 이미 있으면 **건드리지 않고 이름만 알린다** — 프로젝트가 채운 것이기 때문이다.
 set -uo pipefail
 
 KIT_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 PROTECT_FAILED=0
-DO_HOOKS=0 DO_TEMPLATES=0 DO_LINT=0 DO_CI=0 DO_PROTECT=0 DO_AGENT=0 DO_UPDATE=0 DRY_RUN=0 TARGET_ARG="" LANGS=""
+DO_HOOKS=0 DO_TEMPLATES=0 DO_LINT=0 DO_CI=0 DO_PROTECT=0 DO_AGENT=0 DRY_RUN=0 TARGET_ARG="" LANGS=""
 # 설치할 항목을 고르지 않았으면 전부 설치한다.
 # --lang·--dry-run 은 항목이 아니라 수식이므로 여기서 세지 않는다 —
 # 세면 `install.sh <경로> --lang py` 가 아무것도 설치하지 않고 끝난다.
 case " $* " in
-  *" --hooks"*|*" --templates"*|*" --lint"*|*" --ci"*|*" --protect"*|*" --update"*) ;;
+  *" --hooks"*|*" --templates"*|*" --lint"*|*" --ci"*|*" --protect"*) ;;
   *) DO_HOOKS=1 DO_TEMPLATES=1 DO_LINT=1 DO_CI=1 DO_AGENT=1 ;;
 esac
 while [ $# -gt 0 ]; do
@@ -33,7 +31,6 @@ while [ $# -gt 0 ]; do
     --lang) LANGS="${2:-}"; shift 2 ;;
     --lang=*) LANGS="${1#--lang=}"; shift ;;
     --protect) DO_PROTECT=1; shift ;;
-    --update) DO_UPDATE=1; DO_HOOKS=1 DO_TEMPLATES=1 DO_LINT=1 DO_CI=1 DO_AGENT=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
     -*) echo "install: 알 수 없는 인자 $1" >&2; exit 2 ;;
@@ -60,10 +57,10 @@ fi
 [ -d "$TARGET_ARG" ] || { echo "install: 그런 디렉터리가 없습니다 — $TARGET_ARG" >&2; exit 1; }
 TARGET=$(git -C "$TARGET_ARG" rev-parse --show-toplevel 2>/dev/null) \
   || { echo "install: git 레포가 아닙니다 — $TARGET_ARG" >&2; exit 1; }
-if [ "$DO_UPDATE" = 1 ]; then echo "갱신할 레포  $TARGET"; else echo "설치할 레포  $TARGET"; fi
+echo "설치할 레포  $TARGET"
 echo "킷           $KIT_ROOT"
 
-INSTALLED=(); NOOP=(); CONFLICTS=(); WARNINGS=()
+INSTALLED=(); NOOP=(); DIVERGED=(); WARNINGS=()
 # 굵게는 터미널일 때만. 파이프·CI 로그에는 이스케이프가 그대로 찍힌다.
 if [ -t 1 ]; then B=$'\033[1m'; N=$'\033[0m'; else B=""; N=""; fi
 ALL_LANGS="go ts jvm py"
@@ -90,13 +87,7 @@ fi
 STAMP="$TARGET/.ai-kit/install-manifest"
 # 교체 직전 **디스크** 를 해시한다. 매니페스트에 적힌 값을 쓰면, 사람이 손으로 고친
 # 게이트를 조용히 되돌려놓고 "변경 없음" 이라고 보고한다(재현함).
-SUM_BEFORE=""
-if [ -d "$TARGET/.ai-kit/gate" ]; then
-  # shellcheck source=/dev/null
-  . "$TARGET/.ai-kit/gate/lib.sh" 2>/dev/null && SUM_BEFORE=$(gate_checksum "$TARGET/.ai-kit" 2>/dev/null)
-fi
 KIT_REV=""
-KC_TMP=$(mktemp); trap 'rm -f "$KC_TMP"' EXIT
 if [ -f "$STAMP" ]; then
   KIT_REV=$(sed -n 's/^kit_rev=//p' "$STAMP" | head -1)
   if [ -n "$KIT_REV" ] && ! git -C "$KIT_ROOT" cat-file -e "${KIT_REV}^{commit}" 2>/dev/null; then
@@ -117,60 +108,27 @@ for _l in $(echo "$LANGS" | tr ',' ' '); do
   esac
 done
 # 설치 때 고른 언어와 지금 요청이 다르면 gates.yml 은 다시 걸러야 한다.
-# kit_changed() 는 킷 원본의 변경만 보므로 이 경우를 못 잡는다(필터 결과가 달라진다).
-LANG_WAS=""
-[ -f "$STAMP" ] && LANG_WAS=$(sed -n 's/^langs=//p' "$STAMP" | head -1)
-LANG_CHANGED=0
-[ -n "$LANG_WAS" ] && [ "$LANG_WAS" != "$LANGS" ] && LANG_CHANGED=1
-
 DROP=""
 for _l in $ALL_LANGS; do
   case ",$LANGS," in *",$_l,"*) ;; *) DROP="${DROP:+$DROP,}$_l" ;; esac
 done
 
 
-# 갱신 시 이미 있는 파일을 덮지 않는다. 킷의 새 버전을 <파일>.ai-kit-new 로 옆에
-# 놓고 충돌로 보고한다 — 사람이 둘을 비교해 합친다.
-#
-# 자동 3-way 병합을 하지 않는다. base(설치 시점 킷 원본)를 어딘가 들고 있어야 하는데,
-# 그러려면 baseline/ 27개 파일을 커밋시키거나 킷 히스토리에서 복원해야 했고,
-# 두 경로 다 조용히 틀렸다. 편의 하나를 위해 부서지기 쉬운 층을 두지 않는다.
-# 이 파일을 킷이 kit_rev 이후 바꿨나. 판정 못 하면 1(=바꿨다고 본다).
-# 이것이 없으면 프로젝트가 채운 파일이 전부 충돌로 뜬다 — "프로젝트가 채웠다" 와
-# "킷이 바꿨다" 가 구분되지 않기 때문이다. base 파일을 들고 있을 필요는 없고,
-# **킷 안에서** 그 시점과 지금을 비교하면 된다.
-# $KC_TMP 에는 호출 후 kit_rev 시점의 킷 원본이 담긴다(성공 시).
-kit_changed() { # $1=킷 상대경로
-  KC_OK=0
-  [ -n "$KIT_REV" ] || return 0
-  git -C "$KIT_ROOT" show "$KIT_REV:$1" 2>/dev/null > "$KC_TMP" || return 0
-  KC_OK=1
-  cmp -s "$KC_TMP" "$KIT_ROOT/$1" && return 1
-  return 0
+# 킷 소유 파일. 프로젝트가 고쳤든 아니든 항상 교체한다.
+replace() { # $1=src $2=dst(대상 레포 상대)
+  local src="$1" dst="$TARGET/$2"
+  cmp -s "$src" "$dst" 2>/dev/null && { NOOP+=("$2"); return; }
+  [ "$DRY_RUN" = 1 ] || { mkdir -p "$(dirname "$dst")"; cp "$src" "$dst"; }
+  INSTALLED+=("$2")
 }
 
-place() { # $1=src $2=dst(상대) [$3=킷 상대경로, 빈 값이면 항상 "바뀜"] [$4=설치 당시 내용]
-  local src="$1" dst="$TARGET/$2" krel
-  if [ $# -ge 3 ]; then krel="$3"; else krel="${1#"$KIT_ROOT"/}"; fi
+place() { # $1=src $2=dst(대상 레포 상대) [$3=킷 원본 경로 — src 가 임시 파일일 때]
+  local src="$1" dst="$TARGET/$2" origin="${3:-$1}"
   if [ -e "$dst" ]; then
     cmp -s "$src" "$dst" && { NOOP+=("$2"); return; }
-    if [ "$DO_UPDATE" = 1 ]; then
-      # 킷이 안 바꿨으면 프로젝트가 채운 것이다. 건드리지 않는다.
-      if [ -n "$krel" ] && ! kit_changed "$krel"; then NOOP+=("$2"); return; fi
-      # krel 이 비면 킷 원본 대조를 못 한다. 대신 호출자가 $4 로 "설치 당시 이 자리에
-      # 있었을 내용" 을 줄 수 있다 — 언어 선택이 바뀐 gates.yml 이 그 경우다.
-      if [ -z "$krel" ]; then
-        if [ -n "${4:-}" ] && [ -f "$4" ]; then cp "$4" "$KC_TMP"; KC_OK=1; else KC_OK=0; fi
-      fi
-      # 킷은 바꿨는데 프로젝트는 설치 때 그대로면 합칠 것이 없다 — 그냥 새 버전으로.
-      # (KC_TMP 에 설치 시점 원본이 있으므로 "프로젝트가 손댔나" 를 여기서 알 수 있다.)
-      if [ "$KC_OK" = 1 ] && cmp -s "$KC_TMP" "$dst"; then
-        [ "$DRY_RUN" = 1 ] || cp "$src" "$dst"
-        INSTALLED+=("$2"); return
-      fi
-    fi
-    [ "$DRY_RUN" = 1 ] || { mkdir -p "$(dirname "$dst")"; cp "$src" "$dst.ai-kit-new"; }
-    CONFLICTS+=("$2"); return
+    # 이미 있고 내용이 다르면 프로젝트가 채운 것이다. 덮지도, 옆에 복사본을 놓지도
+    # 않는다 — 이름만 알리고 사람이 킷 원본과 비교할지 정한다.
+    DIVERGED+=("$2|$origin"); return
   fi
   [ "$DRY_RUN" = 1 ] || { mkdir -p "$(dirname "$dst")"; cp "$src" "$dst"; }
   INSTALLED+=("$2")
@@ -184,13 +142,7 @@ if [ "$DO_HOOKS" = 1 ]; then
   # .ai-kit/gate 와 git-hooks 는 킷 소유라 통째로 교체한다(프로젝트가 고치면 CI 가 잡는다).
   # identity 는 그 아래 살지만 킷 소유가 아니므로 남긴다.
   if [ "$DRY_RUN" = 1 ]; then
-    MANIFEST_REV_NEW=$( cd "$KIT_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo unknown )
-    # 실제 실행과 같은 기준으로 판정한다 — dry-run 이 틀린 예측을 하면 볼 이유가 없다.
-    dry_sum=$( tmpv=$(mktemp -d); cp -R "$KIT_ROOT/common/gate" "$KIT_ROOT/common/git-hooks" "$tmpv/" 2>/dev/null
-               rm -f "$tmpv/gate/VENDOR-README.md"
-               for _l in $(echo "$DROP" | tr ',' ' '); do rm -f "$tmpv/gate/adapters/$_l.sh"; done
-               ( . "$KIT_ROOT/common/gate/lib.sh"; gate_checksum "$tmpv" ); rm -rf "$tmpv" )
-    if [ "$SUM_BEFORE" = "$dry_sum" ]; then NOOP+=(".ai-kit/"); else INSTALLED+=(".ai-kit/  (게이트·훅 통째로 교체)"); fi
+    INSTALLED+=(".ai-kit/  (게이트·훅 통째로 교체)")
   else
   rm -rf "$vendor/gate" "$vendor/git-hooks" "$vendor/README.md"
   mkdir -p "$vendor"
@@ -220,19 +172,12 @@ if [ "$DO_HOOKS" = 1 ]; then
   # vendor 를 교체한 **직후** 쓴다. 나중으로 미루면 그 사이에 죽었을 때
   # 내용은 새 것 · checksum 은 옛 값이 되어 CI 가 "손으로 고쳤다" 로 오진한다.
   #
-  # kit_rev 는 **출처 하나만** 뜻한다 — 어느 킷 커밋에서 왔나. 여기에 "충돌을
-  # 어디까지 흡수했나" 를 겸하게 했더니, 프로젝트가 채운 CLAUDE.md 처럼 킷 원본과
-  # 영원히 달라지는 파일에서 rev 가 동결돼 빠져나올 수 없었다(재현함).
-  # 미해결 병합은 rev 로 추론하지 않고 **.ai-kit-new 가 실재하는지**로 본다.
-  MANIFEST_REV_NEW="$kit_rev"
+  # kit_rev 는 출처만 뜻한다 — 어느 킷 커밋에서 왔나. 나중에 그 커밋과 diff 를 떠서
+  # 이 프로젝트가 킷에서 무엇을 고쳐 썼는지 본다.
   printf 'kit_repo=%s\nkit_rev=%s\nchecksum=%s\nlangs=%s\n' \
     "$kit_repo" "$kit_rev" "$sum" "$LANGS" > "$vendor/install-manifest"
   # 항상 다시 복사하지만, 내용이 같으면 "바뀜" 이라고 말하지 않는다.
-  if [ "${SUM_BEFORE:-}" = "$sum" ]; then
-    NOOP+=(".ai-kit/")
-  else
-    INSTALLED+=(".ai-kit/")
-  fi
+  INSTALLED+=(".ai-kit/")
 
   fi
 
@@ -261,8 +206,9 @@ if [ "$DO_HOOKS" = 1 ]; then
   # ── 신원 고정 파일 시드 ──
   # 현재 실효 신원을 기대값으로 기록해두면, 이후 잘못된 신원 커밋을 훅이 막는다.
   eff_now=$(git -C "$TARGET" config user.email 2>/dev/null)
-  if [ -n "$eff_now" ] && [ ! -f "$vendor/identity" ] && [ "$DRY_RUN" = 0 ]; then
-    printf '# 이 레포에서 커밋할 이메일. pre-commit 훅이 검증한다.\n%s\n' "$eff_now" > "$vendor/identity"
+  # dry-run 도 **예측은 한다** — 쓰지만 않는다. 안 그러면 예측이 실제와 1건 어긋난다.
+  if [ -n "$eff_now" ] && [ ! -f "$vendor/identity" ]; then
+    [ "$DRY_RUN" = 1 ] || printf '# 이 레포에서 커밋할 이메일. pre-commit 훅이 검증한다.\n%s\n' "$eff_now" > "$vendor/identity"
     INSTALLED+=(".ai-kit/identity ($eff_now)")
   fi
 
@@ -339,7 +285,7 @@ if [ "$DO_LINT" = 1 ]; then
   # JVM: 빌드 루트마다 .editorconfig.
   # 같은 목적지를 두 번 치지 않도록 막는다. settings.gradle + build.gradle 은 Gradle 의
   # 표준 배치라 한 디렉터리에 마커가 둘인 것이 정상이다. 같은 파일을 두 번 놓으면
-  # 두 번째가 .ai-kit-new 를 만들어 없는 충돌을 보고한다.
+  # 두 번째가 "이미 있다" 로 잡혀 없는 문제를 보고한다.
   PLACED_EDITORCONFIG=""
   for m in settings.gradle settings.gradle.kts build.gradle build.gradle.kts pom.xml; do
     place_beside "$m" "$KIT_ROOT/common/lint/jvm/.editorconfig" ".editorconfig"
@@ -355,25 +301,19 @@ if [ "$DO_CI" = 1 ]; then
     case "$b" in
       dependabot.yml) place "$f" ".github/$b" ;;
       gates.yml)
-        # LANG_CHANGED 면 필터 결과가 달라지므로 킷 원본의 변경 여부로 판정하면 안 된다.
-        # krel 을 비워 넘겨 "킷이 바꿨다" 로 취급한다 — DROP 이 비는(전 언어) 쪽도 같다.
-        if [ -n "$DROP" ] || [ "$LANG_CHANGED" = 1 ]; then
+        # gates.yml 은 --lang 으로 **생성되는 파생물**이다. 프로젝트 소유로 두면
+        # --lang 을 바꿔도 워크플로만 옛 언어로 남아, 로컬 게이트와 CI 가 서로 다른
+        # 언어를 검사한다(재현함). 그래서 킷 소유로 두고 항상 교체한다.
+        #
+        # 프로젝트가 여기에 손댈 실제 이유는 하나다 — DB 통합 테스트의 `services:`
+        # (아래 잡 주석 참조). 이 파일은 커밋되므로 설치 후 `git diff` 에 그 손실이
+        # 그대로 보인다. 다시 붙이면 된다.
+        if [ -n "$DROP" ]; then
           tmp=$(mktemp); awk -v drop="$DROP" -f "$KIT_ROOT/common/ci/filter-langs.awk" "$f" > "$tmp"
-          krel="common/ci/$b"; was=""
-          if [ "$LANG_CHANGED" = 1 ]; then
-            # 언어 선택이 바뀌면 필터 결과가 달라지므로 킷 원본의 변경 여부로는 판정할 수
-            # 없다. 대신 **설치 당시 언어로 거른 것을 재현해** 프로젝트가 손댔는지 본다.
-            krel=""
-            wdrop=""
-            for _l in $ALL_LANGS; do
-              case ",$LANG_WAS," in *",$_l,"*) ;; *) wdrop="${wdrop:+$wdrop,}$_l" ;; esac
-            done
-            was=$(mktemp); awk -v drop="$wdrop" -f "$KIT_ROOT/common/ci/filter-langs.awk" "$f" > "$was"
-          fi
-          place "$tmp" ".github/workflows/$b" "$krel" "$was"
-          rm -f "$tmp" "$was"
+          replace "$tmp" ".github/workflows/$b"
+          rm -f "$tmp"
         else
-          place "$f" ".github/workflows/$b"
+          replace "$f" ".github/workflows/$b"
         fi
         ;;
       *)              place "$f" ".github/workflows/$b" ;;
@@ -392,14 +332,6 @@ if [ "$DO_AGENT" = 1 ]; then
 fi
 
 # ── 원격 변경: 브랜치 보호 ──
-# **지난** 실행이 남긴 병합거리. 이번 실행이 방금 만든 것은 아래 충돌 절에 나오므로
-# 여기서 또 적지 않는다 — 같은 말이 두 번 나오면 둘 다 안 읽힌다.
-STALE=()
-while IFS= read -r leftover; do
-  rel=${leftover#"$TARGET/"}; base=${rel%.ai-kit-new}
-  case " ${CONFLICTS[*]:-} " in *" $base "*) continue ;; esac
-  STALE+=("$base")
-done < <(find "$TARGET" -name '*.ai-kit-new' -not -path '*/.git/*' 2>/dev/null)
 
 if [ "$DO_PROTECT" = 1 ]; then
   # protect-branch.sh 는 `gh repo view` 로 **현재 디렉터리**의 레포를 정한다.
@@ -416,25 +348,13 @@ fi
 
 # ── 보고 (산출물 규칙 R1: 개수만, 문제만 자세히) ──
 [ "$DRY_RUN" = 1 ] && echo "── dry-run: 아무것도 바꾸지 않았습니다. 아래는 무엇이 바뀔지입니다 ──"
-if [ "$DO_UPDATE" = 1 ]; then
-  # 리비전 범위는 이번 갱신 전체의 성질이다. 개별 파일에 붙일 것이 아니다.
-  if [ -n "$KIT_REV" ] && [ -n "${MANIFEST_REV_NEW:-}" ]; then
-    echo "킷 리비전    $KIT_REV → $MANIFEST_REV_NEW"
-  elif [ -z "$KIT_REV" ]; then
-    echo "킷 리비전    설치 시점을 알 수 없어 무엇이 바뀌었는지 대조하지 못했습니다"
-  fi
-  echo ""
-  need=$(( ${#CONFLICTS[@]} + ${#STALE[@]} ))
-  echo "${B}변경됨 ${#INSTALLED[@]}건 · 변경 없음 ${#NOOP[@]}건 · 확인 필요 ${need}건${N}"
-  if [ ${#INSTALLED[@]} -gt 0 ]; then
-    echo ""; echo "변경됨"
-    printf '  %s\n' "${INSTALLED[@]}"
-  fi
-else
 echo ""
-echo "${B}설치됨 ${#INSTALLED[@]}건 · 이미 있음 ${#NOOP[@]}건 · 확인 필요 ${#CONFLICTS[@]}건${N}"
+echo "${B}설치됨 ${#INSTALLED[@]}건 · 이미 있음 ${#NOOP[@]}건 · 확인 필요 ${#DIVERGED[@]}건${N}"
+if [ ${#INSTALLED[@]} -gt 0 ] && [ "$DRY_RUN" = 1 ]; then
+  echo ""; echo "놓일 것"
+  printf '  %s\n' "${INSTALLED[@]}"
 fi
-if [ "$DO_HOOKS" = 1 ] && [ "$DO_UPDATE" = 0 ] && [ "$DRY_RUN" = 0 ]; then
+if [ "$DO_HOOKS" = 1 ] && [ "$DRY_RUN" = 0 ]; then
   cat <<'MSG'
 
 install.sh 가 한 일
@@ -456,37 +376,15 @@ install.sh 가 한 일
 MSG
 fi
 
-if [ ${#CONFLICTS[@]} -gt 0 ]; then
+if [ ${#DIVERGED[@]} -gt 0 ]; then
   echo ""
   echo "확인 필요"
-  if [ "$DO_UPDATE" = 1 ]; then
-    echo "  이 레포가 고친 파일을 킷도 바꿨습니다. 기존 파일은 그대로 두었고,"
-  else
-    echo "  이미 있는 파일이라 덮지 않았습니다."
-  fi
-  echo "  킷의 새 버전을 같은 이름 + .ai-kit-new 로 옆에 두었습니다."
+  echo "  아래는 이미 있고 킷의 것과 내용이 다릅니다. 건드리지 않았습니다."
+  echo "  이 레포가 채운 것이면 그대로 두면 되고, 킷이 개선한 것을 가져오려면 비교하세요."
   echo ""
-  printf '    %s\n' "${CONFLICTS[@]}"
-  cat <<'MSG'
-
-  둘을 비교해 킷이 개선한 것만 가져오고, 이 레포가 채운 내용은 그대로 두세요.
-  다 옮긴 뒤 .ai-kit-new 를 직접 지우세요. install.sh 는 지우지 않습니다.
-
-    $ diff CLAUDE.md CLAUDE.md.ai-kit-new
-
-  에이전트에게 맡기려면 아래를 그대로 시키세요.
-
-    *.ai-kit-new 를 각각 짝이 되는 원본과 비교해라. 킷이 개선한 것만 원본에
-    반영하고, 이 프로젝트가 채운 내용은 건드리지 마라. 끝나면 .ai-kit-new 를
-    지워라.
-MSG
-fi
-if [ ${#STALE[@]:-0} -gt 0 ]; then
-  echo ""
-  echo "지난 갱신에서 남은 것"
-  echo "  아직 합치지 않았습니다. 옆에 .ai-kit-new 가 있습니다."
-  echo ""
-  printf '    %s\n' "${STALE[@]}"
+  for d in "${DIVERGED[@]}"; do
+    echo "    \$ diff ${d%%|*} ${d#*|}"
+  done
 fi
 if [ ${#WARNINGS[@]} -gt 0 ]; then
   echo ""

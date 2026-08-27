@@ -72,14 +72,15 @@ git config user.email      # 이 레포에서 쓸 이메일이 맞는지 먼저 
 ## 5. 킷이 바뀌면
 
 ```bash
-<kit>/install.sh <이 레포 경로> --update --dry-run   # 무엇이 바뀔지만
-<kit>/install.sh <이 레포 경로> --update             # 킷 소유는 교체, 나머지는 충돌 보고
+<kit>/install.sh <이 레포 경로> --dry-run   # 무엇이 놓일지만
+<kit>/install.sh <이 레포 경로>             # 다시 설치한다
 ```
 
-`.ai-kit/gate/`·`git-hooks/` 는 킷 소유라 통째로 교체된다. `CLAUDE.md`·CI·린터 설정은
-**프로젝트 소유**라 덮지 않는다 — **킷이 그 파일을 바꿨을 때만** 새 버전을
-`<파일>.ai-kit-new` 로 옆에 놓고 충돌로 보고한다. 둘을 비교해 합치고 `.ai-kit-new`
-를 지운다. 킷이 안 바꿨으면 아무 일도 일어나지 않는다.
+`.ai-kit/gate`·`git-hooks` 와 `.github/workflows/gates.yml` 은 **킷 소유라 항상
+교체된다.** 그 밖의 파일은 이미 있으면 건드리지 않고, 킷의 것과 다르면 이름과
+`diff` 명령만 알려준다 — 가져올지는 네가 정한다.
+
+**`CLAUDE.md` 처럼 네가 채운 파일은 그래서 매번 그 목록에 뜬다.** 정상이다.
 
 ## 6. 킷 자체의 미결 항목
 
