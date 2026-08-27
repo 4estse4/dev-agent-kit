@@ -63,11 +63,12 @@ TARGET=$(git -C "$TARGET_ARG" rev-parse --show-toplevel 2>/dev/null) \
 echo "install: 대상 $TARGET"
 echo "install: 킷   $KIT_ROOT"
 
-INSTALLED=(); SKIPPED=(); CONFLICTS=(); WARNINGS=(); UNCHANGED=()
+INSTALLED=(); NOOP=(); CONFLICTS=(); WARNINGS=()
 ALL_LANGS="go ts jvm py"
 # 갱신 시 --lang 을 안 주면 설치 당시 선택을 이어받는다 — 안 그러면 갱신이
 # 조용히 언어를 도로 넣고 체크섬만 바뀐다.
 STAMP="$TARGET/.ai-kit/install-manifest"
+SUM_BEFORE=$(sed -n 's/^checksum=//p' "$STAMP" 2>/dev/null | head -1)
 KIT_REV=""
 KC_TMP=$(mktemp); trap 'rm -f "$KC_TMP"' EXIT
 if [ -f "$STAMP" ]; then
@@ -126,10 +127,10 @@ place() { # $1=src $2=dst(대상 레포 상대) [$3=킷 상대경로 — 빈 값
   local src="$1" dst="$TARGET/$2" krel
   if [ $# -ge 3 ]; then krel="$3"; else krel="${1#"$KIT_ROOT"/}"; fi
   if [ -e "$dst" ]; then
-    cmp -s "$src" "$dst" && { SKIPPED+=("$2 (동일)"); return; }
+    cmp -s "$src" "$dst" && { NOOP+=("$2"); return; }
     if [ "$DO_UPDATE" = 1 ]; then
       # 킷이 안 바꿨으면 프로젝트가 채운 것이다. 건드리지 않는다.
-      if [ -n "$krel" ] && ! kit_changed "$krel"; then UNCHANGED+=("$2"); return; fi
+      if [ -n "$krel" ] && ! kit_changed "$krel"; then NOOP+=("$2"); return; fi
       [ -n "$krel" ] || KC_OK=0
       # 킷은 바꿨는데 프로젝트는 설치 때 그대로면 합칠 것이 없다 — 그냥 새 버전으로.
       # (KC_TMP 에 설치 시점 원본이 있으므로 "프로젝트가 손댔나" 를 여기서 알 수 있다.)
@@ -153,7 +154,7 @@ if [ "$DO_HOOKS" = 1 ]; then
   # .ai-kit/gate 와 git-hooks 는 킷 소유라 통째로 교체한다(프로젝트가 고치면 CI 가 잡는다).
   # identity 는 그 아래 살지만 킷 소유가 아니므로 남긴다.
   if [ "$DRY_RUN" = 1 ]; then
-    UNCHANGED+=(".ai-kit/gate · git-hooks (갱신 모드에서는 통째로 교체)")
+    INSTALLED+=(".ai-kit/gate · git-hooks (통째로 교체)")
   else
   rm -rf "$vendor/gate" "$vendor/git-hooks" "$vendor/README.md"
   mkdir -p "$vendor"
@@ -190,7 +191,12 @@ if [ "$DO_HOOKS" = 1 ]; then
   MANIFEST_REV_NEW="$kit_rev"
   printf 'kit_repo=%s\nkit_rev=%s\nchecksum=%s\nlangs=%s\n' \
     "$kit_repo" "$kit_rev" "$sum" "$LANGS" > "$vendor/install-manifest"
-  INSTALLED+=(".ai-kit/ (게이트 vendor · $kit_rev · $sum · $LANGS)")
+  # 항상 다시 복사하지만, 내용이 같으면 "바뀜" 이라고 말하지 않는다.
+  if [ "${SUM_BEFORE:-}" = "$sum" ]; then
+    NOOP+=(".ai-kit/ (게이트 vendor)")
+  else
+    INSTALLED+=(".ai-kit/ (게이트 vendor · $kit_rev · $sum · $LANGS)")
+  fi
 
   fi
 
@@ -198,8 +204,10 @@ if [ "$DO_HOOKS" = 1 ]; then
   # 평가자가 레포를 받으면 강제가 통째로 사라진다.
   # 대신 커밋되는 .ai-kit/git-hooks/ 를 core.hooksPath 로 가리킨다.
   # --dry-run 은 무엇이 바뀔지만 본다. git config 도 레포 상태이므로 건드리지 않는다.
-  [ "$DRY_RUN" = 1 ] || git -C "$TARGET" config core.hooksPath .ai-kit/git-hooks
-  INSTALLED+=("core.hooksPath → .ai-kit/git-hooks (커밋되는 훅)")
+  if [ "$(git -C "$TARGET" config core.hooksPath 2>/dev/null)" != ".ai-kit/git-hooks" ]; then
+    [ "$DRY_RUN" = 1 ] || git -C "$TARGET" config core.hooksPath .ai-kit/git-hooks
+    INSTALLED+=("core.hooksPath → .ai-kit/git-hooks (커밋되는 훅)")
+  fi
 
   # 킷 클론의 경로를 이 레포의 로컬 git config 에 적는다 — 커밋되지 않는다.
   # SessionStart 훅이 이것으로 "설치된 킷이 낡았나" 를 판정한다. 커밋되는 파일에
@@ -371,10 +379,10 @@ if [ "$DO_UPDATE" = 1 ]; then
   elif [ -z "$KIT_REV" ]; then
     echo "킷 갱신  (설치 시점 리비전을 알 수 없어 무엇이 바뀌었는지 대조하지 못했습니다)"
   fi
-  echo "갱신 ${#INSTALLED[@]}건 · 그대로 ${#UNCHANGED[@]}건 · 동일 ${#SKIPPED[@]}건 · 충돌 ${#CONFLICTS[@]}건"
+  echo "바뀜 ${#INSTALLED[@]}건 · 변경 없음 ${#NOOP[@]}건 · 확인 필요 ${#CONFLICTS[@]}건"
   if [ ${#INSTALLED[@]} -gt 0 ]; then echo ""; echo "킷 변경이 반영됨:"; printf '  %s\n' "${INSTALLED[@]}"; fi
 else
-echo "설치 ${#INSTALLED[@]}건 · 건너뜀 ${#SKIPPED[@]}건 · 충돌 ${#CONFLICTS[@]}건 · 확인필요 ${#WARNINGS[@]}건"
+echo "설치 ${#INSTALLED[@]}건 · 이미 있음 ${#NOOP[@]}건 · 확인 필요 ${#CONFLICTS[@]}건"
 fi
 if [ "$DO_HOOKS" = 1 ] && [ "$DO_UPDATE" = 0 ]; then
   cat <<'MSG'
@@ -403,27 +411,29 @@ fi
 if [ ${#CONFLICTS[@]} -gt 0 ]; then
   echo ""
   if [ "$DO_UPDATE" = 1 ]; then
-    echo "확인 필요 — 프로젝트가 고친 파일을 킷도 바꿨습니다. 기존 파일은 건드리지 않았습니다:"
+    echo "확인 필요 — 이 레포가 고친 파일을 킷도 바꿨습니다. 기존 파일은 건드리지 않았고,"
+    echo "킷의 새 버전은 같은 이름에 .ai-kit-new 를 붙여 옆에 두었습니다:"
   else
-    echo "확인 필요 — 이미 있는 파일이라 덮지 않았습니다:"
+    echo "확인 필요 — 이미 있는 파일이라 덮지 않았습니다."
+    echo "킷의 새 버전은 같은 이름에 .ai-kit-new 를 붙여 옆에 두었습니다:"
   fi
-  for c in "${CONFLICTS[@]}"; do echo "  $c  ←  $c.ai-kit-new"; done
+  printf '  %s\n' "${CONFLICTS[@]}"
   cat <<'MSG'
 
-  각각 비교해서 **가져올 것만** 가져오고 .ai-kit-new 를 지우세요.
-  킷 개선이 담겨 있을 수 있고, 프로젝트가 채운 내용은 그대로 두어야 합니다.
+  둘을 비교해 **킷이 개선한 것만** 가져오고, 이 레포가 채운 내용은 그대로 두세요.
+  끝나면 .ai-kit-new 를 지웁니다.
 
-    diff <파일> <파일>.ai-kit-new
+    diff CLAUDE.md CLAUDE.md.ai-kit-new
 
-  에이전트에게 맡기려면:
-    "*.ai-kit-new 를 각각 원본과 비교해라. 킷이 개선한 것만 원본에 반영하고,
-     이 프로젝트가 채운 내용은 건드리지 마라. 끝나면 .ai-kit-new 를 지워라."
+  에이전트에게 맡기려면 이렇게 시키세요:
+    "*.ai-kit-new 를 각각 짝이 되는 원본과 비교해라. 킷이 개선한 것만 원본에
+     반영하고, 이 프로젝트가 채운 내용은 건드리지 마라. 끝나면 .ai-kit-new 를 지워라."
 MSG
 fi
 if [ ${#STALE[@]:-0} -gt 0 ]; then
   echo ""
-  echo "지난 갱신에서 남은 것 — 아직 합치지 않았습니다:"
-  for c in "${STALE[@]}"; do echo "  $c  ←  $c.ai-kit-new"; done
+  echo "지난 갱신에서 남은 것 — 아직 합치지 않았습니다(옆에 .ai-kit-new 가 있습니다):"
+  printf '  %s\n' "${STALE[@]}"
 fi
 if [ ${#WARNINGS[@]} -gt 0 ]; then
   echo ""; echo "참고:"
