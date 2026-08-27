@@ -187,6 +187,7 @@ if [ "$DO_HOOKS" = 1 ]; then
   # 어디까지 흡수했나" 를 겸하게 했더니, 프로젝트가 채운 CLAUDE.md 처럼 킷 원본과
   # 영원히 달라지는 파일에서 rev 가 동결돼 빠져나올 수 없었다(재현함).
   # 미해결 병합은 rev 로 추론하지 않고 **.ai-kit-new 가 실재하는지**로 본다.
+  MANIFEST_REV_NEW="$kit_rev"
   printf 'kit_repo=%s\nkit_rev=%s\nchecksum=%s\nlangs=%s\n' \
     "$kit_repo" "$kit_rev" "$sum" "$LANGS" > "$vendor/install-manifest"
   INSTALLED+=(".ai-kit/ (게이트 vendor · $kit_rev · $sum · $LANGS)")
@@ -339,10 +340,13 @@ if [ "$DO_AGENT" = 1 ]; then
 fi
 
 # ── 원격 변경: 브랜치 보호 ──
-# 지난 실행에서 남긴 병합거리가 아직 있나. rev 로 추론하지 않고 파일로 확인한다 —
-# 사람이 합쳤는지 아닌지는 그 파일이 남아 있는지가 말해준다.
+# **지난** 실행이 남긴 병합거리. 이번 실행이 방금 만든 것은 아래 충돌 절에 나오므로
+# 여기서 또 적지 않는다 — 같은 말이 두 번 나오면 둘 다 안 읽힌다.
+STALE=()
 while IFS= read -r leftover; do
-  WARNINGS+=("${leftover#"$TARGET/"} — 아직 합치지 않았습니다. 원본과 비교해 합치고 지우세요.")
+  rel=${leftover#"$TARGET/"}; base=${rel%.ai-kit-new}
+  case " ${CONFLICTS[*]:-} " in *" $base "*) continue ;; esac
+  STALE+=("$base")
 done < <(find "$TARGET" -name '*.ai-kit-new' -not -path '*/.git/*' 2>/dev/null)
 
 if [ "$DO_PROTECT" = 1 ]; then
@@ -361,6 +365,12 @@ fi
 # ── 보고 (산출물 규칙 R1: 개수만, 문제만 자세히) ──
 [ "$DRY_RUN" = 1 ] && echo "── dry-run: 아무것도 바꾸지 않았습니다. 아래는 무엇이 바뀔지입니다 ──"
 if [ "$DO_UPDATE" = 1 ]; then
+  # 리비전 범위는 **이번 갱신 전체**의 성질이다. 개별 충돌에 붙일 것이 아니다.
+  if [ -n "$KIT_REV" ] && [ -n "${MANIFEST_REV_NEW:-}" ] && [ "$KIT_REV" != "$MANIFEST_REV_NEW" ]; then
+    echo "킷 갱신  $KIT_REV → $MANIFEST_REV_NEW"
+  elif [ -z "$KIT_REV" ]; then
+    echo "킷 갱신  (설치 시점 리비전을 알 수 없어 무엇이 바뀌었는지 대조하지 못했습니다)"
+  fi
   echo "갱신 ${#INSTALLED[@]}건 · 그대로 ${#UNCHANGED[@]}건 · 동일 ${#SKIPPED[@]}건 · 충돌 ${#CONFLICTS[@]}건"
   if [ ${#INSTALLED[@]} -gt 0 ]; then echo ""; echo "킷 변경이 반영됨:"; printf '  %s\n' "${INSTALLED[@]}"; fi
 else
@@ -393,14 +403,30 @@ fi
 if [ ${#CONFLICTS[@]} -gt 0 ]; then
   echo ""
   if [ "$DO_UPDATE" = 1 ]; then
-    echo "충돌 — 킷의 새 버전을 <파일>.ai-kit-new 로 두었습니다. 비교해 합치고 지우세요:"
+    echo "확인 필요 — 프로젝트가 고친 파일을 킷도 바꿨습니다. 기존 파일은 건드리지 않았습니다:"
   else
-    echo "충돌 — 기존 파일을 보존했고 새 것은 .ai-kit-new 로 옆에 뒀습니다. 확인 후 병합하세요:"
+    echo "확인 필요 — 이미 있는 파일이라 덮지 않았습니다:"
   fi
-  printf '  %s\n' "${CONFLICTS[@]}"
+  for c in "${CONFLICTS[@]}"; do echo "  $c  ←  $c.ai-kit-new"; done
+  cat <<'MSG'
+
+  각각 비교해서 **가져올 것만** 가져오고 .ai-kit-new 를 지우세요.
+  킷 개선이 담겨 있을 수 있고, 프로젝트가 채운 내용은 그대로 두어야 합니다.
+
+    diff <파일> <파일>.ai-kit-new
+
+  에이전트에게 맡기려면:
+    "*.ai-kit-new 를 각각 원본과 비교해라. 킷이 개선한 것만 원본에 반영하고,
+     이 프로젝트가 채운 내용은 건드리지 마라. 끝나면 .ai-kit-new 를 지워라."
+MSG
+fi
+if [ ${#STALE[@]:-0} -gt 0 ]; then
+  echo ""
+  echo "지난 갱신에서 남은 것 — 아직 합치지 않았습니다:"
+  for c in "${STALE[@]}"; do echo "  $c  ←  $c.ai-kit-new"; done
 fi
 if [ ${#WARNINGS[@]} -gt 0 ]; then
-  echo ""; echo "확인 필요:"
+  echo ""; echo "참고:"
   printf '  %s\n' "${WARNINGS[@]}"
 fi
 
