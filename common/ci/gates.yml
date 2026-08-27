@@ -245,9 +245,9 @@ jobs:
         continue-on-error: true
       - if: needs.detect.outputs.node == 'true'
         run: |
-          for d in $(dirname $(find . -name package.json -not -path '*/node_modules/*' -maxdepth 3)); do
-            (cd "$d" && npm ci --no-audit --no-fund)
-          done
+          while IFS= read -r f; do
+            (cd "$(dirname "$f")" && npm ci --no-audit --no-fund)
+          done < <(find . -name package.json -not -path '*/node_modules/*' -maxdepth 3)
 
       # 게이트 본체 — 로컬 pre-push 와 같은 스크립트.
       - run: bash .ai-kit/gate/gate.sh --all
@@ -487,9 +487,9 @@ jobs:
       - if: needs.detect.outputs.node == 'true'
         name: npm audit (high+)
         run: |
-          for d in $(dirname $(find . -name package-lock.json -not -path '*/node_modules/*' -maxdepth 3)); do
-            (cd "$d" && npm audit --audit-level=high)
-          done
+          while IFS= read -r f; do
+            (cd "$(dirname "$f")" && npm audit --audit-level=high)
+          done < <(find . -name package-lock.json -not -path '*/node_modules/*' -maxdepth 3)
 
       - if: needs.detect.outputs.jvm == 'true'
         uses: actions/setup-java@v6

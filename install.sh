@@ -76,12 +76,6 @@ if [ -f "$STAMP" ]; then
   fi
   git -C "$KIT_ROOT" cat-file -e "${KIT_REV}^{commit}" 2>/dev/null || KIT_REV=""
 fi
-# 옛 킷은 이 정보를 .ai-kit/VERSION 에 두었다. 지원하지 않는다 —
-# 그대로 두면 고른 언어가 조용히 전부로 되돌아가므로, 남아 있으면 말한다.
-if [ -f "$TARGET/.ai-kit/VERSION" ]; then
-  WARNINGS+=(".ai-kit/VERSION 은 더 이상 읽지 않습니다 — 지우세요.")
-  WARNINGS+=("  거기 적힌 langs·kit_rev 는 무시되고, --lang 을 주지 않으면 전 언어가 설치됩니다.")
-fi
 if [ -z "$LANGS" ] && [ -f "$STAMP" ]; then
   LANGS=$(sed -n 's/^langs=//p' "$STAMP" | head -1)
 fi
