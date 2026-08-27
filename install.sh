@@ -60,8 +60,8 @@ fi
 [ -d "$TARGET_ARG" ] || { echo "install: 그런 디렉터리가 없습니다 — $TARGET_ARG" >&2; exit 1; }
 TARGET=$(git -C "$TARGET_ARG" rev-parse --show-toplevel 2>/dev/null) \
   || { echo "install: git 레포가 아닙니다 — $TARGET_ARG" >&2; exit 1; }
-echo "install: 대상 $TARGET"
-echo "install: 킷   $KIT_ROOT"
+echo "설치 대상   $TARGET"
+echo "사용한 킷   $KIT_ROOT"
 
 INSTALLED=(); NOOP=(); CONFLICTS=(); WARNINGS=()
 ALL_LANGS="go ts jvm py"
@@ -136,7 +136,7 @@ place() { # $1=src $2=dst(대상 레포 상대) [$3=킷 상대경로 — 빈 값
       # (KC_TMP 에 설치 시점 원본이 있으므로 "프로젝트가 손댔나" 를 여기서 알 수 있다.)
       if [ "$KC_OK" = 1 ] && cmp -s "$KC_TMP" "$dst"; then
         [ "$DRY_RUN" = 1 ] || cp "$src" "$dst"
-        INSTALLED+=("$2 (킷 변경 반영)"); return
+        INSTALLED+=("$2"); return
       fi
     fi
     [ "$DRY_RUN" = 1 ] || { mkdir -p "$(dirname "$dst")"; cp "$src" "$dst.ai-kit-new"; }
@@ -154,7 +154,7 @@ if [ "$DO_HOOKS" = 1 ]; then
   # .ai-kit/gate 와 git-hooks 는 킷 소유라 통째로 교체한다(프로젝트가 고치면 CI 가 잡는다).
   # identity 는 그 아래 살지만 킷 소유가 아니므로 남긴다.
   if [ "$DRY_RUN" = 1 ]; then
-    INSTALLED+=(".ai-kit/gate · git-hooks (통째로 교체)")
+    INSTALLED+=(".ai-kit/  (게이트·훅 통째로 교체)")
   else
   rm -rf "$vendor/gate" "$vendor/git-hooks" "$vendor/README.md"
   mkdir -p "$vendor"
@@ -193,9 +193,9 @@ if [ "$DO_HOOKS" = 1 ]; then
     "$kit_repo" "$kit_rev" "$sum" "$LANGS" > "$vendor/install-manifest"
   # 항상 다시 복사하지만, 내용이 같으면 "바뀜" 이라고 말하지 않는다.
   if [ "${SUM_BEFORE:-}" = "$sum" ]; then
-    NOOP+=(".ai-kit/ (게이트 vendor)")
+    NOOP+=(".ai-kit/")
   else
-    INSTALLED+=(".ai-kit/ (게이트 vendor · $kit_rev · $sum · $LANGS)")
+    INSTALLED+=(".ai-kit/")
   fi
 
   fi
@@ -206,7 +206,7 @@ if [ "$DO_HOOKS" = 1 ]; then
   # --dry-run 은 무엇이 바뀔지만 본다. git config 도 레포 상태이므로 건드리지 않는다.
   if [ "$(git -C "$TARGET" config core.hooksPath 2>/dev/null)" != ".ai-kit/git-hooks" ]; then
     [ "$DRY_RUN" = 1 ] || git -C "$TARGET" config core.hooksPath .ai-kit/git-hooks
-    INSTALLED+=("core.hooksPath → .ai-kit/git-hooks (커밋되는 훅)")
+    INSTALLED+=("core.hooksPath  (git 이 .ai-kit/git-hooks 를 보게 함)")
   fi
 
   # 킷 클론의 경로를 이 레포의 로컬 git config 에 적는다 — 커밋되지 않는다.
@@ -373,70 +373,83 @@ fi
 # ── 보고 (산출물 규칙 R1: 개수만, 문제만 자세히) ──
 [ "$DRY_RUN" = 1 ] && echo "── dry-run: 아무것도 바꾸지 않았습니다. 아래는 무엇이 바뀔지입니다 ──"
 if [ "$DO_UPDATE" = 1 ]; then
-  # 리비전 범위는 **이번 갱신 전체**의 성질이다. 개별 충돌에 붙일 것이 아니다.
-  if [ -n "$KIT_REV" ] && [ -n "${MANIFEST_REV_NEW:-}" ] && [ "$KIT_REV" != "$MANIFEST_REV_NEW" ]; then
-    echo "킷 갱신  $KIT_REV → $MANIFEST_REV_NEW"
+  # 리비전 범위는 이번 갱신 전체의 성질이다. 개별 파일에 붙일 것이 아니다.
+  if [ -n "$KIT_REV" ] && [ -n "${MANIFEST_REV_NEW:-}" ]; then
+    echo "킷 리비전   $KIT_REV → $MANIFEST_REV_NEW"
   elif [ -z "$KIT_REV" ]; then
-    echo "킷 갱신  (설치 시점 리비전을 알 수 없어 무엇이 바뀌었는지 대조하지 못했습니다)"
+    echo "킷 리비전   설치 시점을 알 수 없어 무엇이 바뀌었는지 대조하지 못했습니다"
   fi
-  echo "바뀜 ${#INSTALLED[@]}건 · 변경 없음 ${#NOOP[@]}건 · 확인 필요 ${#CONFLICTS[@]}건"
-  if [ ${#INSTALLED[@]} -gt 0 ]; then echo ""; echo "킷 변경이 반영됨:"; printf '  %s\n' "${INSTALLED[@]}"; fi
+  echo ""
+  echo "변경됨 ${#INSTALLED[@]}건 · 변경 없음 ${#NOOP[@]}건 · 확인 필요 ${#CONFLICTS[@]}건"
+  if [ ${#INSTALLED[@]} -gt 0 ]; then
+    echo ""; echo "변경됨"
+    printf '  %s\n' "${INSTALLED[@]}"
+  fi
 else
-echo "설치 ${#INSTALLED[@]}건 · 이미 있음 ${#NOOP[@]}건 · 확인 필요 ${#CONFLICTS[@]}건"
+echo ""
+echo "설치됨 ${#INSTALLED[@]}건 · 이미 있음 ${#NOOP[@]}건 · 확인 필요 ${#CONFLICTS[@]}건"
 fi
 if [ "$DO_HOOKS" = 1 ] && [ "$DO_UPDATE" = 0 ]; then
   cat <<'MSG'
 
-── 설치기가 한 일 ──
-  ✓ 게이트·훅을 .ai-kit/ 에 넣었습니다
-  ✓ 훅을 켰습니다 (core.hooksPath → .ai-kit/git-hooks)
+설치기가 한 일
+  게이트와 훅을 .ai-kit/ 에 넣었습니다.
+  git 이 그 훅을 보도록 core.hooksPath 를 설정했습니다.
 
-── 이제 할 일 ──
-  1. .ai-kit/ 을 커밋하세요. 커밋하지 않으면 CI 도, 이 레포를 clone 한 사람도
-     게이트를 갖지 못합니다.
-  2. docs/process/kit-guide.md 를 읽으세요. 무엇이 자동으로 돌고, CLAUDE.md 에서
-     무엇을 채워야 하고, 킷이 무엇을 안 하는지 적혀 있습니다.
+이제 할 일
+  .ai-kit/ 을 커밋하세요. 커밋하지 않으면 CI 도, 이 레포를 clone 한 사람도
+  게이트를 갖지 못합니다.
 
-── 참고 ──
-  core.hooksPath 는 git 이 clone 에 담지 않는 로컬 설정입니다(보안상 의도된 동작).
-  나중에 이 레포를 새로 clone 하는 사람은 한 줄이 필요합니다:
+  docs/process/kit-guide.md 를 읽으세요. 무엇이 자동으로 돌고, CLAUDE.md 에서
+  무엇을 채워야 하고, 킷이 무엇을 안 하는지 적혀 있습니다.
 
-      git config core.hooksPath .ai-kit/git-hooks
+참고
+  core.hooksPath 는 git 이 clone 에 담지 않는 로컬 설정입니다. 보안상 의도된
+  동작입니다 — clone 만으로 남의 스크립트가 돌면 안 되니까요.
+  그래서 이 레포를 새로 clone 하는 사람은 한 줄이 필요합니다.
 
-  그래서 로컬 훅은 우회 가능한 '조기 피드백' 이고, 우회할 수 없는 강제는 CI 입니다.
+    $ git config core.hooksPath .ai-kit/git-hooks
+
+  로컬 훅은 우회할 수 있는 조기 피드백이고, 우회할 수 없는 강제는 CI 입니다.
   둘이 같은 gate.sh 를 부르는 이유가 그것입니다.
 MSG
 fi
 
 if [ ${#CONFLICTS[@]} -gt 0 ]; then
   echo ""
+  echo "확인 필요"
   if [ "$DO_UPDATE" = 1 ]; then
-    echo "확인 필요 — 이 레포가 고친 파일을 킷도 바꿨습니다. 기존 파일은 건드리지 않았고,"
-    echo "킷의 새 버전은 같은 이름에 .ai-kit-new 를 붙여 옆에 두었습니다:"
+    echo "  이 레포가 고친 파일을 킷도 바꿨습니다. 기존 파일은 그대로 두었고,"
   else
-    echo "확인 필요 — 이미 있는 파일이라 덮지 않았습니다."
-    echo "킷의 새 버전은 같은 이름에 .ai-kit-new 를 붙여 옆에 두었습니다:"
+    echo "  이미 있는 파일이라 덮지 않았습니다."
   fi
-  printf '  %s\n' "${CONFLICTS[@]}"
+  echo "  킷의 새 버전을 같은 이름 + .ai-kit-new 로 옆에 두었습니다."
+  echo ""
+  printf '    %s\n' "${CONFLICTS[@]}"
   cat <<'MSG'
 
-  둘을 비교해 **킷이 개선한 것만** 가져오고, 이 레포가 채운 내용은 그대로 두세요.
+  둘을 비교해 킷이 개선한 것만 가져오고, 이 레포가 채운 내용은 그대로 두세요.
   끝나면 .ai-kit-new 를 지웁니다.
 
-    diff CLAUDE.md CLAUDE.md.ai-kit-new
+    $ diff CLAUDE.md CLAUDE.md.ai-kit-new
 
-  에이전트에게 맡기려면 이렇게 시키세요:
-    "*.ai-kit-new 를 각각 짝이 되는 원본과 비교해라. 킷이 개선한 것만 원본에
-     반영하고, 이 프로젝트가 채운 내용은 건드리지 마라. 끝나면 .ai-kit-new 를 지워라."
+  에이전트에게 맡기려면 아래를 그대로 시키세요.
+
+    *.ai-kit-new 를 각각 짝이 되는 원본과 비교해라. 킷이 개선한 것만 원본에
+    반영하고, 이 프로젝트가 채운 내용은 건드리지 마라. 끝나면 .ai-kit-new 를
+    지워라.
 MSG
 fi
 if [ ${#STALE[@]:-0} -gt 0 ]; then
   echo ""
-  echo "지난 갱신에서 남은 것 — 아직 합치지 않았습니다(옆에 .ai-kit-new 가 있습니다):"
-  printf '  %s\n' "${STALE[@]}"
+  echo "지난 갱신에서 남은 것"
+  echo "  아직 합치지 않았습니다. 옆에 .ai-kit-new 가 있습니다."
+  echo ""
+  printf '    %s\n' "${STALE[@]}"
 fi
 if [ ${#WARNINGS[@]} -gt 0 ]; then
-  echo ""; echo "참고:"
+  echo ""
+  echo "참고"
   printf '  %s\n' "${WARNINGS[@]}"
 fi
 
