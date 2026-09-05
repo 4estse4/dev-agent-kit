@@ -152,6 +152,16 @@ if [ "$DO_HOOKS" = 1 ]; then
   # 그 사람 환경을 알려주는 것 말고는 아무 값도 없다.
   [ "$DRY_RUN" = 1 ] || git -C "$TARGET" config ai-kit.path "$KIT_ROOT" 2>/dev/null
 
+  # 옛 킷의 gates.yml 은 vendored 잡에서 gate_checksum 을 부른다. 그 함수는 이제
+  # lib.sh 에 없다. gates.yml 은 프로젝트 소유라 install.sh 가 덮지 않으므로,
+  # ".ai-kit 만 새것 + 워크플로는 옛것" 이 재설치의 **기본 경로**다. 그대로 두면
+  # CI 가 `gate_checksum: command not found` 로 종료코드 127 에 죽는다(실측).
+  _wf="$TARGET/.github/workflows/gates.yml"
+  if [ -f "$_wf" ] && grep -q 'gate_checksum' "$_wf" 2>/dev/null; then
+    WARNINGS+=(".github/workflows/gates.yml 이 gate_checksum 을 부르는데 이 킷의 lib.sh 에는 그 함수가 없습니다 — CI 가 종료코드 127 로 실패합니다.")
+    WARNINGS+=("  그 워크플로의 '체크섬 재계산' 블록을 지우세요. 킷의 새 버전은 common/ci/gates.yml 에 있고, 충돌로 옆에 놓였다면 .github/workflows/gates.yml.ai-kit-new 입니다.")
+  fi
+
   # 기존 .git/hooks 에 커스텀 훅이 있으면 알린다 — hooksPath 설정 시 무시된다.
   for h in pre-commit pre-push commit-msg; do
     f="$TARGET/.git/hooks/$h"
