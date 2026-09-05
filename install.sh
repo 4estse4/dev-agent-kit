@@ -374,7 +374,9 @@ dryrun_report() {
       cut=$(printf '%s\n' "$body" | wc -l | tr -d " ")
       printf '%s\n' "$body" | head -n "$DIFF_MAX_LINES" | sed 's/^/  /'
       [ "$cut" -gt "$DIFF_MAX_LINES" ] && echo "  … 이 파일에서 $((cut - DIFF_MAX_LINES))줄 더 있습니다"
-      shown=$((shown + cut))
+      # 상한은 **찍은 줄**로 센다. diff 전체 길이로 세면 잘려서 안 보인 줄까지 한도를
+      # 먹어, "400줄에 걸렸다" 고 말하면서 실제로는 그보다 훨씬 적게 보여준다.
+      if [ "$cut" -gt "$DIFF_MAX_LINES" ]; then shown=$((shown + DIFF_MAX_LINES)); else shown=$((shown + cut)); fi
     done <<< "$list_diff"
   fi
 
