@@ -29,7 +29,12 @@ while [ $# -gt 0 ]; do
     --templates) DO_TEMPLATES=1; shift ;;
     --lint) DO_LINT=1; shift ;;
     --ci) DO_CI=1; shift ;;
-    --lang) LANGS="${2:-}"; shift 2 ;;
+    # 값을 받는 플래그는 값이 실제로 있는지 먼저 본다. 안 보면 `shift 2` 가 인자
+    # 하나를 못 넘겨 실패하는데, 실패해도 루프는 계속 돌아 **같은 인자를 영원히
+    # 다시 읽는다** — 출력 한 줄 없이 멈춘 것처럼 보인다(실측).
+    --lang)
+      [ $# -ge 2 ] || { echo "install: --lang 에 값이 필요합니다 (예: --lang py,ts)" >&2; exit 2; }
+      LANGS="$2"; shift 2 ;;
     --lang=*) LANGS="${1#--lang=}"; shift ;;
     --protect) DO_PROTECT=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;

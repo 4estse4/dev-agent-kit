@@ -8,8 +8,14 @@ set -uo pipefail
 SPEC="docs/SPEC.md"; MATRIX="docs/traceability.md"
 while [ $# -gt 0 ]; do
   case "$1" in
-    --spec) SPEC="$2"; shift 2 ;;
-    --matrix) MATRIX="$2"; shift 2 ;;
+    # 값이 없으면 `set -u` 가 "$2: unbound variable" 로 죽는다 — 무엇을 빠뜨렸는지
+    # 읽는 사람이 알 수 없다. 먼저 보고 무엇이 필요한지 말한다.
+    --spec)
+      [ $# -ge 2 ] || { echo "trace: --spec 에 경로가 필요합니다" >&2; exit 2; }
+      SPEC="$2"; shift 2 ;;
+    --matrix)
+      [ $# -ge 2 ] || { echo "trace: --matrix 에 경로가 필요합니다" >&2; exit 2; }
+      MATRIX="$2"; shift 2 ;;
     *) echo "trace: 알 수 없는 인자 $1" >&2; exit 2 ;;
   esac
 done
