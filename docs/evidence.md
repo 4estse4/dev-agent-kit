@@ -107,6 +107,10 @@ PR 없이·콜드 리뷰 없이 8커밋을 넣었고, 뒤늦게 콜드 리뷰를
 3) 안내대로 install.sh 재실행             → 수정 잔존 0건. 출력에 경고 한 줄 없음
 ```
 
+2번은 **실제 러너가 아니라 로컬에서 그 잡의 스크립트를 그대로 돌린 것**이다
+(`recorded` 를 읽고 `gate_checksum` 을 재계산해 대조하는 세 줄). 이 킷의 CI 는 아직
+러너에서 돌려보지 않았고, 그 사실은 PR 본문의 "자동화가 닿지 않은 것" 에도 적혀 있다.
+
 3번이 결정적이다. 빨간 것을 푸는 유일한 안내가 **그 수정을 말없이 지운다.**
 
 조사해 보니 "체크섬 불일치 = CI 실패" 는 개발 도구의 관행도 아니었다. 같은 목적에
@@ -131,17 +135,38 @@ PR 없이·콜드 리뷰 없이 8커밋을 넣었고, 뒤늦게 콜드 리뷰를
 
 그중 **그 프로젝트만의 사정은 둘뿐이다** — 프로젝트 전용 CI 워크플로 하나와,
 `settings.json` 안에서 과제 PDF 를 막는 `permissions.ask` 한 블록. 나머지는 전부
-킷 자신의 버그였다. 그중 **셋은 킷 쪽에서도 같은 기간에 따로 고쳤다** — `집행자` →
-`누가 막나` 개명, `gates.yml` 의 빈 `env:` 블록, 그리고 시크릿 범위 스캔. 마지막 것은
-양쪽이 낸 코드가 **바이트 단위로 같다**:
+킷 자신의 버그였다. 그중 **셋은 킷 쪽에서도 같은 기간에 따로 고쳤다** — `집행자` → `누가 막나` 개명,
+`gates.yml` 의 빈 `env:` 블록, 그리고 시크릿 범위 스캔. 마지막 것은 양쪽이 낸 코드가
+**바이트 단위로 같았다**:
 
 ```bash
 FILES=$(git log --name-only --diff-filter=ACM --diff-merges=cc --pretty=format: "$RANGE" | sort -u | sed '/^$/d')
 DIFF=$(git log -p -U0 --diff-merges=cc --pretty=format: "$RANGE")
 ```
 
-3-way 병합은 "커스터마이즈와 업스트림 변경의 충돌" 을 푸는 장치인데, 실제로 치른 비용은
-**같은 버그를 두 곳에서 두 번 고치는 것**이었다. 병합으로는 풀리지 않는다.
+**그 셋은 이 레포의 `main` 에 없다.** 킷 쪽 수정은 미머지 브랜치 `fix/kit-gaps` 에만
+있고 그 PR(#35)은 닫혔다. 위 두 줄도 킷의 `common/gate/secrets.sh` 에는 없다 —
+지금도 `git diff --name-only … "$RANGE"` 다. 확인:
+
+```
+$ git grep -c 'diff-merges=cc' main
+(출력 없음, exit 1)
+
+$ git grep -c 'diff-merges=cc' fix/kit-gaps
+fix/kit-gaps:common/gate/secrets.sh:3
+fix/kit-gaps:docs/evidence.md:1
+
+$ git grep -c '집행자' main -- common/templates/CLAUDE.md
+main:common/templates/CLAUDE.md:5
+
+$ git branch --contains fix/kit-gaps
+  fix/kit-gaps
+```
+
+그것이 이 절의 요점을 약하게 만들지는 않는다. **오히려 그 반대다** — 같은 버그를 두 번
+고치고도 킷에는 아직 한 번도 안 들어왔다. 3-way 병합은 "커스터마이즈와 업스트림 변경의
+충돌" 을 푸는 장치인데, 실제로 치른 비용은 **같은 버그를 두 곳에서 두 번 고치고, 그중
+어느 쪽도 업스트림에 못 올린 것**이었다. 병합으로는 풀리지 않는다.
 
 ## 실증된 것
 

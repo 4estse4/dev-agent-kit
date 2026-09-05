@@ -4,7 +4,7 @@
 #   <kit>/install.sh <프로젝트경로>      로컬 전부 (훅·템플릿·린트·CI·도구설정)
 #                                        경로는 필수. 현재 위치면 "." 를 준다.
 #   <kit>/install.sh <경로> [--lang py,ts] --hooks --lint   선택 설치
-#   <kit>/install.sh --protect           GitHub 브랜치 보호 설정 (원격 변경 — 별도 플래그)
+#   <kit>/install.sh <경로> --protect    GitHub 브랜치 보호 설정 (원격 변경 — 별도 플래그)
 #
 #   <kit>/install.sh <경로> --dry-run    아무것도 바꾸지 않고 무엇이 달라질지만 본다
 #
@@ -133,7 +133,15 @@ if [ "$DO_HOOKS" = 1 ]; then
   # 설치가 놓는 내용이 갈리고, 갈렸을 때 알아챌 방법이 없다.
   vendor_into() { # $1=목적지 .ai-kit 디렉터리
     local v="$1"
-    rm -rf "$v/gate" "$v/git-hooks" "$v/README.md"
+    # .ai-kit 은 identity 를 빼면 전부 킷 소유다. 이름을 지목해 지우면 옛 킷이 두고 간
+    # 것을 놓치고, 그 목록은 킷이 바뀔 때마다 자란다. 그래서 **통째로 비우고 놓는다.**
+    #
+    # 놓치면 어떻게 되는지 실측했다: 옛 기록 파일이 남으면 옛 SessionStart 훅이
+    # 그것을 계속 읽어, 방금 최신으로 재설치한 레포에 대고 영원히 "낡았다" 고 말한다.
+    # 무엇이 사라지는지는 --dry-run 의 "킷이 안 놓음" 이 미리 보여준다.
+    if [ -d "$v" ]; then
+      find "$v" -mindepth 1 -maxdepth 1 ! -name identity -exec rm -rf {} +
+    fi
     mkdir -p "$v"
     cp -R "$KIT_ROOT/common/gate" "$KIT_ROOT/common/git-hooks" "$v/"
     # 활성화 절차가 레포 안에 있어야 한다 — install.sh 는 킷 레포에만 있으므로
@@ -312,7 +320,15 @@ fi
 
 # ── 원격 변경: 브랜치 보호 ──
 if [ "$DO_PROTECT" = 1 ]; then
-  bash "$KIT_ROOT/common/ci/protect-branch.sh" || echo "install: 브랜치 보호 설정 실패" >&2
+  if [ "$DRY_RUN" = 1 ]; then
+    echo "install: --dry-run 이므로 브랜치 보호는 건드리지 않습니다 (원격 변경입니다)"
+  else
+    # 대상 레포 안에서 돌린다. protect-branch.sh 는 gh repo view 로 레포를 찾는데
+    # 그것은 CWD 를 본다 — 여기서 cd 하지 않으면 install.sh 를 실행한 자리의
+    # 레포에 보호가 걸린다. 대상을 인자로 받는 명령에서 그건 사고다.
+    ( cd "$TARGET" && bash "$KIT_ROOT/common/ci/protect-branch.sh" ) \
+      || echo "install: 브랜치 보호 설정 실패" >&2
+  fi
 fi
 
 # ── dry-run 보고: 무엇이 달라지는지 ──
@@ -324,16 +340,21 @@ DIFF_MAX_LINES=${AI_KIT_DIFF_MAX_LINES:-60}   # 파일당
 DIFF_MAX_TOTAL=${AI_KIT_DIFF_MAX_TOTAL:-400}  # 전체
 
 dryrun_report() {
-  local n_new=0 n_diff=0 n_same=0 n_gone=0
-  local list_new="" list_diff="" list_gone="" rel f
+  local n_new=0 n_repl=0 n_side=0 n_same=0 n_gone=0
+  local list_new="" list_repl="" list_side="" list_gone="" rel f
   while IFS= read -r f; do
     rel=${f#"$STAGE"/}
     if [ ! -e "$TARGET/$rel" ]; then
       n_new=$((n_new + 1)); list_new="${list_new}  + ${rel}"$'\n'
     elif cmp -s "$f" "$TARGET/$rel"; then
       n_same=$((n_same + 1))
+    # 내용이 다를 때 설치가 무엇을 하는지는 자리에 따라 다르다. .ai-kit 은 통째로
+    # 교체되지만 그 밖은 place() 가 원본을 남기고 .ai-kit-new 를 옆에 쓴다.
+    # 둘을 한 목록에 담으면 "킷이 놓을 것" 이 절반은 거짓이 된다.
+    elif case "$rel" in .ai-kit/*) true ;; *) false ;; esac; then
+      n_repl=$((n_repl + 1)); list_repl="${list_repl}  ~ ${rel}"$'\n'
     else
-      n_diff=$((n_diff + 1)); list_diff="${list_diff}  ~ ${rel}"$'\n'
+      n_side=$((n_side + 1)); list_side="${list_side}  ~ ${rel}"$'\n'
     fi
   done < <(find "$STAGE" -type f | LC_ALL=C sort)
 
@@ -343,7 +364,7 @@ dryrun_report() {
   # gate·git-hooks 만 보지 않고 .ai-kit 전체를 보는 이유: 옛 킷이 두고 간 것이
   # 그 둘 밖에 쌓인다. 실제로 baseline/ 29파일이 그렇게 남았고, 좁게 보면 안 보인다.
   # identity 는 예외다 — 킷 소유가 아니고, 커밋 신원이 비면 STAGE 에 안 놓인다.
-  if [ -d "$TARGET/.ai-kit" ]; then
+  if [ "$DO_HOOKS" = 1 ] && [ -d "$TARGET/.ai-kit" ]; then
     while IFS= read -r f; do
       rel=${f#"$TARGET"/}
       [ "$rel" = ".ai-kit/identity" ] && continue
@@ -353,16 +374,18 @@ dryrun_report() {
 
   echo "── dry-run: 아무것도 바꾸지 않았습니다 ──"
   echo ""
-  echo "지금 설치하면 — 새 파일 ${n_new} · 내용이 다름 ${n_diff} · 그대로 ${n_same} · 킷이 안 놓음 ${n_gone}"
-  [ -n "$list_diff" ] && { echo ""; echo "내용이 다름"; printf '%s' "$list_diff"; }
-  [ -n "$list_new" ]  && { echo ""; echo "새 파일";     printf '%s' "$list_new"; }
-  [ -n "$list_gone" ] && { echo ""; echo "킷이 안 놓음 (이 레포에만 있는 킷 소유 파일)"; printf '%s' "$list_gone"; }
+  echo "지금 설치하면 — 새 파일 ${n_new} · 킷이 교체 ${n_repl} · 옆에 놓임 ${n_side} · 그대로 ${n_same} · 킷이 안 놓음 ${n_gone}"
+  [ -n "$list_repl" ] && { echo ""; echo "킷이 교체함 (.ai-kit 은 킷 소유다)"; printf '%s' "$list_repl"; }
+  [ -n "$list_side" ] && { echo ""; echo "이 레포 것이 그대로 남음 — 킷의 것은 <파일>.ai-kit-new 로 옆에 놓인다"; printf '%s' "$list_side"; }
+  [ -n "$list_new" ]  && { echo ""; echo "새 파일"; printf '%s' "$list_new"; }
+  [ -n "$list_gone" ] && { echo ""; echo "킷이 안 놓음 (이 레포에만 있는 킷 소유 파일 — 재설치가 지운다)"; printf '%s' "$list_gone"; }
 
   # diff 는 "이 레포 → 킷" 방향이다. - 가 지금 있는 것, + 가 킷이 놓을 것.
-  if [ -n "$list_diff" ]; then
+  local list_all="${list_repl}${list_side}"
+  if [ -n "$list_all" ]; then
     local shown=0 body cut
     echo ""
-    echo "diff (- 지금 이 레포 / + 킷이 놓을 것)"
+    echo "diff (- 지금 이 레포 / + 킷의 것)"
     while IFS= read -r rel; do
       rel=${rel#  ~ }
       [ -n "$rel" ] || continue
@@ -377,7 +400,7 @@ dryrun_report() {
       # 상한은 **찍은 줄**로 센다. diff 전체 길이로 세면 잘려서 안 보인 줄까지 한도를
       # 먹어, "400줄에 걸렸다" 고 말하면서 실제로는 그보다 훨씬 적게 보여준다.
       if [ "$cut" -gt "$DIFF_MAX_LINES" ]; then shown=$((shown + DIFF_MAX_LINES)); else shown=$((shown + cut)); fi
-    done <<< "$list_diff"
+    done <<< "$list_all"
   fi
 
   echo ""
