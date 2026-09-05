@@ -15,11 +15,13 @@
 # 절대 차단하지 않는다. 알 수 없으면 조용히 넘어간다.
 set -uo pipefail
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
-# 옛 킷은 .ai-kit/VERSION 이었다. 아직 재설치하지 않은 레포에서도 낡음을 알려야 하므로
-# 둘 다 본다 — 새 이름이 우선이다.
 STAMP=.ai-kit/install-manifest
-[ -f "$STAMP" ] || STAMP=.ai-kit/VERSION
-[ -f "$STAMP" ] || exit 0
+# 옛 킷은 이 기록을 .ai-kit/VERSION 이라 불렀다. 그 파일은 읽지 않는다 — 대신
+# 낡음 감지가 꺼져 있다고 말한다. 조용히 넘어가면 "최신이다" 와 구분되지 않는다.
+if [ ! -f "$STAMP" ]; then
+  [ -f .ai-kit/VERSION ] && echo "ai-kit: .ai-kit/VERSION 은 옛 기록 이름입니다 — 낡음 감지가 꺼져 있습니다. install.sh 를 다시 돌리세요."
+  exit 0
+fi
 
 # 킷 경로는 install.sh 가 이 레포의 로컬 git config 에 적어둔다.
 # 커밋되는 파일에 넣지 않는 이유: 머신마다 경로가 다르고, 남의 절대경로가
