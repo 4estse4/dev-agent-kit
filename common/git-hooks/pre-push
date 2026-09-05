@@ -13,6 +13,7 @@ fail=0
 
 while read -r _local_ref local_sha _remote_ref remote_sha; do
   [ "$local_sha" = "$ZERO" ] && continue            # 브랜치 삭제 — 검사 없음
+  secrets_range=""
   if [ "$remote_sha" = "$ZERO" ]; then
     # 새 브랜치의 첫 푸시. 원격에 기준점이 없으므로 기본 브랜치와의 merge-base 를 쓴다.
     # 이 경로를 건너뛰면 표준 워크플로(feature 브랜치 → 첫 푸시)에서 시크릿 스캔이
@@ -27,14 +28,20 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
       # 기준점을 못 구했다(고아 브랜치 등). 조용히 건너뛰지 않는다 —
       # 검사가 고장 났을 때 통과시키는 것이 가장 위험하다.
       echo "pre-push: 시크릿 스캔 기준점을 찾을 수 없습니다(main/master 없음)." >&2
-      echo "  전체 히스토리를 검사합니다." >&2
+      echo "  시크릿 스캔은 이 브랜치의 전체 히스토리를 봅니다." >&2
+      # 리비전 **하나**를 준다. `git log <rev>` 는 도달 가능한 모든 커밋을 보므로
+      # 루트 커밋도 들어온다. `루트..HEAD` 로 만들면 **루트 커밋이 범위 밖**이라
+      # 그 안의 시크릿을 놓친다 — 고아 브랜치의 첫 커밋에 키를 넣어 실측했다.
+      secrets_range="$local_sha"
+      # 게이트(포맷·린트·타입)는 여전히 기준점이 필요하다. 그쪽은 루트를 쓴다.
       base=$(git rev-list --max-parents=0 "$local_sha" | tail -1)
     fi
   else
     base="$remote_sha"
   fi
 
-  bash "$KIT/gate/secrets.sh" --range "${base}..${local_sha}" || fail=1
+  [ -n "$secrets_range" ] || secrets_range="${base}..${local_sha}"
+  bash "$KIT/gate/secrets.sh" --range "$secrets_range" || fail=1
   bash "$KIT/gate/gate.sh" --base "$base" || fail=1
 done
 
