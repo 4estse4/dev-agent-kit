@@ -74,8 +74,16 @@ _tmpdir=${TMPDIR:-/tmp}; _tmpdir=${_tmpdir%/}
 ALL_LANGS="go ts jvm py"
 # --lang 을 안 주면 설치 당시 선택을 이어받는다 — 안 그러면 재설치가 조용히
 # 언어를 도로 넣어, 고르지 않은 언어의 잡이 CI 에 되살아난다.
-if [ -z "$LANGS" ] && [ -f "$TARGET/.ai-kit/VERSION" ]; then
-  LANGS=$(sed -n 's/^langs=//p' "$TARGET/.ai-kit/VERSION" | head -1)
+# 옛 킷은 이 기록을 .ai-kit/VERSION 이라 불렀다. 그 이름은 "이 물건의 버전" 으로
+# 읽히는데 내용은 "어디서 설치했나" 다. 옛 이름도 계속 읽는다 — 안 읽으면 옛 설치의
+# 언어 선택이 조용히 유실되고, 재설치가 고르지 않은 언어를 도로 넣는다.
+STAMP="$TARGET/.ai-kit/install-manifest"
+STAMP_OLD="$TARGET/.ai-kit/VERSION"
+_stamp_read=""
+[ -f "$STAMP" ] && _stamp_read="$STAMP"
+[ -z "$_stamp_read" ] && [ -f "$STAMP_OLD" ] && _stamp_read="$STAMP_OLD"
+if [ -z "$LANGS" ] && [ -n "$_stamp_read" ]; then
+  LANGS=$(sed -n 's/^langs=//p' "$_stamp_read" | head -1)
 fi
 [ -z "$LANGS" ] && LANGS=$(echo "$ALL_LANGS" | tr ' ' ',')
 LANGS=$(echo "$LANGS" | tr -d ' ')
@@ -134,7 +142,10 @@ if [ "$DO_HOOKS" = 1 ]; then
     # (.ai-kit/README.md), 체크섬을 두면 그 정상 작업이 CI 를 빨갛게 만들고,
     # 빨간 것을 푸는 안내(install.sh 재실행)가 그 수정을 말없이 지운다. 실측했다.
     # 무엇이 달라졌는지는 --dry-run 이 보여준다.
-    printf 'kit_rev=%s\nlangs=%s\n' "$kit_rev" "$LANGS" > "$v/VERSION"
+    printf 'kit_rev=%s\nlangs=%s\n' "$kit_rev" "$LANGS" > "$v/install-manifest"
+    # 옛 이름을 남겨두면 같은 것을 말하는 파일이 두 벌 커밋되고, 어느 쪽이 진짜인지
+    # 알 방법이 없다. 값은 위에서 이미 읽었다.
+    rm -f "$v/VERSION"
   }
   if [ "$DRY_RUN" = 1 ]; then vendor_into "$STAGE/.ai-kit"; else vendor_into "$vendor"; fi
   # 보고는 dry-run 에서도 한다 — 안 그러면 예고한 건수와 실제 건수가 갈린다.

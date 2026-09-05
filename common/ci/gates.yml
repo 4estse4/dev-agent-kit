@@ -71,7 +71,7 @@ jobs:
           # 어느 킷에서 왔는지만 찍는다. **내용이 킷과 같은지는 검사하지 않는다** —
           # 이 레포에서 게이트를 고치는 것이 정상 작업이기 때문이다(.ai-kit/README.md).
           # 무엇이 달라졌는지 보려면 킷에서 install.sh <경로> --dry-run 을 돌린다.
-          cat .ai-kit/VERSION 2>/dev/null || echo "VERSION 없음"
+          cat .ai-kit/install-manifest 2>/dev/null || echo "install-manifest 없음"
 
   gate:
     needs: detect
