@@ -74,22 +74,6 @@ _tmpdir=${TMPDIR:-/tmp}; _tmpdir=${_tmpdir%/}
 ALL_LANGS="go ts jvm py"
 # --lang 을 안 주면 설치 당시 선택을 이어받는다 — 안 그러면 재설치가 조용히
 # 언어를 도로 넣어, 고르지 않은 언어의 잡이 CI 에 되살아난다.
-# 옛 킷은 이 기록을 .ai-kit/VERSION 이라 불렀다. **그 파일은 읽지 않는다** — 이름 하나에
-# 파서를 두 벌 두면 어느 쪽이 진짜인지가 영영 흐려진다. 대신 있으면 멈춘다.
-#
-# 조용히 무시하면 안 되는 이유: 언어 선택이 거기 들어 있다. 무시하고 진행하면
-# --lang 없는 재설치가 전 언어로 넓어져, 고르지 않은 go·jvm 잡이 CI 에 되살아난다.
-# --lang 을 명시했으면 옛 파일에서 이어받을 것이 없다. 그때까지 막으면 안내문이
-# 시키는 일을 안내문 자신이 막는다(실제로 그랬다).
-if [ -z "$LANGS" ] && [ -f "$TARGET/.ai-kit/VERSION" ]; then
-  echo "install: .ai-kit/VERSION 은 옛 킷의 기록 이름입니다 — 이 킷은 읽지 않습니다." >&2
-  echo "  언어 선택이 그 파일에 들어 있어, 그냥 진행하면 고르지 않은 언어가 되살아납니다." >&2
-  echo "  그 파일의 langs 를 보고 한 번만 명시해 주세요:" >&2
-  sed -n 's/^langs=/    지금 값: /p' "$TARGET/.ai-kit/VERSION" >&2
-  echo "    <kit>/install.sh $TARGET_ARG --lang <그 값>" >&2
-  echo "  (설치가 끝나면 그 옛 파일은 install.sh 가 지웁니다.)" >&2
-  exit 2
-fi
 STAMP="$TARGET/.ai-kit/install-manifest"
 if [ -z "$LANGS" ] && [ -f "$STAMP" ]; then
   LANGS=$(sed -n 's/^langs=//p' "$STAMP" | head -1)
@@ -146,15 +130,12 @@ if [ "$DO_HOOKS" = 1 ]; then
     # 고르지 않은 언어의 어댑터는 vendor 하지 않는다.
     for _l in $(echo "$DROP" | tr ',' ' '); do rm -f "$v/gate/adapters/$_l.sh"; done
     chmod +x "$v"/gate/*.sh "$v"/git-hooks/* 2>/dev/null
-    # VERSION 은 **어디서 왔는지**만 적는다 — 킷 커밋과 언어 선택.
+    # install-manifest 는 **어디서 왔는지**만 적는다 — 킷 커밋과 언어 선택.
     # 내용 체크섬은 두지 않는다. 이 레포에서 게이트를 고치는 것이 정상 작업인데
     # (.ai-kit/README.md), 체크섬을 두면 그 정상 작업이 CI 를 빨갛게 만들고,
     # 빨간 것을 푸는 안내(install.sh 재실행)가 그 수정을 말없이 지운다. 실측했다.
     # 무엇이 달라졌는지는 --dry-run 이 보여준다.
     printf 'kit_rev=%s\nlangs=%s\n' "$kit_rev" "$LANGS" > "$v/install-manifest"
-    # 옛 이름의 파일은 여기서 치운다. 읽지는 않지만 우리가 놓았던 것이고, 남겨두면
-    # 같은 것을 말하는 파일이 두 벌 커밋된 채로 남는다.
-    rm -f "$v/VERSION"
   }
   if [ "$DRY_RUN" = 1 ]; then vendor_into "$STAGE/.ai-kit"; else vendor_into "$vendor"; fi
   # 보고는 dry-run 에서도 한다 — 안 그러면 예고한 건수와 실제 건수가 갈린다.
