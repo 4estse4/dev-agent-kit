@@ -27,7 +27,12 @@ STAGED=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --base) BASE="${2:-}"; shift 2 ;;
+    # 값을 받는 플래그는 값이 실제로 있는지 먼저 본다. 안 보면 `shift 2` 가 인자
+    # 하나를 못 넘겨 실패하는데, 실패해도 루프는 계속 돌아 **같은 인자를 영원히
+    # 다시 읽는다** — 출력 한 줄 없이 멈춘 것처럼 보인다(실측).
+    --base)
+      [ $# -ge 2 ] || { echo "gate: --base 에 값이 필요합니다 (예: --base origin/main)" >&2; exit 2; }
+      BASE="$2"; shift 2 ;;
     --all)  ALL=1; shift ;;
     --lint) GATE_LINT_ONLY=1; shift ;;
     --staged) STAGED=1; shift ;;

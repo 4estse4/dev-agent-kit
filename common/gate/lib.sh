@@ -153,45 +153,6 @@ gate_run_empty() {
   return 0
 }
 
-# 도구가 없어 검사를 건너뛴 것을 기록한다.
-# GATE_STRICT=1 이면 건너뜀을 실패로 본다 — CI 에서 도구 부재는 "통과"가 아니라
-# "검사가 돌지 않았음"이고, 그것을 green 으로 보고하면 게이트가 거짓말을 한다.
-# gate_checksum <.ai-kit 디렉터리> — vendor 내용의 안정적 체크섬.
-#
-# 이식성 주의 두 가지가 여기 들어 있다:
-#  1. shasum(macOS·perl) 과 sha256sum(coreutils) 중 있는 것을 쓴다. 어느 한쪽만
-#     가정하면 상대 플랫폼에서 조용히 실패한다.
-#  2. xargs 를 쓰지 않는다. 빈 입력에서 GNU xargs 는 명령을 한 번 실행해
-#     해시 도구가 stdin 을 기다리며 멈추고, BSD 는 실행하지 않는다 — 갈린다.
-# _gate_hash — 있는 해시 도구로 stdin/파일을 해시한다.
-# 문자열 변수에 명령을 담아 `$cmd file` 로 부르면 셸의 단어 분리에 의존하게 되고
-# zsh 처럼 기본 분리를 하지 않는 셸에서 조용히 깨진다. 함수로 감싸 그 의존을 없앤다.
-_gate_hash() {
-  if command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 "$@"
-  elif command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$@"
-  else
-    return 127
-  fi
-}
-
-# gate_checksum <.ai-kit 디렉터리> — vendor 내용의 안정적 체크섬.
-#
-# 이식성 주의 두 가지가 여기 들어 있다:
-#  1. shasum(macOS·perl) 과 sha256sum(coreutils) 중 있는 것을 쓴다. 어느 한쪽만
-#     가정하면 상대 플랫폼에서 조용히 실패한다.
-#  2. xargs 를 쓰지 않는다. 빈 입력에서 GNU xargs 는 명령을 한 번 실행해
-#     해시 도구가 stdin 을 기다리며 멈추고, BSD 는 실행하지 않는다 — 갈린다.
-gate_checksum() {
-  local dir="$1"
-  _gate_hash </dev/null >/dev/null 2>&1 || return 1   # 해시 도구 없음
-  ( cd "$dir" 2>/dev/null || exit 1
-    find gate git-hooks -type f 2>/dev/null | LC_ALL=C sort | while IFS= read -r f; do
-      _gate_hash "$f"
-    done | _gate_hash | cut -c1-16 )
-}
-
 # gate_absent: 도구는 있는데 **프로젝트가 그 단계를 선언하지 않은** 경우.
 # gate_skip 과 다르다 — 환경이 덜 갖춰진 게 아니라 프로젝트가 그렇게 구성한 것이고,
 # 이걸 실패로 만들면 평범한 JS 프로젝트가 쓰지도 않는 typecheck 스크립트를 억지로
@@ -199,6 +160,9 @@ gate_checksum() {
 # 그 순간 진짜 도구 부재까지 함께 꺼진다. 보고는 하되 막지 않는다.
 gate_absent() { GATE_ABSENT+=("$1"); }
 
+# 도구가 없어 검사를 건너뛴 것을 기록한다.
+# GATE_STRICT=1 이면 건너뜀을 실패로 본다 — CI 에서 도구 부재는 "통과"가 아니라
+# "검사가 돌지 않았음"이고, 그것을 green 으로 보고하면 게이트가 거짓말을 한다.
 gate_skip() {
   # 이름에서 도구를 뽑는다. "golangci-lint" · "ruff" · "gradle(미설치·래퍼없음)" 등.
   local tool="${1%%(*}"; tool="${tool%% *}"

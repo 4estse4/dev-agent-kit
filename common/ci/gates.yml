@@ -68,18 +68,10 @@ jobs:
           for f in .ai-kit/git-hooks/pre-commit .ai-kit/git-hooks/pre-push; do
             [ -x "$f" ] || { echo "::error::$f 에 실행권한이 없습니다 — 훅이 조용히 건너뛰어집니다. git update-index --chmod=+x $f 로 고치고 커밋하세요"; exit 1; }
           done
-          cat .ai-kit/VERSION 2>/dev/null || echo "VERSION 없음"
-          # 체크섬 재계산 — vendor 파일을 손으로 고치면 여기서 드러난다.
-          # 버전 표시가 실제 내용과 어긋나면 디버깅이 헛다리를 짚는다.
-          recorded=$(grep -oE 'checksum=[0-9a-f]+' .ai-kit/VERSION 2>/dev/null | cut -d= -f2)
-          # 체크섬 정의는 vendor 된 lib.sh 한 곳에만 있다 — 여기서 복붙하면 드리프트한다.
-          . .ai-kit/gate/lib.sh
-          actual=$(gate_checksum .ai-kit)
-          if [ -n "$recorded" ] && [ "$recorded" != "$actual" ]; then
-            echo "::error::.ai-kit 내용이 기록된 체크섬과 다릅니다 (기록 $recorded, 실제 $actual)."
-            echo "손으로 고쳤다면 킷에 반영하고 install.sh 를 다시 실행하세요."
-            exit 1
-          fi
+          # 어느 킷에서 왔는지만 찍는다. **내용이 킷과 같은지는 검사하지 않는다** —
+          # 이 레포에서 게이트를 고치는 것이 정상 작업이기 때문이다(.ai-kit/README.md).
+          # 무엇이 달라졌는지 보려면 킷에서 install.sh <경로> --dry-run 을 돌린다.
+          cat .ai-kit/install-manifest 2>/dev/null || echo "install-manifest 없음"
 
   gate:
     needs: detect

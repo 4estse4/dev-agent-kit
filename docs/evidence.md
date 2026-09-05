@@ -92,12 +92,90 @@ PR 없이·콜드 리뷰 없이 8커밋을 넣었고, 뒤늦게 콜드 리뷰를
 고친 뒤로는 `actionlint` 로 닫는다(스크래치패드에 받아서 쓴다). 파서가 아니라
 **그 파일을 실제로 소비하는 도구**로 검증해야 이 부류가 닫힌다.
 
+## 체크섬을 걷어낸 근거 (2026-09)
+
+`.ai-kit/VERSION` 에 vendor 내용의 체크섬을 적고 CI 가 재계산해 대조했다. 그 층이
+**킷의 다른 설계와 정면으로 부딪힌다.** `.ai-kit/README.md` 는 게이트에 문제가 있으면
+그 레포에서 고치라고 말하는데, 체크섬은 그것을 CI 실패로 만든다.
+
+설치된 데모 레포에서 실제 결함(`secrets.sh` 가 AWS secret access key 를 못 잡는 것)을
+고치는 시나리오로 한 바퀴 돌렸다:
+
+```
+1) .ai-kit/gate/secrets.sh 에 패턴 추가   → 차단됨 (결함이 고쳐졌다)
+2) CI 의 vendored 잡                      → ::error:: 기록 3995903652f8ff97 ≠ 실제 f595946954f16a85
+3) 안내대로 install.sh 재실행             → 수정 잔존 0건. 출력에 경고 한 줄 없음
+```
+
+2번은 **실제 러너가 아니라 로컬에서 그 잡의 스크립트를 그대로 돌린 것**이다
+(`recorded` 를 읽고 `gate_checksum` 을 재계산해 대조하는 세 줄). 이 킷의 CI 는 아직
+러너에서 돌려보지 않았고, 그 사실은 PR 본문의 "자동화가 닿지 않은 것" 에도 적혀 있다.
+
+3번이 결정적이다. 빨간 것을 푸는 유일한 안내가 **그 수정을 말없이 지운다.**
+
+조사해 보니 "체크섬 불일치 = CI 실패" 는 개발 도구의 관행도 아니었다. 같은 목적에
+쓰는 것은 **재생성 후 diff** 다(k8s 의 `hack/verify-codegen.sh` 는 실패 메시지에
+`Please run hack/update-codegen.sh` 를 담는다). 체크섬은 "달라졌다" 만 말하고 **어떻게
+되돌리는지를 말하지 못한다.** 체크섬 기반 3-way 병합은 재생성이 불가능한 환경, 즉 OS
+패키지 매니저(dpkg conffiles 의 md5sum, ucf 의 `diff3`)에 있다.
+
+킷의 vendor 내용은 프로젝트 안에서 생성되는 것이 아니라 **다른 레포에서 복사돼 온 것**
+이라, "재생성" 에 해당하는 동작이 곧 덮어쓰기다. 그래서 둘 중 어느 쪽도 아닌 자리에
+있었다. 걷어내고, 대신 무엇이 달라졌는지를 `--dry-run` 이 보여주게 했다.
+
+## 자동 병합을 걷어낸 근거 (2026-09)
+
+킷을 실제 프로젝트 하나(`sera`)에 설치해 24개 PR 을 굴린 뒤, 포크 시점 킷(`a93ee25`)을
+**같은 언어 선택으로 빈 레포에 재설치해** 순수 델타를 냈다. 이 단계를 건너뛰면 언어
+필터가 만든 차이를 프로젝트 수정으로 오인한다 — `gates.yml` 은 그냥 비교하면 181줄이
+다르지만 프로젝트가 고친 것은 19줄이다.
+
+결과: 프로젝트가 킷 파일에 손댄 자리는 **24군데**다 — 내용을 고친 19개, 지운 3개
+(`baseline/` 트리는 통째로 하나로 셌다), 새로 만든 2개.
+
+그중 **그 프로젝트만의 사정은 둘뿐이다** — 프로젝트 전용 CI 워크플로 하나와,
+`settings.json` 안에서 과제 PDF 를 막는 `permissions.ask` 한 블록. 나머지는 전부
+킷 자신의 버그였다. 그중 **셋은 킷 쪽에서도 같은 기간에 따로 고쳤다** — `집행자` → `누가 막나` 개명,
+`gates.yml` 의 빈 `env:` 블록, 그리고 시크릿 범위 스캔. 마지막 것은 양쪽이 낸 코드가
+**바이트 단위로 같았다**:
+
+```bash
+FILES=$(git log --name-only --diff-filter=ACM --diff-merges=cc --pretty=format: "$RANGE" | sort -u | sed '/^$/d')
+DIFF=$(git log -p -U0 --diff-merges=cc --pretty=format: "$RANGE")
+```
+
+**그 셋은 이 레포의 `main` 에 없다.** 킷 쪽 수정은 미머지 브랜치 `fix/kit-gaps` 에만
+있고 그 PR(#35)은 닫혔다. 위 두 줄도 킷의 `common/gate/secrets.sh` 에는 없다 —
+지금도 `git diff --name-only … "$RANGE"` 다. 확인:
+
+```
+$ git grep -c 'diff-merges=cc' main
+(출력 없음, exit 1)
+
+$ git grep -c 'diff-merges=cc' fix/kit-gaps
+fix/kit-gaps:common/gate/secrets.sh:3
+fix/kit-gaps:docs/evidence.md:1
+
+$ git grep -c '집행자' main -- common/templates/CLAUDE.md
+main:common/templates/CLAUDE.md:5
+
+$ git branch --contains fix/kit-gaps
+  fix/kit-gaps
+```
+
+그것이 이 절의 요점을 약하게 만들지는 않는다. **오히려 그 반대다** — 같은 버그를 두 번
+고치고도 킷에는 아직 한 번도 안 들어왔다. 3-way 병합은 "커스터마이즈와 업스트림 변경의
+충돌" 을 푸는 장치인데, 실제로 치른 비용은 **같은 버그를 두 곳에서 두 번 고치고, 그중
+어느 쪽도 업스트림에 못 올린 것**이었다. 병합으로는 풀리지 않는다.
+
 ## 실증된 것
 
 - `main` 직접 커밋 차단 · 시크릿 커밋 차단 · 깨진 코드 push 차단 — **순수 `git` 명령으로 확인**(에이전트 없이)
 - 게이트가 실 2언어 모노레포에서 10개 검사, **CI 에서 건너뜀 0**(`GATE_STRICT`)
 - `trace.sh` 가 누락·유령·없는 경로(구현·테스트 양쪽) 검출
 - vendor 체크섬 드리프트 검출 · 커밋 신원 불일치 검출
+  (체크섬은 2026-09 에 걷어냈다 — 게이트를 고치는 정상 작업을 CI 실패로 만들었고,
+  CI 가 안내하는 복구가 그 수정을 지웠다. 실측은 아래 "체크섬을 걷어낸 근거")
 - 린터 설정이 실 백엔드에서 14건, `govulncheck` 7건, `npm audit` 7건 검출
 - 브랜치 보호 6개 required check 적용(private 레포에서도 가능함을 확인)
 - **JVM·Python 어댑터** — Java+Gradle · Kotlin+Gradle+spotless · 2모듈 Gradle · Python
@@ -105,7 +183,7 @@ PR 없이·콜드 리뷰 없이 8커밋을 넣었고, 뒤늦게 콜드 리뷰를
   것이 "품질 플러그인은 check 에 스스로 걸린다" 는 설계 근거의 증거다
 - **`install.sh --update`** — baseline + 3-way 병합. 프로젝트 수정과 킷 변경이 겹치지
   않으면 둘 다 살아남고, 겹치면 충돌 마커를 남긴다. `--dry-run` 은 트리 해시 앞뒤 비교로
-  무변경 확인
+  무변경 확인. **2026-09 에 걷어냈다** — 병합이 풀려는 상황이 실제로는 안 일어났다(이슈 #38)
 - **낡음 감지** — `SessionStart` 훅. 최신/낡음/모르는 rev/킷 없음 네 상태 실측
 - **`statusLine.command` 의 `$CLAUDE_PROJECT_DIR` 전개** — 문서에 없어서 직접 재봤다
 - **규칙 파일이 실제로 로드된다** — `/context` 의 Memory files 에
