@@ -5,22 +5,22 @@
 #                                        경로는 필수. 현재 위치면 "." 를 준다.
 #   <kit>/install.sh <경로> [--lang py,ts] --hooks --lint   선택 설치
 #   <kit>/install.sh --protect           GitHub 브랜치 보호 설정 (원격 변경 — 별도 플래그)
-#   <kit>/install.sh <경로> [--lang py,ts] --update         설치된 킷을 갱신 (3-way 병합)
-#   <kit>/install.sh <경로> [--lang py,ts] --update --dry-run   무엇이 바뀔지만 보고 아무것도 안 건드림
 #
-# 설치: 기존 파일은 절대 덮어쓰지 않는다. 충돌 시 .ai-kit-new 로 옆에 두고 알린다.
-# 갱신: 설치 시점의 킷 원본을 .ai-kit/baseline/ 에 남겨두고, 그것을 base 로 3-way
-#       병합한다. 프로젝트 수정과 킷 변경이 겹치지 않으면 조용히 둘 다 살아남는다.
+#   <kit>/install.sh <경로> --dry-run    아무것도 바꾸지 않고 무엇이 달라질지만 본다
+#
+# .ai-kit/gate 와 git-hooks 는 킷 소유라 통째로 교체한다. 그 밖의 파일은 이미 있으면
+# 건드리지 않고, 내용이 다르면 .ai-kit-new 로 옆에 둔다. **자동 병합은 하지 않는다** —
+# 합치는 것은 사람·에이전트가 한다.
 set -uo pipefail
 
 KIT_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
-DO_HOOKS=0 DO_TEMPLATES=0 DO_LINT=0 DO_CI=0 DO_PROTECT=0 DO_AGENT=0 DO_UPDATE=0 DRY_RUN=0 TARGET_ARG="" LANGS=""
+DO_HOOKS=0 DO_TEMPLATES=0 DO_LINT=0 DO_CI=0 DO_PROTECT=0 DO_AGENT=0 DRY_RUN=0 TARGET_ARG="" LANGS=""
 # 설치할 항목을 고르지 않았으면 전부 설치한다.
 # --lang·--dry-run 은 항목이 아니라 수식이므로 여기서 세지 않는다 —
 # 세면 `install.sh <경로> --lang py` 가 아무것도 설치하지 않고 끝난다.
 case " $* " in
-  *" --hooks"*|*" --templates"*|*" --lint"*|*" --ci"*|*" --protect"*|*" --update"*) ;;
+  *" --hooks"*|*" --templates"*|*" --lint"*|*" --ci"*|*" --protect"*) ;;
   *) DO_HOOKS=1 DO_TEMPLATES=1 DO_LINT=1 DO_CI=1 DO_AGENT=1 ;;
 esac
 while [ $# -gt 0 ]; do
@@ -32,9 +32,10 @@ while [ $# -gt 0 ]; do
     --lang) LANGS="${2:-}"; shift 2 ;;
     --lang=*) LANGS="${1#--lang=}"; shift ;;
     --protect) DO_PROTECT=1; shift ;;
-    --update) DO_UPDATE=1; DO_HOOKS=1 DO_TEMPLATES=1 DO_LINT=1 DO_CI=1 DO_AGENT=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
-    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
+    # 줄 번호를 박지 않는다 — 헤더가 길어지거나 짧아지면 그 숫자가 조용히 틀린다.
+    # 실제로 그랬다: 갱신 절을 지우자 '2,16p' 가 코드까지 출력했다.
+    -h|--help) awk 'NR==1{next} /^#/{print; next} {exit}' "$0"; exit 0 ;;
     -*) echo "install: 알 수 없는 인자 $1" >&2; exit 2 ;;
     *)
       [ -n "$TARGET_ARG" ] && { echo "install: 프로젝트 경로는 하나만 받습니다" >&2; exit 2; }
@@ -62,11 +63,10 @@ TARGET=$(git -C "$TARGET_ARG" rev-parse --show-toplevel 2>/dev/null) \
 echo "install: 대상 $TARGET"
 echo "install: 킷   $KIT_ROOT"
 
-INSTALLED=(); SKIPPED=(); CONFLICTS=(); WARNINGS=(); MERGED=(); UNCHANGED=(); SEEDED=()
-# 설치 시점 킷 리비전. baseline 이 없을 때 이것으로 원본을 복원한다.
+INSTALLED=(); SKIPPED=(); CONFLICTS=(); WARNINGS=()
 ALL_LANGS="go ts jvm py"
-# 갱신 시 --lang 을 안 주면 설치 당시 선택을 이어받는다 — 안 그러면 갱신이
-# 조용히 언어를 도로 넣고 체크섬만 바뀐다.
+# --lang 을 안 주면 설치 당시 선택을 이어받는다 — 안 그러면 재설치가 조용히
+# 언어를 도로 넣어, 고르지 않은 언어의 잡이 CI 에 되살아난다.
 if [ -z "$LANGS" ] && [ -f "$TARGET/.ai-kit/VERSION" ]; then
   LANGS=$(sed -n 's/^langs=//p' "$TARGET/.ai-kit/VERSION" | head -1)
 fi
@@ -82,115 +82,20 @@ for _l in $ALL_LANGS; do
   case ",$LANGS," in *",$_l,"*) ;; *) DROP="${DROP:+$DROP,}$_l" ;; esac
 done
 
-KIT_REV=""
-if [ -f "$TARGET/.ai-kit/VERSION" ]; then
-  KIT_REV=$(sed -n 's/^kit_rev=//p' "$TARGET/.ai-kit/VERSION" | head -1)
-  [ "$KIT_REV" = "unknown" ] && KIT_REV=""
-  if [ -n "$KIT_REV" ] && ! git -C "$KIT_ROOT" cat-file -e "${KIT_REV}^{commit}" 2>/dev/null; then
-    WARNINGS+=("기록된 킷 리비전 $KIT_REV 을 이 킷 클론에서 찾을 수 없습니다 — baseline 복원 불가")
-    WARNINGS+=("  킷 히스토리를 재작성했다면 그때 끊긴 것입니다. 해당 파일은 손으로 확인해야 합니다.")
-    KIT_REV=""
-  fi
-fi
-
-BASELINE="$TARGET/.ai-kit/baseline"
-# 충돌 마커에 절대경로가 박히면 읽기 어렵다. 사람이 읽는 자리이므로 이름을 준다.
-MF_L='-L 이_레포 -L 설치시점_킷 -L 새_킷'
-
-# 설치 시점의 킷 원본을 남긴다. 이것이 없으면 나중에 "프로젝트가 고친 것"과
-# "킷이 바꾼 것"을 구분할 수 없어, 갱신이 덮어쓰기 아니면 포기 둘 중 하나가 된다.
-save_baseline() { # $1=src $2=dst(상대)
-  [ "$DRY_RUN" = 1 ] && return 0
-  mkdir -p "$BASELINE/$(dirname "$2")" && cp "$1" "$BASELINE/$2" || return 1
-  # 27개 파일이 설명 없이 복제되면 실수처럼 보인다 — 실제로 그렇게 읽혔다.
-  [ -f "$BASELINE/README.md" ] || cp "$KIT_ROOT/common/gate/BASELINE-README.md" "$BASELINE/README.md"
-}
-
-# 기존 파일을 보존하며 복사한다(설치).
+# 기존 파일을 보존하며 복사한다.
+#
+# 판정은 dry-run 이든 아니든 **똑같이** 한다. 다르게 하면 dry-run 이 예고한 것과
+# 실제 설치가 갈리고, 그러면 예고를 읽을 이유가 없어진다. 다른 것은 쓰기뿐이다.
+# mkdir 도 쓰기다 — 조건 앞에 두면 dry-run 이 빈 디렉터리를 남긴다.
 place() { # $1=src $2=dst(대상 레포 상대)
   local src="$1" dst="$TARGET/$2"
-  [ "$DO_UPDATE" = 1 ] && { merge_place "$1" "$2"; return; }
-  mkdir -p "$(dirname "$dst")"
   if [ -e "$dst" ]; then
-    if cmp -s "$src" "$dst"; then SKIPPED+=("$2 (동일)"); save_baseline "$src" "$2"; return; fi
-    cp "$src" "$dst.ai-kit-new"; CONFLICTS+=("$2"); return
+    if cmp -s "$src" "$dst"; then SKIPPED+=("$2 (동일)"); return; fi
+    [ "$DRY_RUN" = 1 ] || cp "$src" "$dst.ai-kit-new"
+    CONFLICTS+=("$2"); return
   fi
-  cp "$src" "$dst"; save_baseline "$src" "$2"; INSTALLED+=("$2")
-}
-
-# baseline 이 없는 레포(=baseline 기능 이전에 설치)에서, 기록된 kit_rev 로 그 시점
-# 킷 원본을 복원한다. 정보는 이미 .ai-kit/VERSION 에 있었고 쓰지 않았을 뿐이다.
-#
-# 경로는 하드코딩하지 않는다 — 킷 안에서 파일이 옮겨다니므로(core/ → common/ 등)
-# git 의 이름 추적에 맡긴다. 그 시점에 없던 파일은 "없음" 이 올바른 답이다.
-seed_baseline() { # $1=킷의 현재 경로 $2=써넣을 파일 → 성공 시 0
-  [ -n "$KIT_REV" ] || return 1
-  local old
-  old=$(git -C "$KIT_ROOT" log --follow --format='' --name-only "$KIT_REV..HEAD" -- "$1" 2>/dev/null \
-        | grep -v '^$' | tail -1)
-  [ -n "$old" ] || old="$1"
-  git -C "$KIT_ROOT" cat-file -e "$KIT_REV:$old" 2>/dev/null || return 1
-  mkdir -p "$(dirname "$2")" || return 1
-  git -C "$KIT_ROOT" show "$KIT_REV:$old" > "$2" 2>/dev/null
-}
-
-# 갱신: base=설치 시점 킷 원본, ours=프로젝트 현재, theirs=킷 새 버전.
-merge_place() { local _r; _merge_place "$@"; _r=$?; [ -n "${MP_TMP:-}" ] && rm -f "$MP_TMP"; MP_TMP=""; return $_r; }
-_merge_place() { # $1=src(킷 새 버전) $2=dst(상대)
-  local src="$1" rel="$2" dst="$TARGET/$2" base="$BASELINE/$2" rc
-
-  # baseline 이 없으면 기록된 kit_rev 로 복원해본다(baseline 기능 이전에 설치된 레포).
-  # dry-run 이면 임시 파일에 복원한다 — 판정은 똑같이 하되 레포는 안 건드린다.
-  local tmpbase=""
-  MP_TMP=""
-  if [ ! -f "$base" ] && [ -n "$KIT_REV" ]; then
-    if [ "$DRY_RUN" = 1 ]; then
-      tmpbase=$(mktemp)
-      if seed_baseline "$src" "$tmpbase"; then base="$tmpbase"; MP_TMP="$tmpbase"; SEEDED+=("$rel"); else rm -f "$tmpbase"; fi
-    else
-      seed_baseline "$src" "$base" && SEEDED+=("$rel")
-    fi
-  fi
-
-  # 복원도 안 되면 이 파일은 킷이 설치한 적이 없다 — 갱신이 아니라 신규 설치다.
-  if [ ! -f "$base" ]; then
-    if [ -e "$dst" ]; then
-      cmp -s "$src" "$dst" && { SKIPPED+=("$rel (동일)"); save_baseline "$src" "$rel"; return; }
-      CONFLICTS+=("$rel (baseline 없음 — 손으로 확인)")
-      [ "$DRY_RUN" = 1 ] || cp "$src" "$dst.ai-kit-new"
-      return
-    fi
-    [ "$DRY_RUN" = 1 ] || { mkdir -p "$(dirname "$dst")"; cp "$src" "$dst"; }
-    save_baseline "$src" "$rel"; INSTALLED+=("$rel"); return
-  fi
-
-  # 킷 쪽이 그대로면 할 일이 없다. 프로젝트가 고쳤든 아니든 건드리지 않는다.
-  cmp -s "$base" "$src" && { UNCHANGED+=("$rel"); return; }
-
-  # 프로젝트가 손대지 않았으면 병합할 것이 없다 — 그냥 새 버전으로 간다.
-  if [ ! -e "$dst" ] || cmp -s "$base" "$dst"; then
-    [ "$DRY_RUN" = 1 ] || { mkdir -p "$(dirname "$dst")"; cp "$src" "$dst"; }
-    save_baseline "$src" "$rel"; INSTALLED+=("$rel (킷 변경 반영)"); return
-  fi
-
-  # 양쪽이 다 움직였다 — 3-way 병합. 종료코드가 곧 충돌 수다.
-  if [ "$DRY_RUN" = 1 ]; then
-    local tmp; tmp=$(mktemp); cp "$dst" "$tmp"
-    git merge-file -q $MF_L "$tmp" "$base" "$src" >/dev/null 2>&1; rc=$?
-    rm -f "$tmp"
-    [ "$rc" -eq 0 ] && MERGED+=("$rel") || CONFLICTS+=("$rel ($rc 곳 충돌)")
-    return
-  fi
-  # shellcheck disable=SC2086
-  git merge-file $MF_L "$dst" "$base" "$src" >/dev/null 2>&1; rc=$?
-  if [ "$rc" -eq 0 ]; then
-    MERGED+=("$rel"); save_baseline "$src" "$rel"
-  else
-    # 충돌 마커를 파일에 남긴다. 에디터와 git 이 그대로 다루는 형식이라
-    # 별도 도구를 배울 필요가 없다. baseline 은 갱신하지 않는다 —
-    # 사람이 해소한 뒤 다시 돌려야 다음 갱신의 base 가 맞다.
-    CONFLICTS+=("$rel ($rc 곳 충돌 — 마커를 남겼습니다)")
-  fi
+  [ "$DRY_RUN" = 1 ] || { mkdir -p "$(dirname "$dst")"; cp "$src" "$dst"; }
+  INSTALLED+=("$2")
 }
 
 # ── 게이트 vendor: 대상 레포에 .ai-kit/ 로 복사한다 ──
@@ -198,12 +103,10 @@ _merge_place() { # $1=src(킷 새 버전) $2=dst(상대)
 # vendor 해서 레포에 커밋하면 어디서 clone 해도 같은 게이트가 돈다.
 if [ "$DO_HOOKS" = 1 ]; then
   vendor="$TARGET/.ai-kit"
-  # .ai-kit/gate 와 git-hooks 는 킷 소유라 통째로 교체한다(프로젝트가 고치면 CI 가 잡는다).
-  # baseline/ 과 identity 는 그 아래 살지만 킷 소유가 아니므로 남긴다 —
-  # baseline 을 지우면 다음 갱신이 3-way 병합의 base 를 잃는다.
-  if [ "$DRY_RUN" = 1 ]; then
-    UNCHANGED+=(".ai-kit/gate · git-hooks (갱신 모드에서는 통째로 교체)")
-  else
+  # .ai-kit/gate 와 git-hooks 는 킷 소유라 통째로 교체한다. identity 는 그 아래
+  # 살지만 킷 소유가 아니므로 남긴다.
+  kit_rev=$( cd "$KIT_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo unknown )
+  if [ "$DRY_RUN" = 0 ]; then
   rm -rf "$vendor/gate" "$vendor/git-hooks" "$vendor/README.md"
   mkdir -p "$vendor"
   cp -R "$KIT_ROOT/common/gate" "$KIT_ROOT/common/git-hooks" "$vendor/"
@@ -218,27 +121,26 @@ if [ "$DO_HOOKS" = 1 ]; then
   # VERSION 에 킷 커밋과 vendor 내용 체크섬을 함께 적는다.
   # 커밋만 적으면 파일을 손으로 고쳤을 때 버전 표시가 거짓말을 한다 —
   # 체크섬이 있으면 CI 가 재계산해서 드리프트를 잡을 수 있다.
-  kit_rev=$( cd "$KIT_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo unknown )
   # 체크섬 계산은 vendor 된 lib.sh 의 정의를 쓴다 — CI 도 같은 함수를 부른다.
   # shellcheck source=/dev/null
   . "$vendor/gate/lib.sh"
   sum=$(gate_checksum "$vendor") || sum="no-hasher"
   printf 'kit_rev=%s\nchecksum=%s\nlangs=%s\n' "$kit_rev" "$sum" "$LANGS" > "$vendor/VERSION"
-  INSTALLED+=(".ai-kit/ (게이트 vendor · $kit_rev · $sum · $LANGS)")
-
   fi
+  # 보고는 dry-run 에서도 한다 — 안 그러면 예고한 건수와 실제 건수가 갈린다.
+  INSTALLED+=(".ai-kit/ (게이트 vendor · $kit_rev · $LANGS)")
 
   # 훅은 .git/hooks 에 두지 않는다 — 그 디렉터리는 clone 되지 않으므로
   # 평가자가 레포를 받으면 강제가 통째로 사라진다.
   # 대신 커밋되는 .ai-kit/git-hooks/ 를 core.hooksPath 로 가리킨다.
-  git -C "$TARGET" config core.hooksPath .ai-kit/git-hooks
+  [ "$DRY_RUN" = 1 ] || git -C "$TARGET" config core.hooksPath .ai-kit/git-hooks
   INSTALLED+=("core.hooksPath → .ai-kit/git-hooks (커밋되는 훅)")
 
   # 킷 클론의 경로를 이 레포의 로컬 git config 에 적는다 — 커밋되지 않는다.
   # SessionStart 훅이 이것으로 "설치된 킷이 낡았나" 를 판정한다. 커밋되는 파일에
   # 넣지 않는 이유: 머신마다 경로가 다르고, 남의 절대경로가 레포에 박히면
   # 그 사람 환경을 알려주는 것 말고는 아무 값도 없다.
-  git -C "$TARGET" config ai-kit.path "$KIT_ROOT" 2>/dev/null
+  [ "$DRY_RUN" = 1 ] || git -C "$TARGET" config ai-kit.path "$KIT_ROOT" 2>/dev/null
 
   # 기존 .git/hooks 에 커스텀 훅이 있으면 알린다 — hooksPath 설정 시 무시된다.
   for h in pre-commit pre-push commit-msg; do
@@ -250,9 +152,15 @@ if [ "$DO_HOOKS" = 1 ]; then
   # ── 신원 고정 파일 시드 ──
   # 현재 실효 신원을 기대값으로 기록해두면, 이후 잘못된 신원 커밋을 훅이 막는다.
   eff_now=$(git -C "$TARGET" config user.email 2>/dev/null)
-  if [ -n "$eff_now" ] && [ ! -f "$vendor/identity" ]; then
-    printf '# 이 레포에서 커밋할 이메일. pre-commit 훅이 검증한다.\n%s\n' "$eff_now" > "$vendor/identity"
-    INSTALLED+=(".ai-kit/identity ($eff_now)")
+  if [ -n "$eff_now" ]; then
+    if [ -f "$vendor/identity" ]; then
+      # 이미 있으면 건너뛴 것으로 **센다**. 아예 세지 않으면 첫 설치와 재설치의
+      # 합계가 달라지고, 읽는 사람은 무엇이 빠졌는지 알 길이 없다.
+      SKIPPED+=(".ai-kit/identity (이미 있음)")
+    else
+      [ "$DRY_RUN" = 1 ] || printf '# 이 레포에서 커밋할 이메일. pre-commit 훅이 검증한다.\n%s\n' "$eff_now" > "$vendor/identity"
+      INSTALLED+=(".ai-kit/identity ($eff_now)")
+    fi
   fi
 
   # ── git 신원 확인 ──
@@ -326,15 +234,12 @@ if [ "$DO_LINT" = 1 ]; then
   place_beside pyproject.toml "$KIT_ROOT/common/lint/py/ruff.toml"        "ruff.toml" \
     '^\[tool\.ruff'
   # JVM: 빌드 루트마다 .editorconfig.
-  # 같은 목적지를 두 번 치지 않도록 막는다. settings.gradle + build.gradle 은 Gradle 의
-  # 표준 배치라 한 디렉터리에 마커가 둘인 것이 정상인데, 신규 설치는 place 의 cmp 가
-  # 막아도 **--update 는 merge_place 로 위임되어 그 스킵이 없다.** 그러면 이미 충돌
-  # 마커가 박힌 파일을 다시 3-way 병합해 마커가 중첩된다(콜드 리뷰가 재현).
-  PLACED_EDITORCONFIG=""
+  # 같은 목적지를 두 번 치지 않도록 place_beside 의 PLACED_DESTS 가 막는다.
+  # settings.gradle + build.gradle 은 Gradle 의 표준 배치라 한 디렉터리에 마커가
+  # 둘인 것이 정상이고, 그때 .editorconfig 를 두 번 놓으면 두 번째가 충돌로 잡힌다.
   for m in settings.gradle settings.gradle.kts build.gradle build.gradle.kts pom.xml; do
     place_beside "$m" "$KIT_ROOT/common/lint/jvm/.editorconfig" ".editorconfig"
   done
-  unset PLACED_EDITORCONFIG
 fi
 
 if [ "$DO_CI" = 1 ]; then
@@ -373,16 +278,9 @@ if [ "$DO_PROTECT" = 1 ]; then
 fi
 
 # ── 보고 (산출물 규칙 R1: 개수만, 문제만 자세히) ──
-if [ "$DO_UPDATE" = 1 ]; then
-  [ "$DRY_RUN" = 1 ] && echo "── dry-run: 아무것도 바꾸지 않았습니다 ──"
-  echo "갱신 ${#INSTALLED[@]}건 · 병합 ${#MERGED[@]}건 · 그대로 ${#UNCHANGED[@]}건 · 동일 ${#SKIPPED[@]}건 · 충돌 ${#CONFLICTS[@]}건"
-  [ ${#SEEDED[@]} -gt 0 ] && echo "(baseline 이 없어 kit_rev $KIT_REV 로 ${#SEEDED[@]}건 복원했습니다)"
-  if [ ${#INSTALLED[@]} -gt 0 ]; then echo ""; echo "킷 변경이 반영됨:"; printf '  %s\n' "${INSTALLED[@]}"; fi
-  if [ ${#MERGED[@]} -gt 0 ]; then echo ""; echo "프로젝트 수정과 함께 병합됨:"; printf '  %s\n' "${MERGED[@]}"; fi
-else
+[ "$DRY_RUN" = 1 ] && echo "── dry-run: 아무것도 바꾸지 않았습니다. 아래는 무엇이 달라질지입니다 ──"
 echo "설치 ${#INSTALLED[@]}건 · 건너뜀 ${#SKIPPED[@]}건 · 충돌 ${#CONFLICTS[@]}건 · 확인필요 ${#WARNINGS[@]}건"
-fi
-if [ "$DO_HOOKS" = 1 ] && [ "$DO_UPDATE" = 0 ]; then
+if [ "$DO_HOOKS" = 1 ]; then
   cat <<'MSG'
 
 ── 설치기가 한 일 ──
@@ -408,11 +306,7 @@ fi
 
 if [ ${#CONFLICTS[@]} -gt 0 ]; then
   echo ""
-  if [ "$DO_UPDATE" = 1 ]; then
-    echo "충돌 — 아래는 손으로 해소한 뒤 --update 를 다시 돌리세요(그래야 baseline 이 맞습니다):"
-  else
-    echo "충돌 — 기존 파일을 보존했고 새 것은 .ai-kit-new 로 옆에 뒀습니다. 확인 후 병합하세요:"
-  fi
+  echo "충돌 — 기존 파일을 보존했고 새 것은 .ai-kit-new 로 옆에 뒀습니다. 확인 후 병합하세요:"
   printf '  %s\n' "${CONFLICTS[@]}"
 fi
 if [ ${#WARNINGS[@]} -gt 0 ]; then
