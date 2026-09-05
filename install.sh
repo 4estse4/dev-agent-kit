@@ -114,18 +114,15 @@ if [ "$DO_HOOKS" = 1 ]; then
   # 이 레포만 clone 한 사람은 훅을 켜는 방법을 알 길이 없다.
   cp "$KIT_ROOT/common/gate/VENDOR-README.md" "$vendor/README.md"
   rm -f "$vendor/gate/VENDOR-README.md"
-  # 고르지 않은 언어의 어댑터는 vendor 하지 않는다 — 설치 뒤에 지우면
-  # 체크섬이 어긋나 CI 가 "손으로 고쳤다" 로 죽는다.
+  # 고르지 않은 언어의 어댑터는 vendor 하지 않는다.
   for _l in $(echo "$DROP" | tr ',' ' '); do rm -f "$vendor/gate/adapters/$_l.sh"; done
   chmod +x "$vendor"/gate/*.sh "$vendor"/git-hooks/* 2>/dev/null
-  # VERSION 에 킷 커밋과 vendor 내용 체크섬을 함께 적는다.
-  # 커밋만 적으면 파일을 손으로 고쳤을 때 버전 표시가 거짓말을 한다 —
-  # 체크섬이 있으면 CI 가 재계산해서 드리프트를 잡을 수 있다.
-  # 체크섬 계산은 vendor 된 lib.sh 의 정의를 쓴다 — CI 도 같은 함수를 부른다.
-  # shellcheck source=/dev/null
-  . "$vendor/gate/lib.sh"
-  sum=$(gate_checksum "$vendor") || sum="no-hasher"
-  printf 'kit_rev=%s\nchecksum=%s\nlangs=%s\n' "$kit_rev" "$sum" "$LANGS" > "$vendor/VERSION"
+  # VERSION 은 **어디서 왔는지**만 적는다 — 킷 커밋과 언어 선택.
+  # 내용 체크섬은 두지 않는다. 이 레포에서 게이트를 고치는 것이 정상 작업인데
+  # (.ai-kit/README.md), 체크섬을 두면 그 정상 작업이 CI 를 빨갛게 만들고,
+  # 빨간 것을 푸는 안내(install.sh 재실행)가 그 수정을 말없이 지운다. 실측했다.
+  # 무엇이 달라졌는지는 --dry-run 이 보여준다.
+  printf 'kit_rev=%s\nlangs=%s\n' "$kit_rev" "$LANGS" > "$vendor/VERSION"
   fi
   # 보고는 dry-run 에서도 한다 — 안 그러면 예고한 건수와 실제 건수가 갈린다.
   INSTALLED+=(".ai-kit/ (게이트 vendor · $kit_rev · $LANGS)")
