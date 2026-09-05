@@ -75,7 +75,15 @@ STAGE=""
 # TMPDIR 은 끝에 / 가 붙어 온다(macOS). 값에서 떼지 않으면 출력 경로에 // 가 남는다 —
 # 따옴표 자리를 옮기는 것으로는 안 없어진다.
 _tmpdir=${TMPDIR:-/tmp}; _tmpdir=${_tmpdir%/}
-[ "$DRY_RUN" = 1 ] && STAGE=$(mktemp -d "$_tmpdir/ai-kit-dryrun.XXXXXX")
+# 실패를 그냥 넘기면 STAGE 가 빈 문자열이 되고, 그 뒤 모든 경로가 "/..." 가 된다 —
+# 아무것도 안 바꾸겠다고 약속한 모드가 **파일시스템 루트에 쓰려고 든다.** 실측했다:
+# 루트가 읽기 전용이라 막혔을 뿐이고, 쓸 수 있는 환경이면 그대로 썼다.
+if [ "$DRY_RUN" = 1 ]; then
+  STAGE=$(mktemp -d "$_tmpdir/ai-kit-dryrun.XXXXXX") || {
+    echo "install: 임시 디렉터리를 만들지 못했습니다 — $_tmpdir" >&2
+    echo "  dry-run 은 킷이 놓을 파일을 거기에 만들어 이 레포와 대조합니다. 없으면 할 수 없습니다." >&2
+    exit 1; }
+fi
 ALL_LANGS="go ts jvm py"
 # --lang 을 안 주면 설치 당시 선택을 이어받는다 — 안 그러면 재설치가 조용히
 # 언어를 도로 넣어, 고르지 않은 언어의 잡이 CI 에 되살아난다.
