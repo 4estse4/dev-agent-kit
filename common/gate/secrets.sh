@@ -5,6 +5,9 @@
 #
 #   secrets.sh              staged 내용 검사 (pre-commit)
 #   secrets.sh --range A..B 커밋 범위 검사 (pre-push / CI)
+#   secrets.sh --range REV   리비전 하나 — 거기서 도달 가능한 **모든** 커밋을 검사한다.
+#                            기준점이 없을 때 쓴다(고아 브랜치, 기본 브랜치의 첫 푸시).
+#                            A..B 는 A 를 제외하므로 그 경우 루트 커밋이 빠진다.
 set -uo pipefail
 
 MODE="staged"; RANGE=""
@@ -69,9 +72,15 @@ else
 fi
 
 # 추가된 줄(+)만 본다. secret-ok 마커가 있으면 면제.
+#
+# 앞에 `[ +]*` 가 붙는 이유: `--diff-merges=cc` 의 결합 diff 는 부모 수만큼 열을 둔다.
+# 두 부모면 `++` 는 어느 부모에도 없는 줄, ` +`(공백 뒤 +)는 부모1 에는 있고 부모2 에는
+# 없는 줄이다. `^\+` 만 보면 뒤엣것을 통째로 놓친다 — 머지가 부모1 쪽을 골라 남긴
+# 시크릿이 그 모양이다(실측). -U0 이라 문맥 줄이 없으므로 이 패턴이 문맥을 먹지 않는다.
+#
 # grep 종료코드: 0=매치, 1=매치없음(정상), >=2=grep 자체 오류.
 # 오류를 || true로 삼키면 검사가 고장 난 채 "통과"한다 — 반드시 구분한다.
-ADDED=$(printf '%s\n' "$DIFF" | grep -E -- '^\+' | grep -vE -- 'secret-ok')
+ADDED=$(printf '%s\n' "$DIFF" | grep -E -- '^[ +]*\+' | grep -vE -- 'secret-ok')
 BAD_CONTENT=$(printf '%s\n' "$ADDED" | grep -nE -- "$PATTERNS")
 rc=$?
 if [ $rc -ge 2 ]; then
