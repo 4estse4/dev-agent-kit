@@ -64,6 +64,13 @@ echo "install: 대상 $TARGET"
 echo "install: 킷   $KIT_ROOT"
 
 INSTALLED=(); SKIPPED=(); CONFLICTS=(); WARNINGS=()
+# dry-run 은 대상 대신 이 트리에 놓는다. 놓고 나서 대상과 비교하면 무엇이 달라지는지가
+# 나오고, 트리 자체가 남으므로 사람이나 에이전트가 그것을 보고 병합할 수 있다.
+STAGE=""
+# TMPDIR 은 끝에 / 가 붙어 온다(macOS). 값에서 떼지 않으면 출력 경로에 // 가 남는다 —
+# 따옴표 자리를 옮기는 것으로는 안 없어진다.
+_tmpdir=${TMPDIR:-/tmp}; _tmpdir=${_tmpdir%/}
+[ "$DRY_RUN" = 1 ] && STAGE=$(mktemp -d "$_tmpdir/ai-kit-dryrun.XXXXXX")
 ALL_LANGS="go ts jvm py"
 # --lang 을 안 주면 설치 당시 선택을 이어받는다 — 안 그러면 재설치가 조용히
 # 언어를 도로 넣어, 고르지 않은 언어의 잡이 CI 에 되살아난다.
@@ -89,6 +96,8 @@ done
 # mkdir 도 쓰기다 — 조건 앞에 두면 dry-run 이 빈 디렉터리를 남긴다.
 place() { # $1=src $2=dst(대상 레포 상대)
   local src="$1" dst="$TARGET/$2"
+  # dry-run 은 대상에 쓰지 않고 STAGE 에 놓는다. 판정(아래)은 그대로 돈다.
+  if [ "$DRY_RUN" = 1 ]; then mkdir -p "$STAGE/$(dirname "$2")"; cp "$src" "$STAGE/$2"; fi
   if [ -e "$dst" ]; then
     if cmp -s "$src" "$dst"; then SKIPPED+=("$2 (동일)"); return; fi
     [ "$DRY_RUN" = 1 ] || cp "$src" "$dst.ai-kit-new"
@@ -106,24 +115,28 @@ if [ "$DO_HOOKS" = 1 ]; then
   # .ai-kit/gate 와 git-hooks 는 킷 소유라 통째로 교체한다. identity 는 그 아래
   # 살지만 킷 소유가 아니므로 남긴다.
   kit_rev=$( cd "$KIT_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo unknown )
-  if [ "$DRY_RUN" = 0 ]; then
-  rm -rf "$vendor/gate" "$vendor/git-hooks" "$vendor/README.md"
-  mkdir -p "$vendor"
-  cp -R "$KIT_ROOT/common/gate" "$KIT_ROOT/common/git-hooks" "$vendor/"
-  # 활성화 절차가 레포 안에 있어야 한다 — install.sh 는 킷 레포에만 있으므로
-  # 이 레포만 clone 한 사람은 훅을 켜는 방법을 알 길이 없다.
-  cp "$KIT_ROOT/common/gate/VENDOR-README.md" "$vendor/README.md"
-  rm -f "$vendor/gate/VENDOR-README.md"
-  # 고르지 않은 언어의 어댑터는 vendor 하지 않는다.
-  for _l in $(echo "$DROP" | tr ',' ' '); do rm -f "$vendor/gate/adapters/$_l.sh"; done
-  chmod +x "$vendor"/gate/*.sh "$vendor"/git-hooks/* 2>/dev/null
-  # VERSION 은 **어디서 왔는지**만 적는다 — 킷 커밋과 언어 선택.
-  # 내용 체크섬은 두지 않는다. 이 레포에서 게이트를 고치는 것이 정상 작업인데
-  # (.ai-kit/README.md), 체크섬을 두면 그 정상 작업이 CI 를 빨갛게 만들고,
-  # 빨간 것을 푸는 안내(install.sh 재실행)가 그 수정을 말없이 지운다. 실측했다.
-  # 무엇이 달라졌는지는 --dry-run 이 보여준다.
-  printf 'kit_rev=%s\nlangs=%s\n' "$kit_rev" "$LANGS" > "$vendor/VERSION"
-  fi
+  # 설치와 dry-run 이 **같은 함수**를 쓴다. 두 벌로 두면 dry-run 이 예고하는 내용과
+  # 설치가 놓는 내용이 갈리고, 갈렸을 때 알아챌 방법이 없다.
+  vendor_into() { # $1=목적지 .ai-kit 디렉터리
+    local v="$1"
+    rm -rf "$v/gate" "$v/git-hooks" "$v/README.md"
+    mkdir -p "$v"
+    cp -R "$KIT_ROOT/common/gate" "$KIT_ROOT/common/git-hooks" "$v/"
+    # 활성화 절차가 레포 안에 있어야 한다 — install.sh 는 킷 레포에만 있으므로
+    # 이 레포만 clone 한 사람은 훅을 켜는 방법을 알 길이 없다.
+    cp "$KIT_ROOT/common/gate/VENDOR-README.md" "$v/README.md"
+    rm -f "$v/gate/VENDOR-README.md"
+    # 고르지 않은 언어의 어댑터는 vendor 하지 않는다.
+    for _l in $(echo "$DROP" | tr ',' ' '); do rm -f "$v/gate/adapters/$_l.sh"; done
+    chmod +x "$v"/gate/*.sh "$v"/git-hooks/* 2>/dev/null
+    # VERSION 은 **어디서 왔는지**만 적는다 — 킷 커밋과 언어 선택.
+    # 내용 체크섬은 두지 않는다. 이 레포에서 게이트를 고치는 것이 정상 작업인데
+    # (.ai-kit/README.md), 체크섬을 두면 그 정상 작업이 CI 를 빨갛게 만들고,
+    # 빨간 것을 푸는 안내(install.sh 재실행)가 그 수정을 말없이 지운다. 실측했다.
+    # 무엇이 달라졌는지는 --dry-run 이 보여준다.
+    printf 'kit_rev=%s\nlangs=%s\n' "$kit_rev" "$LANGS" > "$v/VERSION"
+  }
+  if [ "$DRY_RUN" = 1 ]; then vendor_into "$STAGE/.ai-kit"; else vendor_into "$vendor"; fi
   # 보고는 dry-run 에서도 한다 — 안 그러면 예고한 건수와 실제 건수가 갈린다.
   INSTALLED+=(".ai-kit/ (게이트 vendor · $kit_rev · $LANGS)")
 
@@ -155,7 +168,11 @@ if [ "$DO_HOOKS" = 1 ]; then
       # 합계가 달라지고, 읽는 사람은 무엇이 빠졌는지 알 길이 없다.
       SKIPPED+=(".ai-kit/identity (이미 있음)")
     else
-      [ "$DRY_RUN" = 1 ] || printf '# 이 레포에서 커밋할 이메일. pre-commit 훅이 검증한다.\n%s\n' "$eff_now" > "$vendor/identity"
+      if [ "$DRY_RUN" = 1 ]; then
+        printf '# 이 레포에서 커밋할 이메일. pre-commit 훅이 검증한다.\n%s\n' "$eff_now" > "$STAGE/.ai-kit/identity"
+      else
+        printf '# 이 레포에서 커밋할 이메일. pre-commit 훅이 검증한다.\n%s\n' "$eff_now" > "$vendor/identity"
+      fi
       INSTALLED+=(".ai-kit/identity ($eff_now)")
     fi
   fi
@@ -274,10 +291,83 @@ if [ "$DO_PROTECT" = 1 ]; then
   bash "$KIT_ROOT/common/ci/protect-branch.sh" || echo "install: 브랜치 보호 설정 실패" >&2
 fi
 
+# ── dry-run 보고: 무엇이 달라지는지 ──
+#
+# 건수만 세면 "충돌 3건" 까지만 알고 무엇이 왜 다른지는 모른다. 그래서 킷이 놓을
+# 트리(STAGE)를 대상과 대조해 파일별로 분류하고 diff 를 붙인다. 병합은 하지 않는다 —
+# 트리를 남겨두고 사람이나 에이전트가 보고 정한다.
+DIFF_MAX_LINES=${AI_KIT_DIFF_MAX_LINES:-60}   # 파일당
+DIFF_MAX_TOTAL=${AI_KIT_DIFF_MAX_TOTAL:-400}  # 전체
+
+dryrun_report() {
+  local n_new=0 n_diff=0 n_same=0 n_gone=0
+  local list_new="" list_diff="" list_gone="" rel f
+  while IFS= read -r f; do
+    rel=${f#"$STAGE"/}
+    if [ ! -e "$TARGET/$rel" ]; then
+      n_new=$((n_new + 1)); list_new="${list_new}  + ${rel}"$'\n'
+    elif cmp -s "$f" "$TARGET/$rel"; then
+      n_same=$((n_same + 1))
+    else
+      n_diff=$((n_diff + 1)); list_diff="${list_diff}  ~ ${rel}"$'\n'
+    fi
+  done < <(find "$STAGE" -type f | LC_ALL=C sort)
+
+  # 킷 소유 자리(.ai-kit 전체)에서만 "사라질 것" 을 본다. 그 밖은 프로젝트 소유라
+  # 킷이 놓지 않는 것이 정상이고, 거기까지 세면 프로젝트 파일 전부가 목록에 뜬다.
+  #
+  # gate·git-hooks 만 보지 않고 .ai-kit 전체를 보는 이유: 옛 킷이 두고 간 것이
+  # 그 둘 밖에 쌓인다. 실제로 baseline/ 29파일이 그렇게 남았고, 좁게 보면 안 보인다.
+  # identity 는 예외다 — 킷 소유가 아니고, 커밋 신원이 비면 STAGE 에 안 놓인다.
+  if [ -d "$TARGET/.ai-kit" ]; then
+    while IFS= read -r f; do
+      rel=${f#"$TARGET"/}
+      [ "$rel" = ".ai-kit/identity" ] && continue
+      [ -e "$STAGE/$rel" ] || { n_gone=$((n_gone + 1)); list_gone="${list_gone}  - ${rel}"$'\n'; }
+    done < <(find "$TARGET/.ai-kit" -type f | LC_ALL=C sort)
+  fi
+
+  echo "── dry-run: 아무것도 바꾸지 않았습니다 ──"
+  echo ""
+  echo "지금 설치하면 — 새 파일 ${n_new} · 내용이 다름 ${n_diff} · 그대로 ${n_same} · 킷이 안 놓음 ${n_gone}"
+  [ -n "$list_diff" ] && { echo ""; echo "내용이 다름"; printf '%s' "$list_diff"; }
+  [ -n "$list_new" ]  && { echo ""; echo "새 파일";     printf '%s' "$list_new"; }
+  [ -n "$list_gone" ] && { echo ""; echo "킷이 안 놓음 (이 레포에만 있는 킷 소유 파일)"; printf '%s' "$list_gone"; }
+
+  # diff 는 "이 레포 → 킷" 방향이다. - 가 지금 있는 것, + 가 킷이 놓을 것.
+  if [ -n "$list_diff" ]; then
+    local shown=0 body cut
+    echo ""
+    echo "diff (- 지금 이 레포 / + 킷이 놓을 것)"
+    while IFS= read -r rel; do
+      rel=${rel#  ~ }
+      [ -n "$rel" ] || continue
+      [ "$shown" -ge "$DIFF_MAX_TOTAL" ] && { echo ""; echo "  … 전체 상한 ${DIFF_MAX_TOTAL}줄에 걸려 나머지는 생략했습니다. 병합용 트리에서 직접 보세요."; break; }
+      echo ""
+      echo "──── $rel"
+      body=$(diff -u "$TARGET/$rel" "$STAGE/$rel" 2>/dev/null | tail -n +3)
+      if [ -z "$body" ]; then echo "  (텍스트 diff 없음 — 바이너리이거나 권한만 다릅니다)"; continue; fi
+      cut=$(printf '%s\n' "$body" | wc -l | tr -d " ")
+      printf '%s\n' "$body" | head -n "$DIFF_MAX_LINES" | sed 's/^/  /'
+      [ "$cut" -gt "$DIFF_MAX_LINES" ] && echo "  … 이 파일에서 $((cut - DIFF_MAX_LINES))줄 더 있습니다"
+      shown=$((shown + cut))
+    done <<< "$list_diff"
+  fi
+
+  echo ""
+  echo "병합용 트리: $STAGE"
+  echo "  킷이 놓을 파일만 들어 있습니다. 파일별로 비교하려면:"
+  echo "      diff -u <파일> $STAGE/<파일>"
+  echo "  임시 디렉터리이므로 정리 정책에 사라질 수 있습니다. 남길 것은 옮겨두세요."
+}
+
 # ── 보고 (산출물 규칙 R1: 개수만, 문제만 자세히) ──
-[ "$DRY_RUN" = 1 ] && echo "── dry-run: 아무것도 바꾸지 않았습니다. 아래는 무엇이 달라질지입니다 ──"
+if [ "$DRY_RUN" = 1 ]; then
+  dryrun_report
+else
 echo "설치 ${#INSTALLED[@]}건 · 건너뜀 ${#SKIPPED[@]}건 · 충돌 ${#CONFLICTS[@]}건 · 확인필요 ${#WARNINGS[@]}건"
-if [ "$DO_HOOKS" = 1 ]; then
+fi
+if [ "$DO_HOOKS" = 1 ] && [ "$DRY_RUN" = 0 ]; then
   cat <<'MSG'
 
 ── 설치기가 한 일 ──
@@ -301,7 +391,7 @@ if [ "$DO_HOOKS" = 1 ]; then
 MSG
 fi
 
-if [ ${#CONFLICTS[@]} -gt 0 ]; then
+if [ ${#CONFLICTS[@]} -gt 0 ] && [ "$DRY_RUN" = 0 ]; then
   echo ""
   echo "충돌 — 기존 파일을 보존했고 새 것은 .ai-kit-new 로 옆에 뒀습니다. 확인 후 병합하세요:"
   printf '  %s\n' "${CONFLICTS[@]}"
