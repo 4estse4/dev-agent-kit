@@ -17,17 +17,32 @@
 #             pr create·merge 는 스킬 파일이 접두어를 붙이지만 이슈에는 그런 스킬이 없어
 #             접두어를 붙이는 주체가 에이전트 자신이다. 그래서 deny 문구는 **접두어를
 #             알려주지 않는다** — 알려주면 이 층이 막는 것은 왕복 한 번이 전부가 된다.
-#             그리고 이 자리에서는 이 훅이 **유일한 층**이다. PreToolUse 의 deny 가
-#             권한 평가보다 먼저 끝나는 것을 실측했다 — 허용 목록에 없는 명령인데도
-#             프롬프트가 뜨지 않고 이 훅의 문구가 바로 돌아왔다. 그래서 같은 명령을
-#             settings.json 의 ask 에도 넣으면 그 줄은 죽은 줄이 된다. 넣지 않았다.
+#
+# **이 훅은 유일한 층이 아니다. 더 약한 층이다.** 네 명령 모두 settings.json 의 ask 에
+# 있다. 앞서 이 자리에 "PreToolUse 의 deny 가 권한 평가보다 먼저 끝나므로 ask 에 넣으면
+# 죽은 줄이 된다" 고 적었는데 틀렸다. 문서는 반대다 —
+#   "Hook decisions don't bypass permission rules. Claude Code evaluates deny and ask
+#    rules regardless of what a PreToolUse hook returns"
+# 이고, "먼저 끝난다" 는 **exit 2 로 죽는 훅**에만 해당한다("A hook that exits with code 2
+# stops the tool call before permission rules are evaluated"). 이 훅은 JSON deny + exit 0
+# 이다. 게다가 위 '못 막는다' 네 형태(#, &, $(), 앞 대입)를 ask 규칙은 **전부 잡는다** —
+# 구분자 목록에 개행과 &, 그리고 "including a command nested inside a subshell, a command
+# substitution", "matches past any leading assignment". 즉 이 훅이 죽어 있는 자리에서
+# ask 가 살아 있다.
+#
+# 그래서 이 훅의 남은 값은 차단이 아니라 **"스킬을 써라" 라는 안내 한 줄**이다.
+# 걷어내는 것은 별도 PR 에서 한다.
 #   무관하다  — 사람이 GitHub 웹에서 누르는 머지. 훅은 에이전트의 Bash 호출만 본다.
 set -uo pipefail
 
-# python3 가 없으면 이 훅은 아무것도 못 한다. 조용히 통과시키면 강제 계층이
-# 사라진 것을 아무도 모른다 — stderr 로 말하고 통과한다(차단은 못 하므로).
+# python3 가 없으면 이 훅은 아무것도 못 한다. 조용히 통과시키면 강제 계층이 사라진 것을
+# 아무도 모른다. **stderr 로는 말할 수 없다** — exit 0 인 훅의 stderr 는 디버그 로그로만
+# 가고 화면에도 에이전트에게도 안 간다("Stderr from a hook that exits 0 goes to the debug
+# log only, never the transcript, and Claude never sees it"). 사람에게 보이는 것은
+# JSON 의 systemMessage 다. 그것으로 말하고 통과한다(차단은 못 하므로).
 command -v python3 >/dev/null 2>&1 || {
-  echo "use_skill 훅: python3 이 없어 검사하지 못했습니다" >&2; exit 0; }
+  printf '%s\n' '{"systemMessage":"use_skill 훅: python3 이 없어 gh 명령을 검사하지 못했습니다. settings.json 의 permissions.ask 가 남은 층입니다."}'
+  exit 0; }
 
 cmd=$(python3 -c 'import json,sys; print((json.load(sys.stdin).get("tool_input") or {}).get("command",""))' 2>/dev/null) || exit 0
 [ -n "$cmd" ] || exit 0

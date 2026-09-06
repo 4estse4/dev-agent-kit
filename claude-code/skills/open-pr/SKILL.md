@@ -24,7 +24,7 @@ $ARGUMENTS
 
 1. 푸시: `git push -u origin HEAD`
 
-2. `AI_KIT_SKILL=1 gh pr create` 로 PR 을 연다(접두어는 `use_skill` 훅을 통과시키는 표시다 — 없으면 훅이 막고 "스킬을 써라" 라고 답한다. 이미 스킬 안이다). 제목은 브랜치 전체의 목적을 Conventional Commits 스타일로.
+2. `AI_KIT_SKILL=1 gh pr create` 로 PR 을 연다(접두어는 `use_skill` 훅을 통과시키는 표시다 — 없으면 훅이 막고 "스킬을 써라" 라고 답한다. 이미 스킬 안이다. **훅을 지나도 권한 프롬프트는 뜬다** — `gh pr create` 는 `settings.json` 의 `ask` 에 있고 접두어로 비켜갈 수 없다. 그것이 의도다: 이 스킬을 거쳤는지가 아니라 사람이 봤는지를 세우는 층이다. 승인될 때까지 기다린다). 제목은 브랜치 전체의 목적을 Conventional Commits 스타일로.
    본문은 **아래 네 절만** 쓴다. 브랜치 전체를 요약하되, 각 절의 성격을 지킨다.
 
 ```
@@ -96,7 +96,7 @@ $ARGUMENTS
       ```markdown
       ## 리뷰 2라운드 — 셀프 `Request changes` · 콜드 `Comment`
 
-      리뷰한 head: <H0 40자 그대로>
+      리뷰한 head: <3.1 에서 읽어 적어둔 40자 그대로>
 
       **꼭 고쳐야 함 2**
       - `install.sh:143` 재설치가 언어 선택을 유실한다 — **셀프·콜드 둘 다**

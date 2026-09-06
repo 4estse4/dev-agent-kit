@@ -244,9 +244,10 @@ refactor 1 · chore 1`. 설정 파일 하나를 옮기는 작업이었다.
    멈추는 조건도, 보고하라는 단계도 없었다. **킷의 스킬에도 멈춤은 없었다** — 루프가
    없었을 뿐이다. 스킬이 자라는 순간 같은 일이 난다(그 프로젝트의 것은 킷 원본에서 자랐다).
 2. 규칙 문서의 승인 목록에 리뷰 라운드가 없었다.
-3. `settings.json` 의 `allow` 에 `Bash(gh pr comment*)` 가 있었고, 서브에이전트 스폰은
-   `allow`·`ask`·`deny` 어디에도 없었다. 40번 게시하고 20번 스폰하는 동안 권한 프롬프트가
-   한 번도 안 떴다.
+3. `settings.json` 의 `allow` 에 `Bash(gh pr comment*)` 가 있었다. 40번 게시하는 동안
+   권한 프롬프트가 한 번도 안 떴다.
+   (당시 "서브에이전트 스폰이 `allow`·`ask`·`deny` 어디에도 없었다" 도 원인으로 셌는데
+   **그것은 원인이 아니다** — 문서상 스폰 자체가 프롬프트를 띄우지 않는다. 아래 절.)
 
 **코멘트 40건 중 20건은 서브에이전트가 직접 올렸다.** 그 프로젝트의 `cold-reviewer.md` 가
 `gh pr comment` 를 시켰다. 킷의 것에는 그 지시가 없었지만, 이슈 #41 이 "게시 지시가 없어
@@ -258,8 +259,9 @@ refactor 1 · chore 1`. 설정 파일 하나를 옮기는 작업이었다.
 라운드가 옛 head 를 읽어 수정이 머지에 안 들어간다고 적혀 있다.
 
 **그래서 고친 곳은 셋이다.** 스킬이 라운드 끝에서 멈추고 보고한다 · 게시를 메인 한 자리로
-모은다(서브에이전트 권한 상속이 확인되지 않았으므로) · `ask` 에 게시와 콜드 스폰을 둔다.
-마지막 것은 횟수를 제한하지 않는다 — 매번 사람 눈에 띄게 할 뿐이고, 세는 것은 사람이다.
+모은다(사람이 한 자리에서 읽게 하려는 것이다 — 권한 때문이 아니다) · gh 쓰기 명령 넷을
+`ask` 에 둔다. 마지막 것은 횟수를 제한하지 않는다 — 매번 사람 눈에 띄게 할 뿐이고,
+세는 것은 사람이다.
 
 
 ## 검증 안 한 것을 설계 근거로 썼다 (2026-09)
@@ -303,6 +305,49 @@ permissions:      Use `Agent(AgentName)` rules to control which subagents Claude
 사실이 그냥 기록될 뿐이면 미검증 표시로 충분하다. 그러나 그것이 *왜 이렇게 설계했나* 의
 근거라면, 확인하거나 다른 근거를 찾아야 한다. 확인 못 하면 **그 근거는 못 쓴다.**
 `cold-reviewer` 가 그것을 찾도록 목록에 넣었다.
+
+### 같은 것을 두 번 했다
+
+그 수정을 하면서 `gh issue create` 를 `ask` 에서 **뺐다.** 근거로 이렇게 적었다 —
+*"PreToolUse 의 deny 가 권한 평가보다 먼저 끝나는 것을 실측했다. 그래서 같은 명령을
+`ask` 에도 넣으면 그 줄은 죽은 줄이 된다."*
+
+실측은 실제로 있었다. **일반화가 틀렸다.** 그때 그 설정에는 `gh issue create` 에 대한
+`ask` 규칙이 **애초에 없었다** — 프롬프트가 안 뜬 것은 두 설명 중 어느 쪽으로도 읽힌다.
+내 관찰로는 구분할 수 없었는데 한쪽으로 단정했다. 문서는 반대다:
+
+```
+permissions:  Hook decisions don't bypass permission rules. Claude Code evaluates
+              deny and ask rules regardless of what a PreToolUse hook returns
+permissions:  A hook that exits with code 2 stops the tool call before permission
+              rules are evaluated
+```
+
+"먼저 끝난다" 는 **`exit 2` 로 죽는 훅**에만 해당하고, `use_skill.sh` 는 JSON `deny` +
+`exit 0` 이다. **바로 앞 절에서 세운 규칙을, 그 규칙을 세운 그 작업에서 어겼다.**
+
+### 그래서 층을 바꿨다
+
+찾아보니 이 상황을 위한 공식 레시피가 있었다 — `auto-mode-config` 의
+「Add a human checkpoint」가 예시로 든 규칙이 `Bash(gh pr create *)` 다. 그리고 훅이
+못 잡는다고 **스스로 주석에 적어둔 네 형태**(`#` 주석 · `&` · `$(…)` · 앞 대입)를
+`ask` 규칙은 전부 잡는다 — 구분자 목록에 개행과 `&`, 그리고 *"including a command
+nested inside a subshell, a command substitution"*, *"matches past any leading
+assignment"*. **훅이 죽어 있는 자리에서 `ask` 가 살아 있었다.**
+
+`allowed-tools` 로 스킬에만 예외를 주는 길도 확인했다. 안 된다. 같은 명령으로 2x2:
+
+```
+ask 없음 · allowed-tools 없음   → 차단
+ask 없음 · allowed-tools 있음   → 실행됨        ← allowed-tools 는 작동한다
+ask 있음 · allowed-tools 없음   → 차단
+ask 있음 · allowed-tools 있음   → 차단          ← ask 가 이긴다
+```
+
+그래서 `gh pr create`·`pr merge`·`pr comment`·`issue create` 넷을 `ask` 에 두었다.
+**스킬이 돌릴 때도 묻는다.** 그것을 비용이 아니라 기능으로 본다 — 이 사고가 난 자리가
+정확히 "아무도 안 물어봐서" 였다. `use_skill.sh` 는 차단층이 아니라 "스킬을 써라" 라는
+안내로 남고, 걷어내는 것은 별도 작업이다.
 
 ## 실증된 것
 

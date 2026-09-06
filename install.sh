@@ -321,22 +321,79 @@ if [ "$DO_AGENT" = 1 ]; then
   # **훅 등록과 permissions 가 들어 있다** — 보존되면 새 훅 파일은 놓이는데 그것을
   # 부르는 자리가 없어, 훅이 있는 것처럼 보이면서 아무것도 막지 못한다.
   # `ls .claude/hooks/` 로는 그 상태를 구분할 수 없다. 그래서 짚어서 말한다.
-  if [ -f "$TARGET/.claude/settings.json.ai-kit-new" ]; then
-    _newhooks=$(python3 - "$KIT_ROOT/claude-code/settings.json" "$TARGET/.claude/settings.json" 2>/dev/null <<'PYEOF'
+  #
+  # **절 이름이 아니라 그 안의 항목을 대조한다.** 이름만 보면 `hooks.PreToolUse` 와
+  # `permissions.ask` 를 가진 레포는 언제나 "같다" 로 판정되는데, 실제 사고가 정확히
+  # 그 모양이었다 — 두 절이 다 있는 채로 그 **안에** 게시를 세우는 규칙이 없었다.
+  #
+  # 판정은 dry-run 이든 아니든 같아야 하므로(위 place() 의 불변식) `.ai-kit-new` 파일
+  # 존재로 가르지 않는다. 그 파일은 dry-run 에서 안 생긴다. 대신 이 파일이 **충돌로
+  # 분류됐는지**를 본다 — 있고 다르다는 뜻이고, 그것이 이 경고의 조건 그대로다.
+  _settings_conflict=0
+  if [ ${#CONFLICTS[@]} -gt 0 ]; then
+    case " ${CONFLICTS[*]} " in *" .claude/settings.json "*) _settings_conflict=1 ;; esac
+  fi
+  if [ "$_settings_conflict" = 1 ]; then
+    _missing=""
+    if command -v python3 >/dev/null 2>&1; then
+      _missing=$(python3 - "$KIT_ROOT/claude-code/settings.json" "$TARGET/.claude/settings.json" <<'PYEOF'
 import json, sys
-try:
-    new = json.load(open(sys.argv[1])); cur = json.load(open(sys.argv[2]))
-except Exception:
+
+def load(p):
+    try:
+        return json.load(open(p))
+    except Exception:
+        return None
+
+new, cur = load(sys.argv[1]), load(sys.argv[2])
+if new is None or cur is None:
     sys.exit(0)
-miss  = [k for k in new.get("hooks", {}) if k not in cur.get("hooks", {})]
-miss += [f"permissions.{k}" for k in new.get("permissions", {}) if k not in cur.get("permissions", {})]
-print(", ".join(miss))
+
+def commands(d):
+    """등록된 훅 명령을 (이벤트, 명령) 으로 전부 걷는다."""
+    got = set()
+    for ev, groups in (d.get("hooks") or {}).items():
+        for g in groups or []:
+            for h in (g.get("hooks") or []):
+                if h.get("command"):
+                    got.add((ev, h["command"]))
+    return got
+
+out = []
+for ev, c in sorted(commands(new) - commands(cur)):
+    out.append("hooks.%s 가 %s 를 부르지 않습니다" % (ev, c.rsplit("/", 1)[-1].rstrip('"')))
+
+# deny·ask 만 본다. allow 가 빠진 것은 프롬프트가 늘 뿐 막는 층이 죽지 않는다.
+np, cp = new.get("permissions") or {}, cur.get("permissions") or {}
+cur_allow = set(cp.get("allow") or [])
+for sec in ("deny", "ask"):
+    have = set(cp.get(sec) or [])
+    for rule in np.get(sec) or []:
+        if rule in have:
+            continue
+        if rule in cur_allow:
+            out.append("permissions.%s 에 %s 가 없습니다 — 이 레포는 그것을 allow 에 두고 있습니다" % (sec, rule))
+        else:
+            out.append("permissions.%s 에 %s 가 없습니다" % (sec, rule))
+
+print("\n".join(out))
 PYEOF
 )
-    if [ -n "$_newhooks" ]; then
-      WARNINGS+=(".claude/settings.json 을 보존했습니다 — 이 킷이 새로 넣은 $_newhooks 가 이 레포에 없습니다.")
-      WARNINGS+=("  훅 파일은 .claude/hooks/ 에 놓였지만 부르는 자리가 없어 아무것도 막지 못합니다.")
-      WARNINGS+=("  .claude/settings.json.ai-kit-new 와 비교해 그 절을 가져오세요.")
+    else
+      WARNINGS+=(".claude/settings.json 을 보존했는데 python3 이 없어 대조하지 못했습니다.")
+      WARNINGS+=("  킷의 claude-code/settings.json 과 직접 비교하세요.")
+    fi
+    if [ -n "$_missing" ]; then
+      WARNINGS+=(".claude/settings.json 을 보존했습니다. 킷 파일에는 있고 이 레포 파일에는 없는 것:")
+      while IFS= read -r _m; do
+        [ -n "$_m" ] && WARNINGS+=("    $_m")
+      done <<< "$_missing"
+      WARNINGS+=("  훅은 등록이 없으면 .claude/hooks/ 에 파일만 놓인 채 아무것도 막지 못합니다.")
+      if [ "$DRY_RUN" = 1 ]; then
+        WARNINGS+=("  실제로 설치하면 .claude/settings.json.ai-kit-new 가 옆에 놓입니다. 그것과 비교하세요.")
+      else
+        WARNINGS+=("  .claude/settings.json.ai-kit-new 와 비교해 가져오세요.")
+      fi
     fi
   fi
 
