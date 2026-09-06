@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 설치: <kit>/install.sh 가 .git/hooks/pre-commit 으로 링크한다.
+# 활성화: `git config core.hooksPath .ai-kit/git-hooks` (clone 마다 필요하다).
 # 막는 것: (1) 보호 브랜치 직접 커밋  (2) 잘못된 신원  (3) 충돌 마커  (4) 시크릿  (5) 린트
 #
 # 주의: `git commit --no-verify` 로 우회 가능하다. 그래서 이 훅은 '조기 피드백'이고,
