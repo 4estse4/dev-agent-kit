@@ -23,7 +23,26 @@
     "statusLine 은 프로젝트 설정에서도 동작한다(공식 문서 확인). command 에서",
     "$CLAUDE_PROJECT_DIR 이 전개되는 것은 실측으로 확인했다 — 문서에 없어서 직접 재봤다.",
     "모델·effort·테마 같은 개인 취향은 여기 두지 않는다. 프로젝트 설정이 사용자 설정을",
-    "덮으므로 킷이 박으면 개발자의 /model 선택을 무력화한다."
+    "덮으므로 킷이 박으면 개발자의 /model 선택을 무력화한다.",
+    "",
+    "ask 절 — 밖으로 나가거나 되돌리기 어려운 것만 둔다. deny 는 '절대 안 됨' 이고",
+    "ask 는 '사람이 그 자리에서 정한다' 다. 셋 다 그 성격이다.",
+    "",
+    "  gh pr comment  리뷰·머지 결정이 밖에 남는 자리. 한 프로젝트에서 이것이 allow 에",
+    "                 있어서, 리뷰 라운드가 사람 승인 없이 20회 돌며 코멘트 40건이 나갔다.",
+    "  gh issue create 평가자가 보는 레포에 항목이 생긴다.",
+    "  Agent(cold-reviewer) 라운드를 '시작' 하는 자리. 게시(위)가 라운드의 끝이라면",
+    "                 이쪽이 시작이고, 둘 다 있어야 라운드마다 사람이 보게 된다.",
+    "",
+    "**Agent(...) 의 동작은 이 킷에서 검증하지 않았다.** 서브에이전트 스폰에 권한 규칙이",
+    "적용되는지, 그리고 서브에이전트 안에서 부모의 ask 가 유효한지 확인하지 못했다.",
+    "그래서 강제를 여기에 기대지 않는다 — 리뷰 결과를 **서브에이전트가 아니라 메인이**",
+    "게시하게 해서(cold-reviewer.md 참조), 밖으로 나가는 행위가 전부 메인 세션에 있게 했다.",
+    "이 줄은 그 위에 얹는 층이지 그것을 대신하지 않는다.",
+    "",
+    "use_skill 훅 — 스킬이 있는 작업을 손으로 치는 것을 막는다. **탈출구가",
+    "AI_KIT_SKILL=1 이고 그 변수를 에이전트가 스스로 붙일 수 있다**(이슈 #46).",
+    "그래서 이것은 강제가 아니라 speed bump 다. 진짜로 사람을 세우는 것은 위의 ask 다."
   ],
   "statusLine": {
     "type": "command",
@@ -41,6 +60,11 @@
       "Bash(git push*--force*)",
       "Bash(git reset*--hard*)",
       "Bash(git clean*--force*)"
+    ],
+    "ask": [
+      "Bash(gh pr comment*)",
+      "Bash(gh issue create*)",
+      "Agent(cold-reviewer)"
     ],
     "allow": [
       "Bash(git status*)",
@@ -82,6 +106,17 @@
     ]
   },
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/use_skill.sh\""
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",

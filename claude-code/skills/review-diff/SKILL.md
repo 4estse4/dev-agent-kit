@@ -72,9 +72,13 @@ checked: 본문대조 · 응집도 · 테스트 · 에러분류 · 동시성 · 
 
 ---
 
-**GitHub 게시** (`$ARGUMENTS` 가 비어 있으면 이 블록 전체를 건너뛴다):
+## 게시하지 않는다
 
-`gh pr comment $ARGUMENTS --body "<위에서 쓴 리뷰>"`
+**리뷰를 GitHub 에 직접 올리지 않는다.** 위 형식 그대로 부른 쪽에 돌려준다.
+`open-pr` 이 콜드 리뷰 결과와 **합쳐서 한 번에** 올린다.
 
-Verdict 가 **Request changes** 일 때만 추가로:
-`gh pr review $ARGUMENTS --request-changes --body "<한 줄 요약>"`
+- 게시 자리가 하나여야 사람이 한 번에 본다. 두 층이 따로 올리면 코멘트 둘을 각각
+  읽어야 하고, 그 사이에 다음 라운드가 시작될 수 있다.
+- `gh pr review --request-changes` 도 쓰지 마라. **PR 을 연 계정과 리뷰 계정이 같으면
+  GitHub 이 거부한다** — 혼자 쓰는 레포에서는 항상 그렇다.
+- 사람이 이 스킬을 단독으로 불렀으면 결과를 보여주고 **올릴지 묻는다.**
