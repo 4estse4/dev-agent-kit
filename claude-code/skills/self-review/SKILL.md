@@ -47,7 +47,7 @@ context 전파 · 루프변수 캡처 · `any` 사용 · 훅 규칙 · 접근성
 ```
 ## Self review
 
-리뷰한 head: <gh pr view <N> --json headRefOid -q .headRefOid 의 값 40자 그대로>
+리뷰한 head: <PR 번호를 받았으면 `gh pr view <N> --json headRefOid -q .headRefOid` 의 값 40자 그대로. 로컬 브랜치 리뷰면 `git rev-parse HEAD`.>
 
 checked: 본문대조 · 응집도 · 테스트 · 에러분류 · 동시성 · 명명 · 추상화 · 규칙
 

@@ -316,6 +316,42 @@ if [ "$DO_AGENT" = 1 ]; then
     [ "$rel" = "README.md" ] && continue
     place "$f" ".claude/$rel"
   done < <(find "$cc" -type f)
+
+  # settings.json 은 프로젝트 소유라 이미 있으면 덮지 않는다. 그런데 이 파일에는
+  # **훅 등록과 permissions 가 들어 있다** — 보존되면 새 훅 파일은 놓이는데 그것을
+  # 부르는 자리가 없어, 훅이 있는 것처럼 보이면서 아무것도 막지 못한다.
+  # `ls .claude/hooks/` 로는 그 상태를 구분할 수 없다. 그래서 짚어서 말한다.
+  if [ -f "$TARGET/.claude/settings.json.ai-kit-new" ]; then
+    _newhooks=$(python3 - "$KIT_ROOT/claude-code/settings.json" "$TARGET/.claude/settings.json" 2>/dev/null <<'PYEOF'
+import json, sys
+try:
+    new = json.load(open(sys.argv[1])); cur = json.load(open(sys.argv[2]))
+except Exception:
+    sys.exit(0)
+miss  = [k for k in new.get("hooks", {}) if k not in cur.get("hooks", {})]
+miss += [f"permissions.{k}" for k in new.get("permissions", {}) if k not in cur.get("permissions", {})]
+print(", ".join(miss))
+PYEOF
+)
+    if [ -n "$_newhooks" ]; then
+      WARNINGS+=(".claude/settings.json 을 보존했습니다 — 이 킷이 새로 넣은 $_newhooks 가 이 레포에 없습니다.")
+      WARNINGS+=("  훅 파일은 .claude/hooks/ 에 놓였지만 부르는 자리가 없어 아무것도 막지 못합니다.")
+      WARNINGS+=("  .claude/settings.json.ai-kit-new 와 비교해 그 절을 가져오세요.")
+    fi
+  fi
+
+  # 킷이 더 이상 놓지 않는 스킬·에이전트가 남아 있으면 알린다. .claude/ 는 프로젝트
+  # 소유라 지우지 않는다 — 다만 **이름이 바뀐 경우 옛것과 새것이 나란히 남고**,
+  # 옛것이 지금은 하지 말라고 하는 일을 시킬 수 있다. 지우는 것은 사람이 정한다.
+  for _d in skills agents; do
+    [ -d "$TARGET/.claude/$_d" ] || continue
+    while IFS= read -r _e; do
+      _n=$(basename "$_e")
+      # 방금 이 설치기가 옆에 놓은 것은 낯선 것이 아니다.
+      case "$_n" in *.ai-kit-new) continue ;; esac
+      [ -e "$cc/$_d/$_n" ] || WARNINGS+=(".claude/$_d/$_n 은 이 킷이 놓지 않는 것입니다 — 옛 킷이 두고 갔거나 이 레포가 만든 것입니다. 옛 것이면 지금 규칙과 어긋날 수 있으니 확인하세요.")
+    done < <(find "$TARGET/.claude/$_d" -mindepth 1 -maxdepth 1 2>/dev/null)
+  done
 fi
 
 # ── 원격 변경: 브랜치 보호 ──

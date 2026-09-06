@@ -140,12 +140,18 @@ for seg in segs:
         if m.group(1) == "AI_KIT_SKILL" and m.group(2) == "1":
             escaped = True
         seg = seg[m.end():]
-    if escaped:
-        continue
     m = re.match(r"gh\s+(pr\s+(create|merge)|issue\s+create)\b", seg)
-    if m:
-        print("issue" if m.group(2) is None else m.group(2))
-        break
+    if not m:
+        continue
+    what = "issue" if m.group(2) is None else m.group(2)
+    # 접두어는 **스킬이 자기 명령을 돌린다** 는 표시다. open-pr 은 gh pr create 를,
+    # merge-pr 은 gh pr merge 를 돌리므로 그 둘에만 뜻이 있다.
+    # gh issue create 를 돌리는 스킬은 없다 — 거기에도 접두어를 먹이면, 스킬 파일에
+    # 평문으로 적힌 그 접두어를 읽은 에이전트에게 이슈 등록을 막는 층이 0 이 된다.
+    if escaped and what != "issue":
+        continue
+    print(what)
+    break
 ' 2>/dev/null) || exit 0
 
 [ -n "$what" ] || exit 0
