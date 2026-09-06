@@ -5,6 +5,9 @@
 #
 #   secrets.sh              staged 내용 검사 (pre-commit)
 #   secrets.sh --range A..B 커밋 범위 검사 (pre-push / CI)
+#   secrets.sh --range REV   리비전 하나 — 거기서 도달 가능한 **모든** 커밋을 검사한다.
+#                            기준점이 없을 때 쓴다(고아 브랜치, 기본 브랜치의 첫 푸시).
+#                            A..B 는 A 를 제외하므로 그 경우 루트 커밋이 빠진다.
 set -uo pipefail
 
 MODE="staged"; RANGE=""
@@ -20,7 +23,24 @@ if [ "$MODE" = staged ]; then
   FILES=$(git diff --cached --name-only --diff-filter=ACM) || {
     echo "시크릿 스캔 오류: staged 목록을 읽지 못했습니다." >&2; exit 2; }
 else
-  FILES=$(git diff --name-only --diff-filter=ACM "$RANGE") || {
+  # `git diff A..B` 는 두 끝점만 비교한다 — 넣었다 지운 시크릿이 안 보이는데,
+  # 지우는 것이 사람이 하는 가장 흔한 복구 동작이다. 그래서 커밋 단위로 훑는다.
+  #
+  # --diff-merges=cc 인 이유:
+  #  · `git log` 는 기본적으로 머지 커밋의 diff 를 내지 않는다. 충돌을 손으로 풀며
+  #    써넣은 줄은 어느 부모에도 없어 **어느 커밋에도 안 나타난다.** 실측: 그 시나리오에서
+  #    기본은 시크릿 추가 줄 0개, `cc` 는 1개.
+  #  · `cc`(dense combined diff)는 모든 부모와 같은 hunk 를 생략한다. 그래서 머지
+  #    커밋이 내놓는 것이 정확히 해소 자리다. 실측(main 이 큰 변경을 들여온 머지):
+  #    머지 커밋 하나의 diff 가 `cc` 8줄 · `--first-parent` 727줄. 같은 내용을 원본
+  #    커밋에서 한 번, 머지에서 또 한 번 보고하지 않는다.
+  #  · git 2.31+ 가 필요하다 — `--diff-merges` 자체가 그때 들어왔다.
+  #
+  # **이것이 하지 않는 일**: 범위에 머지로 딸려 들어온 커밋이 있으면 그 커밋의 내용도
+  # 검사한다. 시크릿이 든 main 을 머지한 브랜치는 `cc` 든 `--first-parent` 든 `git diff`
+  # 든 똑같이 막힌다 — 실측으로 셋 다 같은 파일을 짚었다. `cc` 가 그 오탐을 없앤다고
+  # 적어둔 판이 있는데 그건 사실이 아니다.
+  FILES=$(git log --name-only --diff-filter=ACM --diff-merges=cc --pretty=format: "$RANGE" | sort -u | sed '/^$/d') || {
     echo "시크릿 스캔 오류: 범위 '$RANGE' 를 해석하지 못했습니다 — 검사를 신뢰할 수 없어 중단합니다." >&2
     exit 2; }
 fi
@@ -47,15 +67,20 @@ if [ "$MODE" = staged ]; then
   DIFF=$(git diff --cached -U0) || {
     echo "시크릿 스캔 오류: staged diff 를 읽지 못했습니다." >&2; exit 2; }
 else
-  DIFF=$(git diff -U0 "$RANGE") || {
+  DIFF=$(git log -p -U0 --diff-merges=cc --pretty=format: "$RANGE") || {
     echo "시크릿 스캔 오류: 범위 '$RANGE' diff 를 읽지 못했습니다." >&2; exit 2; }
 fi
 
 # 추가된 줄(+)만 본다. secret-ok 마커가 있으면 면제.
-# 추가된 줄(+)만 본다. secret-ok 마커가 있으면 면제.
+#
+# 앞에 `[ +]*` 가 붙는 이유: `--diff-merges=cc` 의 결합 diff 는 부모 수만큼 열을 둔다.
+# 두 부모면 `++` 는 어느 부모에도 없는 줄, ` +`(공백 뒤 +)는 부모1 에는 있고 부모2 에는
+# 없는 줄이다. `^\+` 만 보면 뒤엣것을 통째로 놓친다 — 머지가 부모1 쪽을 골라 남긴
+# 시크릿이 그 모양이다(실측). -U0 이라 문맥 줄이 없으므로 이 패턴이 문맥을 먹지 않는다.
+#
 # grep 종료코드: 0=매치, 1=매치없음(정상), >=2=grep 자체 오류.
 # 오류를 || true로 삼키면 검사가 고장 난 채 "통과"한다 — 반드시 구분한다.
-ADDED=$(printf '%s\n' "$DIFF" | grep -E -- '^\+' | grep -vE -- 'secret-ok')
+ADDED=$(printf '%s\n' "$DIFF" | grep -E -- '^[ +]*\+' | grep -vE -- 'secret-ok')
 BAD_CONTENT=$(printf '%s\n' "$ADDED" | grep -nE -- "$PATTERNS")
 rc=$?
 if [ $rc -ge 2 ]; then
@@ -68,16 +93,35 @@ if [ -z "$BAD_NAMES" ] && [ -z "$BAD_CONTENT" ]; then
 fi
 
 echo "" >&2
-echo "시크릿 스캔 실패 — 커밋을 중단합니다." >&2
+if [ "$MODE" = staged ]; then
+  echo "시크릿 스캔 실패 — 커밋을 중단합니다." >&2
+else
+  echo "시크릿 스캔 실패 — 이 범위의 커밋 중 하나가 시크릿을 들여왔습니다." >&2
+fi
 [ -n "$BAD_NAMES" ] && { echo "" >&2; echo "금지된 파일:" >&2; printf '%s' "$BAD_NAMES" >&2; }
 if [ -n "$BAD_CONTENT" ]; then
   echo "" >&2; echo "시크릿 패턴이 포함된 추가 줄:" >&2
   printf '%s\n' "$BAD_CONTENT" | sed 's/^/  /' >&2
 fi
-cat >&2 <<'MSG'
+# 조치 안내는 모드마다 다르다. range 는 **이미 커밋된 것**이라 "스테이지에서 빼라" 가
+# 통하지 않는다 — 그 안내를 그대로 내면 사람이 시키는 대로 하고도 계속 막히고,
+# 진짜 시크릿이었을 때 폐기가 그만큼 늦어진다.
+if [ "$MODE" = staged ]; then
+  cat >&2 <<'MSG'
 
 조치:
   · 실제 시크릿이면 파일을 스테이지에서 빼고 .gitignore에 넣는다.
   · 테스트용 더미면 같은 줄 끝에 secret-ok 주석을 단다.
 MSG
+else
+  cat >&2 <<'MSG'
+
+조치 — 이미 커밋된 것이라 **지금 지우는 것으로는 해소되지 않습니다.**
+  · 실제 시크릿이면: 먼저 그 키를 폐기·재발급하세요. 되돌릴 수 없습니다.
+    그 뒤 히스토리에서 지웁니다 — git rebase -i 로 해당 커밋을 고치거나,
+    브랜치를 다시 만들어 깨끗한 커밋으로 옮깁니다.
+  · 테스트용 더미면: 그 줄 끝에 secret-ok 주석을 달되, **그 커밋 자체를 고쳐야**
+    합니다. 뒤 커밋에서 주석만 추가하면 범위 스캔은 계속 실패합니다.
+MSG
+fi
 exit 1

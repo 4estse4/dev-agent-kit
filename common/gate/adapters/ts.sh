@@ -9,7 +9,9 @@
 has_script() { node -e "process.exit(require('./package.json').scripts?.['$1']?0:1)" 2>/dev/null; }
 
 has_script format:check && gate_run "prettier" npm run --silent format:check || gate_absent "format:check"
-has_script lint         && gate_run "eslint"   npm run --silent lint          || gate_absent "lint"
+# 라벨을 `eslint` 로 박지 않는다 — 이 단계는 `lint` 스크립트가 무엇이든 그것을 돌린다.
+# oxlint·biome 를 쓰는 프로젝트에서 출력이 "eslint 통과" 라고 말하면 그건 거짓이다.
+has_script lint         && gate_run "lint"     npm run --silent lint          || gate_absent "lint"
 has_script typecheck    && gate_run "tsc"      npm run --silent typecheck     || gate_absent "typecheck"
 if [ "${GATE_LINT_ONLY:-0}" != 1 ]; then
 has_script test         && gate_run "vitest"   npm test --silent             || gate_absent "test"

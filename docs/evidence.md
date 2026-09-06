@@ -168,6 +168,58 @@ $ git branch --contains fix/kit-gaps
 충돌" 을 푸는 장치인데, 실제로 치른 비용은 **같은 버그를 두 곳에서 두 번 고치고, 그중
 어느 쪽도 업스트림에 못 올린 것**이었다. 병합으로는 풀리지 않는다.
 
+## `--diff-merges=cc` 가 하는 일과 안 하는 일 (2026-09)
+
+시크릿 범위 스캔을 `git diff A..B` 에서 `git log --diff-merges=cc` 로 옮기며 실측했다.
+
+| 시나리오 | `git diff` | `git log` 기본 | `--diff-merges=cc` |
+| --- | --- | --- | --- |
+| 넣었다 다음 커밋에서 지움 | **못 잡음** | 잡음 | 잡음 |
+| 충돌 해소 중에 손으로 써넣음 | 잡음 | **못 잡음** | 잡음 |
+| 시크릿이 든 main 을 머지 | 잡음 | 잡음 | 잡음 |
+
+**읽는 법.** `git diff` 가 지는 것은 1행 하나다. 2행은 해소한 줄이 최종 트리에 남으므로
+끝점 비교가 본다 — 처음에 이 칸을 `—` 로 적었는데 실측하니 잡았다.
+
+그래서 `git log` 로 옮기는 것만으로는 **1행을 얻고 2행을 잃는다.** `git log` 는 기본적으로
+머지 커밋의 diff 를 내지 않아 해소 자리가 통째로 안 보인다. `--diff-merges` 가 그것을
+되돌려놓는다 — `cc` 는 안 잃기 위해 필요한 것이지 덤이 아니다.
+
+**3행은 어느 방식도 오탐으로 걸러내지 않는다.** 머지로 딸려 들어온 커밋이 범위 안에
+있으면 그 내용도 검사 대상이다. `cc` 가 그 오탐을 없앤다고 적어둔 사본이 있었는데
+(설치된 프로젝트 쪽) 재현해 보니 사실이 아니었다.
+
+`cc` 를 `--first-parent` 대신 고른 이유는 **머지 커밋이 내놓는 양**이다. 재현:
+
+```bash
+d=$(mktemp -d); cd "$d"; git init -q -b main
+git config user.email a@b.c; git config user.name t
+: > seed; git add -A; git commit -qm seed
+git checkout -q -b feat; printf 'mine\n' > mine.txt; git add -A; git commit -qm mine
+git checkout -q main
+for i in $(seq 1 20); do seq 1 30 | sed "s/^/main-$i /" > "big$i.txt"; done
+git add -A; git commit -qm "main: 20 files"
+printf 'X\n' > shared.txt; git add -A; git commit -qm "main: shared=X"
+git checkout -q feat; printf 'Y\n' > shared.txt; git add -A; git commit -qm "mine: shared=Y"
+git merge -q --no-ff main >/dev/null 2>&1 || true
+printf 'Z\n' > shared.txt; git add -A; git commit -qm "merge: resolved"
+echo "cc           $(git show --diff-merges=cc --format= HEAD | wc -l)"
+echo "first-parent $(git show --first-parent    --format= HEAD | wc -l)"
+```
+
+```
+cc           8
+first-parent 727
+```
+
+`cc` 는 모든 부모와 같은 hunk 를 생략하므로 머지 커밋에 남는 것이 해소 자리뿐이다.
+`--first-parent` 는 머지가 들여온 것 전부를 그 커밋 하나에 몰아 보고한다 — 같은 내용을
+원본 커밋에서 한 번, 머지에서 또 한 번 짚는다.
+
+**결합 diff 는 열이 여럿이다.** 부모가 둘이면 `++` 는 어느 부모에도 없는 줄, ` +` 는
+부모1 에만 있던 줄이다. `^\+` 로만 거르면 뒤엣것을 놓친다 — 머지가 부모1 쪽 시크릿을
+남긴 경우가 그 모양이고, 실측으로 확인해 `^[ +]*\+` 로 고쳤다.
+
 ## 리뷰 라운드가 사람 없이 스무 바퀴 돌았다 (2026-09)
 
 킷을 설치한 프로젝트 하나에서 PR 한 건에 리뷰 라운드가 **20회** 돌았다. 사람의 승인은
@@ -208,6 +260,7 @@ refactor 1 · chore 1`. 설정 파일 하나를 옮기는 작업이었다.
 **그래서 고친 곳은 셋이다.** 스킬이 라운드 끝에서 멈추고 보고한다 · 게시를 메인 한 자리로
 모은다(서브에이전트 권한 상속이 확인되지 않았으므로) · `ask` 에 게시와 콜드 스폰을 둔다.
 마지막 것은 횟수를 제한하지 않는다 — 매번 사람 눈에 띄게 할 뿐이고, 세는 것은 사람이다.
+
 
 ## 실증된 것
 
