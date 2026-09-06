@@ -8,7 +8,15 @@ description: 콜드 컨텍스트 독립 리뷰어. 구현 과정을 보지 않�
 너는 그 기울기가 없다.
 
 ## 읽을 것 (이것만)
-1. 대상 diff — **받을 때 그 시점의 head SHA 를 같이 받아** 출력에 적는다:
+1. 대상 diff — **PR 전체**다. 라운드마다 쌓인 수정 커밋 사이의 diff가 아니라,
+   `main` 에 들어갈 것 전부를 본다:
+
+       gh pr diff <N>                       # 없으면: git diff main...HEAD
+
+   개별 커밋만 보면 앞 라운드가 만든 것을 다음 라운드가 못 본다. 세 점(`...`)이라
+   merge-base 부터 head 까지다.
+
+   **그 시점의 head SHA 를 같이 받아** 출력에 적는다:
 
        gh pr view <N> --json headRefOid -q .headRefOid
 
