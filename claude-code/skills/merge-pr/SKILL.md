@@ -25,15 +25,26 @@ $ARGUMENTS
 **지시가 있어야 이 스킬이 돈다.** 리뷰 두 층이 `Approve` 를 냈다는 것은 그 층들의
 의견이지 허락이 아니고, CI 가 초록인 것도 허락이 아니다. 허락은 사람이 한다.
 
-지시 없이 여기까지 왔으면 머지하지 말고 **`open-pr` 4단계의 요약을 보고하고 멈춘다.**
+지시 없이 여기까지 왔으면 머지하지 말고 **`open-pr` 3단계의 다섯 번째 항목(멈추고 보고)대로 보고하고 멈춘다.**
 
 ### 그다음 — 하나라도 실패하면 즉시 중단
 
 - `gh pr view <N> --json state -q .state` → `OPEN` 이 아니면 중단.
 - `gh pr checks <N>` → `fail` 또는 `pending` 이 하나라도 있으면 중단하고 해당 체크를 나열한다.
 - 위 `git status --porcelain` 이 비어 있지 않으면 중단.
-- **리뷰 반영 확인**: 두 층이 남긴 마지막 `Verdict` 를 읽는다. `Request changes` 가
-  해소되지 않았으면 중단 — 사람이 그것을 넘기기로 했다면 그 사실을 3절에 적는다.
+- **리뷰 반영 확인.** `open-pr` 이 올린 **마지막 라운드 코멘트**를 읽는다:
+
+      gh pr view <N> --json comments \
+        --jq '[.comments[] | select(.body|startswith("## 리뷰 "))] | last | .body'
+
+  그 코멘트 맨 위의 `리뷰한 head:` 가 **지금 서버 head 와 같아야 한다**
+  (`gh pr view <N> --json headRefOid -q .headRefOid`). 다르면 마지막 라운드 뒤에
+  커밋이 더 쌓인 것이므로, 그 커밋들은 아무도 안 봤다 — 중단하고 그 사실을 말한다.
+
+  두 층의 `Verdict` 는 그 코멘트 첫 줄에 있다. `Request changes` 가 해소되지 않았으면
+  중단 — 사람이 그것을 넘기기로 했다면 그 사실을 3절에 적는다.
+
+  라운드 코멘트를 못 찾으면 **리뷰가 돌지 않은 것이다.** 중단한다.
 
 > 이 확인은 편의이지 강제가 아니다. 진짜 강제는 GitHub 브랜치 보호다
 > (`common/ci/protect-branch.sh`). 브랜치 보호가 없는 레포라면 그 사실을 먼저 알린다.
@@ -50,7 +61,9 @@ $ARGUMENTS
 내용은 세 줄이면 된다: 마지막 라운드의 두 `Verdict` · 사람이 넘기기로 한 지적이 있으면
 그것과 이유 · `사람이 머지를 결정했다`.
 
-`gh pr merge <N> --squash --delete-branch --body "<추린 목록, 없으면 빈 문자열>"`
+`AI_KIT_SKILL=1 gh pr merge <N> --squash --delete-branch --body "<추린 목록, 없으면 빈 문자열>"`
+
+접두어는 `use_skill` 훅을 통과시키는 표시다 — 없으면 훅이 막고 "merge-pr 을 호출하라" 고 답한다. 이미 그 안이다.
 
 `git branch -d` 를 따로 실행하지 않는다 — `--delete-branch` 가 처리한다.
 

@@ -30,7 +30,7 @@
     "",
     "  gh pr comment  리뷰·머지 결정이 밖에 남는 자리. 한 프로젝트에서 이것이 allow 에",
     "                 있어서, 리뷰 라운드가 사람 승인 없이 20회 돌며 코멘트 40건이 나갔다.",
-    "  gh issue create 평가자가 보는 레포에 항목이 생긴다.",
+    "  (gh issue create 는 여기 두지 않는다 — use_skill 훅이 그것을 deny 하고, 훅의 deny 가\n   권한 평가보다 먼저 끝나는 것을 실측했다. 둘 다 두면 이 줄이 죽은 줄이 된다.)",
     "  Agent(cold-reviewer) 라운드를 '시작' 하는 자리. 게시(위)가 라운드의 끝이라면",
     "                 이쪽이 시작이고, 둘 다 있어야 라운드마다 사람이 보게 된다.",
     "",
@@ -63,7 +63,6 @@
     ],
     "ask": [
       "Bash(gh pr comment*)",
-      "Bash(gh issue create*)",
       "Agent(cold-reviewer)"
     ],
     "allow": [

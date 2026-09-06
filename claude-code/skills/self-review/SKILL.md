@@ -1,6 +1,6 @@
 ---
-name: review-diff
-description: PR 또는 현재 브랜치의 diff를 리뷰한다. 발견한 것만 기록하고, PR 본문의 주장을 diff와 대조한다. 기계가 잡는 것은 리뷰하지 않는다.
+name: self-review
+description: 맥락을 가진 쪽의 리뷰. 이 변경을 만든 세션이 그 결정을 알고 있는 상태에서 diff 와 PR 본문을 대조한다 — 무엇이 언제 정해지고 바뀌었는지 아는 쪽만 잡는 것이 있다. 콜드 층(cold-reviewer)과 짝이고, 둘은 같은 diff 를 다른 처지에서 본다. 기계가 잡는 것은 리뷰하지 않는다.
 argument-hint: "[PR 번호 | 비우면 현재 브랜치]"
 ---
 
@@ -46,6 +46,8 @@ context 전파 · 루프변수 캡처 · `any` 사용 · 훅 규칙 · 접근성
 
 ```
 ## Self review
+
+리뷰한 head: <gh pr view <N> --json headRefOid -q .headRefOid 의 값 40자 그대로>
 
 checked: 본문대조 · 응집도 · 테스트 · 에러분류 · 동시성 · 명명 · 추상화 · 규칙
 
