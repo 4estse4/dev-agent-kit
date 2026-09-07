@@ -29,13 +29,21 @@ recorded=$(sed -n 's/^kit_rev=//p' "$STAMP" | head -1)
 latest=$(git -C "$kit" rev-parse --short HEAD 2>/dev/null) || exit 0
 [ "$recorded" = "$latest" ] && exit 0
 
+# 커밋 **개수**만으로는 얼마나 벌어졌는지 가늠이 안 된다. 각 커밋 옆에 그 커밋의
+# 날짜를 붙인다. 시간차는 계산하지 않는다 — 판단은 읽는 사람이 한다.
+# 날짜를 못 읽으면 그 자리는 그냥 빈다(없는 숫자를 만들지 않는다).
+_when() {
+  local d
+  d=$(git -C "$kit" show -s --format=%cs "$1" 2>/dev/null) && [ -n "$d" ] && printf ' (%s)' "$d"
+}
+
 # 기록된 커밋이 킷에 실재하는지 확인한다. 없으면(재작성·다른 킷) 커밋 수를
 # 세지 않는다 — 틀린 숫자를 말하느니 숫자를 빼는 편이 낫다.
 if git -C "$kit" cat-file -e "${recorded}^{commit}" 2>/dev/null; then
   behind=$(git -C "$kit" rev-list --count "${recorded}..HEAD" 2>/dev/null || echo "")
   [ -n "$behind" ] && [ "$behind" != "0" ] \
-    && echo "ai-kit: 설치된 킷이 ${behind}개 커밋 낡았습니다 (${recorded} → ${latest}). 확인: ${kit}/install.sh . --dry-run"
+    && echo "ai-kit: 설치된 킷이 ${behind}개 커밋 낡았습니다 — ${recorded}$(_when "$recorded") → ${latest}$(_when "$latest"). 확인: ${kit}/install.sh . --dry-run"
 else
-  echo "ai-kit: 설치된 킷 리비전 ${recorded} 을 로컬 킷에서 찾을 수 없습니다 (현재 ${latest}). 확인: ${kit}/install.sh . --dry-run"
+  echo "ai-kit: 설치된 킷 리비전 ${recorded} 을 로컬 킷에서 찾을 수 없습니다 (현재 ${latest}$(_when "$latest")). 확인: ${kit}/install.sh . --dry-run"
 fi
 exit 0
