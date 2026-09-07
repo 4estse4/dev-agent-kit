@@ -203,25 +203,25 @@ if [ "$DO_HOOKS" = 1 ]; then
 
   # 삭제도 센다. vendor_into() 가 .ai-kit 을 통째로 비우므로 킷이 다시 놓지 않는 파일은
   # 사라지는데, dry-run 은 그것을 "킷이 안 놓음" 으로 세면서 **실제 실행은 한 줄도 말하지
-  # 않았다**(실측: 다섯 칸이 전부 0인데 파일이 사라졌다). .ai-kit/README.md 가 프로젝트더러
-  # "고쳐도 된다" 고 부르므로 이 자리에 프로젝트가 만든 것이 실제로 생긴다.
-  if [ -d "$TARGET/.ai-kit" ]; then
-    while IFS= read -r _t; do
-      _r=${_t#"$TARGET"/}
-      case "$_r" in
-        .ai-kit/identity|.ai-kit/install-manifest) continue ;;
-        .ai-kit/README.md) _src="$KIT_ROOT/common/gate/VENDOR-README.md" ;;
-        .ai-kit/gate/adapters/*)
-          _l=$(basename "$_r" .sh)
-          case ",$DROP," in *",$_l,"*) DELETED+=("$_r (고르지 않은 언어)"); continue ;; esac
-          _src="$KIT_ROOT/common/${_r#.ai-kit/}" ;;
-        *) _src="$KIT_ROOT/common/${_r#.ai-kit/}" ;;
-      esac
-      [ -e "$_src" ] || DELETED+=("$_r")
-    done < <(find "$TARGET/.ai-kit" -type f)
-  fi
+  # 않았다**(실측: 다섯 칸이 전부 0인데 파일이 사라졌다).
+  #
+  # **경로 규칙을 다시 적지 않는다.** 앞뒤 목록의 차이로 센다. 한 번은 `common/` 아래
+  # 존재 여부로 판정하게 적었다가 dry-run 과 또 갈렸다 — `common/` 에는 vendor 가
+  # 안 가져오는 ci·docs·templates 도 있어서 `.ai-kit/ci/*` 가 "킷이 놓는 것" 으로
+  # 오판돼 무보고 삭제됐다(실측: `삭제 0건` 인데 셋이 사라졌다).
+  # 근거가 하나면 갈릴 수 없다.
+  _before=$( cd "$TARGET" 2>/dev/null && find .ai-kit -type f 2>/dev/null | LC_ALL=C sort )
 
-  if [ "$DRY_RUN" = 1 ]; then vendor_into "$STAGE/.ai-kit"; else vendor_into "$vendor"; fi
+  if [ "$DRY_RUN" = 1 ]; then
+    vendor_into "$STAGE/.ai-kit"
+    _after=$( cd "$STAGE" && find .ai-kit -type f 2>/dev/null | LC_ALL=C sort )
+  else
+    vendor_into "$vendor"
+    _after=$( cd "$TARGET" && find .ai-kit -type f 2>/dev/null | LC_ALL=C sort )
+  fi
+  while IFS= read -r _g; do
+    [ -n "$_g" ] && DELETED+=("$_g")
+  done < <(comm -23 <(printf '%s\n' "$_before") <(printf '%s\n' "$_after"))
   # 보고는 dry-run 에서도 한다 — 안 그러면 예고한 건수와 실제 건수가 갈린다.
 
   # 훅은 .git/hooks 에 두지 않는다 — 그 디렉터리는 clone 되지 않으므로
@@ -604,7 +604,8 @@ dryrun_report() {
 
   echo ""
   echo "병합용 트리: $STAGE"
-  echo "  킷이 놓을 파일만 들어 있습니다. 파일별로 비교하려면:"
+  echo "  킷이 놓을 파일이 들어 있습니다(예고 건수를 맞추려고 .ai-kit/identity 도 넣지만"
+  echo "  그것은 킷이 놓는 것이 아니라 보존하는 것입니다). 파일별로 비교하려면:"
   echo "      diff -u <파일> $STAGE/<파일>"
   echo "  임시 디렉터리이므로 정리 정책에 사라질 수 있습니다. 남길 것은 옮겨두세요."
 }

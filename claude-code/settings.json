@@ -19,6 +19,9 @@
     "                   없이 20회 돌며 코멘트 40건이 나갔다.",
     "  gh pr create     auto mode 는 PR 생성을 기본으로 그냥 통과시킨다. 공식 문서가 이",
     "  gh pr merge      자리에 쓰라고 적어둔 것이 ask 다 — /docs/en/auto-mode-config 의",
+    "  gh pr review     PR 에 글을 남기는 두 번째 경로. 스킬이 \"쓰지 마라\" 라고 적어둔 것을",
+    "                   모델 안에만 두면 안 지켜진다 — 밖으로 나가는 명령 중 이것만 규칙에",
+    "                   없었다. --request-changes 는 자기 PR 에서 거절되지만 --comment 는 통과한다.",
     "  gh issue create  「Add a human checkpoint」.",
     "",
     "**스킬(open-pr·merge-pr)이 돌릴 때도 묻는다. 그것이 의도다** — 이 층이 세우는 것은",
@@ -58,6 +61,7 @@
       "Bash(gh pr create*)",
       "Bash(gh pr merge*)",
       "Bash(gh pr comment*)",
+      "Bash(gh pr review*)",
       "Bash(gh issue create*)"
     ],
     "allow": [
