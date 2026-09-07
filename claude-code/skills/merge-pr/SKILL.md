@@ -72,14 +72,11 @@ $ARGUMENTS
 내용은 세 줄이면 된다: 마지막 라운드의 두 `Verdict` · 사람이 넘기기로 한 지적이 있으면
 그것과 이유 · `사람이 머지를 결정했다`.
 
-`AI_KIT_SKILL=1 gh pr merge <N> --squash --delete-branch --body "<추린 목록, 없으면 빈 문자열>"`
+`gh pr merge <N> --squash --delete-branch --body "<추린 목록, 없으면 빈 문자열>"`
 
-접두어는 `use_skill` 훅을 통과시키는 표시다 — 없으면 훅이 막고 "merge-pr 을 호출하라" 고 답한다. 이미 그 안이다.
-
-**훅을 지나도 권한 프롬프트는 뜬다.** `gh pr merge` 와 위의 `gh pr comment` 는 둘 다
-`settings.json` 의 `ask` 에 있고, `ask` 규칙은 앞의 환경변수 대입을 지나 매치하므로
-접두어로 비켜갈 수 없다. 사람이 승인할 때까지 기다린다 — 이 스킬 §전제 가 요구하는
-"사람이 머지를 지시했다" 를 기계로 한 번 더 세우는 자리다.
+**권한 프롬프트가 뜬다.** 이 명령과 위의 `gh pr comment` 는 둘 다 `settings.json` 의
+`ask` 에 있고, 이 스킬 안이라고 해서 비켜가지 않는다. 사람이 승인할 때까지 기다린다 —
+이 스킬 §전제 가 요구하는 "사람이 머지를 지시했다" 를 기계로 한 번 더 세우는 자리다.
 
 `git branch -d` 를 따로 실행하지 않는다 — `--delete-branch` 가 처리한다.
 

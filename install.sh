@@ -318,9 +318,10 @@ if [ "$DO_AGENT" = 1 ]; then
   done < <(find "$cc" -type f)
 
   # settings.json 은 프로젝트 소유라 이미 있으면 덮지 않는다. 그런데 이 파일에는
-  # **훅 등록과 permissions 가 들어 있다** — 보존되면 새 훅 파일은 놓이는데 그것을
-  # 부르는 자리가 없어, 훅이 있는 것처럼 보이면서 아무것도 막지 못한다.
-  # `ls .claude/hooks/` 로는 그 상태를 구분할 수 없다. 그래서 짚어서 말한다.
+  # **훅 등록과 permissions 가 들어 있다** — 보존되면 킷이 새로 넣은 규칙이 이 레포에
+  # 없는 채로 남고, `ls .claude/` 로는 그 상태를 구분할 수 없다. 그래서 짚어서 말한다.
+  # 20라운드 사고의 원인이 정확히 이것이었다: 절은 다 있는데 그 안에 게시를 세우는
+  # 규칙이 없었다.
   #
   # **절 이름이 아니라 그 안의 항목을 대조한다.** 이름만 보면 `hooks.PreToolUse` 와
   # `permissions.ask` 를 가진 레포는 언제나 "같다" 로 판정되는데, 실제 사고가 정확히
@@ -339,15 +340,21 @@ if [ "$DO_AGENT" = 1 ]; then
       _missing=$(python3 - "$KIT_ROOT/claude-code/settings.json" "$TARGET/.claude/settings.json" <<'PYEOF'
 import json, sys
 
-def load(p):
-    try:
-        return json.load(open(p))
-    except Exception:
-        return None
-
-new, cur = load(sys.argv[1]), load(sys.argv[2])
-if new is None or cur is None:
+# 판정 불가를 침묵으로 두지 않는다. 못 읽었으면 못 읽었다고 말한다 — 아래 python3
+# 부재 가지와 같은 이유다. 조용히 지나가면 층이 죽은 것을 아무도 모른다.
+def fail(why):
+    print("!" + why)
     sys.exit(0)
+
+try:
+    new = json.load(open(sys.argv[1]))
+except Exception as e:
+    fail("킷의 settings.json 을 읽지 못해 대조하지 못했습니다 (%s)." % type(e).__name__)
+try:
+    cur = json.load(open(sys.argv[2]))
+except Exception as e:
+    fail("이 레포의 .claude/settings.json 을 JSON 으로 읽지 못해 대조하지 못했습니다 "
+         "(%s). 주석(//)이나 트레일링 콤마가 있으면 그렇습니다." % type(e).__name__)
 
 def commands(d):
     """등록된 훅 명령을 (이벤트, 명령) 으로 전부 걷는다."""
@@ -360,13 +367,14 @@ def commands(d):
     return got
 
 out = []
-for ev, c in sorted(commands(new) - commands(cur)):
+try:
+  for ev, c in sorted(commands(new) - commands(cur)):
     out.append("hooks.%s 가 %s 를 부르지 않습니다" % (ev, c.rsplit("/", 1)[-1].rstrip('"')))
 
-# deny·ask 만 본다. allow 가 빠진 것은 프롬프트가 늘 뿐 막는 층이 죽지 않는다.
-np, cp = new.get("permissions") or {}, cur.get("permissions") or {}
-cur_allow = set(cp.get("allow") or [])
-for sec in ("deny", "ask"):
+  # deny·ask 만 본다. allow 가 빠진 것은 프롬프트가 늘 뿐 막는 층이 죽지 않는다.
+  np, cp = new.get("permissions") or {}, cur.get("permissions") or {}
+  cur_allow = set(cp.get("allow") or [])
+  for sec in ("deny", "ask"):
     have = set(cp.get(sec) or [])
     for rule in np.get(sec) or []:
         if rule in have:
@@ -375,6 +383,9 @@ for sec in ("deny", "ask"):
             out.append("permissions.%s 에 %s 가 없습니다 — 이 레포는 그것을 allow 에 두고 있습니다" % (sec, rule))
         else:
             out.append("permissions.%s 에 %s 가 없습니다" % (sec, rule))
+except Exception as e:
+  fail("이 레포의 .claude/settings.json 구조가 예상과 달라 대조하지 못했습니다 (%s)."
+       % type(e).__name__)
 
 print("\n".join(out))
 PYEOF
@@ -383,12 +394,18 @@ PYEOF
       WARNINGS+=(".claude/settings.json 을 보존했는데 python3 이 없어 대조하지 못했습니다.")
       WARNINGS+=("  킷의 claude-code/settings.json 과 직접 비교하세요.")
     fi
+    case "$_missing" in
+      '!'*)
+        WARNINGS+=(".claude/settings.json 을 보존했는데 ${_missing#\!}")
+        WARNINGS+=("  킷의 claude-code/settings.json 과 직접 비교하세요.")
+        _missing="" ;;
+    esac
     if [ -n "$_missing" ]; then
       WARNINGS+=(".claude/settings.json 을 보존했습니다. 킷 파일에는 있고 이 레포 파일에는 없는 것:")
       while IFS= read -r _m; do
         [ -n "$_m" ] && WARNINGS+=("    $_m")
       done <<< "$_missing"
-      WARNINGS+=("  훅은 등록이 없으면 .claude/hooks/ 에 파일만 놓인 채 아무것도 막지 못합니다.")
+      WARNINGS+=("  훅은 등록이 없으면 .claude/hooks/ 에 파일만 놓인 채 돌지 않고, permissions 는 그 절이 없으면 그냥 없는 것입니다.")
       if [ "$DRY_RUN" = 1 ]; then
         WARNINGS+=("  실제로 설치하면 .claude/settings.json.ai-kit-new 가 옆에 놓입니다. 그것과 비교하세요.")
       else
@@ -397,10 +414,15 @@ PYEOF
     fi
   fi
 
-  # 킷이 더 이상 놓지 않는 스킬·에이전트가 남아 있으면 알린다. .claude/ 는 프로젝트
+  # 킷이 더 이상 놓지 않는 스킬·에이전트·훅이 남아 있으면 알린다. .claude/ 는 프로젝트
   # 소유라 지우지 않는다 — 다만 **이름이 바뀐 경우 옛것과 새것이 나란히 남고**,
   # 옛것이 지금은 하지 말라고 하는 일을 시킬 수 있다. 지우는 것은 사람이 정한다.
-  for _d in skills agents; do
+  #
+  # hooks 를 같이 보는 이유: 킷이 훅을 걷어내도 그 파일은 대상 레포에 남고, 그 레포의
+  # settings.json(프로젝트 소유)이 여전히 그것을 부른다. 지금 남는 실제 사례가
+  # use_skill.sh 다 — 옛 킷의 스킬은 탈출 접두어를 붙였지만 지금 스킬은 안 붙이므로,
+  # 그 훅이 살아 있는 레포에서는 open-pr 이 자기 레포의 훅에 막힌다.
+  for _d in skills agents hooks; do
     [ -d "$TARGET/.claude/$_d" ] || continue
     while IFS= read -r _e; do
       _n=$(basename "$_e")

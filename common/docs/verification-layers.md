@@ -136,12 +136,70 @@ DB 스키마/마이그레이션 · 배포 절차 · **게이트·훅·CI 자체*
 > your prompt or `CLAUDE.md` shape what Claude **tries** to do, but they don't change
 > what Claude Code **allows**."* — `/docs/en/permissions`
 
-**첫 줄만으로 선 규칙은 이 레포에서 세 번 무너졌다** — 킷 PR 넷이 스킬을 안 거치고
+**첫 줄만으로 선 규칙은 이 레포에서 실제로 무너졌다** — 킷 PR 넷이 스킬을 안 거치고
 `gh pr create --fill` 로 나갔고, "사람 허락 없이 머지하지 않는다" 를 어기고 머지된 적이
-있고, 리뷰가 사람 없이 스무 바퀴 돌았다. 셋 다 첫 줄에만 있던 규칙이다.
+있고, 리뷰가 사람 없이 스무 바퀴 돌았다. 전부 첫 줄에만 있던 규칙이다.
 
 그리고 **아래 세 줄만이 의도를 막는다.** 위 세 줄은 실수를 막는다. 되돌릴 수 없는 것은
 아래에 둔다.
+
+### 권한 규칙이 실제로 무엇을 잡나
+
+`permissions` 줄에 무엇을 적을지 정할 때 필요한 사실을 한자리에 둔다. **다른 파일에
+옮겨 적지 마라 — `settings.json` 은 여기를 가리키기만 한다.**
+
+**규칙은 셸이 해석하지 않는다.** `Bash(gh pr create *)` 라는 문자열은 셸에 도달하지
+않는다. Claude Code 가 에이전트가 치려는 명령 **문자열**을 자기 매처로 이 패턴에 맞춰볼
+뿐이다. 그래서 동작을 아는 길은 문서를 읽거나 돌려보는 것 둘뿐이고, 셸 글로브의 직관을
+그대로 들이대면 틀린다.
+
+**문서로 아는 것** — 규칙은 명령을 조각내 각 조각을 본다:
+
+| | |
+| --- | --- |
+| 구분자 | *"The recognized command separators are `&&`, `\|\|`, `;`, `\|`, `\|&`, `&`, and newlines."* |
+| 중첩 | *"Deny and ask rules apply when any subcommand matches them, including a command nested inside a subshell, a command substitution…"* |
+| 앞 대입 | *"A deny or ask rule matches past any leading assignment"* |
+| allow 와의 관계 | *"a matching ask rule prompts even when a more specific allow rule also matches"* |
+| auto mode | *"Content-scoped ask rules … always force a permission prompt, even in auto mode"* · *"The classifier cannot auto-approve a matching action."* |
+
+**실측으로 아는 것** — 규칙이 없으면 그냥 도는 읽기전용 명령으로 대조군을 만들어 쟀다.
+막히면 그것은 규칙이 막은 것이다:
+
+```
+명령: cat AI_KIT_PROBE_FILE.txt
+
+규칙 없음                              → 실행됨
+ask: Bash(cat AI_KIT_PROBE*)           → 차단          개행·주석 형태도 같이 차단됨
+ask: Bash(cat AI_KIT_PROBE_FILE*)      → 차단          뒤에 무엇이 붙어도 잡는다
+ask: Bash(cat AI_KIT_PROBE_FILE *)     → 실행됨        토큰이 정확히 그것일 때만 잡는다
+```
+
+세 번째와 네 번째의 차이가 **뒤 `*` 앞의 공백**이다. 공백이 있으면 그 토큰으로 **시작하는
+다른 명령**을 안 잡는다(문서의 `ls` / `lsof` 예시). **맨몸 명령은 두 형태 다 잡는다** —
+공백 없는 쪽은 `*` 가 빈 문자열에 붙어서, 공백 있는 쪽은 문서가 그 경우를 따로 열어둬서.
+
+**그래서 `deny`·`ask` 에는 공백 없는 형태를 쓴다.** 넓게 잡으면 안 쓰는 명령에 프롬프트가
+한 번 더 뜰 뿐이지만, 좁게 잡으면 그것이 구멍이다. `allow` 는 반대다 — 거기서 과매칭은
+`Bash(ls*)` 가 `lsof` 까지 자동 승인하는 사고이므로 공백 형태를 쓴다.
+
+**스킬은 예외가 될 수 없다.** 스킬 정의의 `allowed-tools` 로도, 명령 앞의 환경변수
+대입으로도 `ask` 를 비켜갈 수 없다. 같은 명령으로 2x2:
+
+```
+ask 없음 · allowed-tools 없음   → 차단
+ask 없음 · allowed-tools 있음   → 실행됨      allowed-tools 는 작동한다
+ask 있음 · allowed-tools 없음   → 차단
+ask 있음 · allowed-tools 있음   → 차단        ask 가 이긴다
+```
+
+그러므로 `ask` 가 세우는 것은 **"스킬을 거쳤나" 가 아니라 "사람이 봤나" 다.** 전자를
+세우려면 규칙이 아니라 훅이 필요한데, 훅은 표의 둘째 줄이라 모델이 탈출구를 쓰면 사라진다.
+킷이 그 훅을 두었다가 걷어낸 경위는 `docs/evidence.md` 에 있다.
+
+**남는 한계.** 규칙은 **지목한 도구**만 본다. `Bash(gh pr create*)` 를 세워도 `curl` 로
+같은 API 를 치면 안 걸린다. 게으른 지름길은 막고 작정한 우회는 못 막는다 — 그 자리는
+아래 두 줄(CI·브랜치 보호)이다.
 
 ### git hooks 의 정직한 한계
 
