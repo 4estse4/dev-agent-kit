@@ -21,7 +21,7 @@ Diff:
 !`if [ -n "$ARGUMENTS" ]; then gh pr view $ARGUMENTS --json headRefOid,headRepository --jq '"PERMALINK_BASE=https://github.com/\(.headRepository.nameWithOwner)/blob/\(.headRefOid)/"' || echo "!! 메타데이터를 못 가져왔다"; fi`
 
 **직전 라운드 코멘트 (검증 대상 — 아래 「재리뷰」):**
-!`gh pr view $ARGUMENTS --json comments --jq '[.comments[]|select(.body|contains("리뷰한 head:"))]|last|.body // "1라운드"' 2>/dev/null || echo "!! 직전 코멘트를 못 가져왔다"`
+!`if [ -z "$ARGUMENTS" ]; then gh pr view --json comments --jq '[.comments[]|select(.body|contains("리뷰한 head:"))]|last|.body // "1라운드"' 2>/dev/null || echo "1라운드"; else gh pr view $ARGUMENTS --json comments --jq '[.comments[]|select(.body|contains("리뷰한 head:"))]|last|.body // "1라운드"' 2>/dev/null || echo "!! 직전 코멘트를 못 가져왔다"; fi`
 
 ---
 
@@ -56,7 +56,7 @@ context 전파 · 루프변수 캡처 · `any` 사용 · 훅 규칙 · 접근성
 | 위에 붙은 것 | 뜻 |
 | --- | --- |
 | `1라운드` | 직전 코멘트가 없다. `### 이전 라운드` 절을 생략한다 |
-| `!! 직전 코멘트를 못 가져왔다` | **1라운드가 아니다.** 못 가져왔다는 사실을 `### 이전 라운드` 에 적고 진행한다 |
+| `!! 직전 코멘트를 못 가져왔다` | **PR 번호를 줬는데 못 가져왔다.** 1라운드가 아니다 — 그 사실을 `### 이전 라운드` 에 적고 진행한다. 번호 없이 불렀을 때는 이 줄이 안 나온다(PR 이 없으면 그냥 `1라운드` 다) |
 | 코멘트 전문 | 재리뷰다. 아래대로 판정한다 |
 
 **받은 것은 배경이 아니라 검증 대상이다.** 콜드 블록까지 읽는다 — 콜드가 지적하고

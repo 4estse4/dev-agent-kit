@@ -70,7 +70,7 @@ TARGET=$(git -C "$TARGET_ARG" rev-parse --show-toplevel 2>/dev/null) \
 echo "install: 대상 $TARGET"
 echo "install: 킷   $KIT_ROOT"
 
-INSTALLED=(); REPLACED=(); SKIPPED=(); CONFLICTS=(); WARNINGS=()
+INSTALLED=(); REPLACED=(); DELETED=(); SKIPPED=(); CONFLICTS=(); WARNINGS=()
 # dry-run 은 대상 대신 이 트리에 놓는다. 놓고 나서 대상과 비교하면 무엇이 달라지는지가
 # 나오고, 트리 자체가 남으므로 사람이나 에이전트가 그것을 보고 병합할 수 있다.
 STAGE=""
@@ -193,6 +193,33 @@ if [ "$DO_HOOKS" = 1 ]; then
     elif cmp -s "$_s" "$TARGET/$_r";  then SKIPPED+=("$_r (동일)")
     else                                   REPLACED+=("$_r"); fi
   done < <(find "$KIT_ROOT/common/gate" "$KIT_ROOT/common/git-hooks" -type f)
+  # install-manifest 는 킷 소스에 없고 vendor_into() 가 만든다. 위 루프가 안 걷으므로
+  # 여기서 센다 — 안 그러면 **첫 설치에서만** 예고가 실제보다 하나 크다(재설치에서는
+  # identity 와 상쇄돼 우연히 맞아 안 드러난다).
+  if [ ! -e "$TARGET/.ai-kit/install-manifest" ]; then INSTALLED+=(".ai-kit/install-manifest")
+  elif [ "$(printf 'kit_rev=%s\nlangs=%s\n' "$kit_rev" "$LANGS")" = "$(cat "$TARGET/.ai-kit/install-manifest" 2>/dev/null)" ]; then
+    SKIPPED+=(".ai-kit/install-manifest (동일)")
+  else REPLACED+=(".ai-kit/install-manifest"); fi
+
+  # 삭제도 센다. vendor_into() 가 .ai-kit 을 통째로 비우므로 킷이 다시 놓지 않는 파일은
+  # 사라지는데, dry-run 은 그것을 "킷이 안 놓음" 으로 세면서 **실제 실행은 한 줄도 말하지
+  # 않았다**(실측: 다섯 칸이 전부 0인데 파일이 사라졌다). .ai-kit/README.md 가 프로젝트더러
+  # "고쳐도 된다" 고 부르므로 이 자리에 프로젝트가 만든 것이 실제로 생긴다.
+  if [ -d "$TARGET/.ai-kit" ]; then
+    while IFS= read -r _t; do
+      _r=${_t#"$TARGET"/}
+      case "$_r" in
+        .ai-kit/identity|.ai-kit/install-manifest) continue ;;
+        .ai-kit/README.md) _src="$KIT_ROOT/common/gate/VENDOR-README.md" ;;
+        .ai-kit/gate/adapters/*)
+          _l=$(basename "$_r" .sh)
+          case ",$DROP," in *",$_l,"*) DELETED+=("$_r (고르지 않은 언어)"); continue ;; esac
+          _src="$KIT_ROOT/common/${_r#.ai-kit/}" ;;
+        *) _src="$KIT_ROOT/common/${_r#.ai-kit/}" ;;
+      esac
+      [ -e "$_src" ] || DELETED+=("$_r")
+    done < <(find "$TARGET/.ai-kit" -type f)
+  fi
 
   if [ "$DRY_RUN" = 1 ]; then vendor_into "$STAGE/.ai-kit"; else vendor_into "$vendor"; fi
   # 보고는 dry-run 에서도 한다 — 안 그러면 예고한 건수와 실제 건수가 갈린다.
@@ -224,6 +251,10 @@ if [ "$DO_HOOKS" = 1 ]; then
     if [ -f "$vendor/identity" ]; then
       # 이미 있으면 건너뛴 것으로 **센다**. 아예 세지 않으면 첫 설치와 재설치의
       # 합계가 달라지고, 읽는 사람은 무엇이 빠졌는지 알 길이 없다.
+      #
+      # 그리고 dry-run 도 STAGE 에 놓는다. 안 놓으면 예고(STAGE 를 센다)와 실제 실행이
+      # 하나 어긋난다 — 실측으로 `그대로 37` vs `건너뜀 38` 이 났다.
+      [ "$DRY_RUN" = 1 ] && cp "$vendor/identity" "$STAGE/.ai-kit/identity" 2>/dev/null
       SKIPPED+=(".ai-kit/identity (이미 있음)")
     else
       if [ "$DRY_RUN" = 1 ]; then
@@ -252,6 +283,20 @@ fi
 
 # ── 템플릿: 파일마다 목적지가 다르므로 명시적으로 매핑한다 ──
 # 추측(전부 docs/ 로)하면 CLAUDE.md·PR 템플릿이 엉뚱한 데로 간다.
+# ── 문서: 킷 소유. 정의가 이 문서의 절을 이름으로 가리키므로 **정의와 짝이다.**
+# 그래서 --agent 로도 갱신된다. 안 그러면 정의만 새것이 되어 없는 절을 부른다(실측).
+# --templates 로도 갱신된다 — 처음 설치할 때 문서가 같이 와야 한다.
+if [ "$DO_AGENT" = 1 ] || [ "$DO_TEMPLATES" = 1 ]; then
+  # 프로젝트가 자기 사정을 적을 자리는 CLAUDE.md 이지 이 문서들이 아니다. 스킬·에이전트 정의가 이 문서의 절을 이름으로 가리키는데,
+  # 정의만 갱신되고 문서가 보존되면 **업그레이드마다 끊긴 참조가 확정으로 생긴다.**
+  # 실제로 그랬다 — 한 레포에서 콜드 리뷰어 정의가 읽으라는 절이 그 레포 문서에 없었다.
+  # 프로젝트가 자기 사정을 적을 자리는 CLAUDE.md 이지 이 문서들이 아니다.
+  for d in "$KIT_ROOT"/common/docs/*.md; do
+    [ -f "$d" ] || continue
+    replace "$d" "docs/process/$(basename "$d")"
+  done
+fi
+
 if [ "$DO_TEMPLATES" = 1 ]; then
   T="$KIT_ROOT/common/templates"
   place "$T/CLAUDE.md"                 "CLAUDE.md"
@@ -265,14 +310,6 @@ if [ "$DO_TEMPLATES" = 1 ]; then
   # 설계 근거 문서는 프로젝트와 함께 다녀야 한다 — CLAUDE.md 가 이것을 인용하는데
   # 킷 레포 경로로 가리키면 레포만 clone 한 사람은 따라갈 수 없다.
   # kit-guide 는 설치 직후 한 번 읽는 문서다. 나머지 설계 근거 문서와 같은 자리에 둔다.
-  # docs/process/ 는 킷 소유다. 스킬·에이전트 정의가 이 문서의 절을 이름으로 가리키는데,
-  # 정의만 갱신되고 문서가 보존되면 **업그레이드마다 끊긴 참조가 확정으로 생긴다.**
-  # 실제로 그랬다 — 한 레포에서 콜드 리뷰어 정의가 읽으라는 절이 그 레포 문서에 없었다.
-  # 프로젝트가 자기 사정을 적을 자리는 CLAUDE.md 이지 이 문서들이 아니다.
-  for d in "$KIT_ROOT"/common/docs/*.md; do
-    [ -f "$d" ] || continue
-    replace "$d" "docs/process/$(basename "$d")"
-  done
 fi
 
 if [ "$DO_LINT" = 1 ]; then
@@ -576,8 +613,15 @@ dryrun_report() {
 if [ "$DRY_RUN" = 1 ]; then
   dryrun_report
 else
-echo "설치 ${#INSTALLED[@]}건 · 교체 ${#REPLACED[@]}건 · 건너뜀 ${#SKIPPED[@]}건 · 충돌 ${#CONFLICTS[@]}건 · 확인필요 ${#WARNINGS[@]}건"
+echo "설치 ${#INSTALLED[@]}건 · 교체 ${#REPLACED[@]}건 · 삭제 ${#DELETED[@]}건 · 건너뜀 ${#SKIPPED[@]}건 · 충돌 ${#CONFLICTS[@]}건 · 확인필요 ${#WARNINGS[@]}건"
 fi
+if [ ${#DELETED[@]} -gt 0 ] && [ "$DRY_RUN" = 0 ]; then
+  echo ""
+  echo "── 지웠습니다 (킷 소유 자리에 있었고 킷이 다시 놓지 않는 것) ──"
+  printf '  - %s\n' "${DELETED[@]}"
+  echo "  .ai-kit 은 통째로 교체되는 자리입니다. 남길 것은 그 밖에 두세요."
+fi
+
 if [ "$DO_HOOKS" = 1 ] && [ "$DRY_RUN" = 0 ]; then
   cat <<'MSG'
 
