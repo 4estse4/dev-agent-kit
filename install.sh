@@ -133,11 +133,8 @@ if [ "$DO_HOOKS" = 1 ]; then
   # 설치가 놓는 내용이 갈리고, 갈렸을 때 알아챌 방법이 없다.
   vendor_into() { # $1=목적지 .ai-kit 디렉터리
     local v="$1"
-    # .ai-kit 은 identity 를 빼면 전부 킷 소유다. 이름을 지목해 지우면 옛 킷이 두고 간
-    # 것을 놓치고, 그 목록은 킷이 바뀔 때마다 자란다. 그래서 **통째로 비우고 놓는다.**
-    #
-    # 놓치면 어떻게 되는지 실측했다: 옛 기록 파일이 남으면 옛 SessionStart 훅이
-    # 그것을 계속 읽어, 방금 최신으로 재설치한 레포에 대고 영원히 "낡았다" 고 말한다.
+    # .ai-kit 은 identity 를 빼면 전부 킷 소유다. 소유한 자리는 **통째로 비우고 놓는다** —
+    # 이름을 지목해 지우면 그 목록이 킷이 바뀔 때마다 자라고, 자라다 빠진다.
     # 무엇이 사라지는지는 --dry-run 의 "킷이 안 놓음" 이 미리 보여준다.
     if [ -d "$v" ]; then
       find "$v" -mindepth 1 -maxdepth 1 ! -name identity -exec rm -rf {} +
@@ -173,16 +170,6 @@ if [ "$DO_HOOKS" = 1 ]; then
   # 넣지 않는 이유: 머신마다 경로가 다르고, 남의 절대경로가 레포에 박히면
   # 그 사람 환경을 알려주는 것 말고는 아무 값도 없다.
   [ "$DRY_RUN" = 1 ] || git -C "$TARGET" config ai-kit.path "$KIT_ROOT" 2>/dev/null
-
-  # 옛 킷의 gates.yml 은 vendored 잡에서 gate_checksum 을 부른다. 그 함수는 이제
-  # lib.sh 에 없다. gates.yml 은 프로젝트 소유라 install.sh 가 덮지 않으므로,
-  # ".ai-kit 만 새것 + 워크플로는 옛것" 이 재설치의 **기본 경로**다. 그대로 두면
-  # CI 가 `gate_checksum: command not found` 로 종료코드 127 에 죽는다(실측).
-  _wf="$TARGET/.github/workflows/gates.yml"
-  if [ -f "$_wf" ] && grep -q 'gate_checksum' "$_wf" 2>/dev/null; then
-    WARNINGS+=(".github/workflows/gates.yml 이 gate_checksum 을 부르는데 이 킷의 lib.sh 에는 그 함수가 없습니다 — CI 가 종료코드 127 로 실패합니다.")
-    WARNINGS+=("  그 워크플로의 '체크섬 재계산' 블록을 지우세요. 킷의 새 버전은 common/ci/gates.yml 에 있고, 충돌로 옆에 놓였다면 .github/workflows/gates.yml.ai-kit-new 입니다.")
-  fi
 
   # 기존 .git/hooks 에 커스텀 훅이 있으면 알린다 — hooksPath 설정 시 무시된다.
   for h in pre-commit pre-push commit-msg; do
@@ -414,23 +401,6 @@ PYEOF
     fi
   fi
 
-  # 킷이 더 이상 놓지 않는 스킬·에이전트·훅이 남아 있으면 알린다. .claude/ 는 프로젝트
-  # 소유라 지우지 않는다 — 다만 **이름이 바뀐 경우 옛것과 새것이 나란히 남고**,
-  # 옛것이 지금은 하지 말라고 하는 일을 시킬 수 있다. 지우는 것은 사람이 정한다.
-  #
-  # hooks 를 같이 보는 이유: 킷이 훅을 걷어내도 그 파일은 대상 레포에 남고, 그 레포의
-  # settings.json(프로젝트 소유)이 여전히 그것을 부른다. 지금 남는 실제 사례가
-  # use_skill.sh 다 — 옛 킷의 스킬은 탈출 접두어를 붙였지만 지금 스킬은 안 붙이므로,
-  # 그 훅이 살아 있는 레포에서는 open-pr 이 자기 레포의 훅에 막힌다.
-  for _d in skills agents hooks; do
-    [ -d "$TARGET/.claude/$_d" ] || continue
-    while IFS= read -r _e; do
-      _n=$(basename "$_e")
-      # 방금 이 설치기가 옆에 놓은 것은 낯선 것이 아니다.
-      case "$_n" in *.ai-kit-new) continue ;; esac
-      [ -e "$cc/$_d/$_n" ] || WARNINGS+=(".claude/$_d/$_n 은 이 킷이 놓지 않는 것입니다 — 옛 킷이 두고 갔거나 이 레포가 만든 것입니다. 옛 것이면 지금 규칙과 어긋날 수 있으니 확인하세요.")
-    done < <(find "$TARGET/.claude/$_d" -mindepth 1 -maxdepth 1 2>/dev/null)
-  done
 fi
 
 # ── 원격 변경: 브랜치 보호 ──
@@ -476,8 +446,8 @@ dryrun_report() {
   # 킷 소유 자리(.ai-kit 전체)에서만 "사라질 것" 을 본다. 그 밖은 프로젝트 소유라
   # 킷이 놓지 않는 것이 정상이고, 거기까지 세면 프로젝트 파일 전부가 목록에 뜬다.
   #
-  # gate·git-hooks 만 보지 않고 .ai-kit 전체를 보는 이유: 옛 킷이 두고 간 것이
-  # 그 둘 밖에 쌓인다. 실제로 baseline/ 29파일이 그렇게 남았고, 좁게 보면 안 보인다.
+  # gate·git-hooks 만 보지 않고 .ai-kit 전체를 보는 이유: 킷 소유는 그 둘이 아니라
+  # .ai-kit 전체다. 좁게 보면 그 밖에 놓인 것이 목록에서 빠진다.
   # identity 는 예외다 — 킷 소유가 아니고, 커밋 신원이 비면 STAGE 에 안 놓인다.
   if [ "$DO_HOOKS" = 1 ] && [ -d "$TARGET/.ai-kit" ]; then
     while IFS= read -r f; do
