@@ -4,6 +4,7 @@
 #   <kit>/install.sh <프로젝트경로>      로컬 전부 (훅·템플릿·린트·CI·도구설정)
 #                                        경로는 필수. 현재 위치면 "." 를 준다.
 #   <kit>/install.sh <경로> [--lang py,ts] --hooks --lint   선택 설치
+#     항목: --hooks --templates --lint --ci --agent  (--agent 는 .claude/** 만)
 #   <kit>/install.sh <경로> --protect    GitHub 브랜치 보호 설정 (원격 변경 — 별도 플래그)
 #
 #   <kit>/install.sh <경로> --dry-run    아무것도 바꾸지 않고 무엇이 달라질지만 본다
@@ -20,7 +21,7 @@ DO_HOOKS=0 DO_TEMPLATES=0 DO_LINT=0 DO_CI=0 DO_PROTECT=0 DO_AGENT=0 DRY_RUN=0 TA
 # --lang·--dry-run 은 항목이 아니라 수식이므로 여기서 세지 않는다 —
 # 세면 `install.sh <경로> --lang py` 가 아무것도 설치하지 않고 끝난다.
 case " $* " in
-  *" --hooks"*|*" --templates"*|*" --lint"*|*" --ci"*|*" --protect"*) ;;
+  *" --hooks"*|*" --templates"*|*" --lint"*|*" --ci"*|*" --protect"*|*" --agent"*) ;;
   *) DO_HOOKS=1 DO_TEMPLATES=1 DO_LINT=1 DO_CI=1 DO_AGENT=1 ;;
 esac
 while [ $# -gt 0 ]; do
@@ -29,6 +30,7 @@ while [ $# -gt 0 ]; do
     --templates) DO_TEMPLATES=1; shift ;;
     --lint) DO_LINT=1; shift ;;
     --ci) DO_CI=1; shift ;;
+    --agent) DO_AGENT=1; shift ;;
     # 값을 받는 플래그는 값이 실제로 있는지 먼저 본다. 안 보면 `shift 2` 가 인자
     # 하나를 못 넘겨 실패하는데, 실패해도 루프는 계속 돌아 **같은 인자를 영원히
     # 다시 읽는다** — 출력 한 줄 없이 멈춘 것처럼 보인다(실측).
@@ -68,7 +70,7 @@ TARGET=$(git -C "$TARGET_ARG" rev-parse --show-toplevel 2>/dev/null) \
 echo "install: 대상 $TARGET"
 echo "install: 킷   $KIT_ROOT"
 
-INSTALLED=(); SKIPPED=(); CONFLICTS=(); WARNINGS=()
+INSTALLED=(); REPLACED=(); SKIPPED=(); CONFLICTS=(); WARNINGS=()
 # dry-run 은 대상 대신 이 트리에 놓는다. 놓고 나서 대상과 비교하면 무엇이 달라지는지가
 # 나오고, 트리 자체가 남으므로 사람이나 에이전트가 그것을 보고 병합할 수 있다.
 STAGE=""
@@ -119,6 +121,26 @@ place() { # $1=src $2=dst(대상 레포 상대)
   fi
   [ "$DRY_RUN" = 1 ] || { mkdir -p "$(dirname "$dst")"; cp "$src" "$dst"; }
   INSTALLED+=("$2")
+}
+
+# 킷 소유 자리는 **덮는다.** place() 와 갈리는 지점이 여기다.
+#
+# 왜 스킬·에이전트·훅이 킷 소유인가: 안 덮으면 갱신이 무의미하다. 그것들은 킷이 계속
+# 고치는 물건이고, 프로젝트가 손댈 이유가 없다(손댈 것은 settings.json 과 CLAUDE.md 다).
+# 실제로 안 덮은 결과가 이렇다 — 한 프로젝트가 여덟 달 전 판으로 리뷰를 일곱 라운드
+# 돌았고, 그 옛 판은 지금 킷이 없애려는 바로 그 동작을 시키고 있었다.
+#
+# **프로젝트가 만든 파일은 손대지 않는다.** 이 함수는 킷이 배포하는 파일만 순회하므로
+# 그 목록에 없는 것은 애초에 닿지 않는다. 지우지도 않는다.
+replace() { # $1=src $2=dst(대상 레포 상대)
+  local src="$1" dst="$TARGET/$2" had=0
+  if [ "$DRY_RUN" = 1 ]; then mkdir -p "$STAGE/$(dirname "$2")"; cp "$src" "$STAGE/$2"; fi
+  if [ -e "$dst" ]; then
+    cmp -s "$src" "$dst" && { SKIPPED+=("$2 (동일)"); return; }
+    had=1
+  fi
+  [ "$DRY_RUN" = 1 ] || { mkdir -p "$(dirname "$dst")"; cp "$src" "$dst"; }
+  if [ "$had" = 1 ]; then REPLACED+=("$2"); else INSTALLED+=("$2"); fi
 }
 
 # ── 게이트 vendor: 대상 레포에 .ai-kit/ 로 복사한다 ──
@@ -301,7 +323,10 @@ if [ "$DO_AGENT" = 1 ]; then
   while IFS= read -r f; do
     rel=${f#"$cc"/}
     [ "$rel" = "README.md" ] && continue
-    place "$f" ".claude/$rel"
+    # settings.json 만 프로젝트 소유다 — 그 안에 프로젝트의 permissions 와 훅 등록이
+    # 산다. 스킬·에이전트·훅 스크립트는 킷 소유라 덮는다.
+    if [ "$rel" = "settings.json" ]; then place "$f" ".claude/$rel"
+    else                                  replace "$f" ".claude/$rel"; fi
   done < <(find "$cc" -type f)
 
   # settings.json 은 프로젝트 소유라 이미 있으면 덮지 않는다. 그런데 이 파일에는
@@ -433,10 +458,19 @@ dryrun_report() {
       n_new=$((n_new + 1)); list_new="${list_new}  + ${rel}"$'\n'
     elif cmp -s "$f" "$TARGET/$rel"; then
       n_same=$((n_same + 1))
-    # 내용이 다를 때 설치가 무엇을 하는지는 자리에 따라 다르다. .ai-kit 은 통째로
-    # 교체되지만 그 밖은 place() 가 원본을 남기고 .ai-kit-new 를 옆에 쓴다.
+    # 내용이 다를 때 설치가 무엇을 하는지는 자리에 따라 다르다. 킷 소유는 교체되고,
+    # 프로젝트 소유는 place() 가 원본을 남기고 .ai-kit-new 를 옆에 쓴다.
     # 둘을 한 목록에 담으면 "킷이 놓을 것" 이 절반은 거짓이 된다.
-    elif case "$rel" in .ai-kit/*) true ;; *) false ;; esac; then
+    #
+    # **여기의 소유 판정은 위 설치 경로와 같아야 한다.** 갈리면 dry-run 이 예고한 것과
+    # 실제 설치가 어긋나고, 그러면 예고를 읽을 이유가 없어진다. 킷 소유는 .ai-kit 전체와
+    # .claude 의 스킬·에이전트·훅이고, .claude/settings.json 만 프로젝트 소유다.
+    elif case "$rel" in
+           .ai-kit/*) true ;;
+           .claude/settings.json) false ;;
+           .claude/*) true ;;
+           *) false ;;
+         esac; then
       n_repl=$((n_repl + 1)); list_repl="${list_repl}  ~ ${rel}"$'\n'
     else
       n_side=$((n_side + 1)); list_side="${list_side}  ~ ${rel}"$'\n'
@@ -460,7 +494,7 @@ dryrun_report() {
   echo "── dry-run: 아무것도 바꾸지 않았습니다 ──"
   echo ""
   echo "지금 설치하면 — 새 파일 ${n_new} · 킷이 교체 ${n_repl} · 옆에 놓임 ${n_side} · 그대로 ${n_same} · 킷이 안 놓음 ${n_gone}"
-  [ -n "$list_repl" ] && { echo ""; echo "킷이 교체함 (.ai-kit 은 킷 소유다)"; printf '%s' "$list_repl"; }
+  [ -n "$list_repl" ] && { echo ""; echo "킷이 교체함 (.ai-kit 과 .claude 의 스킬·에이전트·훅은 킷 소유다)"; printf '%s' "$list_repl"; }
   [ -n "$list_side" ] && { echo ""; echo "이 레포 것이 그대로 남음 — 킷의 것은 <파일>.ai-kit-new 로 옆에 놓인다"; printf '%s' "$list_side"; }
   [ -n "$list_new" ]  && { echo ""; echo "새 파일"; printf '%s' "$list_new"; }
   [ -n "$list_gone" ] && { echo ""; echo "킷이 안 놓음 (이 레포에만 있는 킷 소유 파일 — 재설치가 지운다)"; printf '%s' "$list_gone"; }
@@ -499,7 +533,7 @@ dryrun_report() {
 if [ "$DRY_RUN" = 1 ]; then
   dryrun_report
 else
-echo "설치 ${#INSTALLED[@]}건 · 건너뜀 ${#SKIPPED[@]}건 · 충돌 ${#CONFLICTS[@]}건 · 확인필요 ${#WARNINGS[@]}건"
+echo "설치 ${#INSTALLED[@]}건 · 교체 ${#REPLACED[@]}건 · 건너뜀 ${#SKIPPED[@]}건 · 충돌 ${#CONFLICTS[@]}건 · 확인필요 ${#WARNINGS[@]}건"
 fi
 if [ "$DO_HOOKS" = 1 ] && [ "$DRY_RUN" = 0 ]; then
   cat <<'MSG'

@@ -17,7 +17,7 @@ Diff:
 !`[ -n "$ARGUMENTS" ] && gh pr view $ARGUMENTS --json headRefOid,headRepository --jq '"PERMALINK_BASE=https://github.com/\(.headRepository.nameWithOwner)/blob/\(.headRefOid)/"' 2>/dev/null || true`
 
 **직전 라운드 코멘트 (검증 대상 — 아래 「재리뷰」):**
-!`if [ -z "$ARGUMENTS" ]; then echo "1라운드"; else gh pr view $ARGUMENTS --json comments --jq '[.comments[]|select(.body|contains("리뷰한 head:"))]|last|.body // "1라운드"' 2>/dev/null || echo "!! gh 호출이 실패했다 — 직전 코멘트를 못 가져왔다"; fi`
+!`gh pr view $ARGUMENTS --json comments --jq '[.comments[]|select(.body|contains("리뷰한 head:"))]|last|.body // "1라운드"' 2>/dev/null || echo "!! 직전 코멘트를 못 가져왔다 (gh 실패 또는 PR 아님)"`
 
 ---
 
@@ -52,7 +52,7 @@ context 전파 · 루프변수 캡처 · `any` 사용 · 훅 규칙 · 접근성
 | 위에 붙은 것 | 뜻 |
 | --- | --- |
 | `1라운드` | 직전 코멘트가 없다. `### 이전 라운드` 절을 생략한다 |
-| `!! gh 호출이 실패했다` | **1라운드가 아니다.** 못 가져왔다는 사실을 `### 이전 라운드` 에 적고 진행한다 |
+| `!! 직전 코멘트를 못 가져왔다` | **1라운드가 아니다.** 못 가져왔다는 사실을 `### 이전 라운드` 에 적고 진행한다 |
 | 코멘트 전문 | 재리뷰다. 아래대로 판정한다 |
 
 **받은 것은 배경이 아니라 검증 대상이다.** 콜드 블록까지 읽는다 — 콜드가 지적하고
@@ -83,7 +83,7 @@ checked: 본문대조 · 응집도 · 테스트 · 에러분류 · 동시성 · 
 
 ### 이전 라운드
 <재리뷰일 때만. 직전 코멘트의 항목마다 한 줄, 이름과 판정:
- 닫힘 / 부분 / 미해결 / 정책으로 닫음. 부분·미해결은 그 앞 라운드에서
+ 닫힘 / 부분 / 미해결 / 정책으로 닫음 / 사람 대기. 부분·미해결은 그 앞 라운드에서
  이월된 것도 포함한다. 직전 코멘트를 못 가져왔으면 그 사실을 적는다.
  1라운드면 이 절을 생략.>
 
