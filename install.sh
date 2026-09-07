@@ -177,15 +177,32 @@ if [ "$DO_HOOKS" = 1 ]; then
     # 무엇이 달라졌는지는 --dry-run 이 보여준다.
     printf 'kit_rev=%s\nlangs=%s\n' "$kit_rev" "$LANGS" > "$v/install-manifest"
   }
+  # 요약 집계 — vendor 는 cp -R 로 한 번에 옮기므로 place()/replace() 를 안 지난다.
+  # 한 줄로 "설치 1건" 이라고만 세면 요약이 실제와 갈린다: 6개를 교체하고도 "교체 0건"
+  # 이라고 말한 적이 있다(실측). dry-run 은 파일마다 세므로 예고와 실제가 어긋난다.
+  # **옮기기 전에** 대상의 현재 상태로 센다.
+  while IFS= read -r _s; do
+    _r=".ai-kit/${_s#"$KIT_ROOT"/common/}"
+    case "$_r" in
+      .ai-kit/gate/VENDOR-README.md) _r=".ai-kit/README.md" ;;
+      .ai-kit/gate/adapters/*)
+        _l=$(basename "$_s" .sh)
+        case ",$DROP," in *",$_l,"*) continue ;; esac ;;
+    esac
+    if [ ! -e "$TARGET/$_r" ];        then INSTALLED+=("$_r")
+    elif cmp -s "$_s" "$TARGET/$_r";  then SKIPPED+=("$_r (동일)")
+    else                                   REPLACED+=("$_r"); fi
+  done < <(find "$KIT_ROOT/common/gate" "$KIT_ROOT/common/git-hooks" -type f)
+
   if [ "$DRY_RUN" = 1 ]; then vendor_into "$STAGE/.ai-kit"; else vendor_into "$vendor"; fi
   # 보고는 dry-run 에서도 한다 — 안 그러면 예고한 건수와 실제 건수가 갈린다.
-  INSTALLED+=(".ai-kit/ (게이트 vendor · $kit_rev · $LANGS)")
 
   # 훅은 .git/hooks 에 두지 않는다 — 그 디렉터리는 clone 되지 않으므로
   # 평가자가 레포를 받으면 강제가 통째로 사라진다.
   # 대신 커밋되는 .ai-kit/git-hooks/ 를 core.hooksPath 로 가리킨다.
   [ "$DRY_RUN" = 1 ] || git -C "$TARGET" config core.hooksPath .ai-kit/git-hooks
-  INSTALLED+=("core.hooksPath → .ai-kit/git-hooks (커밋되는 훅)")
+  # core.hooksPath 는 파일이 아니라 설정이다. 파일 건수에 섞으면 dry-run(파일을 센다)과
+  # 실제 실행의 숫자가 갈린다. 아래 "설치기가 한 일" 에서 따로 보고한다.
 
   # 킷 클론의 경로를 이 레포의 로컬 git config 에 적는다 — 커밋되지 않는다.
   # SessionStart 훅이 이것으로 "설치된 킷이 낡았나" 를 판정한다. 커밋되는 파일에
@@ -248,9 +265,13 @@ if [ "$DO_TEMPLATES" = 1 ]; then
   # 설계 근거 문서는 프로젝트와 함께 다녀야 한다 — CLAUDE.md 가 이것을 인용하는데
   # 킷 레포 경로로 가리키면 레포만 clone 한 사람은 따라갈 수 없다.
   # kit-guide 는 설치 직후 한 번 읽는 문서다. 나머지 설계 근거 문서와 같은 자리에 둔다.
+  # docs/process/ 는 킷 소유다. 스킬·에이전트 정의가 이 문서의 절을 이름으로 가리키는데,
+  # 정의만 갱신되고 문서가 보존되면 **업그레이드마다 끊긴 참조가 확정으로 생긴다.**
+  # 실제로 그랬다 — 한 레포에서 콜드 리뷰어 정의가 읽으라는 절이 그 레포 문서에 없었다.
+  # 프로젝트가 자기 사정을 적을 자리는 CLAUDE.md 이지 이 문서들이 아니다.
   for d in "$KIT_ROOT"/common/docs/*.md; do
     [ -f "$d" ] || continue
-    place "$d" "docs/process/$(basename "$d")"
+    replace "$d" "docs/process/$(basename "$d")"
   done
 fi
 
@@ -369,19 +390,39 @@ except Exception as e:
          "(%s). 주석(//)이나 트레일링 콤마가 있으면 그렇습니다." % type(e).__name__)
 
 def commands(d):
-    """등록된 훅 명령을 (이벤트, 명령) 으로 전부 걷는다."""
+    """등록을 (이벤트, matcher, 명령) 으로 걷는다.
+
+    matcher 를 빼면 안 된다 — 그것도 등록의 일부다. 킷과 같은 명령을 등록하되
+    matcher 만 "Edit|Write" 에서 "Write" 로 좁힌 레포는, 명령만 비교하면 "같다" 로
+    나온다. 그 레포의 자동 포맷은 Edit 에서 영영 안 도는데 설치기는 이상 없다고 말한다.
+    """
     got = set()
     for ev, groups in (d.get("hooks") or {}).items():
         for g in groups or []:
             for h in (g.get("hooks") or []):
                 if h.get("command"):
-                    got.add((ev, h["command"]))
+                    got.add((ev, g.get("matcher") or "", h["command"]))
     return got
 
 out = []
 try:
-  for ev, c in sorted(commands(new) - commands(cur)):
-    out.append("hooks.%s 가 %s 를 부르지 않습니다" % (ev, c.rsplit("/", 1)[-1].rstrip('"')))
+  kit_hooks, cur_hooks = commands(new), commands(cur)
+  # 명령이 아예 없는 것과 matcher 만 다른 것은 사람이 할 일이 다르다. 갈라서 말한다.
+  cur_cmds = {(ev, c) for ev, _m, c in cur_hooks}
+  # 스크립트 이름으로도 한 번 본다. 같은 스크립트를 **다른 경로 표기로** 부르는 레포에
+  # "부르지 않습니다" 라고 말하면 그건 거짓이다(예: $CLAUDE_PROJECT_DIR 대신 절대경로).
+  def base(c):
+    return c.rsplit("/", 1)[-1].rstrip('"')
+  cur_names = {(ev, base(c)) for ev, _m, c in cur_hooks}
+  for ev, m, c in sorted(kit_hooks - cur_hooks):
+    name = base(c)
+    if (ev, c) in cur_cmds:
+        out.append("hooks.%s 가 %s 를 부르지만 matcher 가 다릅니다 (킷: %s)"
+                   % (ev, name, m or "(없음)"))
+    elif (ev, name) in cur_names:
+        out.append("hooks.%s 가 %s 를 부르긴 하지만 명령 문자열이 킷과 다릅니다" % (ev, name))
+    else:
+        out.append("hooks.%s 가 %s 를 부르지 않습니다" % (ev, name))
 
   # deny·ask 만 본다. allow 가 빠진 것은 프롬프트가 늘 뿐 막는 층이 죽지 않는다.
   np, cp = new.get("permissions") or {}, cur.get("permissions") or {}
@@ -469,6 +510,7 @@ dryrun_report() {
            .ai-kit/*) true ;;
            .claude/settings.json) false ;;
            .claude/*) true ;;
+           docs/process/*) true ;;
            *) false ;;
          esac; then
       n_repl=$((n_repl + 1)); list_repl="${list_repl}  ~ ${rel}"$'\n'
@@ -477,8 +519,9 @@ dryrun_report() {
     fi
   done < <(find "$STAGE" -type f | LC_ALL=C sort)
 
-  # 킷 소유 자리(.ai-kit 전체)에서만 "사라질 것" 을 본다. 그 밖은 프로젝트 소유라
-  # 킷이 놓지 않는 것이 정상이고, 거기까지 세면 프로젝트 파일 전부가 목록에 뜬다.
+  # "사라질 것" 은 .ai-kit 에서만 본다. 킷 소유는 그 밖에도 있지만(.claude 의 스킬·
+  # 에이전트·훅, docs/process), 그 자리들은 **통째로 비우고 놓는 자리가 아니라 파일
+  # 단위로 덮는 자리**라 애초에 사라지는 것이 없다. .ai-kit 만 vendor_into() 가 비운다.
   #
   # gate·git-hooks 만 보지 않고 .ai-kit 전체를 보는 이유: 킷 소유는 그 둘이 아니라
   # .ai-kit 전체다. 좁게 보면 그 밖에 놓인 것이 목록에서 빠진다.

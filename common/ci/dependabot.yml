@@ -7,7 +7,7 @@
 # 시작해 설치 직후 Dependabot PR 몇 개를 받는다(설치된 뒤에는 스스로 최신이 된다).
 # 킷 쪽은 대신 `common/ci/check-action-pins.sh` 가 본다. 킷의 주간 워크플로
 # (.github/workflows/template-action-pins.yml)가 그것을 돌려 뒤처지면 이슈를 연다 —
-# "사람이 가끔 확인" 은 집행자가 없는 규칙이라 안 지켜진다고 가정해야 한다.
+# "사람이 가끔 확인" 은 막는 것이 없는 규칙이라 안 지켜진다고 가정해야 한다.
 version: 2
 updates:
   - package-ecosystem: github-actions

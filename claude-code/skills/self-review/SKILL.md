@@ -1,23 +1,27 @@
 ---
 name: self-review
 description: 맥락을 가진 쪽의 리뷰. 이 변경을 만든 세션이 그 결정을 알고 있는 상태에서 diff 와 PR 본문을 대조한다 — 무엇이 언제 정해지고 바뀌었는지 아는 쪽만 잡는 것이 있다. 콜드 층(cold-reviewer)과 짝이고, 둘은 같은 diff 를 다른 처지에서 본다. 기계가 잡는 것은 리뷰하지 않는다.
-argument-hint: "[PR 번호 | 비우면 현재 브랜치]"
+argument-hint: "[PR 번호 | '번호 -R owner/repo' (다른 레포) | 비우면 현재 브랜치]"
 ---
 
+> **아래 넷 중 하나라도 `!!` 로 시작하면 리뷰하지 마라.** 그 자리는 비어 있는 것이 아니라
+> **못 가져온 것**이다. 무엇이 실패했는지만 보고하고 멈춘다. `gh` 는 이 세션이 열린 레포에
+> 대해 돌므로, 다른 레포의 PR 이면 `48 -R owner/repo` 로 불러야 한다.
+
 Diff:
-!`gh pr diff $ARGUMENTS 2>/dev/null || git diff main...HEAD`
+!`if [ -z "$ARGUMENTS" ]; then git diff main...HEAD; else gh pr diff $ARGUMENTS || echo "!! gh pr diff $ARGUMENTS 실패 — diff 를 못 가져왔다"; fi`
 
 변경 파일:
-!`gh pr diff $ARGUMENTS --name-only 2>/dev/null || git diff main...HEAD --name-only`
+!`if [ -z "$ARGUMENTS" ]; then git diff main...HEAD --name-only; else gh pr diff $ARGUMENTS --name-only || echo "!! 변경 파일 목록을 못 가져왔다"; fi`
 
 **PR 본문 (검증 대상 — 배경이 아니다):**
-!`[ -n "$ARGUMENTS" ] && gh pr view $ARGUMENTS --json title,body --jq '"TITLE: \(.title)\n\n\(.body)"' 2>/dev/null || echo "(로컬 브랜치 리뷰 — 본문 없음)"`
+!`if [ -z "$ARGUMENTS" ]; then echo "(PR 번호 없이 부름 — 로컬 브랜치 리뷰)"; else gh pr view $ARGUMENTS --json title,body --jq '"TITLE: \(.title)\n\n\(.body)"' || echo "!! PR 본문을 못 가져왔다"; fi`
 
 메타데이터:
-!`[ -n "$ARGUMENTS" ] && gh pr view $ARGUMENTS --json headRefOid,headRepository --jq '"PERMALINK_BASE=https://github.com/\(.headRepository.nameWithOwner)/blob/\(.headRefOid)/"' 2>/dev/null || true`
+!`if [ -n "$ARGUMENTS" ]; then gh pr view $ARGUMENTS --json headRefOid,headRepository --jq '"PERMALINK_BASE=https://github.com/\(.headRepository.nameWithOwner)/blob/\(.headRefOid)/"' || echo "!! 메타데이터를 못 가져왔다"; fi`
 
 **직전 라운드 코멘트 (검증 대상 — 아래 「재리뷰」):**
-!`gh pr view $ARGUMENTS --json comments --jq '[.comments[]|select(.body|contains("리뷰한 head:"))]|last|.body // "1라운드"' 2>/dev/null || echo "!! 직전 코멘트를 못 가져왔다 (gh 실패 또는 PR 아님)"`
+!`gh pr view $ARGUMENTS --json comments --jq '[.comments[]|select(.body|contains("리뷰한 head:"))]|last|.body // "1라운드"' 2>/dev/null || echo "!! 직전 코멘트를 못 가져왔다"`
 
 ---
 
