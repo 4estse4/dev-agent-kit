@@ -170,6 +170,11 @@ if [ "$DO_HOOKS" = 1 ]; then
     # 고르지 않은 언어의 어댑터는 vendor 하지 않는다.
     for _l in $(echo "$DROP" | tr ',' ' '); do rm -f "$v/gate/adapters/$_l.sh"; done
     chmod +x "$v"/gate/*.sh "$v"/git-hooks/* 2>/dev/null
+    # identity 는 킷 소유가 아니다. 실제 설치는 위 rm 이 건너뛰어 그대로 두고, dry-run 은
+    # 대상의 것을 가져온다. **두 모드가 같은 최종 트리를 만들어야** 삭제 집계가 갈리지
+    # 않는다 — 이 복사가 집계보다 뒤에 있었을 때 dry-run 이 identity 를 삭제로 셌다.
+    [ "$v" = "$TARGET/.ai-kit" ] || [ ! -f "$TARGET/.ai-kit/identity" ] \
+      || cp "$TARGET/.ai-kit/identity" "$v/identity"
     # install-manifest 는 **어디서 왔는지**만 적는다 — 킷 커밋과 언어 선택.
     # 내용 체크섬은 두지 않는다. 이 레포에서 게이트를 고치는 것이 정상 작업인데
     # (.ai-kit/README.md), 체크섬을 두면 그 정상 작업이 CI 를 빨갛게 만들고,
@@ -202,26 +207,28 @@ if [ "$DO_HOOKS" = 1 ]; then
   else REPLACED+=(".ai-kit/install-manifest"); fi
 
   # 삭제도 센다. vendor_into() 가 .ai-kit 을 통째로 비우므로 킷이 다시 놓지 않는 파일은
-  # 사라지는데, dry-run 은 그것을 "킷이 안 놓음" 으로 세면서 **실제 실행은 한 줄도 말하지
-  # 않았다**(실측: 다섯 칸이 전부 0인데 파일이 사라졌다).
+  # 사라지는데, 실제 실행이 그것을 한 줄도 말하지 않은 적이 있다(실측: 다섯 칸이 전부
+  # 0인데 파일이 사라졌다).
   #
-  # **경로 규칙을 다시 적지 않는다.** 앞뒤 목록의 차이로 센다. 한 번은 `common/` 아래
-  # 존재 여부로 판정하게 적었다가 dry-run 과 또 갈렸다 — `common/` 에는 vendor 가
-  # 안 가져오는 ci·docs·templates 도 있어서 `.ai-kit/ci/*` 가 "킷이 놓는 것" 으로
-  # 오판돼 무보고 삭제됐다(실측: `삭제 0건` 인데 셋이 사라졌다).
-  # 근거가 하나면 갈릴 수 없다.
-  _before=$( cd "$TARGET" 2>/dev/null && find .ai-kit -type f 2>/dev/null | LC_ALL=C sort )
+  # **정렬해서 비교하지 않는다.** 설치 전 목록의 각 항목이 최종 트리에 아직 있는지만
+  # 본다. sort 와 comm 을 쓰면 정렬 기준이 둘이 되고 — sort 는 LC_ALL=C, comm 은 세션
+  # 로케일 — en_US.UTF-8 은 대소문자를 1차 비교에서 무시하므로 `.ai-kit/README.md` 하나로
+  # 병합이 어긋나 **안 지운 pre-commit·pre-push 를 지웠다고 보고했다**(실측).
+  # 존재 검사에는 정렬 기준이 없다.
+  #
+  # **경로 규칙도 다시 적지 않는다.** 한 번은 `common/` 아래 존재 여부로 판정하게 적었다가
+  # dry-run 과 갈렸다 — `common/` 에는 vendor 가 안 가져오는 ci·docs·templates 도 있어서
+  # `.ai-kit/ci/*` 가 "킷이 놓는 것" 으로 오판돼 무보고 삭제됐다(실측: `삭제 0건` 인데
+  # 셋이 사라졌다). 근거가 하나면 갈릴 수 없다.
+  _before=$( cd "$TARGET" 2>/dev/null && find .ai-kit -type f 2>/dev/null )
 
-  if [ "$DRY_RUN" = 1 ]; then
-    vendor_into "$STAGE/.ai-kit"
-    _after=$( cd "$STAGE" && find .ai-kit -type f 2>/dev/null | LC_ALL=C sort )
-  else
-    vendor_into "$vendor"
-    _after=$( cd "$TARGET" && find .ai-kit -type f 2>/dev/null | LC_ALL=C sort )
-  fi
+  if [ "$DRY_RUN" = 1 ]; then vendor_into "$STAGE/.ai-kit"; _final="$STAGE"
+  else                        vendor_into "$vendor";        _final="$TARGET"; fi
   while IFS= read -r _g; do
-    [ -n "$_g" ] && DELETED+=("$_g")
-  done < <(comm -23 <(printf '%s\n' "$_before") <(printf '%s\n' "$_after"))
+    [ -n "$_g" ] && [ ! -e "$_final/$_g" ] && DELETED+=("$_g")
+  done <<< "$_before"
+  # dryrun_report() 가 이 배열을 그대로 「킷이 안 놓음」으로 쓴다. 거기서 다시 세면
+  # 두 벌이 되고, 두 벌은 반드시 갈린다 — 위 주석의 실측 둘이 그것이다.
   # 보고는 dry-run 에서도 한다 — 안 그러면 예고한 건수와 실제 건수가 갈린다.
 
   # 훅은 .git/hooks 에 두지 않는다 — 그 디렉터리는 clone 되지 않으므로
@@ -251,10 +258,7 @@ if [ "$DO_HOOKS" = 1 ]; then
     if [ -f "$vendor/identity" ]; then
       # 이미 있으면 건너뛴 것으로 **센다**. 아예 세지 않으면 첫 설치와 재설치의
       # 합계가 달라지고, 읽는 사람은 무엇이 빠졌는지 알 길이 없다.
-      #
-      # 그리고 dry-run 도 STAGE 에 놓는다. 안 놓으면 예고(STAGE 를 센다)와 실제 실행이
-      # 하나 어긋난다 — 실측으로 `그대로 37` vs `건너뜀 38` 이 났다.
-      [ "$DRY_RUN" = 1 ] && cp "$vendor/identity" "$STAGE/.ai-kit/identity" 2>/dev/null
+      # (STAGE 로 옮기는 것은 vendor_into() 가 한다 — 여기서 또 하면 두 벌이 된다.)
       SKIPPED+=(".ai-kit/identity (이미 있음)")
     else
       if [ "$DRY_RUN" = 1 ]; then
@@ -556,20 +560,15 @@ dryrun_report() {
     fi
   done < <(find "$STAGE" -type f | LC_ALL=C sort)
 
-  # "사라질 것" 은 .ai-kit 에서만 본다. 킷 소유는 그 밖에도 있지만(.claude 의 스킬·
-  # 에이전트·훅, docs/process), 그 자리들은 **통째로 비우고 놓는 자리가 아니라 파일
-  # 단위로 덮는 자리**라 애초에 사라지는 것이 없다. .ai-kit 만 vendor_into() 가 비운다.
+  # "사라질 것" 은 **다시 세지 않는다.** 설치 경로가 이미 DELETED 에 담아뒀고, 그것이
+  # 실제 실행의 `삭제` 칸과 같은 배열이다. 여기서 또 세면 두 벌이 되고, 두 벌은 갈렸다 —
+  # 한 번은 예고 3 / 실제 0, 한 번은 예고 1 / 실제 3(그중 둘은 지우지도 않았다).
   #
-  # gate·git-hooks 만 보지 않고 .ai-kit 전체를 보는 이유: 킷 소유는 그 둘이 아니라
-  # .ai-kit 전체다. 좁게 보면 그 밖에 놓인 것이 목록에서 빠진다.
-  # identity 는 예외다 — 킷 소유가 아니고, 커밋 신원이 비면 STAGE 에 안 놓인다.
-  if [ "$DO_HOOKS" = 1 ] && [ -d "$TARGET/.ai-kit" ]; then
-    while IFS= read -r f; do
-      rel=${f#"$TARGET"/}
-      [ "$rel" = ".ai-kit/identity" ] && continue
-      [ -e "$STAGE/$rel" ] || { n_gone=$((n_gone + 1)); list_gone="${list_gone}  - ${rel}"$'\n'; }
-    done < <(find "$TARGET/.ai-kit" -type f | LC_ALL=C sort)
-  fi
+  # .ai-kit 에서만 나는 일인 것도 그 배열이 이미 반영한다. 킷 소유는 그 밖에도 있지만
+  # (.claude 의 스킬·에이전트·훅, docs/process) 그 자리들은 **통째로 비우고 놓는 자리가
+  # 아니라 파일 단위로 덮는 자리**라 애초에 사라지는 것이 없다.
+  n_gone=${#DELETED[@]}
+  for rel in ${DELETED+"${DELETED[@]}"}; do list_gone="${list_gone}  - ${rel}"$'\n'; done
 
   echo "── dry-run: 아무것도 바꾸지 않았습니다 ──"
   echo ""
