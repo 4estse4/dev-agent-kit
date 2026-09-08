@@ -515,11 +515,27 @@ if [ "$DO_PROTECT" = 1 ]; then
   if [ "$DRY_RUN" = 1 ]; then
     echo "install: --dry-run 이므로 브랜치 보호는 건드리지 않습니다 (원격 변경입니다)"
   else
-    # 대상 레포 안에서 돌린다. protect-branch.sh 는 gh repo view 로 레포를 찾는데
-    # 그것은 CWD 를 본다 — 여기서 cd 하지 않으면 install.sh 를 실행한 자리의
-    # 레포에 보호가 걸린다. 대상을 인자로 받는 명령에서 그건 사고다.
-    ( cd "$TARGET" && bash "$KIT_ROOT/common/ci/protect-branch.sh" ) \
-      || echo "install: 브랜치 보호 설정 실패" >&2
+    # **사람에게 묻는다.** 이것은 원격 설정을 바꾸는 유일한 자리인데 `permissions.ask`
+    # 가 못 잡는다 — 규칙은 에이전트가 친 명령 **문자열**만 보므로 `bash install.sh
+    # --protect` 안의 `gh api -X PUT` 은 안 보인다. 킷이 `Bash(gh api*)` 를 ask 에
+    # 넣어놓고 그것을 비켜가는 실행 파일을 같이 배포하면 그 층이 거짓이 된다.
+    # 그래서 스크립트가 직접 묻는다. 대답할 사람이 없으면(파이프·CI) 하지 않는다.
+    if [ ! -t 0 ]; then
+      echo "install: --protect 는 원격 설정을 바꿉니다. 지금은 입력을 받을 수 없어 건너뜁니다." >&2
+      echo "          대화형 터미널에서 다시 실행하세요." >&2
+    else
+      printf 'install: %s 의 브랜치 보호를 GitHub 에 설정합니다 — 원격이 바뀝니다. 계속할까요? [y/N] ' "$TARGET"
+      read -r _ans
+      case "$_ans" in
+        [yY]|[yY][eE][sS])
+          # 대상 레포 안에서 돌린다. protect-branch.sh 는 gh repo view 로 레포를 찾는데
+          # 그것은 CWD 를 본다 — 여기서 cd 하지 않으면 install.sh 를 실행한 자리의
+          # 레포에 보호가 걸린다. 대상을 인자로 받는 명령에서 그건 사고다.
+          ( cd "$TARGET" && bash "$KIT_ROOT/common/ci/protect-branch.sh" ) \
+            || echo "install: 브랜치 보호 설정 실패" >&2 ;;
+        *) echo "install: 브랜치 보호를 건드리지 않았습니다." ;;
+      esac
+    fi
   fi
 fi
 
@@ -584,11 +600,11 @@ dryrun_report() {
 
   echo "── dry-run: 아무것도 바꾸지 않았습니다 ──"
   echo ""
-  echo "지금 설치하면 — 새 파일 ${n_new} · 킷이 교체 ${n_repl} · 옆에 놓임 ${n_side} · 그대로 ${n_same} · 지움 ${n_gone}"
-  [ -n "$list_repl" ] && { echo ""; echo "킷이 교체함 (.ai-kit 과 .claude 의 스킬·에이전트·훅은 킷 소유다)"; printf '%s' "$list_repl"; }
-  [ -n "$list_side" ] && { echo ""; echo "이 레포 것이 그대로 남음 — 킷의 것은 <파일>.ai-kit-new 로 옆에 놓인다"; printf '%s' "$list_side"; }
-  [ -n "$list_new" ]  && { echo ""; echo "새 파일"; printf '%s' "$list_new"; }
-  [ -n "$list_gone" ] && { echo ""; echo "재설치가 지울 것"; printf '%s' "$list_gone"; }
+  echo "지금 설치하면 — 설치 ${n_new} · 교체 ${n_repl} · 보존 ${n_side} · 동일 ${n_same} · 삭제 ${n_gone}"
+  [ -n "$list_repl" ] && { echo ""; echo "교체 — .ai-kit 과 .claude 의 스킬·에이전트·훅은 킷 소유다"; printf '%s' "$list_repl"; }
+  [ -n "$list_side" ] && { echo ""; echo "보존 — 이 레포 것을 두고 킷의 것은 <파일>.ai-kit-new 로 옆에 놓는다"; printf '%s' "$list_side"; }
+  [ -n "$list_new" ]  && { echo ""; echo "설치"; printf '%s' "$list_new"; }
+  [ -n "$list_gone" ] && { echo ""; echo "삭제 — 재설치가 지운다"; printf '%s' "$list_gone"; }
 
   # diff 는 "이 레포 → 킷" 방향이다. - 가 지금 있는 것, + 가 킷이 놓을 것.
   local list_all="${list_repl}${list_side}"
@@ -625,11 +641,11 @@ dryrun_report() {
 if [ "$DRY_RUN" = 1 ]; then
   dryrun_report
 else
-echo "설치 ${#INSTALLED[@]}건 · 교체 ${#REPLACED[@]}건 · 삭제 ${#DELETED[@]}건 · 건너뜀 ${#SKIPPED[@]}건 · 충돌 ${#CONFLICTS[@]}건 · 확인필요 ${#WARNINGS[@]}건"
+echo "설치 ${#INSTALLED[@]} · 교체 ${#REPLACED[@]} · 보존 ${#CONFLICTS[@]} · 동일 ${#SKIPPED[@]} · 삭제 ${#DELETED[@]} · 경고 ${#WARNINGS[@]}"
 fi
 if [ ${#DELETED[@]} -gt 0 ] && [ "$DRY_RUN" = 0 ]; then
   echo ""
-  echo "── 지웠습니다 ──"
+  echo "── 삭제 ──"
   for _d in "${DELETED[@]}"; do printf '  - %s' ""; why_gone "$_d"; done
   echo "  .ai-kit 은 통째로 교체되는 자리입니다. 남길 것은 그 밖에 두세요."
 fi
@@ -660,7 +676,7 @@ fi
 
 if [ ${#CONFLICTS[@]} -gt 0 ] && [ "$DRY_RUN" = 0 ]; then
   echo ""
-  echo "충돌 — 기존 파일을 보존했고 새 것은 .ai-kit-new 로 옆에 뒀습니다. 확인 후 병합하세요:"
+  echo "보존 — 이 레포 것을 뒀고 킷의 것은 .ai-kit-new 로 옆에 놓았습니다. 확인 후 병합하세요:"
   printf '  %s\n' "${CONFLICTS[@]}"
 fi
 if [ ${#WARNINGS[@]} -gt 0 ]; then

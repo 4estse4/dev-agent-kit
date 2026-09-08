@@ -58,7 +58,7 @@ $ARGUMENTS
   라운드 코멘트를 못 찾으면 **리뷰가 돌지 않은 것이다.** 중단한다.
 
 > 이 확인은 편의이지 강제가 아니다. 진짜 강제는 GitHub 브랜치 보호다
-> (`common/ci/protect-branch.sh`). 브랜치 보호가 없는 레포라면 그 사실을 먼저 알린다.
+> (킷의 `install.sh --protect` 가 설정한다). 브랜치 보호가 없는 레포라면 그 사실을 먼저 알린다.
 
 ## 3. 머지
 `git log main..HEAD --format='%s'` 로 커밋 제목을 보고 사소한 것(리뷰수정·fixup·포맷)을 뺀

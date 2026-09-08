@@ -56,22 +56,40 @@ check "게이트만"        --hooks
 check "전체 플래그"      --hooks --templates --lint --ci --agent
 check "언어를 좁힌 재설치" --hooks --lang py
 
-# 예고와 실제가 같은 수를 내는가.
+# 미리보기와 실제가 같은 수를 내는가.
 #
-# **삭제가 0 이 아닌 경우를 반드시 포함한다.** 0=0 은 그 칸이 틀려도 통과하므로 아무것도
-# 보증하지 않는다 — 이 테스트의 첫 판이 그랬고, 예고의 건수만 거짓으로 만들어도 초록이었다.
+# **두 출력이 같은 낱말을 쓰므로 정규식 한 벌로 다섯 칸을 통째로 비교한다.** 예전에는
+# 칸마다 이름이 달라(`새 파일`/`설치`, `옆에 놓임`/`충돌`) 정규식을 두 벌 써야 했고,
+# 그러다 `옆에 놓임` 칸을 아예 안 뽑아 비교에서 빠뜨렸다.
+#
+# **단계마다 그 칸이 0 이 아니어야 잰 것이다.** 0 = 0 은 칸이 틀려도 맞으므로 아무것도
+# 보증하지 않는다 — 첫 판이 그랬고, 미리보기의 건수만 거짓으로 만들어도 초록이었다.
+cols() { sed -n 's/.*지금 설치하면 — \(.*\)/\1/p; s/^\(설치 [0-9].*\) · 경고 [0-9]*$/\1/p'; }
 R=$(mkrepo)
-for phase in 첫설치 재설치 지움있는재설치; do
-  [ "$phase" = 지움있는재설치 ] && echo x > "$R/.ai-kit/git-hooks/README.md"
-  f=$(bash "$KIT/install.sh" --hooks --templates --lint --ci --agent --dry-run "$R" 2>&1 \
-      | sed -n 's/.*새 파일 \([0-9]*\) · 킷이 교체 \([0-9]*\).*그대로 \([0-9]*\) · 지움 \([0-9]*\)/\1 \2 \3 \4/p')
-  a=$(bash "$KIT/install.sh" --hooks --templates --lint --ci --agent "$R" 2>&1 \
-      | sed -n 's/^설치 \([0-9]*\)건 · 교체 \([0-9]*\)건 · 삭제 \([0-9]*\)건 · 건너뜀 \([0-9]*\)건.*/\1 \2 \4 \3/p')
-  [ "$f" = "$a" ] && echo "  ✓ 예고=실제 ($phase: $f)" \
-                  || { echo "  ✗ 예고≠실제 ($phase): 예고 [$f] vs 실제 [$a]"; fail=1; }
-  # 마지막 경우는 삭제 칸이 0 이면 안 된다 — 0 이면 이 검사가 그 칸을 안 잰 것이다
-  if [ "$phase" = 지움있는재설치 ]; then
-    case "$f" in *" 0") echo "  ✗ 지움있는재설치인데 예고의 삭제 칸이 0 이다 — 이 경우를 안 잰 셈"; fail=1 ;; esac
-  fi
+for phase in 첫설치 재설치 보존있음 삭제있음; do
+  case "$phase" in
+    # 프로젝트 소유는 둘이다 — CLAUDE.md 와 .claude/settings.json. 하나만 고쳐두면
+    # 다른 하나의 소유 판정이 깨져도 이 검사가 안 터진다(실측: settings.json 쪽을
+    # 킷 소유로 오판하게 만들어도 초록이었다).
+    보존있음) printf '\n# 이 프로젝트가 적은 줄\n' >> "$R/CLAUDE.md"
+              python3 - "$R/.claude/settings.json" <<'PYEOF'
+import json,sys
+p=sys.argv[1]; d=json.load(open(p))
+d["permissions"]["allow"].append("Bash(echo project-owned)")
+json.dump(d, open(p,"w"), indent=2, ensure_ascii=False)
+PYEOF
+              ;;
+    삭제있음) echo x > "$R/.ai-kit/git-hooks/README.md" ;;
+  esac
+  f=$(bash "$KIT/install.sh" --hooks --templates --lint --ci --agent --dry-run "$R" 2>&1 | cols)
+  a=$(bash "$KIT/install.sh" --hooks --templates --lint --ci --agent          "$R" 2>&1 | cols)
+  if [ "$f" = "$a" ]; then echo "  ✓ 미리보기=실제 ($phase: $f)"
+  else echo "  ✗ 미리보기≠실제 ($phase)"; echo "      미리보기 [$f]"; echo "      실제     [$a]"; fail=1; fi
+  # 그 단계가 겨눈 칸이 0 이면 잰 것이 아니다
+  case "$phase" in
+    보존있음) echo "$a" | grep -q '보존 0' && { echo "  ✗ $phase 인데 보존 칸이 0 이다 — 이 칸을 안 잰 셈"; fail=1; } ;;
+    삭제있음) echo "$a" | grep -q '삭제 0' && { echo "  ✗ $phase 인데 삭제 칸이 0 이다 — 이 칸을 안 잰 셈"; fail=1; } ;;
+  esac
 done
+
 exit $fail

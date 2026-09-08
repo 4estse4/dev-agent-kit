@@ -2,10 +2,10 @@
 # SHA 핀이 더 엄격하지만 사람이 손으로 갱신하면 결국 낡는다 — 자동 PR 이 실질적이다.
 #
 # 주의: github-actions 생태계는 `.github/workflows/` 만 훑는다. 킷의 템플릿 원본
-# (common/ci/gates.yml)은 그 경로가 아니므로 **Dependabot 이 갱신하지 않는다.**
+# 은 킷 안에 있어 그 경로가 아니므로 **Dependabot 이 갱신하지 않는다.**
 # 그래서 템플릿의 액션 버전은 시간이 지나면 뒤처지고, 새 프로젝트는 조금 낡은 상태로
 # 시작해 설치 직후 Dependabot PR 몇 개를 받는다(설치된 뒤에는 스스로 최신이 된다).
-# 킷 쪽은 대신 `common/ci/check-action-pins.sh` 가 본다. 킷의 주간 워크플로
+# 킷 쪽은 대신 킷 레포의 주간 워크플로가 본다. 그 워크플로
 # (.github/workflows/template-action-pins.yml)가 그것을 돌려 뒤처지면 이슈를 연다 —
 # "사람이 가끔 확인" 은 막는 것이 없는 규칙이라 안 지켜진다고 가정해야 한다.
 version: 2
