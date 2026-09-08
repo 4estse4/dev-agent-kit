@@ -9,9 +9,10 @@
 #
 #   <kit>/install.sh <경로> --dry-run    아무것도 바꾸지 않고 무엇이 달라질지만 본다
 #
-# .ai-kit/gate 와 git-hooks 는 킷 소유라 통째로 교체한다. 그 밖의 파일은 이미 있으면
-# 건드리지 않고, 내용이 다르면 .ai-kit-new 로 옆에 둔다. **자동 병합은 하지 않는다** —
-# 합치는 것은 사람·에이전트가 한다.
+# 킷 소유는 .ai-kit/** 와 .claude/{skills,agents,hooks}/** 와 docs/process/** 다 —
+# 재설치가 **덮는다.** 프로젝트 소유는 CLAUDE.md 와 .claude/settings.json 이고, 이미
+# 있으면 건드리지 않고 내용이 다르면 .ai-kit-new 로 옆에 둔다. **자동 병합은 하지
+# 않는다** — 합치는 것은 사람·에이전트가 한다. 무엇이 덮이는지는 --dry-run 이 보여준다.
 set -uo pipefail
 
 KIT_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -70,6 +71,7 @@ TARGET=$(git -C "$TARGET_ARG" rev-parse --show-toplevel 2>/dev/null) \
 echo "install: 대상 $TARGET"
 echo "install: 킷   $KIT_ROOT"
 
+PROTECT_SKIPPED=0
 INSTALLED=(); REPLACED=(); DELETED=(); SKIPPED=(); CONFLICTS=(); WARNINGS=()
 # dry-run 은 대상 대신 이 트리에 놓는다. 놓고 나서 대상과 비교하면 무엇이 달라지는지가
 # 나오고, 트리 자체가 남으므로 사람이나 에이전트가 그것을 보고 병합할 수 있다.
@@ -521,8 +523,11 @@ if [ "$DO_PROTECT" = 1 ]; then
     # 넣어놓고 그것을 비켜가는 실행 파일을 같이 배포하면 그 층이 거짓이 된다.
     # 그래서 스크립트가 직접 묻는다. 대답할 사람이 없으면(파이프·CI) 하지 않는다.
     if [ ! -t 0 ]; then
-      echo "install: --protect 는 원격 설정을 바꿉니다. 지금은 입력을 받을 수 없어 건너뜁니다." >&2
+      # **성공으로 끝내지 않는다.** 에이전트의 Bash 호출은 언제나 이 경로이고, exit 0 을
+      # 받으면 "보호를 설정했다" 로 보고하게 된다. 부재는 통과가 아니다.
+      echo "install: --protect 는 원격 설정을 바꿉니다. 지금은 입력을 받을 수 없어 하지 않았습니다." >&2
       echo "          대화형 터미널에서 다시 실행하세요." >&2
+      PROTECT_SKIPPED=1
     else
       printf 'install: %s 의 브랜치 보호를 GitHub 에 설정합니다 — 원격이 바뀝니다. 계속할까요? [y/N] ' "$TARGET"
       read -r _ans
@@ -683,3 +688,7 @@ if [ ${#WARNINGS[@]} -gt 0 ]; then
   echo ""; echo "확인 필요:"
   printf '  %s\n' "${WARNINGS[@]}"
 fi
+
+# --protect 를 지시받고도 못 했으면 실패다. 부재는 통과가 아니다.
+[ "${PROTECT_SKIPPED:-0}" = 1 ] && exit 3
+exit 0

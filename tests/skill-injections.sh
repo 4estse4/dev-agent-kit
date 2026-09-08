@@ -21,27 +21,45 @@ for f in files:
         continue
     bad = 0
     body = re.sub(r'^!`.*`$', '', s, flags=re.M)          # 주입 줄 자체는 설명이 아니다
-    emitted = {e for line in inj for e in re.findall(r'echo "([^"]+)"', line)}
+    # **뽑는 자리에 예외를 두지 않는다.** `echo "…"` 만 보던 탓에 `echo '…'` 와
+    # `printf "…"` 로 쓴 메시지가 통째로 안 보였다(실측: 셋 다 초록).
+    # `printf "%s\\n" "…"` 은 첫 인용문이 서식이라, 명령 하나에서 **인용문을 다 본다.**
+    # 첫 것만 보면 진짜 메시지가 통째로 안 보인다(실측: printf 로 쓴 새 메시지가 초록).
+    CALL = re.compile(r'\b(?:echo|printf)\b((?:\s+(?:-[a-zA-Z]+|"[^"]*"|\'[^\']*\'|[^\s;|&)]+))*)')
+    QUOTED = re.compile(r'"([^"]*)"|\'([^\']*)\'')
+    def msgs(line):
+        out = []
+        for call in CALL.finditer(line):
+            for a, b in QUOTED.findall(call.group(1)):
+                out.append(a or b)
+        return out
+    emitted = {e for line in inj for e in msgs(line)}
     # **한 주입 줄이 내는 것들은 다 적히거나 다 안 적히거나여야 한다.** 그 줄의 갈래를
     # 설명하려고 표를 쓰기 시작했으면 그 줄의 갈래를 다 적어야 한다는 뜻이다. 부분만 적힌
     # 표가 통짜 규칙보다 나쁘다 — 실제로 한 줄이 넷을 내는데 표는 셋만 적고, 남은 하나에
     # 대해 "안 나온다" 는 거짓을 적고 있었다.
     partial = set()
     for line in inj:
-        outs = [e.split('$')[0].strip() for e in re.findall(r'echo "([^"]+)"', line)]
+        outs = [e.split('$')[0].strip() for e in msgs(line)]
         outs = [o for o in outs if len(o) >= 6]
         listed = [o for o in outs if o in body]
         if listed and len(listed) < len(set(outs)):
             partial |= {o for o in outs if o not in body}
     for e in sorted(emitted):
+        # 자르기 표시(`앞 200줄뿐이다` 류)는 **아래 자르기 검사가 이미 강제한다.**
+        # 산문 설명까지 요구하면 같은 것을 두 번 요구하는 것이다. 면제가 아니라
+        # 담당이 다른 것이고, 그 담당이 실제로 검사한다는 것이 이 줄의 조건이다.
+        if any(w in e for w in ('뿐이다', '생략', '만 보여준다', '전체 요구 ID')):
+            continue
         # 치환($VAR · ${VAR})이 든 문자열은 통째로 대조할 수 없다 — 첫 $ 앞까지를 본다
         key = e.split('$')[0].strip()
+        # 치환이 맨 앞에 오면 접두가 `!!` 만 남는다. 그것을 짧다고 건너뛰면 **`!!` 면제가
+        # 좁아진 형태로 되살아난다**(실측). 그럴 때는 치환을 뺀 나머지 조각으로 본다.
         if len(key) < 6:
-            continue
-        # 포괄 규칙(`!!` 로 시작하면 멈춰라)은 **아무 문자열도 개별로 안 적은 파일**에만
-        # 면제가 된다. 하나라도 개별로 적었으면 나머지도 적어야 한다 — 부분만 적힌 표가
-        # 통짜 규칙보다 나쁘다. 실제로 그랬다: 주입이 넷을 내는데 표는 셋이었고, 셋째 행이
-        # 넷째에 대해 "안 나온다" 는 거짓을 적고 있었다. 그 결함을 이 검사가 잡아야 한다.
+            key = re.sub(r'\$\{?\w+\}?', ' ', e).strip()
+            key = max(key.split('  '), key=len).strip() if '  ' in key else key
+            if len(key) < 6:
+                continue
         if key in body:
             continue
         # **예외를 두지 않는다.** 예전에는 파일 맨 위의 통짜 규칙(`!!` 로 시작하면 멈춰라)이
@@ -70,7 +88,7 @@ for f in files:
     # `...` 은 키로 못 쓴다 — `git diff main...HEAD` 가 그것을 갖고 있어 면제돼버린다.
     CUT_WORDS = ('뿐이다', '앞 ', '생략', '만 보여준다', '전체 요구 ID')
     for line in inj:
-        for m in re.finditer(r'\b(?:head|tail) -\d+', line):
+        for m in re.finditer(r"\b(?:head|tail)\s+-[nc]?\s*\d+|\bsed\s+-n\s+'?\d+,\d+p", line):
             if any(w in line for w in CUT_WORDS):
                 continue
             print(f"  ✗ {f}: 말없이 자른다 — {m.group(0)}"); fail = 1; bad = 1

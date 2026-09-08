@@ -153,12 +153,16 @@ CI 가 같은 검사를 다시 도는 이유는 **로컬이 안 돌 수 있기 �
 바꾸지 않고 이렇게 말한다:
 
 ```
-지금 설치하면 — 새 파일 2 · 내용이 다름 3 · 그대로 35 · 킷이 안 놓음 1
+지금 설치하면 — 설치 0 · 교체 1 · 보존 1 · 동일 39 · 삭제 1
 
-내용이 다름
+교체 — .ai-kit 과 .claude 의 스킬·에이전트·훅은 킷 소유다
   ~ .ai-kit/gate/secrets.sh
-킷이 안 놓음 (이 레포에만 있는 킷 소유 파일)
-  - .ai-kit/gate/adapters/ts.sh
+
+보존 — 이 레포 것을 두고 킷의 것은 <파일>.ai-kit-new 로 옆에 놓는다
+  ~ CLAUDE.md
+
+삭제 — 재설치가 지운다
+  - .ai-kit/gate/adapters/extra.sh
 
 diff (- 지금 이 레포 / + 킷이 놓을 것)
   ...
@@ -172,7 +176,8 @@ diff 가 길면 `AI_KIT_DIFF_MAX_LINES`·`AI_KIT_DIFF_MAX_TOTAL` 로 조절한�
 | 대상 | 갱신 방식 |
 |---|---|
 | `.ai-kit/gate/` · `git-hooks/` | 킷 소유 — 통째로 교체 |
-| `CLAUDE.md` · CI · 린터 · 스킬 | 프로젝트 소유 — 건드리지 않고 `diff` 명령만 알려준다 |
+| `CLAUDE.md` · `.claude/settings.json` · CI · 린터 | 프로젝트 소유 — 건드리지 않고 `diff` 명령만 알려준다 |
+| `.claude/skills|agents|hooks` · `docs/process` | **킷 소유 — 재설치가 덮는다** |
 
 ### 자동 병합을 하지 않는 이유
 
