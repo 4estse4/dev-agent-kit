@@ -11,7 +11,7 @@ SPEC:
 > `!! SPEC 이 …줄이라` 가 뜨면 **위 본문은 앞부분뿐이다.** 그 줄 아래의 ID 목록이
 > 전체이고, **거기 있는 것을 「SPEC 에 없는 유령 행」으로 판정하지 마라.**
 
-!`cat docs/SPEC.md 2>/dev/null | head -200; _n=$(wc -l < docs/SPEC.md 2>/dev/null | tr -d " " || echo 0); if [ "$_n" -gt 200 ]; then echo; echo "!! SPEC 이 ${_n}줄이라 위는 앞 200줄뿐이다. 아래가 전체 요구 ID 이고, 여기 있는 것을 유령으로 판정하지 마라:"; grep -ohE "R-[A-Z]+-[0-9]+" docs/SPEC.md | sort -u | tr "\n" " "; echo; fi`
+!`cat docs/SPEC.md 2>/dev/null | head -200; _n=$( [ -f docs/SPEC.md ] && wc -l < docs/SPEC.md | tr -d " " || echo 0 ); if [ "$_n" -gt 200 ]; then echo; echo "!! SPEC 이 ${_n}줄이라 위는 앞 200줄뿐이다. 아래가 전체 요구 ID 이고, 여기 있는 것을 유령으로 판정하지 마라:"; grep -ohE "R-[A-Z]+-[0-9]+" docs/SPEC.md | sort -u | tr "\n" " "; echo; fi`
 
 추적 매트릭스:
 !`cat docs/traceability.md 2>/dev/null`

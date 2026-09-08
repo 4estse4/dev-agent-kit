@@ -11,14 +11,15 @@ argument-hint: "[선택: PR 번호]"
 !`git diff main...HEAD --stat`
 
 PR 본문과 리뷰:
-> `!!` 로 시작하면 **못 가져온 것**이다 — 무엇이 실패했는지만 보고하고 멈춘다.
+> `!! PR <번호> 를 못 가져왔다` 면 **번호는 줬는데 실패한 것**이다 — 무엇이 실패했는지만
+> 보고하고 멈춘다. 커밋 목록만 보고 dev-log 를 쓰지 마라.
 > `(PR 번호 미지정)` 은 실패가 아니라 번호 없이 불린 것이다. **라운드에서 무슨 일이
 > 있었는지를 못 보므로, 사람의 개입을 커밋 목록에서 지어내지 마라** — 번호를 주고 다시
 > 부르거나, dev-log 의 그 칸에 "PR 없이 기록함" 을 적는다.
 !`if [ -z "$ARGUMENTS" ]; then echo "(PR 번호 미지정)"; else gh pr view $ARGUMENTS --json title,body,comments --jq '"TITLE: \(.title)\n\n== BODY ==\n\(.body)\n\n== COMMENTS ==\n" + (.comments | map(.body) | join("\n\n---\n\n"))' || echo "!! PR $ARGUMENTS 를 못 가져왔다 — 번호는 줬는데 실패했다. 이 사실을 적고 진행하지 마라."; fi`
 
 기존 dev-log 항목 순서 (위치 판단용 — 첫 항목과 마지막 항목의 날짜를 비교한다):
-!`grep -n '^## ' docs/dev-log.md 2>/dev/null | head -3; echo '   ...'; grep -n '^## ' docs/dev-log.md 2>/dev/null | tail -3`
+!`grep -n '^## ' docs/dev-log.md 2>/dev/null | head -3; echo '   … (가운데 생략)'; grep -n '^## ' docs/dev-log.md 2>/dev/null | tail -3`
 
 기존 dev-log 마지막 항목 (형식 참조):
 !`awk '/^## /{last=NR} END{print last}' docs/dev-log.md 2>/dev/null | xargs -I{} tail -n +{} docs/dev-log.md 2>/dev/null | head -25; echo '   (형식 참조용이라 앞 25줄만 보여준다 — 전문이 필요하면 직접 읽어라)'`

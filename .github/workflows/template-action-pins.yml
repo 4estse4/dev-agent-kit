@@ -34,7 +34,8 @@ jobs:
           # 이미 있는 검사기에 파일 하나 더 넘기는 쪽이 부품이 적다.
           out=$(bash common/ci/check-action-pins.sh \
                   common/ci/gates.yml \
-                  .github/workflows/template-action-pins.yml 2>&1); rc=$?
+                  .github/workflows/template-action-pins.yml \
+                  .github/workflows/kit-tests.yml 2>&1); rc=$?
           printf '%s\n' "$out"
           {
             echo "rc=$rc"
