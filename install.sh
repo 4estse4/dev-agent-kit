@@ -4,7 +4,7 @@
 #   <kit>/install.sh <프로젝트경로>      로컬 전부 (훅·템플릿·린트·CI·도구설정)
 #                                        경로는 필수. 현재 위치면 "." 를 준다.
 #   <kit>/install.sh <경로> [--lang py,ts] --hooks --lint   선택 설치
-#     항목: --hooks --templates --lint --ci --agent  (--agent 는 .claude/** 만)
+#     항목: --hooks --templates --lint --ci --agent  (--agent 는 .claude/** 와 docs/process/**)
 #   <kit>/install.sh <경로> --protect    GitHub 브랜치 보호 설정 (원격 변경 — 별도 플래그)
 #
 #   <kit>/install.sh <경로> --dry-run    아무것도 바꾸지 않고 무엇이 달라질지만 본다
@@ -157,7 +157,7 @@ if [ "$DO_HOOKS" = 1 ]; then
     local v="$1"
     # .ai-kit 은 identity 를 빼면 전부 킷 소유다. 소유한 자리는 **통째로 비우고 놓는다** —
     # 이름을 지목해 지우면 그 목록이 킷이 바뀔 때마다 자라고, 자라다 빠진다.
-    # 무엇이 사라지는지는 --dry-run 의 "킷이 안 놓음" 이 미리 보여준다.
+    # 무엇이 사라지는지는 --dry-run 의 "재설치가 지울 것" 이 미리 보여준다.
     if [ -d "$v" ]; then
       find "$v" -mindepth 1 -maxdepth 1 ! -name identity -exec rm -rf {} +
     fi
@@ -227,7 +227,7 @@ if [ "$DO_HOOKS" = 1 ]; then
   while IFS= read -r _g; do
     [ -n "$_g" ] && [ ! -e "$_final/$_g" ] && DELETED+=("$_g")
   done <<< "$_before"
-  # dryrun_report() 가 이 배열을 그대로 「킷이 안 놓음」으로 쓴다. 거기서 다시 세면
+  # dryrun_report() 가 이 배열을 그대로 「재설치가 지울 것」으로 쓴다. 거기서 다시 세면
   # 두 벌이 되고, 두 벌은 반드시 갈린다 — 위 주석의 실측 둘이 그것이다.
   # 보고는 dry-run 에서도 한다 — 안 그러면 예고한 건수와 실제 건수가 갈린다.
 
@@ -584,7 +584,7 @@ dryrun_report() {
 
   echo "── dry-run: 아무것도 바꾸지 않았습니다 ──"
   echo ""
-  echo "지금 설치하면 — 새 파일 ${n_new} · 킷이 교체 ${n_repl} · 옆에 놓임 ${n_side} · 그대로 ${n_same} · 킷이 안 놓음 ${n_gone}"
+  echo "지금 설치하면 — 새 파일 ${n_new} · 킷이 교체 ${n_repl} · 옆에 놓임 ${n_side} · 그대로 ${n_same} · 지움 ${n_gone}"
   [ -n "$list_repl" ] && { echo ""; echo "킷이 교체함 (.ai-kit 과 .claude 의 스킬·에이전트·훅은 킷 소유다)"; printf '%s' "$list_repl"; }
   [ -n "$list_side" ] && { echo ""; echo "이 레포 것이 그대로 남음 — 킷의 것은 <파일>.ai-kit-new 로 옆에 놓인다"; printf '%s' "$list_side"; }
   [ -n "$list_new" ]  && { echo ""; echo "새 파일"; printf '%s' "$list_new"; }

@@ -10,11 +10,14 @@ argument-hint: "[선택: 맥락·티켓]"
 변경 규모:
 !`git diff main...HEAD --stat`
 
+> `!! 새 테스트가 …개라` 가 뜨면 위 목록은 앞부분뿐이다 — 본문의 `새 테스트` 칸에
+> 그 사실을 적는다. 목록에 없는 것을 "없다" 로 쓰지 마라.
+
 **게이트 실행 결과 (본문에 그대로 붙일 증거):**
 !`bash .ai-kit/gate/gate.sh 2>&1 || true`
 
 새로 추가된 테스트:
-!`git diff main...HEAD -U0 -- '*_test.go' '*.test.ts' '*.test.tsx' '*_test.py' | grep -E '^\+\s*(func Test|it\(|test\(|describe\()' | sed 's/^+[[:space:]]*/  /' | head -40`
+!`git diff main...HEAD -U0 -- '*_test.go' '*.test.ts' '*.test.tsx' '*_test.py' | grep -E '^\+\s*(func Test|it\(|test\(|describe\()' | sed 's/^+[[:space:]]*/  /' | head -40; _t=$(git diff main...HEAD -U0 -- '*_test.go' '*.test.ts' '*.test.tsx' '*_test.py' | grep -cE '^\+\s*(func Test|it\(|test\(|describe\()'); [ "$_t" -gt 40 ] && echo "  !! 새 테스트가 ${_t}개라 위는 앞 40개뿐이다"`
 
 $ARGUMENTS
 

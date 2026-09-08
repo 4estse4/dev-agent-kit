@@ -21,7 +21,7 @@ PR 본문과 리뷰:
 !`grep -n '^## ' docs/dev-log.md 2>/dev/null | head -3; echo '   ...'; grep -n '^## ' docs/dev-log.md 2>/dev/null | tail -3`
 
 기존 dev-log 마지막 항목 (형식 참조):
-!`awk '/^## /{last=NR} END{print last}' docs/dev-log.md 2>/dev/null | xargs -I{} tail -n +{} docs/dev-log.md 2>/dev/null | head -25`
+!`awk '/^## /{last=NR} END{print last}' docs/dev-log.md 2>/dev/null | xargs -I{} tail -n +{} docs/dev-log.md 2>/dev/null | head -25; echo '   (형식 참조용이라 앞 25줄만 보여준다 — 전문이 필요하면 직접 읽어라)'`
 
 $ARGUMENTS
 
