@@ -14,6 +14,16 @@ python3 - <<'PY'
 import re, glob, sys
 fail = 0
 files = sorted(glob.glob('claude-code/skills/*/SKILL.md')) + sorted(glob.glob('claude-code/agents/*.md'))
+# **아무것도 안 본 검사는 통과가 아니다.** 이 파일이 겪은 결함은 거의 다 "정규식이 그
+# 표기를 몰라서 조용히 0건을 봤다" 였다(`echo '…'` · `printf` · `head -n`). 통과와
+# 구분이 안 되므로, **거칠게 세어본 수와 정교하게 뽑은 수가 어긋나면 실패**시킨다.
+def crude(line):
+    return len(re.findall(r'\b(?:echo|printf)\b', line))
+def crude_cut(line):
+    # **명령 자리에 있는 것만 본다.** 그냥 낱말로 찾으면 jq 표현식 안의 `head:` 같은
+    # 문자열을 명령으로 오인한다(실측: `contains("리뷰한 head:")` 가 걸렸다).
+    return len(re.findall(r'(?:^|[|;&(]\s*)(?:head|tail)\s+-|(?:^|[|;&(]\s*)sed\s+-n', line))
+
 for f in files:
     s = open(f).read()
     inj = re.findall(r'^!`(.*)`$', s, re.M)
@@ -86,13 +96,23 @@ for f in files:
     # 명령이 실패했다는 표시지 잘랐다는 표시가 아니고, 실제로 `!!` 를 가진 줄에 `head -500`
     # 을 넣으니 통과했다. 자르기를 말하는 낱말만 본다.
     # `...` 은 키로 못 쓴다 — `git diff main...HEAD` 가 그것을 갖고 있어 면제돼버린다.
+    CUT_RE = r"\b(?:head|tail)\s+-[nc]?\s*\d+|\bsed\s+-n\s+'?\d+,\d+p"
     CUT_WORDS = ('뿐이다', '앞 ', '생략', '만 보여준다', '전체 요구 ID')
     for line in inj:
-        for m in re.finditer(r"\b(?:head|tail)\s+-[nc]?\s*\d+|\bsed\s+-n\s+'?\d+,\d+p", line):
+        for m in re.finditer(CUT_RE, line):
             if any(w in line for w in CUT_WORDS):
                 continue
             print(f"  ✗ {f}: 말없이 자른다 — {m.group(0)}"); fail = 1; bad = 1
             break
+
+    # 사각지대 검사 — 뽑는 쪽이 그 줄을 아예 못 봤나
+    for line in inj:
+        if crude(line) and not msgs(line):
+            print(f"  ✗ {f}: echo/printf 가 있는데 메시지를 하나도 못 뽑았다 — {line[:60]}")
+            fail = 1; bad = 1
+        if crude_cut(line) and not re.search(CUT_RE, line):
+            print(f"  ✗ {f}: 자르기가 있는데 자르기 정규식이 못 봤다 — {line[:60]}")
+            fail = 1; bad = 1
     if not bad:
         print(f"  ✓ {f.split('/')[-2] if 'skills' in f else f.split('/')[-1]}: 내는 문자열 {len(emitted)}개 전부 설명됨")
 sys.exit(fail)

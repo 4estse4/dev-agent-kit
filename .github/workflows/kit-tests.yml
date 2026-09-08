@@ -44,3 +44,6 @@ jobs:
 
       - name: every injected string is explained
         run: bash tests/skill-injections.sh
+
+      - name: installed docs do not lie
+        run: bash tests/installed-docs.sh
