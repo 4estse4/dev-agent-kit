@@ -13,20 +13,46 @@ cd "$KIT" || exit 1
 python3 - <<'PY'
 import re, glob, sys
 fail = 0
-files = sorted(glob.glob('claude-code/skills/*/SKILL.md')) + sorted(glob.glob('claude-code/agents/*.md'))
+# 훑을 것이 없으면 통과가 아니다 — 디렉터리 구조가 바뀌는 날 조용히 초록이 된다.
+# **glob 마다 따로 본다.** 합쳐서 보면 한쪽이 통째로 사라져도 다른 쪽 때문에 안 비어
+# 그대로 지나간다(실측: skills/ 를 옮겨도 agents/ 하나로 초록이었다).
+files = []
+for pat in ('claude-code/skills/*/SKILL.md', 'claude-code/agents/*.md'):
+    got = sorted(glob.glob(pat))
+    if not got:
+        print(f"  ✗ {pat} 에 해당하는 파일이 없다 — 경로가 바뀌었나"); sys.exit(1)
+    files += got
 # **아무것도 안 본 검사는 통과가 아니다.** 이 파일이 겪은 결함은 거의 다 "정규식이 그
 # 표기를 몰라서 조용히 0건을 봤다" 였다(`echo '…'` · `printf` · `head -n`). 통과와
 # 구분이 안 되므로, **거칠게 세어본 수와 정교하게 뽑은 수가 어긋나면 실패**시킨다.
 def crude(line):
-    return len(re.findall(r'\b(?:echo|printf)\b', line))
+    # 인자 없는 `echo` 나 `echo 0` 은 메시지가 아니다 — 따옴표 인자를 가진 것만 센다.
+    return len(re.findall(r'''\b(?:echo|printf)\b(?:\s+-[a-zA-Z]+)*\s+["']''', line))
+def has_var_msg(line):
+    # `_m="!! …"; … echo "$_m"` 처럼 변수에 담으면 뽑는 쪽도 거친 쪽도 같이 눈먼다.
+    # 대입에 메시지가 들어 있으면 그 대입 자체를 메시지로 본다.
+    out = [a or b for a, b in
+           re.findall(r'''\b\w+=(?:"([^"]*)"|'([^']*)')''', line)]
+    # jq 표현식·경로 같은 대입까지 메시지로 세면 오탐이다. 이 검사가 겨눈 것은
+    # **실패 표시를 변수에 숨기는 것**이므로 `!!` 를 담은 대입만 본다.
+    return [v for v in out if '!!' in v]
 def crude_cut(line):
     # **명령 자리에 있는 것만 본다.** 그냥 낱말로 찾으면 jq 표현식 안의 `head:` 같은
     # 문자열을 명령으로 오인한다(실측: `contains("리뷰한 head:")` 가 걸렸다).
-    return len(re.findall(r'(?:^|[|;&(]\s*)(?:head|tail)\s+-|(?:^|[|;&(]\s*)sed\s+-n', line))
+    return len(re.findall(r'(?:^|[|;&(]\s*)(?:head|tail)\b'
+                          r'|(?:^|[|;&(]\s*)sed\s+-n'
+                          r'|(?:^|[|;&(]\s*)(?:awk|cut)\b', line))
 
 for f in files:
     s = open(f).read()
-    inj = re.findall(r'^!`(.*)`$', s, re.M)
+    # **주입 줄 인식이 빡빡하면 파일이 통째로 빠지고, 화면에는 `✓ 0개` 가 뜬다.**
+    # 실측: 줄 끝에 공백 하나만 붙어도 그 파일의 검사 셋이 다 건너뛰어졌다.
+    # 들여쓰기·끝공백을 허용하고, **거칠게 본 수와 어긋나면 실패**시킨다.
+    inj = re.findall(r'^\s*!`(.*)`\s*$', s, re.M)
+    crude_inj = len(re.findall(r'^\s*!`', s, re.M))
+    if crude_inj != len(inj):
+        print(f"  ✗ {f}: 주입처럼 보이는 줄 {crude_inj}개 중 {len(inj)}개만 읽었다 — 나머지가 검사 밖이다")
+        fail = 1
     if not inj:
         continue
     bad = 0
@@ -43,14 +69,14 @@ for f in files:
             for a, b in QUOTED.findall(call.group(1)):
                 out.append(a or b)
         return out
-    emitted = {e for line in inj for e in msgs(line)}
+    emitted = {e for line in inj for e in msgs(line) + has_var_msg(line)}
     # **한 주입 줄이 내는 것들은 다 적히거나 다 안 적히거나여야 한다.** 그 줄의 갈래를
     # 설명하려고 표를 쓰기 시작했으면 그 줄의 갈래를 다 적어야 한다는 뜻이다. 부분만 적힌
     # 표가 통짜 규칙보다 나쁘다 — 실제로 한 줄이 넷을 내는데 표는 셋만 적고, 남은 하나에
     # 대해 "안 나온다" 는 거짓을 적고 있었다.
     partial = set()
     for line in inj:
-        outs = [e.split('$')[0].strip() for e in msgs(line)]
+        outs = [e.split('$')[0].strip() for e in msgs(line) + has_var_msg(line)]
         outs = [o for o in outs if len(o) >= 6]
         listed = [o for o in outs if o in body]
         if listed and len(listed) < len(set(outs)):
@@ -96,7 +122,11 @@ for f in files:
     # 명령이 실패했다는 표시지 잘랐다는 표시가 아니고, 실제로 `!!` 를 가진 줄에 `head -500`
     # 을 넣으니 통과했다. 자르기를 말하는 낱말만 본다.
     # `...` 은 키로 못 쓴다 — `git diff main...HEAD` 가 그것을 갖고 있어 면제돼버린다.
-    CUT_RE = r"\b(?:head|tail)\s+-[nc]?\s*\d+|\bsed\s+-n\s+'?\d+,\d+p"
+    # 플래그 없는 `head` 는 기본 10줄 — 가장 짧게 자르는 표기가 사각지대였다(실측).
+    CUT_RE = (r"(?:^|[|;&(]\s*)(?:head|tail)\b(?:\s+-[nc]?\s*\d+)?"
+              r"|\bsed\s+-n\s+'?\d+,\d+p"
+              r"|\bawk\s+'[^']*NR\s*[<>]=?\s*\d+"
+              r"|\bcut\s+-c\s*\d+")
     CUT_WORDS = ('뿐이다', '앞 ', '생략', '만 보여준다', '전체 요구 ID')
     for line in inj:
         for m in re.finditer(CUT_RE, line):
@@ -107,8 +137,9 @@ for f in files:
 
     # 사각지대 검사 — 뽑는 쪽이 그 줄을 아예 못 봤나
     for line in inj:
-        if crude(line) and not msgs(line):
-            print(f"  ✗ {f}: echo/printf 가 있는데 메시지를 하나도 못 뽑았다 — {line[:60]}")
+        # **수로 견준다.** 진위값으로 보면 한 줄에 둘이고 하나만 뽑혀도 초록이다(실측).
+        if crude(line) > len(msgs(line)):
+            print(f"  ✗ {f}: echo/printf {crude(line)}개인데 메시지는 {len(msgs(line))}개만 뽑았다 — {line[:50]}")
             fail = 1; bad = 1
         if crude_cut(line) and not re.search(CUT_RE, line):
             print(f"  ✗ {f}: 자르기가 있는데 자르기 정규식이 못 봤다 — {line[:60]}")
