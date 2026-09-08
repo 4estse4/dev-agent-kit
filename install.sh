@@ -234,7 +234,7 @@ if [ "$DO_HOOKS" = 1 ]; then
   # 보고는 dry-run 에서도 한다 — 안 그러면 예고한 건수와 실제 건수가 갈린다.
 
   # 훅은 .git/hooks 에 두지 않는다 — 그 디렉터리는 clone 되지 않으므로
-  # 평가자가 레포를 받으면 강제가 통째로 사라진다.
+  # 레포를 새로 받은 사람에게는 강제가 통째로 사라진다.
   # 대신 커밋되는 .ai-kit/git-hooks/ 를 core.hooksPath 로 가리킨다.
   [ "$DRY_RUN" = 1 ] || git -C "$TARGET" config core.hooksPath .ai-kit/git-hooks
   # core.hooksPath 는 파일이 아니라 설정이다. 파일 건수에 섞으면 dry-run(파일을 센다)과
