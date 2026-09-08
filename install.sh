@@ -531,6 +531,18 @@ fi
 DIFF_MAX_LINES=${AI_KIT_DIFF_MAX_LINES:-60}   # 파일당
 DIFF_MAX_TOTAL=${AI_KIT_DIFF_MAX_TOTAL:-400}  # 전체
 
+# 사라지는 이유는 둘이고, 한 줄로 뭉뚱그리면 하나가 거짓이 된다. --lang 으로 뺀 언어의
+# 어댑터는 **킷이 배포하는 파일**이라 "킷이 다시 놓지 않는 것" 이 아니다 — 그렇게 적으면
+# 읽는 사람은 킷이 그 언어 지원을 뺐다고 읽는다(실측: `--lang py` 재설치에서 셋이 그렇게 나갔다).
+why_gone() { # $1=경로 → 사라지는 이유를 덧붙여 출력한다
+  local _p="$1" _l
+  for _l in $(echo "$DROP" | tr ',' ' '); do
+    [ -n "$_l" ] && [ "$_p" = ".ai-kit/gate/adapters/$_l.sh" ] \
+      && { printf '%s  (--lang 에서 뺀 언어)\n' "$_p"; return; }
+  done
+  printf '%s\n' "$_p"
+}
+
 dryrun_report() {
   local n_new=0 n_repl=0 n_side=0 n_same=0 n_gone=0
   local list_new="" list_repl="" list_side="" list_gone="" rel f
@@ -568,7 +580,7 @@ dryrun_report() {
   # (.claude 의 스킬·에이전트·훅, docs/process) 그 자리들은 **통째로 비우고 놓는 자리가
   # 아니라 파일 단위로 덮는 자리**라 애초에 사라지는 것이 없다.
   n_gone=${#DELETED[@]}
-  for rel in ${DELETED+"${DELETED[@]}"}; do list_gone="${list_gone}  - ${rel}"$'\n'; done
+  for rel in ${DELETED+"${DELETED[@]}"}; do list_gone="${list_gone}  - $(why_gone "$rel")"$'\n'; done
 
   echo "── dry-run: 아무것도 바꾸지 않았습니다 ──"
   echo ""
@@ -576,7 +588,7 @@ dryrun_report() {
   [ -n "$list_repl" ] && { echo ""; echo "킷이 교체함 (.ai-kit 과 .claude 의 스킬·에이전트·훅은 킷 소유다)"; printf '%s' "$list_repl"; }
   [ -n "$list_side" ] && { echo ""; echo "이 레포 것이 그대로 남음 — 킷의 것은 <파일>.ai-kit-new 로 옆에 놓인다"; printf '%s' "$list_side"; }
   [ -n "$list_new" ]  && { echo ""; echo "새 파일"; printf '%s' "$list_new"; }
-  [ -n "$list_gone" ] && { echo ""; echo "킷이 안 놓음 (이 레포에만 있는 킷 소유 파일 — 재설치가 지운다)"; printf '%s' "$list_gone"; }
+  [ -n "$list_gone" ] && { echo ""; echo "재설치가 지울 것"; printf '%s' "$list_gone"; }
 
   # diff 는 "이 레포 → 킷" 방향이다. - 가 지금 있는 것, + 가 킷이 놓을 것.
   local list_all="${list_repl}${list_side}"
@@ -617,8 +629,8 @@ echo "설치 ${#INSTALLED[@]}건 · 교체 ${#REPLACED[@]}건 · 삭제 ${#DELET
 fi
 if [ ${#DELETED[@]} -gt 0 ] && [ "$DRY_RUN" = 0 ]; then
   echo ""
-  echo "── 지웠습니다 (킷 소유 자리에 있었고 킷이 다시 놓지 않는 것) ──"
-  printf '  - %s\n' "${DELETED[@]}"
+  echo "── 지웠습니다 ──"
+  for _d in "${DELETED[@]}"; do printf '  - %s' ""; why_gone "$_d"; done
   echo "  .ai-kit 은 통째로 교체되는 자리입니다. 남길 것은 그 밖에 두세요."
 fi
 
