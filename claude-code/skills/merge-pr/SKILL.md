@@ -63,7 +63,15 @@ $ARGUMENTS
       gh pr view <N> --json comments \
         --jq '[.comments[].body] as $b
               | ([$b|to_entries[]|select(.value|startswith("## 리뷰 "))|.key]|last) as $i
-              | if $i == null then [] else $b[$i+1:] end|join("\n\n———\n\n")'
+              | if $i == null then [] else $b[$i+1:] end
+              | map(select(startswith("### ") and contains("라운드에 사람이 준 답")))
+              | join("\n\n———\n\n")'
+
+  **위치만으로 고르지 않는다.** 그 창에는 **이 스킬이 올린 코멘트도 들어간다** — 아래
+  「사람이 거절하면」 경로가 결정 코멘트와 `머지하지 않았다…` 한 줄을 그 뒤에 남기고,
+  다시 지시받으면 새 결정 코멘트를 올린다. 위치만 보면 옛 결정 코멘트가 **사람의 답으로**
+  새 결정 코멘트에 인용되고, `사람이 머지를 결정했다` 가 여러 벌 남는 그 상태가 형태만
+  바꿔 돌아온다. 그래서 3.5 의 코멘트가 쓰는 제목으로 좁힌다.
 
 > 이 확인은 편의이지 강제가 아니다. 진짜 강제는 GitHub 브랜치 보호다
 > (킷의 `install.sh --protect` 가 설정한다). 브랜치 보호가 없는 레포라면 그 사실을 먼저 알린다.
