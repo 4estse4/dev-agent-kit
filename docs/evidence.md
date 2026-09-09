@@ -285,7 +285,7 @@ $ wc -l tests/*.sh
      330 total
 ```
 
-**이 수는 여기까지다.** 같은 수를 규범 문서 셋(`common/docs/verification-layers.md` ·
+**이 수는 여기까지다.** 같은 수를 규범 문서 셋(`common/docs/verification-stages.md` ·
 `open-pr` · `cold-reviewer`)에 옮겨 적었다가 도로 뺐다. **다음 편집에 바뀌는 값을 문서에
 상수로 적으면 그 편집을 안 따라온다** — 이슈 #50 이 바로 그 편집이고, 그것이 끝나는 날
 세 문장이 동시에 거짓이 된다. 규범에는 성질만 남기고 수는 이 자리의 명령 출력으로 둔다 —
@@ -359,7 +359,7 @@ rules"*, 그리고 "먼저 끝난다" 는 `exit 2` 로 죽는 훅에만 해당�
 
 **이것을 다시 넣지 마라.** 훅으로 세울 수 있는 것은 "스킬을 거쳤나" 이고, 세워야 하는
 것은 "사람이 봤나" 다. 후자는 `permissions.ask` 가 하고, 전자는 탈출구 때문에 못 한다.
-규칙이 무엇을 잡는지의 실측은 `docs/process/verification-layers.md` 에 있다.
+규칙이 무엇을 잡는지의 실측은 `docs/process/verification-stages.md` 에 있다.
 
 > `use_skill.sh` 는 `main` 에 도달한 적이 없다 — 이 브랜치가 만들고 같은 브랜치가 지웠다.
 > **릴리스된 킷이 그 훅을 설치한 프로젝트는 없다.**
@@ -414,7 +414,7 @@ rules"*, 그리고 "먼저 끝난다" 는 `exit 2` 로 죽는 훅에만 해당�
   문서 인용이 아니라 증거를 갖게 됐다
 - **검사별 실소요**(실 모노레포): eslint 6.5s · vitest 7.8s · tsc 2.5s · prettier 1.7s ·
   golangci-lint 0.9s · go test 0.3s(캐시 없으면 3.6s) · 전체 37~42s ·
-  `--lint --staged` 로 커밋은 2.8s. 숫자는 `common/docs/verification-layers.md` 에 표로 있다
+  `--lint --staged` 로 커밋은 2.8s. 숫자는 `common/docs/verification-stages.md` 에 표로 있다
 - `install-operator.sh` — 빈 홈 설치·재실행 멱등·기존 파일 보존(충돌은 `.ai-kit-new`)·
   소스 누락·복사 실패를 **격리된 `CLAUDE_HOME` 으로 확인**(실제 `~/.claude` 는 안 건드림)
 - 훅이 실행권한 없이 커밋되면 강제가 꺼진다 — `core.fileMode=false` · 편집기 재생성
