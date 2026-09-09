@@ -28,8 +28,8 @@ Diff:
 메타데이터:
 !`if [ -n "$ARGUMENTS" ]; then gh pr view $ARGUMENTS --json headRefOid,headRepository --jq '"PERMALINK_BASE=https://github.com/\(.headRepository.nameWithOwner)/blob/\(.headRefOid)/"' || echo "!! 메타데이터를 못 가져왔다"; fi`
 
-**직전 라운드 코멘트 (검증 대상 — 아래 「재리뷰」):**
-!`_q='[.comments[]|select(.body|contains("리뷰한 head:"))]|last|.body // "1라운드"'; if gh pr view $ARGUMENTS --json comments --jq "$_q" 2>/dev/null; then :; elif gh pr view $ARGUMENTS --json number >/dev/null 2>&1; then echo "!! 직전 코멘트를 못 가져왔다"; elif [ -z "$ARGUMENTS" ] && gh auth status >/dev/null 2>&1; then echo "1라운드"; else echo "!! 직전 코멘트를 못 가져왔다 (gh 실패 또는 PR 없음)"; fi`
+**직전 라운드 코멘트 + 그 뒤의 코멘트 전부 (검증 대상 — 아래 「재리뷰」). 사람의 답이 그 뒤 답글에 있다:**
+!`_q='[.comments[].body] as $b | ([$b|to_entries[]|select(.value|contains("리뷰한 head:"))|.key]|last) as $i | if $i == null then "1라운드" else $b[$i:]|join("\n\n———\n\n") end'; if gh pr view $ARGUMENTS --json comments --jq "$_q" 2>/dev/null; then :; elif gh pr view $ARGUMENTS --json number >/dev/null 2>&1; then echo "!! 직전 코멘트를 못 가져왔다"; elif [ -z "$ARGUMENTS" ] && gh auth status >/dev/null 2>&1; then echo "1라운드"; else echo "!! 직전 코멘트를 못 가져왔다 (gh 실패 또는 PR 없음)"; fi`
 
 ---
 
@@ -68,7 +68,8 @@ context 전파 · 루프변수 캡처 · `any` 사용 · 훅 규칙 · 접근성
 **왜 이렇게 하는지는 `docs/process/verification-layers.md` 의 「라운드 사이에 무엇이
 넘어가나」에 있다. 여기 옮겨 적지 마라.**
 
-직전 라운드 코멘트는 **위에 통째로 붙어 있다.** 세 가지로 읽는다:
+직전 라운드 코멘트와 **그 뒤에 달린 답글이 위에 통째로 붙어 있다**(`———` 로 나뉜다).
+**사람이 3.5 에서 준 답은 그 답글에 있다.** 세 가지로 읽는다:
 
 | 위에 붙은 것 | 뜻 |
 | --- | --- |
