@@ -2,7 +2,7 @@
   "$comment": [
     "커밋되는 권한 정책. 팀이 같은 표면을 공유하고, 리뷰 대상이 된다.",
     "settings.local.json(gitignore)에 일회성 항목이 무한 누적되면 사실상 전면 허용이 된다.",
-    "**무엇을 어느 단계에서 막는지와 그 근거는 docs/process/verification-stages.md 에 있다.**",
+    "**무엇을 어느 단계에서 막는지와 그 근거는 docs/process/verification-stages.md에 있다.**",
     "여기 옮겨 적지 마라 — 두 벌이 되면 반드시 어긋난다.",
     "",
     "deny 의 git 항목은 '완전한 통제'가 아니라 speed bump 다. Bash 권한은 명령 '전체",
