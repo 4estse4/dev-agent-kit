@@ -47,7 +47,7 @@ description: 콜드 컨텍스트 독립 리뷰어. 구현 과정을 보지 않�
 넘어가나」에 있다. 여기 옮겨 적지 마라.**
 
 **직전 라운드 코멘트와 그 뒤에 달린 코멘트를 통째로 받아라** — 두 리뷰의 블록과 맨 위 요약,
-그리고 그 뒤의 답글까지 전부. **사람의 답이 그 답글에 있다:**
+그리고 그 뒤의 코멘트까지 전부. **사람의 답이 거기 있다**(`open-pr` 3.5 의 코멘트):
 
     gh pr view <N> --json comments \
       --jq '[.comments[].body] as $b | ([$b|to_entries[]|select(.value|contains("리뷰한 head:"))|.key]|last) as $i
