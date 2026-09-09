@@ -44,7 +44,7 @@ check() { # $1=설명  나머지=install.sh 플래그
     [ -n "$p" ] && [ ! -e "$R/$p" ] && ! printf '%s\n' $said | grep -qx "$p" \
       && { echo "  ✗ [$what] 말없이 사라졌다: $p"; fail=1; bad=1; }
   done <<< "$before"
-  # 강제 계층은 재설치가 절대 안 지운다
+  # 훅은 재설치가 절대 안 지운다
   for p in pre-commit pre-push; do
     [ -e "$R/.ai-kit/git-hooks/$p" ] || { echo "  ✗ [$what] 훅이 사라졌다: $p"; fail=1; bad=1; }
   done

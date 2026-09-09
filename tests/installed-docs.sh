@@ -37,7 +37,10 @@ for f in found:
     # `common/`·`.ai-kit/` 만 보면 소유 규칙과 상호참조가 실제로 쓰는 어휘
     # (`.claude/skills/…`·`docs/process/…`)가 통째로 검사 밖이다 — 15라운드에 거짓이던
     # 자리가 바로 그 어휘였다.
-    for m in re.findall(r'`((?:common|\.ai-kit|\.claude|docs/process)/[\w./|-]+)`', text):
+    # **백틱 안만 보면 안 된다.** `settings.json` 이 백틱 없이 적은 옛 경로가 통과했다 —
+    # 개명 뒤에도 초록이었고, 그 파일은 설치되므로 모든 프로젝트가 없는 경로를 가리켰다.
+    for m in re.findall(r'(?<![\w/-])((?:common|\.ai-kit|\.claude|docs/process)/[\w./|-]+)', text):
+        m = m.rstrip('.')            # 문장 끝 마침표가 붙어 온다
         m = m.split('|')[0]          # `.claude/skills|agents|hooks` 같은 표기
         if not os.path.exists(os.path.join(R, m)):
             print(f"  ✗ {f[len(R)+1:]} 가 없는 경로를 가리킨다 — {m}"); bad = 1

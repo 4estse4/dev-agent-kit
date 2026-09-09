@@ -2,7 +2,7 @@
   "$comment": [
     "커밋되는 권한 정책. 팀이 같은 표면을 공유하고, 리뷰 대상이 된다.",
     "settings.local.json(gitignore)에 일회성 항목이 무한 누적되면 사실상 전면 허용이 된다.",
-    "**층을 어디에 두는지와 그 근거는 docs/process/verification-layers.md 에 있다.**",
+    "**무엇을 어느 단계에서 막는지와 그 근거는 docs/process/verification-stages.md 에 있다.**",
     "여기 옮겨 적지 마라 — 두 벌이 되면 반드시 어긋난다.",
     "",
     "deny 의 git 항목은 '완전한 통제'가 아니라 speed bump 다. Bash 권한은 명령 '전체",
@@ -24,7 +24,7 @@
     "                   없었다. --request-changes 는 자기 PR 에서 거절되지만 --comment 는 통과한다.",
     "  gh issue create  「Add a human checkpoint」.",
     "",
-    "**스킬(open-pr·merge-pr)이 돌릴 때도 묻는다. 그것이 의도다** — 이 층이 세우는 것은",
+    "**스킬(open-pr·merge-pr)이 돌릴 때도 묻는다. 그것이 의도다** — 이 규칙이 세우는 것은",
     "'스킬을 거쳤나' 가 아니라 '사람이 봤나' 다. 비켜갈 수 없다는 실측은 위 문서에 있다.",
     "",
     "Agent(cold-reviewer) 를 여기 두지 마라 — 스폰 자체가 프롬프트를 안 띄운다",
