@@ -29,7 +29,7 @@ Diff:
 !`if [ -n "$ARGUMENTS" ]; then gh pr view $ARGUMENTS --json headRefOid,headRepository --jq '"PERMALINK_BASE=https://github.com/\(.headRepository.nameWithOwner)/blob/\(.headRefOid)/"' || echo "!! 메타데이터를 못 가져왔다"; fi`
 
 **직전 라운드 코멘트 + 그 뒤의 코멘트 전부 (검증 대상 — 아래 「재리뷰」). 사람의 답이 그 뒤 코멘트에 있다:**
-!`_q='[.comments[].body] as $b | ([$b|to_entries[]|select(.value|startswith("## 리뷰 "))|.key]|last) as $i | if $i == null then "1라운드" else $b[$i:]|join("\n\n———\n\n") end'; if gh pr view $ARGUMENTS --json comments --jq "$_q" 2>/dev/null; then :; elif gh pr view $ARGUMENTS --json number >/dev/null 2>&1; then echo "!! 직전 코멘트를 못 가져왔다"; elif [ -z "$ARGUMENTS" ] && gh auth status >/dev/null 2>&1; then echo "1라운드"; else echo "!! 직전 코멘트를 못 가져왔다 (gh 실패 또는 PR 없음)"; fi`
+!`_q='[.comments[].body] as $b | ([$b|to_entries[]|select(.value|test("^\\s*## 리뷰 "))|.key]|last) as $i | if $i == null then (if ($b|length)==0 then "1라운드" else "ANCHOR-MISS \($b|length)" end) else $b[$i:]|join("\n\n———\n\n") end'; _o=$(gh pr view $ARGUMENTS --json comments --jq "$_q" 2>/dev/null); case "${_o%% *}" in ANCHOR-MISS) echo "!! 코멘트 ${_o#* }건인데 라운드 코멘트를 못 찾았다";; "") if gh pr view $ARGUMENTS --json number >/dev/null 2>&1; then echo "!! 직전 코멘트를 못 가져왔다"; elif [ -z "$ARGUMENTS" ] && gh auth status >/dev/null 2>&1; then echo "1라운드"; else echo "!! 직전 코멘트를 못 가져왔다 (gh 실패 또는 PR 없음)"; fi;; *) printf '%s\n' "$_o";; esac`
 
 > `$ARGUMENTS` 에 따옴표를 붙이지 마라. 붙이면 `48 -R owner/repo` 가 한 덩어리로 가고
 > 빈 인자가 `""` 로 남아 현재 브랜치 모드가 사라진다.
@@ -81,7 +81,8 @@ context 전파 · 루프변수 캡처 · `any` 사용 · 훅 규칙 · 접근성
 
 | 위에 붙은 것 | 뜻 |
 | --- | --- |
-| `1라운드` | 직전 코멘트가 없다. `### 이전 라운드` 절을 생략한다. **`gh` 가 살아 있는 것을 확인한 뒤에만 이 값이 나온다** |
+| `1라운드` | 직전 코멘트가 없다. `### 이전 라운드` 절을 생략한다. **`gh` 가 살아 있고 코멘트가 0건일 때만 이 값이 나온다** |
+| `!! 코멘트 N건인데 라운드 코멘트를 못 찾았다` | 코멘트는 있는데 앵커가 빗나갔다. **1라운드가 아니다** — 리뷰하지 말고 그 사실을 보고하고 멈춘다 |
 | `!! 직전 코멘트를 못 가져왔다` | **PR 번호를 줬는데 못 가져왔다.** 1라운드가 아니다 — 그 사실을 `### 이전 라운드` 에 적고 진행한다 |
 | `!! 직전 코멘트를 못 가져왔다 (gh 실패 또는 PR 없음)` | **번호 없이 불렀고 `gh` 가 죽었다.** 1라운드인지 아닌지를 알 수 없다 — 그 사실을 적고 진행한다. `gh` 가 살아 있고 PR 이 없을 때만 `1라운드` 가 나온다 |
 | 코멘트 전문 | 재리뷰다. 아래대로 판정한다 |

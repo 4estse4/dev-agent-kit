@@ -50,10 +50,16 @@ description: 콜드 컨텍스트 독립 리뷰어. 구현 과정을 보지 않�
 그리고 그 뒤의 코멘트까지 전부. **사람의 답이 거기 있다**(`open-pr` 3.5 의 코멘트):
 
     gh pr view <N> --json comments \
-      --jq '[.comments[].body] as $b | ([$b|to_entries[]|select(.value|startswith("## 리뷰 "))|.key]|last) as $i
-             | if $i == null then "1라운드" else $b[$i:]|join("\n\n———\n\n") end'
+      --jq '[.comments[].body] as $b
+             | ([$b|to_entries[]|select(.value|test("^\\s*## 리뷰 "))|.key]|last) as $i
+             | if $i == null
+               then (if ($b|length)==0 then "1라운드"
+                     else "!! 코멘트 \($b|length)건인데 라운드 코멘트를 못 찾았다" end)
+               else $b[$i:]|join("\n\n———\n\n") end'
 
-**이 명령이 `1라운드` 를 내면 1라운드다.** 다른 신호로 판단하지 마라 — 특히 커밋 로그가
+**이 명령이 `1라운드` 를 내면 1라운드다** — 코멘트가 **0건**일 때만 그 값이 나온다.
+코멘트는 있는데 라운드 코멘트를 못 찾으면 `!!` 로 떨어지고, 그건 「1라운드」가 아니라
+**앵커가 빗나간 것**이다. 다른 신호로 판단하지 마라 — 특히 커밋 로그가
 비었다는 것으로는 안 된다. 수정을 커밋만 하고 안 밀었거나 사람이 "고치지 말고 한 번 더
 봐" 라고 한 라운드도 커밋 로그는 비어 있다. 명령이 **실패**하면(gh·네트워크·권한) 그것도
 1라운드가 아니다 — 리뷰에 "직전 코멘트를 못 가져왔다" 를 적고 진행한다.
