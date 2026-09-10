@@ -50,7 +50,7 @@ description: 콜드 컨텍스트 독립 리뷰어. 구현 과정을 보지 않�
 그리고 그 뒤의 코멘트까지 전부. **사람의 답이 거기 있다**(`open-pr` 3.5 의 코멘트):
 
     gh pr view <N> --json comments \
-      --jq '[.comments[].body] as $b | ([$b|to_entries[]|select(.value|contains("리뷰한 head:"))|.key]|last) as $i
+      --jq '[.comments[].body] as $b | ([$b|to_entries[]|select(.value|startswith("## 리뷰 "))|.key]|last) as $i
              | if $i == null then "1라운드" else $b[$i:]|join("\n\n———\n\n") end'
 
 **이 명령이 `1라운드` 를 내면 1라운드다.** 다른 신호로 판단하지 마라 — 특히 커밋 로그가

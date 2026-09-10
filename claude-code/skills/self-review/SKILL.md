@@ -29,7 +29,7 @@ Diff:
 !`if [ -n "$ARGUMENTS" ]; then gh pr view $ARGUMENTS --json headRefOid,headRepository --jq '"PERMALINK_BASE=https://github.com/\(.headRepository.nameWithOwner)/blob/\(.headRefOid)/"' || echo "!! 메타데이터를 못 가져왔다"; fi`
 
 **직전 라운드 코멘트 + 그 뒤의 코멘트 전부 (검증 대상 — 아래 「재리뷰」). 사람의 답이 그 뒤 코멘트에 있다:**
-!`_q='[.comments[].body] as $b | ([$b|to_entries[]|select(.value|contains("리뷰한 head:"))|.key]|last) as $i | if $i == null then "1라운드" else $b[$i:]|join("\n\n———\n\n") end'; if gh pr view $ARGUMENTS --json comments --jq "$_q" 2>/dev/null; then :; elif gh pr view $ARGUMENTS --json number >/dev/null 2>&1; then echo "!! 직전 코멘트를 못 가져왔다"; elif [ -z "$ARGUMENTS" ] && gh auth status >/dev/null 2>&1; then echo "1라운드"; else echo "!! 직전 코멘트를 못 가져왔다 (gh 실패 또는 PR 없음)"; fi`
+!`_q='[.comments[].body] as $b | ([$b|to_entries[]|select(.value|startswith("## 리뷰 "))|.key]|last) as $i | if $i == null then "1라운드" else $b[$i:]|join("\n\n———\n\n") end'; if gh pr view $ARGUMENTS --json comments --jq "$_q" 2>/dev/null; then :; elif gh pr view $ARGUMENTS --json number >/dev/null 2>&1; then echo "!! 직전 코멘트를 못 가져왔다"; elif [ -z "$ARGUMENTS" ] && gh auth status >/dev/null 2>&1; then echo "1라운드"; else echo "!! 직전 코멘트를 못 가져왔다 (gh 실패 또는 PR 없음)"; fi`
 
 > `$ARGUMENTS` 에 따옴표를 붙이지 마라. 붙이면 `48 -R owner/repo` 가 한 덩어리로 가고
 > 빈 인자가 `""` 로 남아 현재 브랜치 모드가 사라진다. 남는 위험은 값에 `*` 가 들어갈 때의
