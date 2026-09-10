@@ -32,9 +32,11 @@ Diff:
 !`_q='[.comments[].body] as $b | ([$b|to_entries[]|select(.value|startswith("## 리뷰 "))|.key]|last) as $i | if $i == null then "1라운드" else $b[$i:]|join("\n\n———\n\n") end'; if gh pr view $ARGUMENTS --json comments --jq "$_q" 2>/dev/null; then :; elif gh pr view $ARGUMENTS --json number >/dev/null 2>&1; then echo "!! 직전 코멘트를 못 가져왔다"; elif [ -z "$ARGUMENTS" ] && gh auth status >/dev/null 2>&1; then echo "1라운드"; else echo "!! 직전 코멘트를 못 가져왔다 (gh 실패 또는 PR 없음)"; fi`
 
 > `$ARGUMENTS` 에 따옴표를 붙이지 마라. 붙이면 `48 -R owner/repo` 가 한 덩어리로 가고
-> 빈 인자가 `""` 로 남아 현재 브랜치 모드가 사라진다. 남는 위험은 값에 `*` 가 들어갈 때의
-> 글로빙 하나이고, `;` 는 실행되지 않는다 — 펼친 뒤에 하는 것은 쪼개기와 파일이름 확장이지
-> 명령 재해석이 아니다.
+> 빈 인자가 `""` 로 남아 현재 브랜치 모드가 사라진다.
+> `$ARGUMENTS` 는 **파일 본문에 텍스트로 치환된 뒤** 셸에 간다 — 이 킷의 스킬들이 `!` 블록
+> **밖**에서 맨몸으로 쓰는 것이 그 증거다(셸 변수였으면 그 자리에 값이 안 들어간다).
+> 값에 셸 메타문자가 들어갔을 때 어떻게 되는지는 **이 레포에서 확인하지 못했다** — 재려면
+> `!` 주입이 도는 스킬을 불러야 하는데 킷 레포에는 스킬이 로드되지 않는다(#54).
 
 ---
 
