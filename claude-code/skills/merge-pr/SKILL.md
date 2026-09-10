@@ -135,15 +135,43 @@ $ARGUMENTS
 `git checkout main` → `git pull --ff-only`.
 fast-forward 실패 시 중단: `Error: main 을 fast-forward 할 수 없습니다.`
 
-**`--delete-branch` 는 원격만 지운다. 로컬은 남는다** — 실측이다. 여기서 지운다:
+**`--delete-branch` 뒤에 로컬 브랜치가 남는지는 아직 모른다.** 지금 아는 것만 적는다:
 
-    gh pr view <N> --json state -q .state      # MERGED 가 아니면 중단한다
-    git branch -D <브랜치>
+- `gh pr merge --help` (2.92.0)는 `Delete the local and remote branch after merge` 라고
+  적는다. **안 지우는 조건은 문서에 없다.**
+- 그런데 PR #52 머지 뒤 로컬 `docs/weigh-findings-before-fixing` 은 **남았다.** 그 뒤로
+  머지된 브랜치 열셋이 로컬에 쌓여 있었다.
+- **어느 조건이 갈랐는지는 확인 못 했다.** 그때의 실제 호출을 되짚을 수 없다.
 
-**`MERGED` 확인이 `-D` 를 안전하게 만드는 가드다. 그 순서를 바꾸지 마라.**
-`-d` 로는 안 지워진다 — 스쿼시 머지라 브랜치가 `main` 의 조상이 아니어서
-`not fully merged` 로 거부한다. 그래서 `-D` 인데, `-D` 는 무조건 지우므로
-**머지가 실패했을 때 작업이 사라진다.** 그 앞의 `MERGED` 확인이 그것을 막는다.
+그래서 **지웠는지 보고 없으면 넘어간다** — 없는 것은 실패가 아니다:
+
+    gh pr view <N> --json state,headRefName,headRefOid
+    git rev-parse <headRefName>                # headRefOid 와 다르면 중단한다 — 아래
+    git branch -D <headRefName>                # `not found` 면 gh 가 이미 지운 것이다. 넘어간다
+
+`state` 가 `MERGED` 가 아니면 거기서 중단한다.
+
+**브랜치 이름은 `state` 와 같은 호출에서 받는다.** §4 는 `git checkout main` **뒤**라
+그 시점의 현재 브랜치는 `main` 이고, `$ARGUMENTS` 로 **다른 PR 을 번호로 머지하는 것이
+정상 경로**다(`argument-hint`). 이름을 따로 얻으면 `MERGED` 확인과 삭제 대상이 갈라진다 —
+**그 확인은 시점만 세우고 대상은 안 세운다.**
+
+**`-d` 로는 안 지워진다** — 스쿼시 머지라 브랜치가 `main` 의 조상이 아니어서
+`not fully merged` 로 거부한다. 그래서 `-D` 다.
+
+**`-D` 는 확인 없이 지우지만 되돌릴 수 있다** — 지운 팁 SHA 를 출력하고(`Deleted branch
+<이름> (was <SHA>)`) reflog 가 만료 전까지 들고 있다.
+
+**되돌리기 어려운 쪽은 따로 있다: 커밋만 하고 안 민 것.** 2절의 어느 검사에도 안 걸린다 —
+`git status --porcelain` 은 미커밋만 보고, head 대조는 서버끼리 본다. 그래서 위에서
+**로컬 팁을 `headRefOid` 와 견준다.** 다르면 서버가 못 본 커밋이 있는 것이고, 그것이
+스쿼시로 `main` 에 안 들어갔으므로 지우면 그 자리엔 reflog 밖에 안 남는다.
+
+**`git log <브랜치> --not --remotes` 로 세지 마라.** 스쿼시 머지는 브랜치 커밋을 `main` 의
+조상으로 만들지 않으므로 **다 민 브랜치에서도 전부 나온다.** 재현:
+
+    $ git log feat --not --remotes --oneline    # 푸시 안 된 커밋이 없는 상태
+    0906300 f1                                  ← 비어야 하는데 나온다
 
 ## 5. 한 줄 보고
 `Merged PR #<N>. main at <short SHA>.`
