@@ -8,9 +8,13 @@ argument-hint: "[PR 번호 | '번호 -R owner/repo' (다른 레포) | 비우면 
 > 것이 아니라 **못 가져온 것**이다. 무엇이 실패했는지만 보고하고 멈춘다. `gh` 는 이 세션이
 > 열린 레포에 대해 돌므로, 다른 레포의 PR 이면 `48 -R owner/repo` 로 불러야 한다.
 >
-> 자리마다 실패 문구가 다르다. **넷 다 뜻은 같다 — 그 자리를 못 가져왔으니 멈춘다:**
+> 자리마다 실패 문구가 다르다. **못 가져온 것들 — 그 자리를 못 가져왔으니 멈춘다:**
 > `!! gh pr diff <번호> 실패 — diff 를 못 가져왔다` · `!! 변경 파일 목록을 못 가져왔다` ·
-> `!! PR 본문을 못 가져왔다` · `!! 메타데이터를 못 가져왔다`.
+> `!! PR 본문을 못 가져왔다` · `!! 메타데이터를 못 가져왔다` · `!! 직전 코멘트를 못 가져왔다`.
+>
+> **`!! 코멘트 N건인데 라운드 코멘트를 못 찾았다` 는 뜻이 다르다** — 가져오기는 성공했고
+> **앵커가 빗나간 것**이다. 멈추는 것은 같지만 원인을 그렇게 적어라. 「못 가져왔다」로
+> 보고하면 다음 사람이 `gh` 와 네트워크를 뒤진다.
 >
 > **PR 본문 자리가 `(PR 번호 없이 부름 — 로컬 브랜치 리뷰)` 면** 실패가 아니라 번호 없이
 > 불린 것이다. 그러면 **대조할 본문이 없으므로 `### 본문 ↔ diff` 에 `일치.` 를 쓰지 마라** —
@@ -29,7 +33,7 @@ Diff:
 !`if [ -n "$ARGUMENTS" ]; then gh pr view $ARGUMENTS --json headRefOid,headRepository --jq '"PERMALINK_BASE=https://github.com/\(.headRepository.nameWithOwner)/blob/\(.headRefOid)/"' || echo "!! 메타데이터를 못 가져왔다"; fi`
 
 **직전 라운드 코멘트 + 그 뒤의 3.5 코멘트 (검증 대상 — 아래 「재리뷰」). 사람의 답이 그 뒤 코멘트에 있다:**
-!`_q='[.comments[].body] as $b | ([$b|to_entries[]|select(.value|test("^\\s*## 리뷰 "))|.key]|last) as $i | if $i == null then (if ($b|length)==0 then "1라운드" else "ANCHOR-MISS \($b|length)" end) else ([$b[$i]] + ($b[$i+1:]|map(select(test("^\\s*### .*라운드에 사람이 준 답")))))|join("\n\n———\n\n") end'; _o=$(gh pr view $ARGUMENTS --json comments --jq "$_q" 2>/dev/null); case "${_o%% *}" in ANCHOR-MISS) echo "!! 코멘트 ${_o#* }건인데 라운드 코멘트를 못 찾았다";; "") if gh pr view $ARGUMENTS --json number >/dev/null 2>&1; then echo "!! 직전 코멘트를 못 가져왔다"; elif [ -z "$ARGUMENTS" ] && gh auth status >/dev/null 2>&1; then echo "1라운드"; else echo "!! 직전 코멘트를 못 가져왔다 (gh 실패 또는 PR 없음)"; fi;; *) printf '%s\n' "$_o";; esac`
+!`_q='[.comments[].body] as $b | ([$b|to_entries[]|select(.value|test("^\\s*## 리뷰 "))|.key]|last) as $i | if $i == null then (if ($b|length)==0 then "1라운드" else "ANCHOR-MISS \($b|length)" end) else ([$b[$i]] + ($b[$i+1:]|map(select(test("^\\s*### .*라운드에 사람이 준 답")))))|join("\n\n———\n\n") end'; _o=$(gh pr view $ARGUMENTS --json comments --jq "$_q" 2>/dev/null); case "$_o" in "ANCHOR-MISS "*) echo "!! 코멘트 ${_o#* }건인데 라운드 코멘트를 못 찾았다";; "") if gh pr view $ARGUMENTS --json number >/dev/null 2>&1; then echo "!! 직전 코멘트를 못 가져왔다"; elif [ -z "$ARGUMENTS" ] && gh auth status >/dev/null 2>&1; then echo "1라운드"; else echo "!! 직전 코멘트를 못 가져왔다 (gh 실패 또는 PR 없음)"; fi;; *) printf '%s\n' "$_o";; esac`
 
 > `$ARGUMENTS` 에 따옴표를 붙이지 마라. 붙이면 `48 -R owner/repo` 가 한 덩어리로 가고
 > 빈 인자가 `""` 로 남아 현재 브랜치 모드가 사라진다.

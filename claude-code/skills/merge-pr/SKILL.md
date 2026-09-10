@@ -35,7 +35,7 @@ $ARGUMENTS
 - **리뷰 반영 확인.** `open-pr` 이 올린 **마지막 라운드 코멘트**를 읽는다:
 
       gh pr view <N> --json comments \
-        --jq '[.comments[] | select(.body|startswith("## 리뷰 "))] | last | .body'
+        --jq '[.comments[] | select(.body|test("^\\s*## 리뷰 "))] | last | .body'
 
   그 코멘트 **맨 위의** `리뷰한 head:` 를 지금 서버 head 와 비교한다
   (`gh pr view <N> --json headRefOid -q .headRefOid`). 접힌 전문 안에도 같은 줄이
@@ -62,9 +62,9 @@ $ARGUMENTS
 
       gh pr view <N> --json comments \
         --jq '[.comments[].body] as $b
-              | ([$b|to_entries[]|select(.value|startswith("## 리뷰 "))|.key]|last) as $i
+              | ([$b|to_entries[]|select(.value|test("^\\s*## 리뷰 "))|.key]|last) as $i
               | if $i == null then [] else $b[$i+1:] end
-              | map(select(startswith("### ") and contains("라운드에 사람이 준 답")))
+              | map(select(test("^\\s*### .*라운드에 사람이 준 답")))
               | join("\n\n———\n\n")'
 
   **위치만으로 고르지 않는다.** 그 창에는 **이 스킬이 올린 코멘트도 들어간다** — 아래
