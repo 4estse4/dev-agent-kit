@@ -131,11 +131,19 @@ $ARGUMENTS
 `ask` 에 있고, 이 스킬 안이라고 해서 비켜가지 않는다. 사람이 승인할 때까지 기다린다 —
 이 스킬 §전제 가 요구하는 "사람이 머지를 지시했다" 를 기계로 한 번 더 세우는 자리다.
 
-`git branch -d` 를 따로 실행하지 않는다 — `--delete-branch` 가 처리한다.
-
-## 4. main 복귀
+## 4. main 복귀와 로컬 브랜치 삭제
 `git checkout main` → `git pull --ff-only`.
 fast-forward 실패 시 중단: `Error: main 을 fast-forward 할 수 없습니다.`
+
+**`--delete-branch` 는 원격만 지운다. 로컬은 남는다** — 실측이다. 여기서 지운다:
+
+    gh pr view <N> --json state -q .state      # MERGED 가 아니면 중단한다
+    git branch -D <브랜치>
+
+**`MERGED` 확인이 `-D` 를 안전하게 만드는 가드다. 그 순서를 바꾸지 마라.**
+`-d` 로는 안 지워진다 — 스쿼시 머지라 브랜치가 `main` 의 조상이 아니어서
+`not fully merged` 로 거부한다. 그래서 `-D` 인데, `-D` 는 무조건 지우므로
+**머지가 실패했을 때 작업이 사라진다.** 그 앞의 `MERGED` 확인이 그것을 막는다.
 
 ## 5. 한 줄 보고
 `Merged PR #<N>. main at <short SHA>.`
