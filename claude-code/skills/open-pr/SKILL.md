@@ -139,9 +139,11 @@ Conventional Commits 스타일로.
 사람에게 보고한다:
 
     gh pr view <N> --json comments \
-      --jq --arg h '<3.1 에서 읽은 head>' \
-          '[.comments[].body|select(test("^\\s*## 리뷰 "))|split("\n")[2]]
-           |map(select(contains($h)))|length'
+      --jq '[.comments[].body|select(test("^\\s*## 리뷰 "))|split("\n")[2]]
+            |map(select(contains("<3.1 에서 읽은 head>")))|length'
+
+**head 를 필터 안에 박는다.** `gh pr view --jq` 는 필터 하나만 받아서 jq 의 `--arg` 를
+못 넘긴다 — `accepts at most 1 arg(s)` 로 죽는다.
 
 **규칙으로는 안 막힌다.** 「같은 것을 두 번 올리지 마라」를 읽을 세션이 **자기가 이미
 올렸다는 것을 모르는** 경우가 이 중복을 만든다(되감긴 세션 · 승인 프롬프트가 실패로 보인
