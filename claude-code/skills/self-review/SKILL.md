@@ -28,8 +28,8 @@ Diff:
 메타데이터:
 !`if [ -n "$ARGUMENTS" ]; then gh pr view $ARGUMENTS --json headRefOid,headRepository --jq '"PERMALINK_BASE=https://github.com/\(.headRepository.nameWithOwner)/blob/\(.headRefOid)/"' || echo "!! 메타데이터를 못 가져왔다"; fi`
 
-**직전 라운드 코멘트 + 그 뒤의 코멘트 전부 (검증 대상 — 아래 「재리뷰」). 사람의 답이 그 뒤 코멘트에 있다:**
-!`_q='[.comments[].body] as $b | ([$b|to_entries[]|select(.value|test("^\\s*## 리뷰 "))|.key]|last) as $i | if $i == null then (if ($b|length)==0 then "1라운드" else "ANCHOR-MISS \($b|length)" end) else $b[$i:]|join("\n\n———\n\n") end'; _o=$(gh pr view $ARGUMENTS --json comments --jq "$_q" 2>/dev/null); case "${_o%% *}" in ANCHOR-MISS) echo "!! 코멘트 ${_o#* }건인데 라운드 코멘트를 못 찾았다";; "") if gh pr view $ARGUMENTS --json number >/dev/null 2>&1; then echo "!! 직전 코멘트를 못 가져왔다"; elif [ -z "$ARGUMENTS" ] && gh auth status >/dev/null 2>&1; then echo "1라운드"; else echo "!! 직전 코멘트를 못 가져왔다 (gh 실패 또는 PR 없음)"; fi;; *) printf '%s\n' "$_o";; esac`
+**직전 라운드 코멘트 + 그 뒤의 3.5 코멘트 (검증 대상 — 아래 「재리뷰」). 사람의 답이 그 뒤 코멘트에 있다:**
+!`_q='[.comments[].body] as $b | ([$b|to_entries[]|select(.value|test("^\\s*## 리뷰 "))|.key]|last) as $i | if $i == null then (if ($b|length)==0 then "1라운드" else "ANCHOR-MISS \($b|length)" end) else ([$b[$i]] + ($b[$i+1:]|map(select(test("^\\s*### .*라운드에 사람이 준 답")))))|join("\n\n———\n\n") end'; _o=$(gh pr view $ARGUMENTS --json comments --jq "$_q" 2>/dev/null); case "${_o%% *}" in ANCHOR-MISS) echo "!! 코멘트 ${_o#* }건인데 라운드 코멘트를 못 찾았다";; "") if gh pr view $ARGUMENTS --json number >/dev/null 2>&1; then echo "!! 직전 코멘트를 못 가져왔다"; elif [ -z "$ARGUMENTS" ] && gh auth status >/dev/null 2>&1; then echo "1라운드"; else echo "!! 직전 코멘트를 못 가져왔다 (gh 실패 또는 PR 없음)"; fi;; *) printf '%s\n' "$_o";; esac`
 
 > `$ARGUMENTS` 에 따옴표를 붙이지 마라. 붙이면 `48 -R owner/repo` 가 한 덩어리로 가고
 > 빈 인자가 `""` 로 남아 현재 브랜치 모드가 사라진다.
@@ -111,7 +111,7 @@ context 전파 · 루프변수 캡처 · `any` 사용 · 훅 규칙 · 접근성
 
 리뷰한 head: <PR 번호를 받았으면 `gh pr view <N> --json headRefOid -q .headRefOid` 의 값 40자 그대로. 로컬 브랜치 리뷰면 `git rev-parse HEAD`.>
 
-checked: 본문대조 · 본문정정 · 응집도 · 테스트 · 에러분류 · 동시성 · 명명 · 추상화 · 규칙 · 즉석형식
+checked: 본문대조 · 본문정정 · 코멘트정정 · 응집도 · 테스트 · 에러분류 · 동시성 · 명명 · 추상화 · 규칙 · 즉석형식
 
 ### 이전 라운드
 <재리뷰일 때만. 직전 코멘트의 항목마다 한 줄, 이름과 판정:
@@ -132,6 +132,11 @@ checked: 본문대조 · 본문정정 · 응집도 · 테스트 · 에러분류 
    <왜 문제인가 1~2문장. 반드시 구체적 실패 시나리오를 포함한다:
     어떤 입력·상태에서 무엇이 잘못되나.>
 
+### 지난 코멘트 정정
+<앞선 **라운드 코멘트**에 거짓이 있으면 여기 적는다. 무엇이 거짓이고 실제로 확인한 것이
+ 무엇인지. `open-pr` 3.4 가 이것을 라운드 코멘트의 「지난 코멘트 정정」으로 옮긴다.
+ 위 `### 본문 정정` 은 PR 본문 쪽이고 이쪽은 코멘트 쪽이다. 없으면 절을 생략.>
+
 ### 남기는 위험
 - <머지해도 되지만 알고 있어야 할 것. 없으면 이 절 자체를 생략.>
 
@@ -141,7 +146,7 @@ checked: 본문대조 · 본문정정 · 응집도 · 테스트 · 에러분류 
 규칙:
 
 - **`checked:` 에는 실제로 본 것만 남긴다.** 1라운드거나 단독 호출이면 볼 대상이 없는
-  항목을 지운다 — `즉석형식`(직전 라운드 코멘트가 없다) · `본문대조`(PR 본문이 없다).
+  항목을 지운다 — `즉석형식`·`코멘트정정`(직전 라운드 코멘트가 없다) · `본문대조`(PR 본문이 없다).
   안 지우면 **안 본 것을 봤다고 적는 줄**이 된다. 바로 위가 금지한 그것이다.
 - 발견이 0건이면 `### 발견` 아래에 `없음.` 한 줄. 그것으로 끝이다.
 - **구체적 실패 시나리오를 못 쓰겠으면 그것은 발견이 아니라 취향이다** — 적지 마라.
