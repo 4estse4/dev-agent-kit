@@ -3,7 +3,7 @@
 # 막는 것: (1) 보호 브랜치 직접 커밋  (2) 잘못된 신원  (3) 충돌 마커  (4) 시크릿  (5) 린트
 #
 # 주의: `git commit --no-verify` 로 우회 가능하다. 그래서 이 훅은 '조기 피드백'이고,
-# 진짜 backstop 은 CI + 브랜치 보호다. (core/docs/verification-layers.md 참조)
+# 진짜 backstop 은 CI + 브랜치 보호다. (docs/process/verification-stages.md 참조)
 set -uo pipefail
 # 게이트는 대상 레포에 vendor 된 .ai-kit/ 에서 찾는다 — 다른 머신·CI 에서도 동일 경로.
 REPO=$(git rev-parse --show-toplevel) || exit 1

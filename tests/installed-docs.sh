@@ -37,7 +37,14 @@ for f in found:
     # `common/`·`.ai-kit/` 만 보면 소유 규칙과 상호참조가 실제로 쓰는 어휘
     # (`.claude/skills/…`·`docs/process/…`)가 통째로 검사 밖이다 — 15라운드에 거짓이던
     # 자리가 바로 그 어휘였다.
-    for m in re.findall(r'`((?:common|\.ai-kit|\.claude|docs/process)/[\w./|-]+)`', text):
+    # **백틱 안만 보면 안 된다.** `settings.json` 이 백틱 없이 적은 옛 경로가 통과했다 —
+    # 개명 뒤에도 초록이었고, 그 파일은 설치되므로 모든 프로젝트가 없는 경로를 가리켰다.
+    # **`(?a)` 가 있어야 한다.** `\w` 는 파이썬에서 유니코드라 한글 음절을 문자로 세고,
+    # 그래서 `…verification-stages.md에` 처럼 경로에 붙은 조사를 통째로 삼켜 없는 경로로
+    # 읽었다(실측: 그 상태에서 이 검사가 종료코드 1). 백틱 제약을 뺀 대가다 — 백틱이
+    # 없으면 「경로 뒤에 공백」이라는 표기 관습도 같이 사라진다.
+    for m in re.findall(r'(?a)(?<![\w/-])((?:common|\.ai-kit|\.claude|docs/process)/[\w./|-]+)', text):
+        m = m.rstrip('.')            # 문장 끝 마침표가 붙어 온다
         m = m.split('|')[0]          # `.claude/skills|agents|hooks` 같은 표기
         if not os.path.exists(os.path.join(R, m)):
             print(f"  ✗ {f[len(R)+1:]} 가 없는 경로를 가리킨다 — {m}"); bad = 1

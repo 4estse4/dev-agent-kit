@@ -417,7 +417,7 @@ if [ "$DO_AGENT" = 1 ]; then
 import json, sys
 
 # 판정 불가를 침묵으로 두지 않는다. 못 읽었으면 못 읽었다고 말한다 — 아래 python3
-# 부재 가지와 같은 이유다. 조용히 지나가면 층이 죽은 것을 아무도 모른다.
+# 부재 가지와 같은 이유다. 조용히 지나가면 그 검사가 죽은 것을 아무도 모른다.
 def fail(why):
     print("!" + why)
     sys.exit(0)
@@ -467,7 +467,7 @@ try:
     else:
         out.append("hooks.%s 가 %s 를 부르지 않습니다" % (ev, name))
 
-  # deny·ask 만 본다. allow 가 빠진 것은 프롬프트가 늘 뿐 막는 층이 죽지 않는다.
+  # deny·ask 만 본다. allow 가 빠진 것은 프롬프트가 늘 뿐 막는 규칙이 죽지 않는다.
   np, cp = new.get("permissions") or {}, cur.get("permissions") or {}
   cur_allow = set(cp.get("allow") or [])
   for sec in ("deny", "ask"):
@@ -520,7 +520,7 @@ if [ "$DO_PROTECT" = 1 ]; then
     # **사람에게 묻는다.** 이것은 원격 설정을 바꾸는 유일한 자리인데 `permissions.ask`
     # 가 못 잡는다 — 규칙은 에이전트가 친 명령 **문자열**만 보므로 `bash install.sh
     # --protect` 안의 `gh api -X PUT` 은 안 보인다. 킷이 `Bash(gh api*)` 를 ask 에
-    # 넣어놓고 그것을 비켜가는 실행 파일을 같이 배포하면 그 층이 거짓이 된다.
+    # 넣어놓고 그것을 비켜가는 실행 파일을 같이 배포하면 그 규칙이 거짓이 된다.
     # 그래서 스크립트가 직접 묻는다. 대답할 사람이 없으면(파이프·CI) 하지 않는다.
     if [ ! -t 0 ]; then
       # **성공으로 끝내지 않는다.** 에이전트의 Bash 호출은 언제나 이 경로이고, exit 0 을

@@ -10,7 +10,7 @@ AI 코딩 에이전트와 함께 개발할 때 쓰는 **절차·검증 체계 �
    에이전트 훅에만 강제를 걸면 도구를 바꾸는 순간 강제가 사라진다.
    → 에이전트 훅은 *편의*(자동 포맷·조기 피드백)에만 쓴다.
 
-2. **아래 계층이 잡을 수 있으면 위 계층에서 뺀다.**
+2. **아래 단계가 잡을 수 있으면 위 단계에서 뺀다.**
    린터가 결정론적으로 잡는 것을 AI 리뷰에 맡기지 않는다.
    리뷰 체크리스트에서 그만큼 삭제하면 **품질이 오르면서 리뷰가 짧아진다.**
 
@@ -19,13 +19,13 @@ AI 코딩 에이전트와 함께 개발할 때 쓰는 **절차·검증 체계 �
    본 범위는 한 줄로 선언한다.
 
 자세한 근거: [`common/docs/artifact-rules.md`](common/docs/artifact-rules.md) ·
-[`common/docs/verification-layers.md`](common/docs/verification-layers.md)
+[`common/docs/verification-stages.md`](common/docs/verification-stages.md)
 
 ## 구조
 
 ```
 common/                에이전트 없이도 작동하는 것 — 킷의 본체
-  docs/                산출물 규칙(R1~R7) · 검증 계층 (설계 근거)
+  docs/                산출물 규칙(R1~R7) · 검증 단계 (설계 근거)
   templates/           CLAUDE.md · SPEC · 추적 매트릭스 · ADR · dev-log · plan · PR
   git-hooks/           pre-commit · pre-push  ← 진짜 강제가 사는 곳
   gate/                게이트 본체 · 언어별 어댑터 · 도구 설치기
@@ -133,9 +133,9 @@ AI_KIT_ALLOW_MISSING_TOOLS=1 git push
 CI 가 같은 검사를 다시 도는 이유는 **로컬이 안 돌 수 있기 때문**이다 — `--no-verify`,
 훅을 활성화하지 않은 clone, 실행권한 없는 훅. 셋 다 이 킷에서 실증했다.
 
-설치되는 강제 계층:
+설치되는 강제 단계:
 
-| 계층 | 막는 것 |
+| 단계 | 막는 것 |
 |---|---|
 | `pre-commit` (git) | `main` 직접 커밋 · 시크릿 패턴 |
 | `pre-push` (git) | 변경 영역의 포맷·린트·타입·테스트 실패 · 시크릿 · 요구 추적 |
@@ -196,7 +196,7 @@ diff 가 길면 `AI_KIT_DIFF_MAX_LINES`·`AI_KIT_DIFF_MAX_TOTAL` 로 조절한�
 `GITHUB_TOKEN` 은 그 워크플로가 도는 레포에만 권한이 있다. 다른 레포를 읽으려면 PAT 이나
 deploy key 를 프로젝트 secrets 에 넣어야 하고, 그러면 킷을 읽을 자격증명이 프로젝트마다
 복제된다. **낡음 감지는 정확성 게이트가 아니라 편의다** — 놓쳐도 깨지지 않고 옛 킷 코드를
-쓸 뿐이다. 킷을 public 으로 바꾸면 토큰 없이 읽히므로 그때 CI 계층을 얹으면 된다.
+쓸 뿐이다. 킷을 public 으로 바꾸면 토큰 없이 읽히므로 그때 CI 단계를 얹으면 된다.
 
 ## 킷 템플릿이 낡는 것은 자동으로 잡는다
 
