@@ -30,20 +30,10 @@ $ARGUMENTS
 ### 그다음 — 하나라도 실패하면 즉시 중단
 
 - `gh pr view <N> --json state,headRefName,headRefOid` → `state` 가 `OPEN` 이 아니면 중단.
-  나머지 둘은 아래와 4절이 쓴다.
+  나머지 둘은 4절이 쓴다. **셸 변수에 담지 마라. 읽어서 출력한다** — 명령을 여러 번 부르는
+  사이에 셸 상태는 유지되지 않는다(`open-pr` 3.1 이 그 사고로 적어둔 규칙이다).
 - `gh pr checks <N>` → `fail` 또는 `pending` 이 하나라도 있으면 중단하고 해당 체크를 나열한다.
 - 위 `git status --porcelain` 이 비어 있지 않으면 중단.
-- **푸시 안 한 커밋 확인. 머지 전인 여기서 한다.** 3절의 `--delete-branch` 는 로컬 브랜치를
-  지울 수 있고 **그때 gh 는 푸시 여부를 보지 않는다.** 4절로 미루면 이미 없어진 뒤다:
-
-      git rev-parse --verify --quiet <headRefName>          # 아무것도 안 나오면(rc=1) 볼 것이 없다
-      git merge-base --is-ancestor <그 값> <headRefOid>      # rc 가 0 이 아니면 중단한다
-
-  **같은지로 보지 마라 — 조상인지로 본다.** 로컬이 서버 head 보다 **뒤처진** 것은 지워도
-  잃을 것이 없고(예전에 받아둔 브랜치를 번호로 머지하는 경우), **앞선** 것만 위험하다.
-  같은지로 보면 안전한 쪽까지 막아서 머지된 브랜치가 그대로 쌓인다.
-  네 방향으로 깨봤다 — 같음 `0` · 뒤처짐 `0` · 앞섬 `1` · 없는 객체 `128`.
-  **`0` 이 아닌 것은 다 중단이다.** 판정 못 한 것을 통과로 치지 않는다.
 - **리뷰 반영 확인.** `open-pr` 이 올린 **마지막 라운드 코멘트**를 읽는다:
 
       gh pr view <N> --json comments \
@@ -127,17 +117,11 @@ $ARGUMENTS
 
     gh pr merge <N> --squash --delete-branch
 
-**`-R` 을 붙이지 마라.** 이 스킬은 클론 안에서 도므로 필요 없고, **그 플래그가 gh 의 로컬
-브랜치 삭제를 끄는 조건이라는 지적이 리뷰에서 나왔다.** 붙이지 않는 것으로 조건을 하나
-줄여둔다.
+**`-R` 을 붙이지 마라.** 이 스킬은 클론 안에서 도므로 필요 없다.
 
-> **이 명령이 로컬 브랜치까지 지우는지는 아직 모른다.** 아는 것은 셋뿐이다 —
-> `gh pr merge --help` (2.92.0)가 `Delete the local and remote branch after merge` 라고
-> 적고, **안 지우는 조건은 그 문서에 없다.** 그런데 PR #52 머지 뒤 로컬
-> `docs/weigh-findings-before-fixing` 은 **남았고**, 그 뒤로 머지된 브랜치 열셋이 로컬에
-> 쌓여 있었다. **어느 조건이 갈랐는지는 확인 못 했다** — 그때의 실제 호출을 되짚을 수 없다.
-> **이 스킬이 다음에 도는 머지 한 번이 그것을 정한다.** 그때 gh 가
-> `Deleted local branch <이름>` 을 찍는지 보고 이 절과 4절을 다시 쓴다.
+**이 명령이 로컬 브랜치까지 지우는지는 4절이 안 따진다.** 지웠으면 넘어가고 안 지웠으면
+지운다 — 관측으로 갈리므로 gh 가 내부에서 무엇을 하는지 알 필요가 없다. 경위는
+`docs/evidence.md` 에 있다.
 
 **사람이 이 프롬프트에서 거절하면 머지하지 않고 멈춘다.** 위 결정 코멘트는 이미
 나갔으므로 **같은 코멘트를 다시 올리지 마라** — 대신 그 뒤에 코멘트로 한 줄을 남긴다:
@@ -159,16 +143,39 @@ $ARGUMENTS
 fast-forward 실패 시 중단: `Error: main 을 fast-forward 할 수 없습니다.`
 
 **`--delete-branch` 가 로컬까지 지웠는지는 그때그때 다르다.** 그래서 **있으면 지우고 없으면
-넘어간다** — 없는 것은 실패가 아니다:
+넘어간다.** 없는 것은 실패가 아니다:
 
     git rev-parse --verify --quiet <headRefName>   # 아무것도 안 나오면(rc=1) 끝이다. 5절로 간다
-    gh pr view <N> --json state -q .state          # MERGED 가 아니면 중단한다
-    git branch -D <headRefName>                    # 위 둘을 통과했을 때만 여기 온다
+    git branch -d <headRefName>                    # 지워지면(rc=0) 끝이다. 5절로 간다
 
-`<headRefName>` 은 2절이 이미 받아둔 값이다. **이름을 여기서 새로 구하지 마라** — 이 절은
-`git checkout main` **뒤**라 현재 브랜치는 `main` 이고, `$ARGUMENTS` 로 **다른 PR 을 번호로
-머지하는 것이 정상 경로**다(`argument-hint`). 이름을 따로 얻으면 `MERGED` 확인과 삭제
-대상이 갈라진다. **그 확인은 시점만 세우지 대상은 안 세운다.**
+**`-D` 가 아니라 `-d` 다. `-d` 자체가 가드다.** 안 민 커밋이 있으면 git 이 거부한다 —
+산문으로 대조를 짓지 않아도 된다. 네 방향으로 깨봤다:
+
+| 상태 | `git branch -d` |
+| --- | --- |
+| 다 밀었고 `refs/remotes/origin/<이름>` 이 로컬에 남아 있다 | `rc=0`. 지워진다 |
+| **커밋만 하고 안 밀었다** | `rc=1` `not fully merged`. 거부 |
+| 다 밀었지만 그 원격 추적 ref 가 pruned 됐다 | `rc=1`. 거부 |
+| `-D` | 언제나 지운다. 그래서 안 쓴다 |
+
+첫 줄이 `rc=0` 인 이유는 **`-d` 가 업스트림을 보기 때문**이다(HEAD 를 보는 것은 업스트림이
+없을 때다). `open-pr` 1절이 `git push -u` 로 밀고 gh 는 원격 브랜치를 API 로 지우므로,
+로컬 `refs/remotes/origin/<이름>` 은 남아 있다. **갈림은 스쿼시가 아니라 원격 추적 ref 다.**
+
+**`-d` 가 거부하면(rc=1) 둘 중 하나다. 로컬 팁으로 가른다:**
+
+    git rev-parse <headRefName>        # 위에서 이미 받은 값이다
+
+- `headRefOid` 와 **같으면** 원격 추적 ref 가 pruned 된 것이다. 서버가 다 가졌으므로
+  `git branch -D <headRefName>` 로 지운다
+- **다르면 중단하고 사람에게 말한다.** 대개 커밋만 하고 안 민 것이 있는 것이고, 여기서
+  `-D` 를 쓰면 그것이 사라진다. 로컬이 **뒤처졌고** 원격 추적 ref 까지 pruned 된 드문
+  경우도 여기로 오는데, 가리지 않고 멈추는 쪽이 안전하다. 이 대조는 문자열끼리라 로컬에
+  없는 객체를 요구하지 않는다
+
+`<headRefName>`·`<headRefOid>` 는 2절이 받아둔 값이다. **이름을 여기서 새로 구하지 마라.**
+이 절은 `git checkout main` **뒤**라 현재 브랜치는 `main` 이고, `$ARGUMENTS` 로 **다른 PR 을
+번호로 머지하는 것이 정상 경로**다(`argument-hint`).
 
 **`--verify --quiet` 를 빼지 마라.** 맨 `git rev-parse <없는 브랜치>` 는 `rc=128` 로 죽으면서
 **인자를 stdout 으로 되뱉는다**(`fatal:` 은 stderr 로 가서 안 보일 수 있다). 그러면 읽는 쪽이
@@ -177,17 +184,12 @@ fast-forward 실패 시 중단: `Error: main 을 fast-forward 할 수 없습니�
     $ git rev-parse nosuchbranch          → stdout `nosuchbranch`, rc=128
     $ git rev-parse --verify --quiet nosuchbranch  → 출력 없음, rc=1
 
-**`-d` 로는 안 지워진다** — 스쿼시 머지라 브랜치가 `main` 의 조상이 아니어서
-`not fully merged` 로 거부한다. 그래서 `-D` 다.
+**`-d` 는 성공해도 stderr 에 `warning:` 을 찍는다**(`deleting branch '<이름>' that has been
+merged to 'refs/remotes/origin/<이름>', but not yet merged to HEAD`). **실패가 아니다.**
+보는 것은 종료코드다.
 
-**`-D` 는 확인 없이 지우지만 되돌릴 수 있다** — 지운 팁 SHA 를 출력한다
-(`Deleted branch <이름> (was <SHA>)`). 진짜로 잃는 것은 **커밋만 하고 안 민 것**인데,
-그것을 지키는 자리는 여기가 아니라 **2절**이다. 3절의 `--delete-branch` 가 먼저 지울 수
-있으므로 이 절의 검사로는 늦는다.
-
-**`git log <브랜치> --not --remotes` 로 푸시 여부를 세지 마라.** 갈림은 스쿼시가 아니라
-**원격 추적 ref 가 남아 있는지**여서, `--delete-branch` 뒤에는 **다 민 브랜치의 커밋도 전부
-나온다.** 세 단계로 재현했다:
+**`git log <브랜치> --not --remotes` 로 푸시 여부를 세지 마라.** 갈림은 여기서도 원격 추적
+ref 여서, `--delete-branch` 뒤에는 **다 민 브랜치의 커밋도 전부 나온다.** 세 단계로 재현했다:
 
     $ git log feat --not --remotes --oneline   # push 직후, origin/feat 있음
     $ git log feat --not --remotes --oneline   # squash 머지 + push 뒤, origin/feat 아직 있음
