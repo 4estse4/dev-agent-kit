@@ -29,17 +29,33 @@ $ARGUMENTS
 
 ### 그다음 — 하나라도 실패하면 즉시 중단
 
-- `gh pr view <N> --json state -q .state` → `OPEN` 이 아니면 중단.
+- `gh pr view <N> --json state,headRefName,headRefOid` → `state` 가 `OPEN` 이 아니면 중단.
+  나머지 둘은 바로 아래와 4절이 쓴다. **셸 변수에 담지 마라. 읽어서 출력한다** — 명령을 여러
+  번 부르는 사이에 셸 상태는 유지되지 않는다(`open-pr` 3.1 이 그 사고로 적어둔 규칙이다).
 - `gh pr checks <N>` → `fail` 또는 `pending` 이 하나라도 있으면 중단하고 해당 체크를 나열한다.
 - 위 `git status --porcelain` 이 비어 있지 않으면 중단.
+- **로컬 브랜치가 서버와 같은지 본다. 머지 전인 여기서 한다:**
+
+      git rev-parse --verify --quiet <headRefName>   # 출력이 없으면 로컬에 그 브랜치가 없다. 넘어간다
+
+  출력이 있으면 그 SHA 를 위에서 받은 `headRefOid` 와 **글자로** 견준다. **다르면 중단하고
+  사람에게 말한다.** 대개 커밋만 하고 안 민 것이 있는 것이다. 로컬이 뒤처진 경우도 여기서
+  멈추는데, 그쪽은 멈춰도 잃는 것이 없다.
+
+  **왜 머지 전인가.** 3절의 `--delete-branch` 는 도움말이 `Delete the local and remote branch
+  after merge` 라고 적는다. 로컬에만 있는 커밋이 있어도 그 브랜치째 지워질 수 있으므로
+  **지워지기 전인 여기서 본다.** gh 가 실제로 지웠는지는 머지 뒤에 4절이 확인한다.
+
+  **왜 글자로 견주나.** 두 커밋의 관계(`git merge-base --is-ancestor`)를 보면 서버 쪽 커밋이
+  로컬에 있어야 판정되고, 없으면 `rc=128` 로 떨어져 멀쩡한 머지를 막는다. 글자 비교는 로컬
+  객체를 요구하지 않는다.
 - **리뷰 반영 확인.** `open-pr` 이 올린 **마지막 라운드 코멘트**를 읽는다:
 
       gh pr view <N> --json comments \
         --jq '[.comments[] | select(.body|test("^\\s*## 리뷰 "))] | last | .body'
 
-  그 코멘트 **맨 위의** `리뷰한 head:` 를 지금 서버 head 와 비교한다
-  (`gh pr view <N> --json headRefOid -q .headRefOid`). 접힌 전문 안에도 같은 줄이
-  있으므로 맨 위 것을 쓴다.
+  그 코멘트 **맨 위의** `리뷰한 head:` 를 **위 첫 줄에서 받아둔 `headRefOid`** 와 비교한다.
+  접힌 전문 안에도 같은 줄이 있으므로 맨 위 것을 쓴다.
 
   **다르면** 마지막 라운드 뒤에 커밋이 더 쌓인 것이고 그 커밋들은 아무도 안 봤다.
   중단하고 **어느 커밋인지 나열해** 사람에게 말한다(`git log <그 head>..HEAD --oneline`).
@@ -116,6 +132,8 @@ $ARGUMENTS
 
     gh pr merge <N> --squash --delete-branch
 
+**`-R` 을 붙이지 마라.** 이 스킬은 클론 안에서 도므로 필요 없다.
+
 **사람이 이 프롬프트에서 거절하면 머지하지 않고 멈춘다.** 위 결정 코멘트는 이미
 나갔으므로 **같은 코멘트를 다시 올리지 마라** — 대신 그 뒤에 코멘트로 한 줄을 남긴다:
 `머지하지 않았다(권한 프롬프트에서 거절됨).` 다시 머지하라는 지시를 받으면 그때
@@ -131,11 +149,32 @@ $ARGUMENTS
 `ask` 에 있고, 이 스킬 안이라고 해서 비켜가지 않는다. 사람이 승인할 때까지 기다린다 —
 이 스킬 §전제 가 요구하는 "사람이 머지를 지시했다" 를 기계로 한 번 더 세우는 자리다.
 
-`git branch -d` 를 따로 실행하지 않는다 — `--delete-branch` 가 처리한다.
-
-## 4. main 복귀
+## 4. main 복귀와 로컬 브랜치 삭제
 `git checkout main` → `git pull --ff-only`.
 fast-forward 실패 시 중단: `Error: main 을 fast-forward 할 수 없습니다.`
+
+**남아 있으면 지운다.** 2절이 로컬과 서버가 같다는 것을 머지 전에 세웠으므로 지워도 잃을
+것이 없다:
+
+    git rev-parse --verify --quiet <headRefName>   # 출력이 없으면 이미 지워졌다. 5절로 간다
+    git branch -D <headRefName>                    # 출력이 있으면 지운다
+
+`<headRefName>` 은 2절이 받아둔 값이다. **이름을 여기서 새로 구하지 마라.** 이 절은
+`git checkout main` **뒤**라 현재 브랜치는 `main` 이고, `$ARGUMENTS` 로 **다른 PR 을 번호로
+머지하는 것이 정상 경로**다(`argument-hint`).
+
+**`-d` 가 아니라 `-D` 인 이유.** 원격 추적 ref 가 pruned 된 레포에서는 `-d` 가 다 민
+브랜치도 거부한다. 2절이 이미 세운 것을 다시 세우느라 멀쩡한 삭제를 막을 까닭이 없다.
+
+**`-D` 에서 권한 프롬프트가 뜬다**(`settings.json` 의 `ask`). 사람이 거절하면 브랜치를 남긴
+채 5절로 가고, 남겼다고 한 줄 덧붙인다.
+
+**`--verify --quiet` 를 빼지 마라.** 맨 `git rev-parse <없는 브랜치>` 는 `rc=128` 로 죽으면서
+**인자를 stdout 으로 되뱉는다**(`fatal:` 은 stderr 로 간다). 읽는 쪽이 그것을 SHA 자리에서
+받으면, 이미 지워진 **정상 경로에서 이 절이 멈춘다.** 실측:
+
+    $ git rev-parse nosuchbranch                    → stdout `nosuchbranch`, rc=128
+    $ git rev-parse --verify --quiet nosuchbranch   → 출력 없음, rc=1
 
 ## 5. 한 줄 보고
 `Merged PR #<N>. main at <short SHA>.`
