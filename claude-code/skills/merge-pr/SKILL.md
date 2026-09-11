@@ -132,19 +132,27 @@ $ARGUMENTS
 `개명 없음` 도 쓰지 마라 — 프로젝트는 킷이 배포하는 파일을 소유하지 않으므로, 늘 뜨면
 **한 레포에서만 참인 줄을 모든 레포가 진다.**
 
-**닫히는 이슈 줄** — 머지로 이슈를 닫는 것은 PR 본문의 닫는 키워드만이 아니다. 스쿼시 커밋
-본문에 들어가는 커밋 메시지의 닫는 키워드도 닫는다. 아래에서 `--body` 를 넘기지 않으므로
-스쿼시 커밋 본문은 레포의 기본값을 따르고, 그 기본값이 커밋 메시지를 모으는 레포가 있다.
-아래 명령의 출력을 합쳐 옮기고, 모두 비었을 때만 닫히는 이슈가 없다:
+**닫히는 이슈 줄** — 머지로 이슈를 닫는 것은 PR 본문의 닫는 키워드만이 아니다. 스쿼시 커밋에
+들어가는 PR 제목과 커밋 메시지의 닫는 키워드도 닫는다. 아래에서 `--body` 를 넘기지 않으므로
+스쿼시 커밋의 제목과 본문은 레포의 기본값을 따르고, 그 기본값이 PR 제목이나 커밋 메시지를
+싣는 레포가 있다. 아래 명령의 출력을 합쳐 옮기고, 모두 비었을 때만 닫히는 이슈가 없다:
 
     gh pr view <N> --json closingIssuesReferences --jq '[.closingIssuesReferences[].number]'
-    gh pr view <N> --json commits --jq '.commits[] | .messageHeadline, .messageBody' \
+    gh pr view <N> --json title,commits --jq '.title, (.commits[]
+        | if (.messageHeadline|endswith("…")) and (.messageBody|startswith("…"))
+          then (.messageHeadline|rtrimstr("…")) + (.messageBody|ltrimstr("…"))
+          else .messageHeadline + "\n" + .messageBody end)' \
       | grep -Eiow '(close[sd]?|fix(e[sd])?|resolve[sd]?):?[[:space:]]+([[:alnum:]_.-]+/[[:alnum:]_.-]+)?#[0-9]+'
 
 **`closingIssuesReferences` 만 보지 마라.** 그 필드는 커밋 메시지의 키워드를 안 센다. 실제로
-그 필드가 `[]` 인 PR 둘이 커밋 메시지의 `Closes #N` 으로 이슈를 닫았다. 커밋 메시지 쪽 명령의
-`-w` 는 `prefix #N` 처럼 낱말 안에 든 `fix` 를 빼려는 것이다. 레포의 기본값이 커밋 메시지를
-싣지 않으면 그 명령이 닫히지 않을 것까지 적는데, 모자라게 적는 것보다 낫다.
+그 필드가 `[]` 인 PR 둘이 커밋 메시지의 `Closes #N` 으로 이슈를 닫았다. PR 제목을 세는지는
+재지 않았다. 재려면 PR 을 하나 머지해야 하므로, 재지 않고 제목도 같이 읽는다.
+
+**`messageHeadline` 은 긴 제목을 자른다.** 끝에 `…` 를 붙이고, 나머지를 `…` 로 시작하는
+`messageBody` 앞에 둔다. 그대로 읽으면 제목 끝의 키워드가 두 줄로 갈려 안 걸리고, 번호
+한가운데서 잘리면 앞자리만 걸려 다른 번호가 나온다. 그래서 잘린 둘을 다시 잇는다. `-w` 는 `prefix #N` 처럼 낱말 안에 든 `fix` 를 빼려는 것이다. 레포의 기본값이
+제목이나 커밋 메시지를 싣지 않으면 이 명령이 닫히지 않을 것까지 적는데, 모자라게 적는 것보다
+낫다.
 
 이슈 닫기는 사람의 승인을 받는 행동인데, 머지로 닫히는 것은 닫는 명령이 따로 없어서 사람이
 볼 자리가 이 초안뿐이다. PR 본문의 닫는 키워드는 여는 순간에 봤지만 본문은 얼어 있고,
