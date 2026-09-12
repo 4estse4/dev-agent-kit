@@ -31,11 +31,13 @@ gh issue list -R 4estse4/ai-native-kit
 열었는데 그것이 열린 결정 1(「킷이 자기 자신에게 게이트를 걸 것인가」)의 실측이었다.
 같은 주제를 둘로 나누면 **둘 다 흐려진다.** 내용을 원래 이슈로 옮기고 새 것을 닫았다.
 
-## 근거는 `docs/evidence.md` 에 있다
+## 근거는 `docs/adr/` 와 `docs/dev-log.md` 에 있다
 
-아래 규칙들이 왜 그 모양인지는 거기 적혀 있다 — 스킬 5개가 첫 사용에서 버그였던 것,
-콜드 리뷰가 셀프 리뷰를 몇 대 몇으로 이겼는지, 추정으로 설계를 정했다가 세 번 틀린 것.
-**새로 겪은 것은 그 자리에서 거기 적는다.**
+결정의 근거는 `docs/adr/` 에, 겪은 일은 `docs/dev-log.md` 에 있다 — 스킬 5개가 첫 사용에서
+버그였던 것, 콜드 리뷰가 셀프 리뷰를 몇 대 몇으로 이겼는지, 추정으로 설계를 정했다가 세 번
+틀린 것. 둘을 가른 이유는 `docs/adr/0001-kit-writes-its-own-records.md` 다.
+**새로 겪은 것은 머지 직전에 dev-log 항목으로 적는다** — `devlog` 스킬의 절차대로, 이
+레포에서는 손으로. 라운드 도중에 안 것은 라운드 코멘트에 남긴다.
 
 ## 이 레포의 성격
 
@@ -56,7 +58,9 @@ gh issue list -R 4estse4/ai-native-kit
 **경계**: *"네 `settings.json` 에 킷의 규칙이 없다"* 는 이번 설치의 사실이라 남기고,
 *"옛 킷이 두고 간 파일이 있다"* 는 이전 버전에 대한 배려라 뺀다.
 **킷이 움직였다고 알리는 것**(`kit_freshness.sh`)도 배려가 아니다 — 옛 설치를
-돌아가게 만드는 것이 배려다.
+돌아가게 만드는 것이 배려다. 갱신을 킷이 맡았다가 걷어낸 경위는
+`docs/adr/0004-drop-update-merge.md` 에, 체크섬 대조를 걷어낸 경위는
+`docs/adr/0003-drop-vendor-checksum.md` 에 있다.
 
 **킷이 배포하는 파일의 이름을 바꾸는 것은 깨는 변경이다.** `install.sh` 는 킷이 **지금
 배포하는** 파일만 순회하므로, 이름을 바꾸면 **옛 이름이 설치된 레포에 영원히 남고 새
@@ -73,7 +77,7 @@ gh issue list -R 4estse4/ai-native-kit
 
 | 규칙 | 누가 막나 |
 | --- | --- |
-| 브랜치 → PR → 콜드 리뷰 → 머지. `main` 직접 커밋 금지 | `사람` |
+| 브랜치 → PR → 콜드 리뷰 → 머지. `main` 직접 커밋 금지. 근거는 `docs/adr/0002-kit-goes-through-pr-and-cold-review.md` | `사람` |
 | 커밋 트레일러는 `Co-Authored-By: Claude <모델> (<effort>) <noreply@anthropic.com>` 한 줄 | `리뷰` |
 | 셸 스크립트를 고치면 `bash -n` 과 **실제 실행**으로 닫는다 | 구문은 `CI` · **실제 실행은 `사람`** — 아래 |
 | 설치기를 고치면 **깨끗한 데모 레포에 설치해** 미리보기와 실제를 대조한다 | `CI`(`tests/install-deletions.sh`) |
@@ -105,7 +109,7 @@ gh issue list -R 4estse4/ai-native-kit
 `Edit|Write` 다(`claude-code/settings.json`). **bash 편집은 그 훅을 건너뛴다.**
 `누가 막나` 가 `사람` 인 것은 정직하게 그렇다 — 이 레포에서는 훅 자체가 안 돌고(이슈 #4),
 시스템이 매 세션 반대 지시를 주기도 한다. 통짜 치환이 실제로 무엇을 지웠는지는
-`docs/evidence.md` 에 있다.
+`docs/dev-log.md` 의 2026-09-10 항목에 있다.
 
 ### 커밋 트레일러를 왜 커밋마다 적나
 

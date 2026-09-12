@@ -62,7 +62,8 @@ claude-code/           Claude Code 가 있어야 의미 있는 것
 | `common/` 전부 | **검증됨** — 실제 프로젝트에 적용해 결함을 잡음 |
 | `claude-code/` 의 statusline | **검증됨** — 상시 사용 중 |
 
-무엇을 어떻게 확인했고 무엇이 실제로 깨졌는지는 [`docs/evidence.md`](docs/evidence.md) 에 있다.
+무엇이 실제로 깨졌고 누가 잡았는지는 [`docs/dev-log.md`](docs/dev-log.md) 에,
+그래서 무엇을 정했는지는 [`docs/adr/`](docs/adr/) 에 있다.
 
 ## 누가 썼나 (정직하게)
 
