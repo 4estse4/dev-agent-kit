@@ -138,7 +138,8 @@ $ARGUMENTS
 제목으로 들어가 머지 때 이슈를 닫을 수 있다. 이것은 재지 않았다 — 재려면 PR 을 하나 머지해야
 하므로, 재지 않고 제목도 읽는다. 아래에서 `--body` 를 넘기지 않으므로 스쿼시 커밋의 제목과
 본문은 레포의 기본값을 따르고, 그 기본값이 PR 제목이나 커밋 메시지를 싣는 레포가 있다. 아래
-명령의 출력을 합쳐 옮기고, 모두 비었을 때만 닫히는 이슈가 없다:
+명령을 다 돌려 나온 번호를 모은다. 그 번호의 상태를 본 뒤 적고, `OPEN` 이 없을 때만 닫히는
+이슈가 없다:
 
     gh pr view <N> --json closingIssuesReferences --jq '[.closingIssuesReferences[].number]'
     gh pr view <N> --json title,commits --jq '.title, (.commits[]
