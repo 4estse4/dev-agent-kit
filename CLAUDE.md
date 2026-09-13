@@ -35,7 +35,8 @@ gh issue list -R 4estse4/ai-native-kit
 
 결정의 근거는 `docs/adr/` 에, 겪은 일은 `docs/dev-log.md` 에 있다 — 스킬 5개가 첫 사용에서
 버그였던 것, 콜드 리뷰가 셀프 리뷰를 몇 대 몇으로 이겼는지, 추정으로 설계를 정했다가 세 번
-틀린 것. 둘을 가른 이유는 `docs/adr/0001-kit-writes-its-own-records.md` 다.
+틀린 것. **규칙만 읽고 근거를 잃으면 규칙이 취향처럼 보이고, 취향은 다음 사람이 지운다.**
+그래서 근거를 따로 둔다. 둘을 가른 이유는 `docs/adr/0001-kit-writes-its-own-records.md` 다.
 **새로 겪은 것은 머지 직전에 dev-log 항목으로 적는다** — `devlog` 스킬의 절차대로, 이
 레포에서는 손으로. 라운드 도중에 안 것은 라운드 코멘트에 남긴다.
 
