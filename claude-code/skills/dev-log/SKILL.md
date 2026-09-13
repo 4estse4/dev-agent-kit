@@ -1,5 +1,5 @@
 ---
-name: devlog
+name: dev-log
 description: 이 브랜치의 작업을 docs/dev-log.md 항목으로 추가한다. 머지 직전에 실행한다.
 argument-hint: "[선택: PR 번호]"
 ---
