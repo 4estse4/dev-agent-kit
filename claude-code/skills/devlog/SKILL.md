@@ -38,11 +38,11 @@ $ARGUMENTS
 지우고, 지운 것을 이 dev-log 항목의 「작업」 줄 끝에 「계획에서 지움: #N」으로 적는다.** 닫는
 이슈는 위 PR 본문의 `Closes #N` 으로 안다. 다른 절(위험 표 등)에 있는 같은 번호는 그대로 둔다.
 **지금 단계 문서는 `docs/plan/README.md` 가 가리키는 파일이다.** README 가 없거나 가리키는
-파일이 없으면 이 단락을 건너뛴다 — 설치기는 `docs/plan/0000-template.md` 만 놓으므로 단계
-문서가 없는 레포가 정상이다.
+파일이 없으면 이 단락을 건너뛴다 — 설치기는 `docs/plan/0000-template.md` 만 놓으므로 README 가
+없는 레포가 정상이다.
 
-    ls docs/plan/ 2>/dev/null | grep -vE '^(0000-template\.md|README\.md)$'   # 비어 있으면 건너뛴다
-    grep -nE '#<N>([^0-9]|$)' docs/plan/<지금 단계 문서>                        # 「작업 목록」의 줄만 지운다
+    ls docs/plan/README.md 2>/dev/null || echo "(README 없음 — 건너뛴다)"
+    grep -nE '#<N>([^0-9]|$)' docs/plan/<README 가 가리키는 파일>   # 「작업 목록」의 줄만 지운다. 이 출력은 증거로 붙이지 않는다
 
 ## 형식
 
