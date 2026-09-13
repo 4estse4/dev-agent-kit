@@ -71,9 +71,13 @@ $ gh api repos/4estse4/ai-native-kit/rulesets --jq '.[] | {name, enforcement, ta
 룰셋이 막는 것은 PR 없는 push · `tests` 가 빨간 채로 머지 · 스쿼시 아닌 머지 · `main`
 삭제까지다. **콜드 리뷰를 돌렸는지는 룰셋이 안 본다.** 그것은 여전히 `사람` 이다.
 
-룰셋 때문에 낡은 자리가 둘 있고, 그것은 이슈 #4 가 든다 — `.github/workflows/kit-tests.yml`
-머리의 「이것은 required check 가 아니다」와, `merge-pr` 2절의 보호 확인이 클래식
-엔드포인트만 봐서 룰셋을 「보호가 없다」로 보고하는 것. 룰셋의
+룰셋 때문에 낡은 자리가 있고, 그것은 이슈 #4 가 든다. `.github/workflows/kit-tests.yml`
+머리는 「이것은 required check 가 아니다」라고 적는다. `merge-pr` 2절에는 보호를 확인하는
+명령이 없고 「브랜치 보호가 없는 레포라면 그 사실을 먼저 알린다」 한 줄만 있는데, 그 줄이
+가리키는 `install.sh --protect` 는 클래식 보호를 설정한다(`gh api -X PUT`). 사람이 켠 것은
+룰셋이라 클래식 엔드포인트로 보면 404 이고, 룰셋은
+`repos/{owner}/{repo}/rules/branches/{branch}` 가 보여 준다. 확인 명령을 스킬에 넣을지와
+`--protect` 를 룰셋으로 바꿀지는 #4 가 가진 일이다. 룰셋의
 `require_extra_approval_for_unattributed_changes` 가 `true` 라 머지가 막히면 그것부터 본다.
 
 되돌리려면 룰셋과 `CLAUDE.md` 하드룰 첫 줄을 같이 건드려야 한다. 룰셋만 끄면 규칙은

@@ -44,7 +44,8 @@ permissions:      Use `Agent(AgentName)` rules to control which subagents Claude
 - **`use_skill.sh` 를 걷어낸다.** 이 훅은 `main` 에 도달한 적이 없다 — 한 브랜치가 만들고
   같은 브랜치가 지웠다. 릴리스된 킷이 그 훅을 설치한 프로젝트는 없다.
 - **밖으로 나가는 `gh` 쓰기 명령을 `settings.json` 의 `permissions.ask` 에 둔다.** PR #48
-  이 넷을 뒀고 그 뒤 PR 들이 더했다. 횟수를 제한하지 않는다 — 매번 사람 눈에 띄게 할
+  이 아홉을 뒀고 그 뒤 PR 이 `git branch -D*` 하나를 더했다. 그 PR 도중의 기록에는 넷이라
+  적혀 있었고, 머지된 것은 아홉이다. 횟수를 제한하지 않는다 — 매번 사람 눈에 띄게 할
   뿐이고, 세는 것은 사람이다.
 - **두 리뷰는 게시하지 않고 돌려준다.** 게시는 `open-pr` 의 한 자리다.
 

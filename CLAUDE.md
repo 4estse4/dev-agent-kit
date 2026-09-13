@@ -77,7 +77,7 @@ gh issue list -R 4estse4/ai-native-kit
 
 | 규칙 | 누가 막나 |
 | --- | --- |
-| 브랜치 → PR → 콜드 리뷰 → 머지. `main` 직접 커밋 금지. 근거는 `docs/adr/0002-kit-goes-through-pr-and-cold-review.md` | `사람` |
+| 브랜치 → PR → 콜드 리뷰 → 머지. `main` 직접 커밋 금지. 근거는 `docs/adr/0002-kit-goes-through-pr-and-cold-review.md` | `main` 룰셋(PR 없는 push · 빨간 `tests` · 스쿼시 아닌 머지를 막는다) · `사람`(콜드 리뷰를 돌렸는지) |
 | 커밋 트레일러는 `Co-Authored-By: Claude <모델> (<effort>) <noreply@anthropic.com>` 한 줄 | `리뷰` |
 | 셸 스크립트를 고치면 `bash -n` 과 **실제 실행**으로 닫는다 | 구문은 `CI` · **실제 실행은 `사람`** — 아래 |
 | 설치기를 고치면 **깨끗한 데모 레포에 설치해** 미리보기와 실제를 대조한다 | `CI`(`tests/install-deletions.sh`) |
