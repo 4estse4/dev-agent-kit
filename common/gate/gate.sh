@@ -74,10 +74,12 @@ if [ "$ALL" = 0 ]; then
   if [ "$STAGED" = 1 ]; then
     # quotePath 기본값(true)은 비ASCII 경로를 octal 로 이스케이프해 따옴표째 내보낸다.
     # 그 이름으로는 파일을 못 찾는다 — 한국어 문서가 산출물인 이 킷에서 바로 물린다.
+    # 아래 두 줄도 같은 자리다. 한때 이 줄만 고치고 두 줄은 그대로 뒀다(실측: 중첩
+    # 모듈의 한글 파일만 바뀌면 "검사 대상 없음" 으로 조용히 통과).
     CHANGED=$(git -c core.quotePath=false diff --cached --name-only 2>/dev/null || true)
   fi
-  [ -z "$CHANGED" ] && [ -n "$BASE" ] && CHANGED=$(git diff --name-only "$BASE...HEAD" 2>/dev/null || true)
-  [ -z "$CHANGED" ] && [ "$STAGED" != 1 ] && CHANGED=$(git diff --name-only HEAD 2>/dev/null || true)
+  [ -z "$CHANGED" ] && [ -n "$BASE" ] && CHANGED=$(git -c core.quotePath=false diff --name-only "$BASE...HEAD" 2>/dev/null || true)
+  [ -z "$CHANGED" ] && [ "$STAGED" != 1 ] && CHANGED=$(git -c core.quotePath=false diff --name-only HEAD 2>/dev/null || true)
   [ -z "$CHANGED" ] && ALL=1
 fi
 

@@ -19,8 +19,12 @@ ALLOWED_NAMES='(\.env\.example|\.env\.sample|\.env\.template)$'
 
 # git 실패를 삼키면 DIFF 가 비어 "매치 없음 = 통과" 가 된다.
 # 범위 해석 실패(shallow clone·사라진 SHA·잘못된 인자)는 검사 불능이지 통과가 아니다.
+#
+# core.quotePath 기본값(true)은 비ASCII 경로를 octal 로 이스케이프해 따옴표째 내보낸다.
+# 그 문자열은 끝이 `"` 라 FORBIDDEN_NAMES 의 `$` 에 안 맞고, 한글 디렉터리 아래의
+# .env 나 키 파일이 이름 검사를 그대로 통과한다 — 실측. 두 모드 다 같은 자리다.
 if [ "$MODE" = staged ]; then
-  FILES=$(git diff --cached --name-only --diff-filter=ACM) || {
+  FILES=$(git -c core.quotePath=false diff --cached --name-only --diff-filter=ACM) || {
     echo "시크릿 스캔 오류: staged 목록을 읽지 못했습니다." >&2; exit 2; }
 else
   # `git diff A..B` 는 두 끝점만 비교한다 — 넣었다 지운 시크릿이 안 보이는데,
@@ -40,7 +44,7 @@ else
   # 검사한다. 시크릿이 든 main 을 머지한 브랜치는 `cc` 든 `--first-parent` 든 `git diff`
   # 든 똑같이 막힌다 — 실측으로 셋 다 같은 파일을 짚었다. `cc` 가 그 오탐을 없앤다고
   # 적어둔 판이 있는데 그건 사실이 아니다.
-  FILES=$(git log --name-only --diff-filter=ACM --diff-merges=cc --pretty=format: "$RANGE" | sort -u | sed '/^$/d') || {
+  FILES=$(git -c core.quotePath=false log --name-only --diff-filter=ACM --diff-merges=cc --pretty=format: "$RANGE" | sort -u | sed '/^$/d') || {
     echo "시크릿 스캔 오류: 범위 '$RANGE' 를 해석하지 못했습니다 — 검사를 신뢰할 수 없어 중단합니다." >&2
     exit 2; }
 fi
