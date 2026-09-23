@@ -69,10 +69,13 @@ for f in found:
     # **킷 레포 이름.** 파일이든 PR 이든 킷 레포로 보내는 것은 같다(이슈 #61 의 결정).
     # 주소만 보면 `gh api repos/…` · `-R …` · `owner/repo#N` 이 빠져나간다. 그래서 이름을
     # 본다. 레포 홈 주소만 둔다 — 설치본이 어디서 왔는지 밝히는 자리(`.ai-kit/README.md`)다.
-    for mo in re.finditer(r'4estse4/ai-native-kit', text):
+    # 대소문자를 가리지 않는다. `gh api repos/4ESTSE4/AI-Native-Kit` 도 킷 레포를 낸다.
+    # 홈 주소 뒤는 막을 글자로 본다 — 영숫자 · `@` · `#` · `-`, 그리고 `/` · `.` · `:` 뒤에
+    # 이어지는 경로. 둘 글자로 보던 때는 쉼표 · 조사 · 끝 슬래시 · 콜론에서 오탐이 났다.
+    for mo in re.finditer(r'(?i)4estse4/ai-native-kit', text):
         s, e = mo.span()
-        home = (text[max(0, s - 19):s] == 'https://github.com/'
-                and re.match(r'(?a)(\.?(\s|$))|[)`>\]"\' ]', text[e:e + 2] or ' '))
+        home = (text[max(0, s - 19):s].lower() == 'https://github.com/'
+                and not re.match(r'(?a)[\w@#-]|[/.:][\w#-]', text[e:e + 2]))
         if not home:
             line = text[text.rfind('\n', 0, s) + 1:].split('\n')[0].strip()[:100]
             print(f"  ✗ {f[len(R)+1:]} 가 킷 레포를 가리킨다 — {line}"); bad = 1
