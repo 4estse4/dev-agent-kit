@@ -77,16 +77,11 @@ check "\\ 줄넘김은 한 줄로 잇는다" pass "gh pr comment 89 \\
   --body-file $FX/pr89/round2.md"
 mk nobold.md "${r2//\*\*/}"
 check "인용 안의 굵게 표시를 뗀 것" pass "$(post nobold.md)"
-check "명령 이름만 적은 다른 명령" pass "echo 'gh pr comment 89' && gh pr view 89"
-# 게시 명령 글자를 따옴표 안에 든 명령. 명령 자리에 없으므로 게시가 아니다.
-# a3e4ad1 은 막았다.
-check "따옴표 안의 게시 명령 글자" pass "echo 'gh pr comment 89 --body-file x' && gh pr view 89"
-check "sed 로 스킬의 게시 줄을 찾는 명령" pass \
-  "sed -n '/^머지/,/^    gh pr comment <N> --body-file <파일>/p' claude-code/skills/merge-pr/SKILL.md"
-check "커밋 메시지를 \$(cat <<EOF) 로 넘김" pass "git commit -m \"\$(cat <<'EOF'
-fix(hooks): block gh pr comment 89 --body-file with fake quotes
-EOF
-)\""
+# 하위 명령이 comment 가 아니거나, 낱말이 comment 가 아니다
+check "PR 코멘트를 읽는 명령(comments)" pass "gh pr view 89 --json comments --jq '.comments[].body'"
+check "제목에 comment 가 든 gh pr create" pass \
+  "gh pr create --title \"feat(review): round comment quote hook\" --body-file $T/body.md"
+check "gh 를 뺀 글자로 찾는 명령" pass "grep -n 'pr comment' claude-code/skills/merge-pr/SKILL.md"
 check "레포를 붙인 -R=" pass "gh pr comment 89 -R=4estse4/ai-native-kit --body-file $FX/pr89/round2.md"
 args_has "붙인 -R= 의 값을 gh 에 넘긴다" "-R 4estse4/ai-native-kit"
 mk inner.md "$r4
@@ -122,12 +117,6 @@ EOF
 check "사람의 답에 백틱 안의 \" 가 홀수 개" pass "$(post oddround.md)" "$T/odd"
 check "--help" pass "gh pr comment --help"
 check "--delete-last(본문 없음)" pass "gh pr comment 89 --delete-last --yes"
-check "heredoc 커밋 메시지 안의 명령" pass "git commit -F - <<'EOF'
-feat(hooks): block gh pr comment 89 --body-file with fake quotes
-EOF"
-check "heredoc 안의 아포스트로피" pass "cat > draft.md <<'EOF'
-don't run gh pr comment 89 --body-file x here
-EOF"
 
 # ── 3.5 코멘트는 사람에게 묻는다 ──
 mk answer.md "$(cat "$FX/pr89/answer2.md")"
@@ -251,6 +240,46 @@ EOF" "" "정규형"
 check "PR 을 URL 로 적음" deny \
   "gh pr comment https://github.com/other/repo/pull/89 --body-file $FX/pr89/round2.md" "" "번호 하나"
 check "eval 래퍼" deny "eval \"$(post onechar.md)\"" "" "정규형"
+check "gh 와 pr 사이의 플래그" deny \
+  "gh --repo 4estse4/ai-native-kit pr comment 89 --body-file $T/onechar.md" "" "정규형"
+check "두 번 준 --body-file" deny \
+  "gh pr comment 89 --body-file $FX/pr89/round2.md --body-file $T/onechar.md" "" "두 번"
+check "편집기로 쓰는 -e" deny "gh pr comment 89 -e" "" "절대 경로 파일 하나로만"
+check "웹으로 쓰는 -w" deny "gh pr comment 89 -w" "" "절대 경로 파일 하나로만"
+
+# ── 막아야 하는 것: 명령 글자 어디에든 게시 명령이 보이면 ──
+# 앞에 무엇이 오든, 따옴표 · heredoc 안이든 정규형이 아니면 막는다. 「명령 자리」를 목록으로
+# 정해 알아보던 동안 목록 밖(`if` · `timeout` · `bash -lc` …)의 게시가 대조 없이 지나갔다.
+check "if 조건 자리" deny "if $(post onechar.md); then echo ok; fi" "" "정규형"
+check "while 조건 자리" deny "while $(post onechar.md); do break; done" "" "정규형"
+check "then 뒤" deny "if true; then $(post onechar.md); fi" "" "정규형"
+check "! 뒤" deny "! $(post onechar.md)" "" "정규형"
+check "{ } 안" deny "{ $(post onechar.md); }" "" "정규형"
+check "timeout 앞붙임" deny "timeout 60 $(post onechar.md)" "" "정규형"
+check "timeout 앞붙임의 3.5 코멘트" deny "timeout 60 $(post answer.md)" "" "정규형"
+check "변수 대입 앞붙임" deny "GH_REPO=4estse4/ai-native-kit $(post onechar.md)" "" "정규형"
+check "env 앞붙임" deny "env X=1 $(post onechar.md)" "" "정규형"
+check "nice 앞붙임" deny "nice $(post onechar.md)" "" "정규형"
+check "sudo -E 앞붙임" deny "sudo -E $(post onechar.md)" "" "정규형"
+check "command -p 앞붙임" deny "command -p $(post onechar.md)" "" "정규형"
+check "앞의 리다이렉트" deny "2>/dev/null $(post onechar.md)" "" "정규형"
+check "bash -lc 래퍼" deny "bash -lc '$(post onechar.md)'" "" "정규형"
+check "sh -ec 래퍼" deny "sh -ec '$(post onechar.md)'" "" "정규형"
+check "find -exec" deny \
+  "find $T -name onechar.md -exec gh pr comment 89 --body-file {} \\;" "" "정규형"
+check "xargs" deny "echo $T/onechar.md | xargs gh pr comment 89 --body-file" "" "정규형"
+check "백틱 명령 치환" deny "echo \`$(post onechar.md)\`" "" "정규형"
+check "따옴표 안의 게시 명령 글자" deny "echo 'gh pr comment 89 --body-file x' && gh pr view 89" "" "정규형"
+check "sed 로 스킬의 게시 줄을 찾는 명령" deny \
+  "sed -n '/^머지/,/^    gh pr comment <N> --body-file <파일>/p' claude-code/skills/merge-pr/SKILL.md" "" \
+  "\`pr comment\` 로 찾고"
+check "커밋 메시지를 \$(cat <<EOF) 로 넘김" deny "git commit -m \"\$(cat <<'EOF'
+fix(hooks): block gh pr comment 89 --body-file with fake quotes
+EOF
+)\"" "" "정규형"
+check "heredoc 으로 쓰는 초안" deny "cat > draft.md <<'EOF'
+don't run gh pr comment 89 --body-file x here
+EOF" "" "Write"
 
 # ── 판정 못 하면 막는다 ──
 STUB_GH_FAIL=1 check "gh 가 실패" deny "gh pr comment 89 --body-file $FX/pr89/round2.md" "" "판정 못 한 것은"
