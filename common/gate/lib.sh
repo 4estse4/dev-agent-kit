@@ -87,6 +87,18 @@ gate_go_min_check() {
   return 1
 }
 
+# 레포 루트에 .nvmrc 가 있는지 본다. 없으면 GitHub 주석(::error)으로 이유를 말하고 실패한다.
+# CI 의 setup-node 가 그 파일로 node 를 깐다. node 는 잡 하나에 하나라 py 의 .python-version 처럼
+# 루트에 둔다. setup-node 를 쓰는 잡이 모두 그 앞에서 부른다. 한때 setup-node 가 루트의 .nvmrc 와
+# lockfile 을 가정하고, 그 실패를 continue-on-error 가 초록으로 덮었다(이슈 #95).
+gate_nvmrc_check() {
+  local found
+  [ -f .nvmrc ] && return 0
+  found=$(find . \( $(gate_prune_expr) \) -prune -o -name .nvmrc -print | sed 's#^\./##' | paste -sd ' ' -)
+  echo "::error::.nvmrc 가 레포 루트에 없습니다${found:+(하위 디렉터리에는 있습니다: $found)}. CI 는 node 를 잡마다 하나만 깔고 그 버전을 루트의 .nvmrc 에서 읽습니다. 레포 루트에 node 버전 한 줄(예: 22)로 만들고 커밋하세요."
+  return 1
+}
+
 # Go 도구를 부르는 방법을 한 곳에서 정한다.
 #
 # go.mod 의 `tool` 지시어(Go 1.24+)가 선언한 도구는 `go tool <이름>` 으로 부를 수 있고,

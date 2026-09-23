@@ -303,10 +303,21 @@ jobs:
             )
           done < <(find . \( $(gate_prune_expr) \) -prune -o -name pyproject.toml -print)
 
+      # node 버전은 **레포 루트의 `.nvmrc`** 가 정한다. 없으면 여기서 이유를 말하며 멈춘다
+      # (lib.sh 의 gate_nvmrc_check). 한때 setup-node 가 루트의 `.nvmrc` 와 lockfile 을 가정했고,
+      # 그 실패를 continue-on-error 가 초록으로 덮었다(실측). lockfile 은 모듈마다 있을 수 있어
+      # cache 키를 레포 어디의 package-lock.json 에서든 잡는다.
+      - if: needs.detect.outputs.node == 'true'
+        name: require a root .nvmrc
+        run: |
+          . .ai-kit/gate/lib.sh
+          gate_nvmrc_check
       - if: needs.detect.outputs.node == 'true'
         uses: actions/setup-node@v7
-        with: { node-version-file: '.nvmrc', cache: npm }
-        continue-on-error: true
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+          cache-dependency-path: '**/package-lock.json'
       - if: needs.detect.outputs.node == 'true'
         run: |
           # 줄 단위로 읽는다. `for d in $(…)` 는 공백 든 경로에서 낱말이 갈려 cd 가 죽었다.
@@ -424,9 +435,13 @@ jobs:
           exit $fail
 
       - if: needs.detect.outputs.node == 'true'
+        name: require a root .nvmrc
+        run: |
+          . .ai-kit/gate/lib.sh
+          gate_nvmrc_check
+      - if: needs.detect.outputs.node == 'true'
         uses: actions/setup-node@v7
         with: { node-version-file: '.nvmrc' }
-        continue-on-error: true
       - if: needs.detect.outputs.node == 'true'
         name: npm audit (high+)
         run: |
