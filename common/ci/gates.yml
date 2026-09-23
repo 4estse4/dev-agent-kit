@@ -306,7 +306,8 @@ jobs:
       # node 버전은 **레포 루트의 `.nvmrc`** 가 정한다. 없으면 여기서 이유를 말하며 멈춘다
       # (lib.sh 의 gate_nvmrc_check). 한때 setup-node 가 루트의 `.nvmrc` 와 lockfile 을 가정했고,
       # 그 실패를 continue-on-error 가 초록으로 덮었다(실측). lockfile 은 모듈마다 있을 수 있어
-      # cache 키를 레포 어디의 package-lock.json 에서든 잡는다.
+      # cache 키를 레포 어디의 lockfile 에서든 잡는다. 이 값을 주면 setup-node 는 기본 패턴 대신
+      # 이것만 보고, 하나도 안 맞으면 멈추므로 npm ci 가 읽는 둘을 다 적는다.
       - if: needs.detect.outputs.node == 'true'
         name: require a root .nvmrc
         run: |
@@ -317,7 +318,9 @@ jobs:
         with:
           node-version-file: '.nvmrc'
           cache: npm
-          cache-dependency-path: '**/package-lock.json'
+          cache-dependency-path: |
+            **/package-lock.json
+            **/npm-shrinkwrap.json
       - if: needs.detect.outputs.node == 'true'
         run: |
           # 줄 단위로 읽는다. `for d in $(…)` 는 공백 든 경로에서 낱말이 갈려 cd 가 죽었다.

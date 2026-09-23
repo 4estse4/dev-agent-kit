@@ -8,8 +8,10 @@
 #
 # 깨끗한 레포에 킷을 설치하고 그 gates.yml 을 읽는다. 보는 것:
 #   · actions/setup-node 를 쓰는 스텝마다 continue-on-error 가 없고, 같은 잡에서 그보다 앞선
-#     스텝이 gate_nvmrc_check 를 부르고, cache: npm 이면 cache-dependency-path 도 있다(없으면
-#     setup-node 가 레포 루트에서만 lockfile 을 찾는다)
+#     스텝이 gate_nvmrc_check 를 부르고, cache 가 npm 이면(따옴표를 쳐도) cache-dependency-path 가
+#     레포 전체의 package-lock.json 과 npm-shrinkwrap.json 을 둘 다 잡는다. 그 값을 주면
+#     setup-node 는 기본 패턴 대신 그것만 보고, 하나도 안 맞으면 「Some specified paths were not
+#     resolved」로 멈춘다. 값이 없으면 레포 루트에서만 lockfile 을 찾는다
 #   · 그 확인 스텝의 run 을 설치한 레포에서 돌리면, 루트에 .nvmrc 가 없을 때(하위 디렉터리에만
 #     있을 때도) 이유를 말하며 실패하고, 있으면 통과한다. 러너의 기본 셸처럼 `bash -e` 로 돈다
 set -u
@@ -28,13 +30,14 @@ ok() { echo "  ✓ $1"; }
 bad() { echo "  ✗ $1"; fail=1; }
 
 # setup-node 스텝마다 판정한다. 주석 줄은 보지 않는다.
-report=$(awk '
+report=$(awk -v q="'" '
   function endstep() {
     if (step ~ /uses: actions\/setup-node@/) {
       n++; msg = ""
       if (step ~ /continue-on-error:/) msg = msg " continue-on-error 가 있다."
       if (!checked) msg = msg " 앞에서 gate_nvmrc_check 를 안 부른다."
-      if (step ~ /cache: *npm/ && step !~ /cache-dependency-path:/) msg = msg " cache: npm 인데 cache-dependency-path 가 없다."
+      if (step ~ ("cache: *[\"" q "]?npm") && !(index(step, "**/package-lock.json") && index(step, "**/npm-shrinkwrap.json")))
+        msg = msg " cache 가 npm 인데 cache-dependency-path 가 레포 전체의 package-lock.json 과 npm-shrinkwrap.json 을 다 잡지 않는다."
       print (msg == "" ? "ok" : "bad") "\t" job "\t" msg
     }
     if (hit) checked = 1
