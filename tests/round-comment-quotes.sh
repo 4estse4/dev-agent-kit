@@ -18,7 +18,7 @@ KIT="$(cd "$(dirname "$0")/.." && pwd)"
 HOOK="$KIT/claude-code/hooks/round_comment_quotes.sh"
 FX="$KIT/tests/fixtures/round-comment-quotes"
 T=$(mktemp -d)
-mkdir -p "$T/bin" "$T/empty"
+mkdir -p "$T/bin" "$T/empty" "$T/odd"
 cat > "$T/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$STUB_GH_ARGS"
@@ -64,6 +64,7 @@ args_has() {
 mk() { printf '%s' "$2" > "$T/$1"; }
 r2=$(cat "$FX/pr89/round2.md")
 r4=$(cat "$FX/pr89/round4.md")
+post() { printf 'gh pr comment %s --body-file %s' "${2:-89}" "$T/$1"; }
 
 # ── 통과해야 하는 것 ──
 check "올라간 2라운드 코멘트 그대로" pass "gh pr comment 89 --body-file $FX/pr89/round2.md"
@@ -71,12 +72,14 @@ args_has "gh 에 PR 번호를 넘긴다" "pr view 89 "
 check "레포를 밝힌 호출" pass "gh pr comment 89 -R 4estse4/ai-native-kit --body-file $FX/pr89/round2.md"
 args_has "gh 에 레포를 넘긴다" "-R 4estse4/ai-native-kit"
 check "올라간 4라운드 코멘트 그대로" pass "gh pr comment 89 --body-file $FX/pr89/round4.md"
+check "\\ 줄넘김은 한 줄로 잇는다" pass "gh pr comment 89 \\
+  --body-file $FX/pr89/round2.md"
 mk nobold.md "${r2//\*\*/}"
-check "인용 안의 굵게 표시를 뗀 것" pass "gh pr comment 89 --body-file nobold.md"
-check "gh pr comment 가 아닌 명령" pass "echo 'gh pr comment 89 --body-file x' && gh pr view 89"
+check "인용 안의 굵게 표시를 뗀 것" pass "$(post nobold.md)"
+check "명령 이름만 적은 다른 명령" pass "echo 'gh pr comment 89' && gh pr view 89"
 mk inner.md "$r4
 - (사람) \"고치고 한 라운드 더. … 홈 주소를 명령 인자로 쓰는 모양은 비추천 그대로 둔다.\""
-check "따옴표 안을 … 로 줄인 진짜 인용" pass "gh pr comment 89 --body-file inner.md"
+check "따옴표 안을 … 로 줄인 진짜 인용" pass "$(post inner.md)"
 mk folded.md "$r4
 
 <details>
@@ -84,11 +87,31 @@ mk folded.md "$r4
 - (사람) \"접힌 전문 안의 가짜 인용은 대조하지 않는다\"
 
 </details>"
-check "접힌 부분(<details>) 안의 인용은 보지 않는다" pass "gh pr comment 89 --body-file folded.md"
+check "접힌 부분(<details>) 안의 인용은 보지 않는다" pass "$(post folded.md)"
+mk span.md "$r4
+- (콜드) \`- (사람) \"사람이 한 적 없는 말\"\` 같은 예시를 백틱에 든 항목"
+check "백틱 안의 (사람) \"…\" 예시" pass "$(post span.md)"
+mk paren.md "$r4
+- (콜드) 새 이슈는 따로 연다(사람이 연다)"
+check "라벨이 아닌 괄호 글 (사람이 …)" pass "$(post paren.md)"
+# 사람의 답에 백틱 안의 " 가 홀수 개 든 경우. PR #59 의 3.5 코멘트에 실제로 있었다.
+cat > "$T/odd/answer1.md" <<'EOF'
+### 1라운드에 사람이 준 답
+
+- (사람) "고친다. 둘째 줄은 `(사람) "` 를 안 품는다"
+  → 고친다
+EOF
+cat > "$T/oddround.md" <<'EOF'
+## 리뷰 2라운드 — 셀프 ***`Comment`*** · 콜드 ***`Comment`***
+
+- **해결** (사람) "고친다. 둘째 줄은 `(사람) "` 를 안 품는다"
+  → 고쳤다
+EOF
+check "사람의 답에 백틱 안의 \" 가 홀수 개" pass "$(post oddround.md)" "$T/odd"
 check "--help" pass "gh pr comment --help"
 check "--delete-last(본문 없음)" pass "gh pr comment 89 --delete-last --yes"
-check "heredoc 커밋 메시지 안의 명령 이름" pass "git commit -F - <<'EOF'
-feat(hooks): block gh pr comment with fake quotes
+check "heredoc 커밋 메시지 안의 명령" pass "git commit -F - <<'EOF'
+feat(hooks): block gh pr comment 89 --body-file with fake quotes
 EOF"
 check "heredoc 안의 아포스트로피" pass "cat > draft.md <<'EOF'
 don't run gh pr comment 89 --body-file x here
@@ -96,75 +119,108 @@ EOF"
 
 # ── 3.5 코멘트는 사람에게 묻는다 ──
 mk answer.md "$(cat "$FX/pr89/answer2.md")"
-check "3.5 코멘트" ask "gh pr comment 89 --body-file answer.md" "" "사람의 승인을 받고"
+check "3.5 코멘트" ask "$(post answer.md)" "" "사람의 승인을 받고"
+check "3.5 코멘트, \\ 줄넘김" ask "gh pr comment 89 \\
+  --body-file $T/answer.md"
 
-# ── 막아야 하는 것 ──
+# ── 막아야 하는 것: 인용 ──
 mk onechar.md "${r2/약속을 빼먹는다/약속을 빼먹었다}"
-check "인용 한 글자를 바꿈" deny "gh pr comment 89 --body-file onechar.md" "" "약속을 빼먹었다"
+check "인용 한 글자를 바꿈" deny "$(post onechar.md)" "" "약속을 빼먹었다"
 mk arrow.md "$r4
 - **해결** (사람) \"질문 창에서 고른 답이다. 4라운드 코멘트를 올렸다.\""
-check "3.5 코멘트의 → 줄(세션의 글)을 인용" deny \
-  "gh pr comment 89 --body-file arrow.md" "" "질문 창에서 고른 답이다"
+check "3.5 코멘트의 → 줄(세션의 글)을 인용" deny "$(post arrow.md)" "" "질문 창에서 고른 답이다"
 mk self.md "$r2
 - (사람) \"필수 둘을 고치고 결정 필요에 답을 받아 한 라운드 더 도는 것을 권합니다.\""
-check "라운드 코멘트 자신에만 있는 말을 인용" deny \
-  "gh pr comment 89 --body-file self.md" "" "한 라운드 더 도는 것을"
+check "라운드 코멘트 자신에만 있는 말을 인용" deny "$(post self.md)" "" "한 라운드 더 도는 것을"
 check "실제로 난 일 — PR #64 7라운드" deny \
   "gh pr comment 64 --body-file $FX/pr64/round7.md" "$FX/pr64" "그 이유를 커밋 메시지에"
 check "3.5 코멘트가 아직 없는 PR" deny "gh pr comment 89 --body-file $FX/pr89/round2.md" "$T/empty"
 mk since.md "$r4
 - (사람, 1라운드부터) \"1라운드부터 이월된 가짜 지시\""
-check "(사람, N라운드부터) 표기" deny "gh pr comment 89 --body-file since.md" "" "이월된 가짜 지시"
+check "(사람, N라운드부터) 표기" deny "$(post since.md)" "" "이월된 가짜 지시"
 mk wrapped.md "$r4
 - (사람) \"경로는 파일이 있나로 가리지만,
   번호는 가짜로 바꾼 말이다.\""
-check "두 줄로 넘어간 인용" deny "gh pr comment 89 --body-file wrapped.md" "" "번호는 가짜로 바꾼 말이다"
+check "두 줄로 넘어간 인용" deny "$(post wrapped.md)" "" "번호는 가짜로 바꾼 말이다"
 mk elided.md "$r4
 - (사람) \"레포 이름을 막는다 … 사람이 한 적 없는 말\""
-check "… 로 줄인 인용의 뒤 조각" deny "gh pr comment 89 --body-file elided.md" "" "사람이 한 적 없는 말"
+check "… 로 줄인 인용의 뒤 조각" deny "$(post elided.md)" "" "사람이 한 적 없는 말"
 mk stitched.md "$r4
 - (사람) \"홈 주소를 … 막는다\""
-check "서로 다른 인용의 조각을 … 로 이음" deny \
-  "gh pr comment 89 --body-file stitched.md" "" "홈 주소를 … 막는다"
+check "서로 다른 인용의 조각을 … 로 이음" deny "$(post stitched.md)" "" "홈 주소를 … 막는다"
 mk reordered.md "$r4
 - (사람) \"그대로 둔다 … 홈 주소를 명령 인자로 쓰는 모양은\""
-check "한 인용의 조각 순서를 바꿈" deny "gh pr comment 89 --body-file reordered.md"
-check "한 명령의 둘째 호출(-F · --body-file= 표기)" deny \
-  "gh pr comment 89 -F $FX/pr89/round2.md && gh pr comment 89 --body-file=onechar.md" "" "약속을 빼먹었다"
-mk msg.txt "fix: something"
-check "줄바꿈 뒤의 다른 명령이 본문 인자를 덮지 않는다" deny "gh pr comment 89 --body-file onechar.md
-git commit -F msg.txt" "" "약속을 빼먹었다"
+check "한 인용의 조각 순서를 바꿈" deny "$(post reordered.md)"
+check "\\ 줄넘김으로 친 가짜 인용" deny "gh pr comment 89 \\
+  --body-file $T/onechar.md" "" "약속을 빼먹었다"
 
-# ── 따옴표 없는 (사람) 라벨 ──
+# ── 막아야 하는 것: 인용이 아닌 (사람) ──
 mk l1.md "$r4
 - (사람) 훅을 지우고 승인 단계를 되살린다"
-check "필수의 따옴표 없는 라벨" deny "gh pr comment 89 --body-file l1.md" "" "따옴표로 인용하지 않은"
+check "필수의 따옴표 없는 라벨" deny "$(post l1.md)" "" "따옴표로 인용하지 않은"
 mk l2.md "$r4
 - **해결** (사람) 사람이 한 적 없는 지시를 따랐다"
-check "판정 및 근거의 따옴표 없는 라벨" deny \
-  "gh pr comment 89 --body-file l2.md" "" "따옴표로 인용하지 않은"
+check "판정 및 근거의 따옴표 없는 라벨" deny "$(post l2.md)" "" "따옴표로 인용하지 않은"
 mk l3.md "$r4
 - (사람) “굽은 따옴표로 쓴 가짜”"
-check "굽은 따옴표" deny "gh pr comment 89 --body-file l3.md" "" "따옴표로 인용하지 않은"
+check "굽은 따옴표" deny "$(post l3.md)" "" "따옴표로 인용하지 않은"
 mk l4.md "$r4
 - (사람): \"콜론 뒤의 가짜\""
-check "라벨 뒤 콜론" deny "gh pr comment 89 --body-file l4.md" "" "따옴표로 인용하지 않은"
+check "라벨 뒤 콜론" deny "$(post l4.md)" "" "따옴표로 인용하지 않은"
 mk l5.md "$r4
 1. (사람) 번호 목록의 가짜"
-check "번호 목록" deny "gh pr comment 89 --body-file l5.md" "" "따옴표로 인용하지 않은"
+check "번호 목록" deny "$(post l5.md)" "" "따옴표로 인용하지 않은"
 mk l6.md "$r4
 - (사람) \"레포 이름을 막는다
 들여쓰지 않은 이어짐의 가짜\""
-check "닫히지 않은 따옴표(들여쓰지 않은 이어짐)" deny \
-  "gh pr comment 89 --body-file l6.md" "" "닫히지 않았다"
+check "닫히지 않은 따옴표(들여쓰지 않은 이어짐)" deny "$(post l6.md)" "" "닫히지 않았거나"
+mk l7.md "$r4
+- **(사람)** \"굵게 감싼 라벨의 가짜\""
+check "굵게 감싼 라벨" deny "$(post l7.md)" "" "굵게 감싼 라벨의 가짜"
+mk l8.md "$r4
+- **해결 (사람)** \"판정어와 같이 굵게 감싼 가짜\""
+check "판정어와 같이 굵게 감싼 라벨" deny "$(post l8.md)" "" "같이 굵게 감싼 가짜"
+mk l9.md "$r4
+- 해결 (사람) 굵지 않은 판정어 뒤의 가짜"
+check "굵지 않은 판정어 뒤의 라벨" deny "$(post l9.md)" "" "따옴표로 인용하지 않은"
+mk l10.md "## 리뷰 5라운드 — 셀프 ***\`Comment\`*** · 콜드 ***\`Comment\`***
+
+<details>
+접힌 블록
+</details>
+
+- (사람) \"앞쪽 접힌 블록 뒤의 가짜\""
+check "앞쪽에 접힌 블록이 있어도 그 뒤를 본다" deny "$(post l10.md)" "" "앞쪽 접힌 블록 뒤의 가짜"
+mk l11.md "$r4
+
+사람이 정했다 (사람) 불릿 밖의 가짜"
+check "불릿 밖의 (사람)" deny "$(post l11.md)" "" "따옴표로 인용하지 않은"
+
+# ── 막아야 하는 것: 정규형이 아닌 게시 ──
+mk msg.txt "fix: something"
+check "한 명령에 게시 둘" deny \
+  "gh pr comment 89 -F $FX/pr89/round2.md && gh pr comment 89 --body-file=$T/onechar.md" "" "정규형"
+check "줄바꿈 뒤의 다른 명령" deny "$(post onechar.md)
+git commit -F msg.txt" "" "정규형"
+check "게시 줄 끝의 # 주석" deny "$(post onechar.md) # post
+git commit -F msg.txt" "" "정규형"
+check "here-string(<<<) 뒤 줄" deny "cat <<< \"hi\"
+$(post onechar.md)" "" "정규형"
+check "따옴표 안의 << 뒤 줄" deny "echo \"use << EOF style\"
+$(post onechar.md)" "" "정규형"
+mk copy.md "$r2"               # 대조를 통과하는 옛 초안이 그 자리에 있다
+check "같은 명령에서 본문 파일을 바꾼 뒤 게시" deny \
+  "cp $T/onechar.md $T/copy.md && gh pr comment 89 --body-file $T/copy.md" "" "정규형"
+check "bash -c 래퍼" deny "bash -c \"$(post onechar.md)\"" "" "정규형"
+check "표준입력 리다이렉트" deny "gh pr comment 89 --body-file - < $FX/pr89/round2.md" "" "정규형"
 
 # ── 판정 못 하면 막는다 ──
 STUB_GH_FAIL=1 check "gh 가 실패" deny "gh pr comment 89 --body-file $FX/pr89/round2.md" "" "판정 못 한 것은"
-check "인라인 본문 \$(cat …)" deny 'gh pr comment 89 --body "$(cat round2.md)"' "" "--body-file"
-check "표준입력 본문" deny "gh pr comment 89 --body-file - < $FX/pr89/round2.md" "" "--body-file"
-check "없는 본문 파일" deny "gh pr comment 89 --body-file no-such-file.md" "" "--body-file"
+check "인라인 본문 \$(cat …)" deny 'gh pr comment 89 --body "$(cat round2.md)"' "" "절대 경로"
+check "상대 경로 본문" deny "gh pr comment 89 --body-file round2.md" "" "절대 경로"
+check "없는 본문 파일" deny "$(post no-such-file.md)" "" "읽지 못해"
 printf '\xff\xfe## \xeb\xa6\xac\xeb\xb7\xb0 x\n' > "$T/latin.md"
-check "UTF-8 이 아닌 본문" deny "gh pr comment 89 --body-file latin.md" "" "UTF-8"
+check "UTF-8 이 아닌 본문" deny "$(post latin.md)" "" "UTF-8"
 
 rm -rf "$T"
 [ "$fail" = 0 ] && echo "  ✓ 라운드 코멘트 인용 대조 훅이 막을 것만 막는다"
