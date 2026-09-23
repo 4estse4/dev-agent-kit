@@ -15,6 +15,7 @@
 # 인용으로 옮겼다. 이 훅이 겨누는 원본 형태다.
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$KIT" || exit 1                      # 상대 경로 경우가 레포 뿌리를 기준으로 한다
 HOOK="$KIT/claude-code/hooks/round_comment_quotes.sh"
 FX="$KIT/tests/fixtures/round-comment-quotes"
 T=$(mktemp -d)
@@ -77,6 +78,17 @@ check "\\ 줄넘김은 한 줄로 잇는다" pass "gh pr comment 89 \\
 mk nobold.md "${r2//\*\*/}"
 check "인용 안의 굵게 표시를 뗀 것" pass "$(post nobold.md)"
 check "명령 이름만 적은 다른 명령" pass "echo 'gh pr comment 89' && gh pr view 89"
+# 게시 명령 글자를 따옴표 안에 든 명령. 명령 자리에 없으므로 게시가 아니다.
+# a3e4ad1 은 막았다.
+check "따옴표 안의 게시 명령 글자" pass "echo 'gh pr comment 89 --body-file x' && gh pr view 89"
+check "sed 로 스킬의 게시 줄을 찾는 명령" pass \
+  "sed -n '/^머지/,/^    gh pr comment <N> --body-file <파일>/p' claude-code/skills/merge-pr/SKILL.md"
+check "커밋 메시지를 \$(cat <<EOF) 로 넘김" pass "git commit -m \"\$(cat <<'EOF'
+fix(hooks): block gh pr comment 89 --body-file with fake quotes
+EOF
+)\""
+check "레포를 붙인 -R=" pass "gh pr comment 89 -R=4estse4/ai-native-kit --body-file $FX/pr89/round2.md"
+args_has "붙인 -R= 의 값을 gh 에 넘긴다" "-R 4estse4/ai-native-kit"
 mk inner.md "$r4
 - (사람) \"고치고 한 라운드 더. … 홈 주소를 명령 인자로 쓰는 모양은 비추천 그대로 둔다.\""
 check "따옴표 안을 … 로 줄인 진짜 인용" pass "$(post inner.md)"
@@ -214,10 +226,38 @@ check "같은 명령에서 본문 파일을 바꾼 뒤 게시" deny \
 check "bash -c 래퍼" deny "bash -c \"$(post onechar.md)\"" "" "정규형"
 check "표준입력 리다이렉트" deny "gh pr comment 89 --body-file - < $FX/pr89/round2.md" "" "정규형"
 
+# ── 막아야 하는 것: 게시일 수 있는데 정규형이 아닌 것 ──
+check "짧은 플래그에 붙인 -F<경로>" deny "gh pr comment 89 -F$T/onechar.md" "" "약속을 빼먹었다"
+check "붙인 -F=<경로>" deny "gh pr comment 89 -F=$T/onechar.md" "" "약속을 빼먹었다"
+check "번호 앞의 -F<경로>" deny "gh pr comment -F$T/onechar.md 89" "" "약속을 빼먹었다"
+check "붙인 -F<경로> 의 3.5 코멘트" ask "gh pr comment 89 -F$T/answer.md"
+check "붙인 -b<값>" deny "gh pr comment 89 -bx" "" "절대 경로 파일 하나로만"
+check "모르는 플래그" deny "gh pr comment 89 -y --body-file $T/onechar.md" "" "모르는 플래그"
+check "하위 명령 앞의 -R" deny \
+  "gh pr -R 4estse4/ai-native-kit comment 89 --body-file $T/onechar.md" "" "정규형"
+check "따옴표로 감싼 comment" deny "gh pr \"comment\" 89 --body-file $T/onechar.md" "" "약속을 빼먹었다"
+check "하위 명령과 플래그 사이에 끼운 \$(…)" deny \
+  "gh pr comment 89 \$(cp $T/onechar.md $T/copy.md;) --body-file $T/copy.md" "" "정규형"
+check "\$((1<<2)) 뒤 줄의 게시" deny "echo \$((1<<2))
+$(post onechar.md)" "" "정규형"
+check "\\ 로 끝나는 따옴표 heredoc 뒤 줄의 게시" deny "cat <<'EOF'
+path C:\\
+EOF
+$(post onechar.md)" "" "정규형"
+check "heredoc 안 줄머리의 게시 명령" deny "git commit -F - <<'EOF'
+fix: x
+$(post onechar.md)
+EOF" "" "정규형"
+check "PR 을 URL 로 적음" deny \
+  "gh pr comment https://github.com/other/repo/pull/89 --body-file $FX/pr89/round2.md" "" "번호 하나"
+check "eval 래퍼" deny "eval \"$(post onechar.md)\"" "" "정규형"
+
 # ── 판정 못 하면 막는다 ──
 STUB_GH_FAIL=1 check "gh 가 실패" deny "gh pr comment 89 --body-file $FX/pr89/round2.md" "" "판정 못 한 것은"
 check "인라인 본문 \$(cat …)" deny 'gh pr comment 89 --body "$(cat round2.md)"' "" "절대 경로"
-check "상대 경로 본문" deny "gh pr comment 89 --body-file round2.md" "" "절대 경로"
+# 레포 뿌리에서 실제로 풀리는 상대 경로다. 절대 경로 규칙이 빠지면 읽혀서 통과한다.
+check "상대 경로 본문" deny \
+  "gh pr comment 89 --body-file tests/fixtures/round-comment-quotes/pr89/round2.md" "" "상대 경로"
 check "없는 본문 파일" deny "$(post no-such-file.md)" "" "읽지 못해"
 printf '\xff\xfe## \xeb\xa6\xac\xeb\xb7\xb0 x\n' > "$T/latin.md"
 check "UTF-8 이 아닌 본문" deny "$(post latin.md)" "" "UTF-8"

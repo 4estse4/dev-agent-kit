@@ -7,15 +7,17 @@
 # 두면 모델이 안 따를 때 사라지므로 모델 밖인 여기 둔다. 근거는
 # `docs/process/verification-stages.md` 의 「사람의 승인이 필요한 행동」.
 #
-# **본문을 넘기는 `gh pr comment` 는 한 줄 정규형만 받는다.**
+# **명령 자리에 `gh pr comment` 가 오면 한 줄 정규형만 받는다.**
 #
 #     gh pr comment <N> [-R <레포>] --body-file <절대 경로>
 #
-# `\` 줄넘김만 공백으로 잇는다. 다른 명령 · 줄바꿈 · 주석 · 리다이렉트 · 래퍼(`bash -c`)와
-# 이은 것은 해석하지 않고 막는다. 셸 문자열을 해석하는 폭을 넓힐 때마다 새 우회가 났기
-# 때문이다(같은 명령 안에서 본문 파일을 바꾼 뒤 게시하는 것도 이것으로 닫힌다). 경로는
-# 절대 경로만 받는다 — 명령 안의 `cd` 를 이 훅이 못 따라간다. 본문 없는 호출(`--help` ·
-# `--delete-last`)과 heredoc 안의 글(커밋 메시지 · 초안)은 게시가 아니라서 건너뛴다.
+# `\` 줄넘김만 공백으로 잇는다. 그 밖의 모양 — 다른 명령 · 줄바꿈 · 주석 · 리다이렉트 ·
+# 래퍼(`sh -c` · `eval`) · 모르는 플래그 · URL 이나 브랜치로 적은 PR — 은 게시인지 가리지
+# 않고 막는다. 게시인지 해석해서 가려 막던 동안 라운드마다 새 우회가 났다. 플래그는 gh
+# 도움말의 목록 그대로이고, 값을 받는 `-F` · `-R` 은 붙인 모양(`-Fx` · `-F=x`)도 값으로 읽는다.
+# 경로는 절대 경로만 받는다 — 명령 안의 `cd` 를 이 훅이 못 따라간다. 본문 없는 호출
+# (`--help` · `--delete-last`)은 게시가 아니라서 건너뛴다. 따옴표 안의 글자(커밋 메시지 ·
+# `sed` 패턴)는 명령 자리가 아니라서 안 본다. heredoc 안이라도 줄머리에 오면 명령 자리로 본다.
 #
 # **라운드 코멘트(첫 줄 `## 리뷰 `)에서 무엇을 막나.** 접힌 블록(`<details>`)을 뺀 부분에서
 # - `(사람…) "…"` 의 따옴표 조각이 3.5 코멘트의 `(사람)` 인용 어디에도 없을 때. `…` 로 줄인
@@ -28,9 +30,10 @@
 # 레포에서도 사람이 한 번 누르게 한다.
 #
 # **무엇을 못 막나.** 이 에이전트가 Bash 로 칠 때만 걸린다. 사람이 손으로 올리거나, 다른
-# 명령(`gh api` · `gh issue comment <PR 번호>`)이나 heredoc 으로 넘긴 스크립트(`bash <<EOF`)나
-# 웹으로 올리면 안 걸린다. 대조의 원본인 3.5 코멘트의 인용이 진짜 사람 말인지는 이 훅이
-# 모른다. 3.5 코멘트는 사람이 승인하고 올린다.
+# 명령(`gh api` · `gh issue comment <PR 번호>`)이나 웹으로 올리면 안 걸린다. 명령 이름을
+# 꾸며도(변수 `$GH` · 별칭 · 함수 · 백틱 명령 치환 안) 못 알아본다 — 이 훅은 형식대로 친
+# 게시의 실수를 겨누고, 작정한 우회는 겨누지 않는다. 대조의 원본인 3.5 코멘트의 인용이 진짜
+# 사람 말인지는 이 훅이 모른다. 3.5 코멘트는 사람이 승인하고 올린다.
 #
 # **통과시킬 때 아무것도 내지 않는다.** 훅의 `"allow"` 는 권한 프롬프트를 건너뛰게 하지만
 # `ask` 규칙은 그대로 평가된다(공식 문서: "Deny and ask rules … are still evaluated regardless
@@ -63,7 +66,6 @@ BULLET = re.compile(r'^\s*(?:[-*]|\d+\.)\s')
 # `(사람이 연다)` 같은 괄호 글은 라벨이 아니다.
 LABEL = re.compile(r'\(사람(?:\s*,[^)]*)?\)')
 AFTER = re.compile(r'(?:\*\*)?\s*"')          # 라벨 바로 뒤. `**(사람)** "…"` 도 인용이다
-BODY_FLAGS = ('-F', '--body-file', '-b', '--body', '-e', '--editor', '-w', '--web')
 QMASK, LMASK = '＂', '(사​람'       # 백틱 안의 `"` 와 `(사람` 을 가린다
 CANON = "`gh pr comment <N> [-R <레포>] --body-file <절대 경로>`"
 
@@ -157,41 +159,26 @@ def bad_labels(body):
     return bad
 
 
-def heredoc_ends(line):
-    """따옴표 밖의 `<<` 에서 heredoc 끝말을 찾는다. `<<<` 는 heredoc 이 아니다."""
-    ends, q, i = [], None, 0
-    while i < len(line):
-        c = line[i]
-        if q:
-            if c == '\\' and q == '"':
-                i += 1
-            elif c == q:
-                q = None
-        elif c in '\'"':
-            q = c
-        elif c == '\\':
-            i += 1
-        elif line.startswith('<<', i) and not line.startswith('<<<', i) \
-                and (i == 0 or line[i - 1] != '<'):
-            m = re.match(r'<<-?\s*([\'"]?)(\w+)\1', line[i:])
-            if m:
-                ends.append(m.group(2))
-                i += m.end()
-                continue
-        i += 1
-    return ends
+# 명령 자리: 줄머리, 또는 `;` `&` `|` `(` `{` `$(` `!` 과 `then` `do` `else` 뒤, 그리고
+# 래퍼(`sh -c "…"` · `eval`) 안. 앞에 변수 대입과 `command` 같은 앞붙임이 올 수 있다. 그 자리의
+# `gh` 다음 하위 명령이 `pr`, 그다음이 `comment` 면(사이에는 플래그만) 게시일 수 있는 명령이다.
+# 따옴표로 감싼 낱말도 알아본다. 백틱은 구분자로 안 본다 — 초안의 마크다운 `gh pr comment` 가
+# 명령으로 읽힌다. 그래서 백틱 명령 치환 안은 못 알아본다.
+_FLAGS = r'(?:-\S+\s+(?:[^-\s;&|]\S*\s+)?)*'
+CAND = re.compile(
+    r'(?:^|[;&|(){}!]|\$\(|\b(?:then|do|else|elif|eval)\b|\s-c\s)\s*'
+    r'(?:[A-Za-z_]\w*=\S*\s+)*(?:(?:command|exec|env|time|nohup|sudo)\s+)*'
+    r'(?:\S*/)?["\']?gh["\']?\s+' + _FLAGS + r'["\']?pr["\']?\s+' + _FLAGS
+    + r'["\']?comment["\']?(?=[\s;&|)]|$)', re.M)
+# 정규형이 받는 플래그. `gh pr comment --help` 의 FLAGS · INHERITED FLAGS 그대로다.
+VALUED = {'-R': 'repo', '--repo': 'repo', '-F': 'file', '--body-file': 'file',
+          '-b': 'body', '--body': 'body'}
+BOOLS = {'--create-if-none', '--delete-last', '--edit-last', '--yes',
+         '-e', '--editor', '-w', '--web', '-h', '--help'}
 
 
-def strip_heredocs(cmd):
-    keep, ends = [], []
-    for line in cmd.split('\n'):
-        if ends:
-            if line.strip() == ends[0]:
-                ends.pop(0)
-            continue
-        keep.append(line)
-        ends += heredoc_ends(line)
-    return '\n'.join(keep)
+def canon_deny(why):
+    deny("gh pr comment 는 한 줄 정규형으로 따로 쳐라: " + CANON + ". " + why)
 
 
 try:
@@ -201,66 +188,75 @@ except ValueError:
 if data.get('tool_name') != 'Bash':
     sys.exit(0)
 cmd = (data.get('tool_input') or {}).get('command') or ''
-cmd = strip_heredocs(cmd.replace('\\\n', ' '))
-if not re.search(r'\bgh\s+pr\s+comment\b', cmd):
+cmd = cmd.replace('\\\n', ' ')
+if not CAND.search(cmd):
     sys.exit(0)
 
-# ── 정규형인가 ──
+# ── 게시일 수 있는 명령이다. 정규형이 아니면 게시인지 가리지 않고 막는다 ──
 line = cmd.strip()
-toks = None
-if '\n' not in line:
-    try:
-        lex = shlex.shlex(line, posix=True, punctuation_chars=True)
-        lex.whitespace_split = True
-        lex.commenters = ''
-        toks = list(lex)
-    except ValueError:
-        toks = None
-canon = (toks is not None and len(toks) >= 3
-         and os.path.basename(toks[0]) == 'gh' and toks[1:3] == ['pr', 'comment']
-         and not any(set(t) <= set('();<>|&') or t.startswith('#') for t in toks))
-if not canon:
-    posting = re.search(r'\bgh\s+pr\s+comment\b[^\n;&|]*?\s(?:%s)(?=[\s=]|$)'
-                        % '|'.join(re.escape(f) for f in BODY_FLAGS), cmd)
-    if posting:
-        deny("본문을 넘기는 gh pr comment 는 한 줄 정규형으로 따로 쳐라: " + CANON
-             + ". 다른 명령 · 줄바꿈 · 주석 · 리다이렉트 · 래퍼와 이으면 "
-             "이 훅이 본문을 믿을 수 없다.")
-    sys.exit(0)
+if '\n' in line:
+    canon_deny("줄바꿈으로 다른 명령과 이으면 이 훅이 무엇이 올라가는지 믿을 수 없다.")
+try:
+    lex = shlex.shlex(line, posix=True, punctuation_chars=True)
+    lex.whitespace_split = True
+    lex.commenters = ''
+    toks = list(lex)
+except ValueError:
+    canon_deny("명령을 읽지 못했다.")
+if len(toks) < 3 or os.path.basename(toks[0]) != 'gh' or toks[1:3] != ['pr', 'comment']:
+    canon_deny("앞붙임 · 래퍼 · 하위 명령 앞의 플래그는 받지 않는다.")
+if any(set(t) <= set('();<>|&') or t.startswith('#') for t in toks):
+    canon_deny("다른 명령 · 주석 · 리다이렉트와 이으면 "
+               "이 훅이 무엇이 올라가는지 믿을 수 없다.")
 
+pr, got, bools = [], {}, set()
 args = toks[3:]
-if '--help' in args or '-h' in args:
-    sys.exit(0)
-pr, repo, path, flags = None, None, None, []
 j = 0
 while j < len(args):
-    a, val = args[j], None
-    if '=' in a and a.startswith('--'):
-        a, val = a.split('=', 1)
-    if a in ('-F', '--body-file', '-b', '--body', '-R', '--repo') and val is None:
-        j += 1
-        val = args[j] if j < len(args) else ''
-    if a in BODY_FLAGS:
-        flags.append(a)
-        if a in ('-F', '--body-file'):
-            path = val
-    elif a in ('-R', '--repo'):
-        repo = val
-    elif not a.startswith('-') and pr is None:
-        pr = a
+    a = args[j]
+    name, val = a, None
+    if a.startswith('--') and '=' in a:
+        name, val = a.split('=', 1)
+    elif re.match(r'^-[RFb].', a):          # 짧은 플래그에 값을 붙인 `-Fx` · `-F=x`
+        name, val = a[:2], a[2:]
+        if val.startswith('='):
+            val = val[1:]
+    if name in VALUED:
+        if val is None:
+            j += 1
+            if j >= len(args):
+                canon_deny(name + " 에 값이 없다.")
+            val = args[j]
+        if VALUED[name] in got:
+            canon_deny(name + " 가 두 번 나왔다.")
+        got[VALUED[name]] = val
+    elif name in BOOLS and val is None:
+        bools.add(name)
+    elif not a.startswith('-'):
+        pr.append(a)
+    else:
+        canon_deny("모르는 플래그다: " + a)
     j += 1
 
-if not flags:
-    sys.exit(0)                 # 본문 없이는 새 글을 안 올린다(`--delete-last` 등)
-if flags != ['-F'] and flags != ['--body-file'] or not path or not os.path.isabs(path):
+if bools & {'-h', '--help'}:
+    sys.exit(0)
+if 'body' in got or bools & {'-e', '--editor', '-w', '--web'}:
     deny("gh pr comment 의 본문은 절대 경로 파일 하나로만 넘긴다: " + CANON
-         + ". 인라인 본문 · 표준입력 · 편집기 · 상대 경로는 이 훅이 판정할 수 없다.")
+         + ". 인라인 본문 · 편집기 · 웹은 이 훅이 판정할 수 없다.")
+if 'file' not in got:
+    sys.exit(0)                 # 본문 없이는 새 글을 안 올린다(`--delete-last` 등)
+if len(pr) != 1 or not re.match(r'^\d+$', pr[0]):
+    canon_deny("PR 은 번호 하나로 적는다(URL · 브랜치 이름은 받지 않는다).")
+pr, repo, path = pr[0], got.get('repo'), got['file']
+if not os.path.isabs(path):
+    deny("gh pr comment 의 --body-file 에 상대 경로를 넘겼다. 이 훅은 명령 안의 cd 를 못 "
+         "따라가므로 절대 경로만 받는다: " + CANON)
 try:
     with open(path, encoding='utf-8') as fh:
         body = fh.read()
 except (OSError, UnicodeDecodeError):
     deny("gh pr comment 의 본문 파일을 읽지 못해 판정할 수 없다(없거나 UTF-8 이 아니다). "
-         "UTF-8 파일을 절대 경로로 --body-file 에 넘겨라.")
+         "UTF-8 파일을 --body-file 에 넘겨라.")
 
 if ANSWER.match(body):
     out("ask", "3.5 코멘트(「### N라운드에 사람이 준 답」)는 사람의 승인을 받고 올리는 "
