@@ -830,3 +830,29 @@ dev-log 에만 있다. 템플릿과 스킬에는 넣지 않는다(ADR-0001).
   둘을 갈라 훅 머리 · 승인 절 · 킷 레포 설정에 적었다. "정규형 + --body-file 은 절대 경로만."(2라운드 답)
 - **이관**: 봇 계정 · 형식 검사의 나머지 · 3.5 인용의 원본 → 이슈 #83 에 남는다. 설치된 레포에서 `ask`
   규칙과 훅의 `ask` 가 겹칠 때 프롬프트가 몇 번 뜨는지 → 재지 않았다고 `claude-code/settings.json` 에 적었다.
+
+## 2026-09-23 — CI 가 레포에 있는 go.mod 로 Go 를 깔고, 킷이 지원하지 않는 Go 면 이유를 말하며 멈춘다 (PR #97)
+
+- **작업**: detect 가 `go` 줄이 가장 높은 `go.mod` 를 `gomod` 로 내고 세 잡의 `setup-go` 가 그것을 받는다.
+  coverage 는 모듈마다 돌고 `go test` 실패를 삼키지 않는다. setup-go 를 쓰는 세 잡이 먼저
+  `gate_go_min_check` 로 setup-go 가 깔 Go(그 파일의 `toolchain` 줄, 없으면 `go` 줄)가 `go_min` 이상인지
+  본다. `tests/gate-go-min.sh` · `tests/gate-go-ci.sh` 를 kit-tests 에 걸었다.
+- **채택**: `[사용자]` "1.24 는 지원하지 않는다. … go.mod 의 go 줄이 1.25 미만이면 CI 가 그 말을 하며
+  죽게 한다"(계획, setup-go 가 `GOTOOLCHAIN=local` 이라 가장 높은 `go` 줄로 깐다). `[사용자]` "최소 버전
+  검사를 setup-go 쓰는 세 잡(gate·coverage·security)이 다 먼저 하게"(열기 전). `[사용자]` 「가장 높은
+  것만」(1라운드 답) · 「toolchain 먼저 · probe」(2라운드 답) · 「go_min 을 1.26 으로」(probe PR #10 뒤).
+- **폐기**: `[AI]` 모든 `go.mod` 를 `go_min` 과 견줌 → main 에서 돌던 멀티모듈 레포를 거짓 이유로 멈췄다.
+  `[AI]` `go_min` 1.25 → probe ② 에서 goimports 가 먼저 죽어 golangci-lint 설치가 skipped 라, 그 도구가
+  1.26 을 요구하는 것을 1.25.1 로 돈 probe PR #10 에서야 봤다. 처음 실패만 보고 바닥을 정했다.
+  `[사용자]` "비추천 둘 기각 · 머지로"(3라운드 답).
+- **리뷰가 잡은 것**: 1라운드 셀프 — coverage 에 검사를 두는 이유가 틀린 주석. 1라운드 콜드 — 검사 범위,
+  이 PR 이 더한 pipefail 이 COVER_MIN 판정을 말없이 죽임, 이슈 #93 본체를 kit-tests 가 안 봄. 2라운드
+  콜드 — setup-go v7 이 `toolchain` 줄을 먼저 읽음. 전달문 — `.nvmrc` 초안의 「setup-node 성공」이
+  continue-on-error 가 덮은 결론(0082), 캐시 기본 키가 `go.sum` 이 아니라 `go.mod`(0086), 이슈 초안이
+  이슈 #36 에서 옮긴 「check-action-pins.sh 가 tool-versions 를 본다(PR #35)」가 거짓(0088).
+- **사람이 잡은 것**: 첫 판 킷으로 모듈 하나를 돌리는 probe 단계가 ② 와 같은 것을 본다 — "6은 2에서 이미
+  봤." PR #94 와의 순서 — "PR #94 머지 뒤에 머지해. 그 전에 main 을 브랜치로 머지해서 kit-tests.yml
+  충돌 풀고".
+- **이관**: `.nvmrc` · lockfile 의 루트 가정 → 이슈 #95. 하위 디렉터리 `go.mod` 의 setup-go 캐시 → 이슈
+  #96. `go_min` 과 핀한 도구의 go 줄을 맞추는 검사 → 이슈 #98. `gate_go_highest` 가 `toolchain` 줄로 순위를
+  안 매기는 것(3라운드 콜드, 지어낸 배치) → 머지 결정 코멘트.
