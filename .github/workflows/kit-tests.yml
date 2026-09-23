@@ -73,11 +73,16 @@ jobs:
         continue-on-error: true
         run: bash tests/pre-commit-markers.sh
 
+      - name: module markers are found the way the gate finds them
+        id: discovery
+        continue-on-error: true
+        run: bash tests/gate-discovery.sh
+
       - name: fail if any check failed
         run: |
           bad=0
-          for r in "${{ steps.deletions.outcome }}" "${{ steps.injections.outcome }}" "${{ steps.docs.outcome }}" "${{ steps.quotepath.outcome }}" "${{ steps.targets.outcome }}" "${{ steps.markers.outcome }}"; do
+          for r in "${{ steps.deletions.outcome }}" "${{ steps.injections.outcome }}" "${{ steps.docs.outcome }}" "${{ steps.quotepath.outcome }}" "${{ steps.targets.outcome }}" "${{ steps.markers.outcome }}" "${{ steps.discovery.outcome }}"; do
             [ "$r" = failure ] && bad=1
           done
-          echo "deletions=${{ steps.deletions.outcome }} · injections=${{ steps.injections.outcome }} · docs=${{ steps.docs.outcome }} · quotepath=${{ steps.quotepath.outcome }} · targets=${{ steps.targets.outcome }} · markers=${{ steps.markers.outcome }}"
+          echo "deletions=${{ steps.deletions.outcome }} · injections=${{ steps.injections.outcome }} · docs=${{ steps.docs.outcome }} · quotepath=${{ steps.quotepath.outcome }} · targets=${{ steps.targets.outcome }} · markers=${{ steps.markers.outcome }} · discovery=${{ steps.discovery.outcome }}"
           exit $bad

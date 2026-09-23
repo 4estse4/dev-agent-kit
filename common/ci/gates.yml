@@ -32,19 +32,28 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - id: d
-        # 여기서 감지하지 못한 언어는 gate 잡의 모든 단계가 건너뛰어지고
-        # 잡이 초록으로 끝난다 — 아무것도 검사하지 않은 채로. 어댑터를 추가하면
-        # 반드시 여기도 같이 추가해야 한다.
+        # 여기서 감지하지 못한 언어는 도구와 의존성을 설치하는 스텝이 건너뛰어진다.
+        # gate 잡의 마지막 스텝(gate.sh --all)은 그래도 그 모듈을 찾는다. 러너에 도구가
+        # 없으면 빨갛게 끝나지만, 러너 이미지에 이미 있는 도구로 돌면 버전을 핀하지 않은
+        # 채 초록으로 끝난다. security 잡의 언어별 취약점 검사는 어느 쪽이든 조용히
+        # 건너뛰어진다. 어댑터를 추가하면 반드시 여기도 같이 추가해야 한다.
+        #
+        # 마커를 찾는 기준은 게이트(gate.sh)와 같다. 깊이를 제한하지 않고, 건너뛸 디렉터리는
+        # lib.sh 의 gate_prune_expr 하나를 쓴다. 한때 여기만 maxdepth 3 이라 네 단계 아래의
+        # 모듈을 게이트는 보고 이 감지는 못 봤다. 아래 스텝들의 find 도 같은 기준이다.
+        # -print -quit 는 첫 하나에서 멈춘다.
         run: |
-          find . -name go.mod -not -path '*/node_modules/*' -maxdepth 3 | grep -q . \
+          . .ai-kit/gate/lib.sh
+          find . \( $(gate_prune_expr) \) -prune -o -name go.mod -print -quit | grep -q . \
             && echo "go=true" >> "$GITHUB_OUTPUT" || echo "go=false" >> "$GITHUB_OUTPUT"
-          find . -name package.json -not -path '*/node_modules/*' -maxdepth 3 | grep -q . \
+          find . \( $(gate_prune_expr) \) -prune -o -name package.json -print -quit | grep -q . \
             && echo "node=true" >> "$GITHUB_OUTPUT" || echo "node=false" >> "$GITHUB_OUTPUT"
-          find . \( -name 'settings.gradle' -o -name 'settings.gradle.kts' \
+          find . \( $(gate_prune_expr) \) -prune -o \
+                 \( -name 'settings.gradle' -o -name 'settings.gradle.kts' \
                     -o -name 'build.gradle' -o -name 'build.gradle.kts' -o -name 'pom.xml' \) \
-               -not -path '*/build/*' -maxdepth 3 | grep -q . \
+                 -print -quit | grep -q . \
             && echo "jvm=true" >> "$GITHUB_OUTPUT" || echo "jvm=false" >> "$GITHUB_OUTPUT"
-          find . -name pyproject.toml -not -path '*/.venv/*' -maxdepth 3 | grep -q . \
+          find . \( $(gate_prune_expr) \) -prune -o -name pyproject.toml -print -quit | grep -q . \
             && echo "py=true" >> "$GITHUB_OUTPUT" || echo "py=false" >> "$GITHUB_OUTPUT"
 
   vendored:
@@ -129,6 +138,7 @@ jobs:
           #
           # 빌드 루트마다 본다. 레포 어딘가에 래퍼가 하나만 있으면 통과시키면,
           # 래퍼 없는 다른 빌드 루트가 시스템 gradle 로 조용히 검사된다.
+          . .ai-kit/gate/lib.sh
           fail=0
           while IFS= read -r m; do
             d=$(dirname "$m")
@@ -148,10 +158,12 @@ jobs:
           # 마커가 있는 모든 디렉터리를 빌드 루트로 보면 표준 멀티모듈 레포(루트에만
           # gradlew, 서브모듈마다 build.gradle)가 여기서 죽는다. 어댑터는 그 서브모듈에
           # 들어가지도 않는데 CI 만 실패한다.
-          done < <(find . \( -name 'settings.gradle' -o -name 'settings.gradle.kts' \
+          # 건너뛰는 디렉터리도 게이트와 같다. build/ · target/ 을 이름으로 거르지 않는다 —
+          # 업무 도메인 이름이기도 해서 멀쩡한 모듈이 빠진다(lib.sh 의 GATE_PRUNE_DIRS 주석).
+          done < <(find . \( $(gate_prune_expr) \) -prune -o \
+                          \( -name 'settings.gradle' -o -name 'settings.gradle.kts' \
                              -o -name 'build.gradle' -o -name 'build.gradle.kts' \
-                             -o -name pom.xml \) -not -path '*/node_modules/*' \
-                       -not -path '*/build/*' -not -path '*/target/*' \
+                             -o -name pom.xml \) -print \
                    | while IFS= read -r m; do printf '%s|%s\n' "$(dirname "$m")" "$m"; done \
                    | sort -u -t'|' -k1,1 \
                    | awk -F'|' '{
@@ -220,6 +232,7 @@ jobs:
         name: install project dev dependencies
         run: |
           set -e
+          . .ai-kit/gate/lib.sh
           # **모든** pyproject 를 돈다. 게이트는 마커가 있는 모든 디렉터리에서 py
           # 어댑터를 돌리므로(조상-자손 제거는 빌드 도구가 있는 언어에만 적용된다), 첫 하나만 설치하면
           # 나머지는 도구 없이 검사되거나 남의 의존성으로 테스트가 돈다.
@@ -273,7 +286,7 @@ jobs:
                      "[project.optional-dependencies].dev · requirements-dev.txt 중 하나로 선언하세요."
               fi
             )
-          done < <(find . -name pyproject.toml -not -path '*/node_modules/*' -not -path '*/.venv/*')
+          done < <(find . \( $(gate_prune_expr) \) -prune -o -name pyproject.toml -print)
 
       - if: needs.detect.outputs.node == 'true'
         uses: actions/setup-node@v7
@@ -281,9 +294,12 @@ jobs:
         continue-on-error: true
       - if: needs.detect.outputs.node == 'true'
         run: |
-          for d in $(dirname $(find . -name package.json -not -path '*/node_modules/*' -maxdepth 3)); do
-            (cd "$d" && npm ci --no-audit --no-fund)
-          done
+          # 줄 단위로 읽는다. `for d in $(…)` 는 공백 든 경로에서 낱말이 갈려 cd 가 죽었다.
+          . .ai-kit/gate/lib.sh
+          while IFS= read -r f; do
+            echo "── $(dirname "$f") ──"
+            (cd "$(dirname "$f")" && npm ci --no-audit --no-fund)
+          done < <(find . \( $(gate_prune_expr) \) -prune -o -name package.json -print)
 
       # 게이트 본체 — 로컬 pre-push 와 같은 스크립트.
       - run: bash .ai-kit/gate/gate.sh --all
@@ -359,12 +375,13 @@ jobs:
           # 도구 동작 자체가 조용히 바뀌는 것은 막는다.
           go install golang.org/x/vuln/cmd/govulncheck@${{ steps.tv.outputs.govulncheck }}
           export PATH="$(go env GOPATH)/bin:$PATH"
+          . .ai-kit/gate/lib.sh
           fail=0
           while IFS= read -r mod; do
             d=$(dirname "$mod")
             echo "── govulncheck $d ──"
             ( cd "$d" && govulncheck ./... ) || fail=1
-          done < <(find . -name go.mod -not -path '*/node_modules/*' -maxdepth 3)
+          done < <(find . \( $(gate_prune_expr) \) -prune -o -name go.mod -print)
           exit $fail
 
       - if: needs.detect.outputs.node == 'true'
@@ -374,9 +391,12 @@ jobs:
       - if: needs.detect.outputs.node == 'true'
         name: npm audit (high+)
         run: |
-          for d in $(dirname $(find . -name package-lock.json -not -path '*/node_modules/*' -maxdepth 3)); do
-            (cd "$d" && npm audit --audit-level=high)
-          done
+          # 줄 단위로 읽는다 — 위 npm ci 단계와 같은 이유다.
+          . .ai-kit/gate/lib.sh
+          while IFS= read -r f; do
+            echo "── $(dirname "$f") ──"
+            (cd "$(dirname "$f")" && npm audit --audit-level=high)
+          done < <(find . \( $(gate_prune_expr) \) -prune -o -name package-lock.json -print)
 
   trace:
     runs-on: ubuntu-latest
