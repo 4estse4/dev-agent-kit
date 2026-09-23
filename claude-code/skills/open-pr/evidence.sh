@@ -29,6 +29,43 @@ if [ -z "${cmd//[[:space:]]/}" ]; then
   exit 2
 fi
 
+# ask · deny 규칙 글자가 보이는 명령은 돌리지 않는다. 이 스크립트는 받은 글을 `bash -c` 로
+# 돌리므로 권한 규칙이 그 안을 못 본다(공식 문서: a deny or ask rule "isn't a security boundary
+# around the program"). 누가 이 스크립트를 allow 에 넣거나 「다시 묻지 않음」을 누르면 그 안의
+# `gh pr merge` · `git push --force` 가 프롬프트 없이 돈다. 증거는 읽기만 하는 명령이다.
+# 규칙은 레포의 `.claude/settings.json` · `settings.local.json` 에서 읽고, 글자는 명령 어디에든
+# 보이면 걸린다(`*` 는 아무 글자, 공백은 공백 여럿). 설정을 못 읽으면 막는다. 이름을 꾸민
+# 명령(변수 · 별칭)은 못 알아본다.
+root=$(git rev-parse --show-toplevel 2>/dev/null) || root=$PWD
+why=$(EVIDENCE_CMD="$cmd" python3 - "$root/.claude/settings.json" "$root/.claude/settings.local.json" 2>&1 <<'PY'
+import json, os, re, sys
+cmd = os.environ['EVIDENCE_CMD']
+for path in sys.argv[1:]:
+    if not os.path.exists(path):
+        continue
+    try:
+        perms = json.load(open(path, encoding='utf-8')).get('permissions') or {}
+        rules = [(k, r) for k in ('ask', 'deny') for r in perms.get(k) or []]
+    except (OSError, ValueError, AttributeError, TypeError) as e:
+        print('%s 를 읽지 못했다(%s)' % (path, e))
+        sys.exit(1)
+    for kind, rule in rules:
+        m = re.fullmatch(r'Bash\((.*)\)', str(rule).strip(), re.S)
+        if not m:
+            continue
+        pat = m.group(1).strip()
+        if pat.endswith(':*'):
+            pat = pat[:-2]
+        pieces = [r'\s+'.join(map(re.escape, p.split())) for p in pat.split('*')]
+        if re.search('.*'.join(p for p in pieces if p), cmd, re.S):
+            print('%s 의 %s 규칙 %s 의 글자가 보인다' % (os.path.basename(path), kind, rule))
+            sys.exit(1)
+PY
+) || {
+  echo "evidence.sh: 이 명령을 증거로 돌리지 않는다. $why" >&2
+  exit 2
+}
+
 res=$(bash -c "$cmd" 2>&1 </dev/null)
 rc=$?
 

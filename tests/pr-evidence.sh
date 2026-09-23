@@ -74,6 +74,43 @@ grep -qx 'first' "$T/twice.part" 2>/dev/null && grep -qx 'second' "$T/twice.part
 run "$T/pwd.part" 'pwd -P'
 grep -qxF "$(cd "$T" && pwd -P)" "$T/pwd.part" 2>/dev/null && ok "부른 자리에서 돈다" || bad "부른 자리에서 돈다"
 
+# ── ask · deny 규칙 글자가 보이는 명령은 돌리지 않는다 ──
+# evidence.sh 는 받은 글을 `bash -c` 로 돌린다. 권한 규칙은 그 안을 못 본다(공식 문서:
+# "isn't a security boundary"). 누가 evidence.sh 를 허용하면 그 안의 `gh pr merge` 가 프롬프트
+# 없이 돈다. 그래서 스크립트가 프로젝트 설정의 ask · deny 글자를 보고 거부한다.
+R="$T/repo"
+mkdir -p "$R/.claude" "$R/sub"
+git -C "$R" init -q
+cat > "$R/.claude/settings.json" <<'EOF'
+{"permissions": {"allow": ["Bash(git log*)"],
+  "ask": ["Bash(gh pr merge*)", "Bash(gh api:*)"],
+  "deny": ["Bash(git push*--force*)"]}}
+EOF
+cat > "$R/.claude/settings.local.json" <<'EOF'
+{"permissions": {"deny": ["Bash(rm -rf*)"]}}
+EOF
+refused() {   # refused <이름> <명령> [cwd]
+  local f="$T/refuse-$RANDOM.part" rc err
+  err=$( cd "${3:-$R}" && printf '%s\n' "$2" | bash "$S" "$f" 2>&1 >/dev/null ); rc=$?
+  if [ "$rc" != 0 ] && [ ! -e "$f" ] && printf '%s' "$err" | grep -q '돌리지 않는다'; then ok "$1"
+  else bad "$1 — rc=$rc, 파일 $( [ -e "$f" ] && echo 있음 || echo 없음 ), $err"; fi
+}
+# 명령은 규칙 글자를 품은 `echo` 다. 글자로 막으므로 막히는 것은 같고, 가드가 빠져
+# 돌아가도 아무것도 안 한다.
+refused "ask 규칙 글자(gh pr merge)" 'echo gh pr merge 12 --squash'
+refused "deny 규칙 글자(git push … --force)" 'echo git push origin main --force'
+refused "사이에 공백이 더 든 글자" 'echo git  push   --force'
+refused "이은 명령 뒤쪽의 글자" 'echo ok && echo gh pr merge 1'
+refused "여러 줄 명령 둘째 줄의 글자" $'echo ok\necho gh pr merge 1'
+refused "끝에 :* 를 쓴 규칙" 'echo gh api repos/x/y'
+refused "settings.local.json 의 규칙" 'echo rm -rf build'
+refused "하위 디렉터리에서 불러도 레포 설정을 본다" 'echo gh pr merge 3' "$R/sub"
+f="$T/allowed.part"
+( cd "$R" && printf '%s\n' 'git log --oneline -1 2>&1; echo done' | bash "$S" "$f" >/dev/null 2>&1 )
+grep -qx 'done' "$f" 2>/dev/null && ok "규칙 글자가 없는 명령은 돈다" || bad "규칙 글자가 없는 명령은 돈다"
+printf '{"permissions": ' > "$R/.claude/settings.json"
+refused "설정을 못 읽으면 막는다" 'echo hi'
+
 # ── 스킬이 손으로 붙이라고 시키지 않는다 ──
 for f in "$OPEN" "$MERGE"; do
   name=$(basename "$(dirname "$f")")
