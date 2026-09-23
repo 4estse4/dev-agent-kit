@@ -1,0 +1,23 @@
+{
+  "$comment": [
+    "킷 레포 자신의 설정이다. 킷이 배포하는 claude-code/settings.json 과 다른 파일이다.",
+    "이 레포는 킷의 permissions 와 훅을 걸지 않는다(이슈 #4). 여기 거는 것은 훅 하나다 —",
+    "라운드 코멘트의 (사람) 인용을 그 PR 의 3.5 코멘트와 대조하는 훅. 라운드 코멘트가 사람의",
+    "승인 없이 올라가게 되면서, 그 인용을 보는 것이 이 레포에서는 이 훅뿐이라서다.",
+    "경로는 설치본(.claude/hooks/)이 아니라 원본(claude-code/hooks/)이다."
+  ],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/claude-code/hooks/round_comment_quotes.sh\"",
+            "timeout": 120
+          }
+        ]
+      }
+    ]
+  }
+}
