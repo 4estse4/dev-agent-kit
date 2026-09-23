@@ -104,25 +104,14 @@ jobs:
             echo "$k=$v" >> "$GITHUB_OUTPUT"
           done < "$f"
 
-      # 킷이 지원하는 Go 는 tool-versions 의 go_min 이상이다. 핀한 Go 도구가 그보다 낮은 go
-      # 로는 설치되지 않아서, 낮으면 아래 설치 스텝이 「requires go >= …」로 죽는다(실측). 그 전에
-      # 어느 go.mod 가 몇인지 말하며 여기서 멈춘다.
+      # 킷이 지원하는 Go 는 tool-versions 의 go_min 이상이다. 낮으면 아래 설치 스텝이
+      # 「requires go >= …」로 죽는다(실측). 그 전에 어느 go.mod 가 몇인지 말하며 멈춘다.
+      # setup-go 를 쓰는 잡마다 그 앞에서 부른다(lib.sh 의 gate_go_min_check).
       - if: needs.detect.outputs.go == 'true'
         name: require the kit's minimum Go
         run: |
           . .ai-kit/gate/lib.sh
-          min='${{ steps.tv.outputs.go_min }}'
-          [ -n "$min" ] || { echo "::error::.ai-kit/gate/tool-versions 에 go_min 이 없습니다 — 킷을 갱신하세요"; exit 1; }
-          bad=0
-          while IFS= read -r f; do
-            v=$(awk '$1 == "go" { print $2; exit }' "$f")
-            if [ -z "$v" ] || [ "$(printf '%s\n%s\n' "$min" "$v" | sort -V | head -1)" != "$min" ]; then
-              if [ -n "$v" ]; then what="go 줄이 $v 입니다"; else what="go 줄이 없습니다"; fi
-              echo "::error file=${f#./}::${f#./} 의 $what. 킷은 Go $min 이상만 지원합니다 — 핀한 Go 도구(goimports · govulncheck)가 그보다 낮은 go 로는 설치되지 않습니다. go 줄을 $min 이상으로 올리세요."
-              bad=1
-            fi
-          done < <(find . \( $(gate_prune_expr) \) -prune -o -name go.mod -print)
-          exit $bad
+          gate_go_min_check
       # detect 의 gomod 는 go 줄이 가장 높은 go.mod 다. 세 잡의 setup-go 가 그것으로 Go 를 깐다.
       # go.mod 는 레포 루트에 없을 수 있고(backend/go.mod 같은 배치) 여럿일 수 있다. 한때
       # 루트의 go.mod 를 가리켜 그런 레포에서 세 잡이 다 죽었다(실측). setup-go 는
@@ -339,6 +328,10 @@ jobs:
     #    커버리지가 과소 보고된다 — 틀린 숫자는 없느니만 못하다.
     steps:
       - uses: actions/checkout@v7
+      - name: require the kit's minimum Go
+        run: |
+          . .ai-kit/gate/lib.sh
+          gate_go_min_check
       - uses: actions/setup-go@v7
         with: { go-version-file: '${{ needs.detect.outputs.gomod }}', cache: true }
       # 먼저 측정하고 보이게 한다. 임계값은 COVER_MIN 을 설정할 때만 강제한다 —
@@ -402,6 +395,11 @@ jobs:
             bash .ai-kit/gate/secrets.sh --range "HEAD~1..HEAD"
           fi
 
+      - if: needs.detect.outputs.go == 'true'
+        name: require the kit's minimum Go
+        run: |
+          . .ai-kit/gate/lib.sh
+          gate_go_min_check
       - if: needs.detect.outputs.go == 'true'
         uses: actions/setup-go@v7
         with: { go-version-file: '${{ needs.detect.outputs.gomod }}', cache: true }

@@ -78,11 +78,16 @@ jobs:
         continue-on-error: true
         run: bash tests/gate-discovery.sh
 
+      - name: every job that sets up Go checks the kit's minimum Go first
+        id: gomin
+        continue-on-error: true
+        run: bash tests/gate-go-min.sh
+
       - name: fail if any check failed
         run: |
           bad=0
-          for r in "${{ steps.deletions.outcome }}" "${{ steps.injections.outcome }}" "${{ steps.docs.outcome }}" "${{ steps.quotepath.outcome }}" "${{ steps.targets.outcome }}" "${{ steps.markers.outcome }}" "${{ steps.discovery.outcome }}"; do
+          for r in "${{ steps.deletions.outcome }}" "${{ steps.injections.outcome }}" "${{ steps.docs.outcome }}" "${{ steps.quotepath.outcome }}" "${{ steps.targets.outcome }}" "${{ steps.markers.outcome }}" "${{ steps.discovery.outcome }}" "${{ steps.gomin.outcome }}"; do
             [ "$r" = failure ] && bad=1
           done
-          echo "deletions=${{ steps.deletions.outcome }} · injections=${{ steps.injections.outcome }} · docs=${{ steps.docs.outcome }} · quotepath=${{ steps.quotepath.outcome }} · targets=${{ steps.targets.outcome }} · markers=${{ steps.markers.outcome }} · discovery=${{ steps.discovery.outcome }}"
+          echo "deletions=${{ steps.deletions.outcome }} · injections=${{ steps.injections.outcome }} · docs=${{ steps.docs.outcome }} · quotepath=${{ steps.quotepath.outcome }} · targets=${{ steps.targets.outcome }} · markers=${{ steps.markers.outcome }} · discovery=${{ steps.discovery.outcome }} · gomin=${{ steps.gomin.outcome }}"
           exit $bad
