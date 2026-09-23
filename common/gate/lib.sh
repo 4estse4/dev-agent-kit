@@ -49,23 +49,23 @@ gate_go_highest() {
   done | sort -V | tail -1 | cut -f2-
 }
 
-# 레포의 모든 go.mod 가 tool-versions 의 go_min 이상인지 본다. 아니면 그 파일과 이유를
-# GitHub 주석(::error)으로 내고 실패한다. CI 에서 setup-go 를 쓰는 잡이 모두 그 앞에서 부른다.
-# 핀한 Go 도구는 go_min 보다 낮은 go 로는 설치되지 않는데, 잡은 저마다 Go 를 깔아서
-# 한 잡에만 두면 다른 잡은 「requires go >= …」로 다른 말을 하며 죽는다(실측).
+# CI 가 Go 를 까는 go.mod(go 줄이 가장 높은 것, 위 gate_go_highest)가 tool-versions 의 go_min
+# 이상인지 본다. 아니면 그 파일과 이유를 GitHub 주석(::error)으로 내고 실패한다.
+# 보는 것은 그 하나다. 핀한 Go 도구의 설치를 가르는 것은 돌고 있는 go 이고, go 줄이 더 낮은
+# 보조 모듈도 그 go 로 빌드된다. 모든 go.mod 를 보면 전에 돌던 멀티모듈 레포가 멈춘다.
+# CI 에서 setup-go 를 쓰는 잡이 모두 그 앞에서 부른다. 잡은 저마다 Go 를 깔아서, 한 잡에만 두면
+# security 는 govulncheck 설치에서 「requires go >= …」로 다른 말을 하며 죽고(실측), 도구를
+# 깔지 않는 coverage 는 킷이 지원하지 않는 Go 로 초록을 낸다(실측).
 gate_go_min_check() {
-  local min f v what bad=0
+  local min f v what
   min=$(gate_tool_version go_min)
   [ -n "$min" ] || { echo "::error::.ai-kit/gate/tool-versions 에 go_min 이 없습니다 — 킷을 갱신하세요"; return 1; }
-  while IFS= read -r f; do
-    v=$(awk '$1 == "go" { print $2; exit }' "$f")
-    if [ -z "$v" ] || [ "$(printf '%s\n%s\n' "$min" "$v" | sort -V | head -1)" != "$min" ]; then
-      if [ -n "$v" ]; then what="go 줄이 $v 입니다"; else what="go 줄이 없습니다"; fi
-      echo "::error file=${f#./}::${f#./} 의 $what. 킷은 Go $min 이상만 지원합니다 — 핀한 Go 도구(goimports · govulncheck)가 그보다 낮은 go 로는 설치되지 않습니다. go 줄을 $min 이상으로 올리세요."
-      bad=1
-    fi
-  done < <(find . \( $(gate_prune_expr) \) -prune -o -name go.mod -print)
-  return $bad
+  f=$(find . \( $(gate_prune_expr) \) -prune -o -name go.mod -print | gate_go_highest)
+  v=$(awk '$1 == "go" { print $2; exit }' "$f")
+  [ -n "$v" ] && [ "$(printf '%s\n%s\n' "$min" "$v" | sort -V | head -1)" = "$min" ] && return 0
+  if [ -n "$v" ]; then what="go 줄이 $v 입니다"; else what="go 줄이 없습니다"; fi
+  echo "::error file=${f#./}::${f#./} 의 $what. CI 는 go 줄이 가장 높은 이 파일로 Go 를 깝니다. 킷은 Go $min 이상만 지원합니다 — 핀한 Go 도구(goimports · govulncheck)가 그보다 낮은 go 로는 설치되지 않습니다. go 줄을 $min 이상으로 올리세요."
+  return 1
 }
 
 # Go 도구를 부르는 방법을 한 곳에서 정한다.

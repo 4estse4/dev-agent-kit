@@ -1,7 +1,7 @@
 # 게이트가 쓰는 도구의 고정 버전. **단일 출처다.**
 #
 # 이 값을 읽는 곳:
-#   .ai-kit/gate/lib.sh          도구가 없을 때 설치 안내에 버전을 넣는다. CI 가 go.mod 를 go_min 과 견준다
+#   .ai-kit/gate/lib.sh          도구가 없을 때 설치 안내에 버전을 넣는다. CI 가 Go 를 까는 go.mod 를 go_min 과 견준다
 #   .ai-kit/gate/install-tools.sh 이 버전대로 설치한다
 #   .github/workflows/gates.yml         CI 가 이 버전대로 설치한다
 #
@@ -18,7 +18,8 @@
 
 # Go 의 최소 버전. 런타임은 위대로 go.mod 가 정하지만, 아래에 핀한 Go 도구가 이보다 낮은
 # go 로는 설치되지 않는다(goimports 의 x/tools 와 govulncheck 가 이 버전을 요구한다).
-# CI 는 go.mod 의 go 줄이 이보다 낮으면 그 이유를 말하며 멈춘다. 도구 핀을 올리면 이 값도 본다.
+# CI 는 go 줄이 가장 높은 go.mod 로 Go 를 깔고, 그것이 이보다 낮으면 그 이유를 말하며 멈춘다.
+# 도구 핀을 올리면 이 값도 본다.
 go_min=1.25
 
 # Go — go install 로 받는다. go.mod 의 tool 지시어를 쓰는 프로젝트는 그쪽이 우선한다.

@@ -4,12 +4,15 @@
 # 이 테스트가 있는 이유: 핀한 Go 도구(goimports · govulncheck)는 tool-versions 의 go_min 보다
 # 낮은 go 로는 설치되지 않는다. gates.yml 의 잡은 저마다 setup-go 로 Go 를 까는데, go 1.24 로
 # Go 를 깐 security 잡은 govulncheck 설치에서 「requires go >= 1.25.0」으로 죽었다(이슈 #93).
-# 검사가 한 잡에만 있으면 다른 잡은 그렇게 다른 말을 하며 죽는다.
+# 검사가 한 잡에만 있으면 security 는 그렇게 다른 말을 하며 죽고, 도구를 깔지 않는 coverage 는
+# 킷이 지원하지 않는 Go 로 초록을 낸다(같은 실행에서 coverage 가 go 1.24.13 으로 돌았다).
 #
 # 깨끗한 레포에 킷을 설치하고 그 gates.yml 을 읽는다. 보는 것:
 #   · actions/setup-go 를 쓰는 잡마다, 그보다 앞선 스텝이 gate_go_min_check 를 부른다
-#   · 그 스텝의 run 을 설치한 레포에서 돌리면 go 줄이 go_min 보다 낮거나 없는 go.mod 를
-#     이름대며 실패하고, 모두 go_min 이상이면 통과한다. 러너의 기본 셸처럼 `bash -e` 로 돈다
+#   · 그 스텝의 run 을 설치한 레포에서 돌리면, go 줄이 가장 높은 go.mod(setup-go 가 그것으로
+#     Go 를 깐다)가 go_min 보다 낮거나 go 줄이 없을 때 그 파일을 이름대며 실패하고, 아니면
+#     통과한다. 더 낮은 보조 모듈이 섞여 있어도 통과한다. 도구 설치를 가르는 것은 돌고 있는
+#     go 하나이고, 낮은 go 줄의 모듈도 그 go 로 빌드된다. 러너의 기본 셸처럼 `bash -e` 로 돈다
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 fail=0
@@ -57,7 +60,7 @@ awk -v out="$T/step." '
 
 min=$(sed -n 's/^go_min=//p' "$R/.ai-kit/gate/tool-versions")
 [ -n "$min" ] || { echo "  ✗ 설치된 tool-versions 에 go_min 이 없다"; exit 1; }
-IFS=. read -r ma mi _ <<< "$min"; below="$ma.$((mi - 1))"
+IFS=. read -r ma mi _ <<< "$min"; below="$ma.$((mi - 1))"; lower="$ma.$((mi - 2))"
 # 버전으로는 낮고 문자열로는 높은 것(1.25 에 대해 1.3). 문자열로 견주면 이것이 통과한다.
 short="$ma.$((mi / 10 + 1))"
 
@@ -94,10 +97,12 @@ steps=$(cd "$T" && ls step.* 2>/dev/null | sed 's/^step\.//')
 [ -n "$steps" ] || { echo "  ✗ gate_go_min_check 를 부르는 스텝이 하나도 안 뽑혔다"; fail=1; }
 for job in $steps; do
   check "$job" "go $below 모듈 하나"          fail backend/go.mod "backend:$below"
-  check "$job" "go $below · go $min 섞임"     fail backend/go.mod "backend:$below" "tools/x:$min"
+  check "$job" "go $below · go $lower"       fail backend/go.mod "backend:$below" "tools/x:$lower"
   check "$job" "go $short"                   fail backend/go.mod "backend:$short"
   check "$job" "go 줄 없음"                  fail backend/go.mod "backend:"
   check "$job" "go $min"                     pass ""             "backend:$min"
+  check "$job" "go $below · go $min 섞임"     pass ""             "backend:$below" "tools/x:$min"
+  check "$job" "go 줄 없음 · go $min"         pass ""             "backend:" "tools/x:$min"
   check "$job" "go $min.3 · go $ma.$((mi + 1))"  pass ""         "backend:$min.3" "tools/x:$ma.$((mi + 1))"
 done
 
