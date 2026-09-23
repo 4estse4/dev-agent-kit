@@ -49,22 +49,30 @@ gate_go_highest() {
   done | sort -V | tail -1 | cut -f2-
 }
 
-# CI 가 Go 를 까는 go.mod(go 줄이 가장 높은 것, 위 gate_go_highest)가 tool-versions 의 go_min
-# 이상인지 본다. 아니면 그 파일과 이유를 GitHub 주석(::error)으로 내고 실패한다.
+# CI 가 Go 를 까는 go.mod(go 줄이 가장 높은 것, 위 gate_go_highest)에서 setup-go 가 깔 버전이
+# tool-versions 의 go_min 이상인지 본다. 아니면 그 파일과 이유를 GitHub 주석(::error)으로 내고
+# 실패한다. setup-go 는 그 파일에 toolchain 줄이 있으면 그 버전을, 없으면 go 줄을 깐다
+# (setup-go v7 의 parseGoVersionFile). 검사도 같은 순서로 본다. toolchain 줄은 go 줄을 낮게
+# 둔 채 새 Go 로 빌드하려고 쓰는 것이라, go 줄만 보면 도는 레포를 거짓 이유로 멈춘다.
 # 보는 것은 그 하나다. 핀한 Go 도구의 설치를 가르는 것은 돌고 있는 go 이고, go 줄이 더 낮은
 # 보조 모듈도 그 go 로 빌드된다. 모든 go.mod 를 보면 전에 돌던 멀티모듈 레포가 멈춘다.
 # CI 에서 setup-go 를 쓰는 잡이 모두 그 앞에서 부른다. 잡은 저마다 Go 를 깔아서, 한 잡에만 두면
 # security 는 govulncheck 설치에서 「requires go >= …」로 다른 말을 하며 죽고(실측), 도구를
 # 깔지 않는 coverage 는 킷이 지원하지 않는 Go 로 초록을 낸다(실측).
 gate_go_min_check() {
-  local min f v what
+  local min f tc v what raise
   min=$(gate_tool_version go_min)
   [ -n "$min" ] || { echo "::error::.ai-kit/gate/tool-versions 에 go_min 이 없습니다 — 킷을 갱신하세요"; return 1; }
   f=$(find . \( $(gate_prune_expr) \) -prune -o -name go.mod -print | gate_go_highest)
-  v=$(awk '$1 == "go" { print $2; exit }' "$f")
+  tc=$(awk '$1 == "toolchain" { print $2; exit }' "$f")
+  if [ "${tc#go1.}" != "$tc" ]; then
+    v="${tc#go}"; what="toolchain 줄이 $tc 입니다"; raise="toolchain 줄을 go$min 이상으로"
+  else
+    v=$(awk '$1 == "go" { print $2; exit }' "$f"); raise="go 줄을 $min 이상으로"
+    if [ -n "$v" ]; then what="go 줄이 $v 입니다"; else what="go 줄이 없습니다"; fi
+  fi
   [ -n "$v" ] && [ "$(printf '%s\n%s\n' "$min" "$v" | sort -V | head -1)" = "$min" ] && return 0
-  if [ -n "$v" ]; then what="go 줄이 $v 입니다"; else what="go 줄이 없습니다"; fi
-  echo "::error file=${f#./}::${f#./} 의 $what. CI 는 go 줄이 가장 높은 이 파일로 Go 를 깝니다. 킷은 Go $min 이상만 지원합니다 — 핀한 Go 도구(goimports · govulncheck)가 그보다 낮은 go 로는 설치되지 않습니다. go 줄을 $min 이상으로 올리세요."
+  echo "::error file=${f#./}::${f#./} 의 $what. CI 는 go 줄이 가장 높은 이 파일로 Go 를 깝니다(toolchain 줄이 있으면 그 버전). 킷은 Go $min 이상만 지원합니다 — 핀한 Go 도구(goimports · govulncheck)가 그보다 낮은 go 로는 설치되지 않습니다. ${raise} 올리세요."
   return 1
 }
 

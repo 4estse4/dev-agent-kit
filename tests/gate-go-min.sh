@@ -11,7 +11,8 @@
 #   · actions/setup-go 를 쓰는 잡마다, 그보다 앞선 스텝이 gate_go_min_check 를 부른다
 #   · 그 스텝의 run 을 설치한 레포에서 돌리면, go 줄이 가장 높은 go.mod(setup-go 가 그것으로
 #     Go 를 깐다)가 go_min 보다 낮거나 go 줄이 없을 때 그 파일을 이름대며 실패하고, 아니면
-#     통과한다. 더 낮은 보조 모듈이 섞여 있어도 통과한다. 도구 설치를 가르는 것은 돌고 있는
+#     통과한다. 그 파일에 toolchain 줄이 있으면 go 줄 대신 그것을 본다 — setup-go 가 그 버전을
+#     깐다. 더 낮은 보조 모듈이 섞여 있어도 통과한다. 도구 설치를 가르는 것은 돌고 있는
 #     go 하나이고, 낮은 go 줄의 모듈도 그 go 로 빌드된다. 러너의 기본 셸처럼 `bash -e` 로 돈다
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -64,13 +65,14 @@ IFS=. read -r ma mi _ <<< "$min"; below="$ma.$((mi - 1))"; lower="$ma.$((mi - 2)
 # 버전으로는 낮고 문자열로는 높은 것(1.25 에 대해 1.3). 문자열로 견주면 이것이 통과한다.
 short="$ma.$((mi / 10 + 1))"
 
-gomods() { # 인자=「경로:go 줄」. go 줄이 비면 그 줄 없이 만든다
-  local a p v
+gomods() { # 인자=「경로:go 줄[:toolchain 줄]」. go 줄이 비면 그 줄 없이 만든다
+  local a p v tc
   rm -rf "$R/backend" "$R/tools"
   for a in "$@"; do
-    p="${a%%:*}"; v="${a#*:}"
+    p="${a%%:*}"; v="${a#*:}"; tc=""
+    case "$v" in *:*) tc="${v#*:}"; v="${v%%:*}" ;; esac
     mkdir -p "$R/$p"
-    { echo "module example.com/m"; [ -z "$v" ] || echo "go $v"; } > "$R/$p/go.mod"
+    { echo "module example.com/m"; [ -z "$v" ] || echo "go $v"; [ -z "$tc" ] || echo "toolchain $tc"; } > "$R/$p/go.mod"
   done
 }
 
@@ -104,6 +106,9 @@ for job in $steps; do
   check "$job" "go $below · go $min 섞임"     pass ""             "backend:$below" "tools/x:$min"
   check "$job" "go 줄 없음 · go $min"         pass ""             "backend:" "tools/x:$min"
   check "$job" "go $min.3 · go $ma.$((mi + 1))"  pass ""         "backend:$min.3" "tools/x:$ma.$((mi + 1))"
+  # setup-go 는 그 go.mod 에 toolchain 줄이 있으면 그 버전을 깐다. 검사도 그 줄을 먼저 본다.
+  check "$job" "go $below.0 + toolchain go$min.1"   pass ""             "backend:$below.0:go$min.1"
+  check "$job" "go $lower + toolchain go$below.9"   fail backend/go.mod "backend:$lower:go$below.9"
 done
 
 rm -rf "$T"
