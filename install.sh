@@ -312,6 +312,7 @@ if [ "$DO_TEMPLATES" = 1 ]; then
   place "$T/RUNBOOK.md"                "docs/RUNBOOK.md"
   place "$T/adr.md"                    "docs/adr/0000-template.md"
   place "$T/plan.md"                   "docs/plan/0000-template.md"
+  place "$T/plan-README.md"            "docs/plan/README.md"
   place "$T/PULL_REQUEST_TEMPLATE.md"  ".github/PULL_REQUEST_TEMPLATE.md"
   # 설계 근거 문서는 프로젝트와 함께 다녀야 한다 — CLAUDE.md 가 이것을 인용하는데
   # 킷 레포 경로로 가리키면 레포만 clone 한 사람은 따라갈 수 없다.
