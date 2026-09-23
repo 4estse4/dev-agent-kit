@@ -52,6 +52,11 @@ git config user.email      # 이 레포에서 쓸 이메일이 맞는지 먼저 
 다르면 `git config user.email '<쓸 이메일>'` 로 고치고 `.ai-kit/identity` 를 지운 뒤
 `install.sh` 를 다시 돌린다.
 
+**Go 버전.** 킷이 핀한 Go 도구는 `.ai-kit/gate/tool-versions` 의 `go_min` 보다 낮은 go 로는
+설치되지 않는다. `go.mod` 는 레포 어디에 있어도 되고 여럿이어도 된다. CI 는 `go` 줄이 가장
+높은 것으로 Go 를 깔고(그 파일에 `toolchain` 줄이 있으면 그 버전), 그 버전이 `go_min` 보다
+낮으면 Go 를 까는 잡마다 그 이유를 말하며 멈춘다.
+
 ## 4. 킷이 안 하는 것 — 기대하지 마라
 
 - **Java** — `ktlint` 는 `.kt` 만 본다. Java 소스는 컴파일·테스트만 되고 **린트가 0**이다.

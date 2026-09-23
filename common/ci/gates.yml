@@ -26,6 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       go: ${{ steps.d.outputs.go }}
+      gomod: ${{ steps.d.outputs.gomod }}
       node: ${{ steps.d.outputs.node }}
       jvm: ${{ steps.d.outputs.jvm }}
       py: ${{ steps.d.outputs.py }}
@@ -41,11 +42,12 @@ jobs:
         # 마커를 찾는 기준은 게이트(gate.sh)와 같다. 깊이를 제한하지 않고, 건너뛸 디렉터리는
         # lib.sh 의 gate_prune_expr 하나를 쓴다. 한때 여기만 maxdepth 3 이라 네 단계 아래의
         # 모듈을 게이트는 보고 이 감지는 못 봤다. 아래 스텝들의 find 도 같은 기준이다.
-        # -print -quit 는 첫 하나에서 멈춘다.
+        # 대부분 -print -quit 로 첫 하나에서 멈춘다.
         run: |
           . .ai-kit/gate/lib.sh
-          find . \( $(gate_prune_expr) \) -prune -o -name go.mod -print -quit | grep -q . \
-            && echo "go=true" >> "$GITHUB_OUTPUT" || echo "go=false" >> "$GITHUB_OUTPUT"
+          find . \( $(gate_prune_expr) \) -prune -o -name go.mod -print > "$RUNNER_TEMP/go.mods"; \
+            gomod=$(gate_go_highest < "$RUNNER_TEMP/go.mods"); \
+            [ -n "$gomod" ] && echo "gomod=${gomod#./}" >> "$GITHUB_OUTPUT" && echo "go=true" >> "$GITHUB_OUTPUT" || echo "go=false" >> "$GITHUB_OUTPUT"
           find . \( $(gate_prune_expr) \) -prune -o -name package.json -print -quit | grep -q . \
             && echo "node=true" >> "$GITHUB_OUTPUT" || echo "node=false" >> "$GITHUB_OUTPUT"
           find . \( $(gate_prune_expr) \) -prune -o \
@@ -102,9 +104,21 @@ jobs:
             echo "$k=$v" >> "$GITHUB_OUTPUT"
           done < "$f"
 
+      # 킷이 지원하는 Go 는 tool-versions 의 go_min 이상이다. setup-go 가 까는 Go 가 그보다 낮으면
+      # 아래 설치 스텝이 「requires go >= …」로 죽는다(실측). 그 전에 어느 go.mod 가 몇인지 말하며
+      # 멈춘다. setup-go 를 쓰는 잡마다 그 앞에서 부른다(lib.sh 의 gate_go_min_check).
+      - if: needs.detect.outputs.go == 'true'
+        name: require the kit's minimum Go
+        run: |
+          . .ai-kit/gate/lib.sh
+          gate_go_min_check
+      # detect 의 gomod 는 go 줄이 가장 높은 go.mod 다. 세 잡의 setup-go 가 그것으로 Go 를 깐다.
+      # go.mod 는 레포 루트에 없을 수 있고(backend/go.mod 같은 배치) 여럿일 수 있다. 한때
+      # 루트의 go.mod 를 가리켜 그런 레포에서 세 잡이 다 죽었다(실측). setup-go 는
+      # GOTOOLCHAIN=local 이라 더 높은 go 를 받아 오지 않으므로 가장 높은 것을 깐다.
       - if: needs.detect.outputs.go == 'true'
         uses: actions/setup-go@v7
-        with: { go-version-file: 'go.mod', cache: true }
+        with: { go-version-file: '${{ needs.detect.outputs.gomod }}', cache: true }
       - if: needs.detect.outputs.go == 'true'
         run: |
           # 버전을 핀한다. @latest 는 코드 변경 없이 포맷 규칙이 바뀌어
@@ -314,21 +328,40 @@ jobs:
     #    커버리지가 과소 보고된다 — 틀린 숫자는 없느니만 못하다.
     steps:
       - uses: actions/checkout@v7
+      - name: require the kit's minimum Go
+        run: |
+          . .ai-kit/gate/lib.sh
+          gate_go_min_check
       - uses: actions/setup-go@v7
-        with: { go-version-file: 'go.mod', cache: true }
+        with: { go-version-file: '${{ needs.detect.outputs.gomod }}', cache: true }
       # 먼저 측정하고 보이게 한다. 임계값은 COVER_MIN 을 설정할 때만 강제한다 —
       # 첫날부터 실패하는 임계값은 결국 꺼진다.
+      #
+      # 모듈마다 돈다. go.mod 가 루트에 없을 수 있고 여럿일 수 있다.
+      # go test 가 실패하면 이 잡도 실패한다. 한때 `go test | tee` 에 pipefail 이 없어 테스트가
+      # 실패해도 「보고만 합니다」로 초록이었다(실측). 틀린 숫자를 초록으로 내지 않는다.
+      # pipefail 을 스텝 전체에 걸지 않고 go test 의 종료 코드만 본다. 걸면 아래 COVER_MIN 판정의
+      # grep 이 커버리지 숫자를 못 찾을 때 그 대입이 스텝을 말없이 끝낸다.
       - name: 패키지별 커버리지
         env:
           COVER_MIN: ${{ vars.COVER_MIN }}
         run: |
-          go test -cover ./... 2>&1 | tee /tmp/cov.txt
+          . .ai-kit/gate/lib.sh
+          : > /tmp/cov.txt
+          fail=0
+          while IFS= read -r mod; do
+            d=$(dirname "$mod")
+            echo "── $d ──" | tee -a /tmp/cov.txt
+            ( cd "$d" && go test -cover ./... ) 2>&1 | tee -a /tmp/cov.txt
+            [ "${PIPESTATUS[0]}" = 0 ] || fail=1
+          done < <(find . \( $(gate_prune_expr) \) -prune -o -name go.mod -print)
           {
             echo "### 커버리지"
             echo '```'
             grep -E 'coverage:' /tmp/cov.txt || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+          [ "$fail" = 0 ] || { echo "::error::go test 가 실패한 모듈이 있습니다 — 위 숫자는 믿을 수 없습니다"; exit 1; }
           [ -z "$COVER_MIN" ] && { echo "COVER_MIN 미설정 — 보고만 합니다."; exit 0; }
           low=$(grep -oE 'coverage: [0-9.]+' /tmp/cov.txt | awk -v m="$COVER_MIN" '{if ($2+0 < m) print}')
           [ -n "$low" ] && { echo "::error::COVER_MIN=$COVER_MIN 미만 패키지가 있습니다"; echo "$low"; exit 1; }
@@ -365,8 +398,13 @@ jobs:
           fi
 
       - if: needs.detect.outputs.go == 'true'
+        name: require the kit's minimum Go
+        run: |
+          . .ai-kit/gate/lib.sh
+          gate_go_min_check
+      - if: needs.detect.outputs.go == 'true'
         uses: actions/setup-go@v7
-        with: { go-version-file: 'go.mod', cache: true }
+        with: { go-version-file: '${{ needs.detect.outputs.gomod }}', cache: true }
       - if: needs.detect.outputs.go == 'true'
         name: govulncheck
         # go.mod 가 루트에 없을 수 있다(모노레포). 모듈마다 실행한다.

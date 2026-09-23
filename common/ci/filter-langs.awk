@@ -6,8 +6,9 @@
 # 걷어내는 자리 다섯:
 #   1) 잡 전체        잡 수준 `if: needs.detect.outputs.<lang>`
 #   2) 스텝           `- if: needs.detect.outputs.<lang>` 과 그 앞의 주석 묶음
-#   3) detect outputs `<lang>: ${{ steps.d.outputs.<lang> }}`
-#   4) detect 탐지문  `find ... && echo "<lang>=true"` 한 덩어리
+#   3) detect outputs `<lang>: ${{ steps.d.outputs.<lang> }}` 와 그 언어에 딸린 출력(아래 OUTOF)
+#   4) detect 탐지문  `find ...` 로 시작해 `echo "<lang>=true"` 가 든 줄까지 한 덩어리.
+#                    딸린 출력(gomod)을 내는 줄도 이 덩어리 안에 둔다
 #   5) 워크플로 env   해당 언어만 쓰는 변수(아래 ENVOF)
 #
 # 입력: -v drop="go,jvm"
@@ -20,6 +21,9 @@ BEGIN {
   n = split(drop, D, ",")
   for (i = 1; i <= n; i++) { X[D[i]] = 1; if (D[i] in CI) X[CI[D[i]]] = 1 }
   ENVOF["AI_KIT_JAVA_VERSION"] = "jvm"        # 언어 전용 워크플로 변수
+  # 언어 이름이 아닌 detect 출력. 그 언어를 빼면 같이 지운다. 안 지우면 go 를 뺀 설치에
+  # gomod 출력 줄이 남는다.
+  OUTOF["gomod"] = "go"
 }
 
 function lang_of(l) { sub(/.*outputs\./, "", l); sub(/[^a-z].*/, "", l); return l }
@@ -50,7 +54,7 @@ injobs && /^    if: needs\.detect\.outputs\.[a-z]+ ==/ { if (lang_of($0) in X) j
 # 3) detect 의 outputs
 injobs && /^      [a-z]+: \$\{\{ steps\.d\.outputs\.[a-z]+ \}\}$/ {
   l = $0; sub(/^ +/, "", l); sub(/:.*/, "", l)
-  if (l in X) next
+  if (l in X || (l in OUTOF && OUTOF[l] in X)) next
 }
 
 # 4) detect 탐지문 — find 로 시작해 echo "<lang>=true" 로 끝나는 덩어리

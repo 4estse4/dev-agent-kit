@@ -1,7 +1,7 @@
 # 게이트가 쓰는 도구의 고정 버전. **단일 출처다.**
 #
 # 이 값을 읽는 곳:
-#   .ai-kit/gate/lib.sh          도구가 없을 때 설치 안내에 버전을 넣는다
+#   .ai-kit/gate/lib.sh          도구가 없을 때 설치 안내에 버전을 넣는다. CI 가 Go 를 까는 go.mod 를 go_min 과 견준다
 #   .ai-kit/gate/install-tools.sh 이 버전대로 설치한다
 #   .github/workflows/gates.yml         CI 가 이 버전대로 설치한다
 #
@@ -15,6 +15,15 @@
 # 없다. 그래서 워크플로의 AI_KIT_JAVA_VERSION 이 정한다(워크플로는 프로젝트 소유다).
 #
 # 형식: <이름>=<버전>  (셸이 source 할 수 있게 공백 없이)
+
+# Go 의 최소 버전. 런타임은 위대로 go.mod 가 정하지만, 아래에 핀한 Go 도구가 이보다 낮은
+# go 로는 설치되지 않는다. 아래 Go 도구 셋이 각각 요구하는 go(그 모듈의 go 줄) 가운데 가장 높은
+# 것이 이 값이다. 한때 goimports 와 govulncheck 만 보고 정했다가, 더 높은 go 를 요구하는
+# golangci-lint 가 러너에서 「requires go >= …」 로 죽었다(실측).
+# CI 는 go 줄이 가장 높은 go.mod 로 Go 를 깔고(그 파일에 toolchain 줄이 있으면 그 버전), 그 버전이
+# 이보다 낮으면 그 이유를 말하며 멈춘다.
+# 도구 핀을 올리면 이 값도 본다. 각 도구 모듈의 go 줄은 proxy.golang.org 의 <모듈>/@v/<버전>.mod 에 있다.
+go_min=1.26
 
 # Go — go install 로 받는다. go.mod 의 tool 지시어를 쓰는 프로젝트는 그쪽이 우선한다.
 goimports=v0.45.0
