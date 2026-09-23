@@ -8,8 +8,9 @@
 # 한쪽만 고쳐진다. 새로 쓰는 자리를 잡는 것은 이 검사뿐이다.
 #
 # 보는 것: `.md` 가 아닌 설치되는 파일(common/ · claude-code/)과 install.sh 에서 주석이 아닌 줄.
-#   · 마커를 찾는 find 는 gate_prune_expr 를 쓰고, -maxdepth 를 쓰지 않고, -not -path 로
-#     따로 거르지 않는다. 건너뛸 것은 gate_prune_expr 하나가 정한다
+#   · 마커를 찾는 find 는 gate_prune_expr 를 쓰고, -maxdepth 를 쓰지 않고, -not -path ·
+#     ! -path 로 따로 거르지 않는다. prune 그룹 안에 이름을 더하는 모양은 보지 않는다 —
+#     정규식으로 그 모양까지 쫓으면 지나가는 모양이 끝없이 새로 나온다
 #   · 경로 목록을 `for x in $(find …)` · `$(dirname …)` 로 돌지 않는다 — 공백 든 경로에서
 #     낱말이 갈린다(이슈 #80)
 # 마커를 찾는 find 는 `-name` 뒤에 마커 이름이 글자로 오거나 변수(`-name "$1"`)가 오는 것이다.
@@ -68,6 +69,6 @@ fi
 
 if [ "$fail" = 0 ]; then
   n=$(printf '%s\n' "$finds" | wc -l | tr -d ' ')
-  echo "  ✓ 마커를 찾는 find ${n}개(이름을 변수로 받는 것 포함)가 전부 gate_prune_expr 하나로 거르고 깊이를 제한하지 않는다 · for \$(find) 루프 없음"
+  echo "  ✓ 마커를 찾는 find ${n}개(이름을 변수로 받는 것 포함)가 전부 gate_prune_expr 를 쓰고 -maxdepth · -not -path 가 없다 · for \$(find) 루프 없음"
 fi
 exit $fail
