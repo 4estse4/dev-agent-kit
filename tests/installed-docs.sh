@@ -45,7 +45,8 @@ for f in found:
     # 그래서 `…verification-stages.md에` 처럼 경로에 붙은 조사를 통째로 삼켜 없는 경로로
     # 읽었다(실측: 그 상태에서 이 검사가 종료코드 1). 백틱 제약을 뺀 대가다 — 백틱이
     # 없으면 「경로 뒤에 공백」이라는 표기 관습도 같이 사라진다.
-    for m in re.findall(r'(?a)(?<![\w/-])((?:common|\.ai-kit|\.claude|docs/process)/[\w./|-]+)', text):
+    # 앞의 `./` · `../` 는 떼고 레포 뿌리에서 본다 — 아래 킷 전용 경로 검사와 같다.
+    for m in re.findall(r'(?a)(?<![\w/.-])(?:\.\.?/)*((?:common|\.ai-kit|\.claude|docs/process)/[\w./|-]+)', text):
         m = m.rstrip('.')            # 문장 끝 마침표가 붙어 온다
         m = m.split('|')[0]          # `.claude/skills|agents|hooks` 같은 표기
         if not os.path.exists(os.path.join(R, m)):
@@ -55,12 +56,20 @@ for f in found:
     # 그렇다. 그래서 이쪽은 「킷에는 있는데 설치된 트리에는 없다」일 때만 실패한다.
     # 설치된 파일이 킷 자신의 기록(`docs/adr/0001-…` · `tests/…` · 킷 전용 워크플로)을
     # 가리키던 것이 이 검사 밖이었다(이슈 #61). 예외 목록을 두지 않는다.
-    for m in re.findall(r'(?a)(?<![\w/-])((?:docs|\.github|tests)/[\w./-]+)', text):
-        m = m.rstrip('.')
-        if m.startswith('docs/process/'):
+    # 앞의 `./` · `../` 는 떼고 레포 뿌리에서 본다. 마크다운 상대 링크가 흔히 그 모양이다.
+    # 디렉터리만 적은 것(`tests/`)은 킷 파일 중 그 접두어로 시작하는 것이 있으면 킷 경로다.
+    # `0001-…` 처럼 줄인 이름은 실제 경로로 풀 수 없어 보지 않는다.
+    for m in re.findall(r'(?a)(?<![\w/.-])(?:\.\.?/)*((?:docs|\.github|tests)/[\w./-]*)', text):
+        m = m.rstrip('.').rstrip('/')
+        if m.startswith('docs/process'):
             continue                 # 위에서 봤다
-        if m in KIT and not os.path.exists(os.path.join(R, m)):
+        in_kit = m in KIT or any(k.startswith(m + '/') for k in KIT)
+        if in_kit and not os.path.exists(os.path.join(R, m)):
             print(f"  ✗ {f[len(R)+1:]} 가 킷에만 있는 경로를 가리킨다 — {m}"); bad = 1
+    # **킷 레포 주소.** 파일이든 PR 이든 킷 레포로 보내는 것은 같다(이슈 #61 의 결정).
+    # 레포 홈 주소만 둔다 — 설치본이 어디서 왔는지 밝히는 자리(`.ai-kit/README.md`)다.
+    for m in re.findall(r'(?a)github\.com/4estse4/ai-native-kit/[^\s)`>\]"\']+', text):
+        print(f"  ✗ {f[len(R)+1:]} 가 킷 레포 주소를 가리킨다 — {m}"); bad = 1
 sys.exit(bad)
 PY
 [ "$fail" = 0 ] && echo "  ✓ 설치본의 킷 경로 참조가 전부 실재한다"
