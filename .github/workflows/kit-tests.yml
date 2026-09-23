@@ -62,11 +62,22 @@ jobs:
         continue-on-error: true
         run: bash tests/gate-quotepath.sh
 
+      # 이 둘은 게이트와 훅을 실제로 돌린다.
+      - name: the gate picks the changed module as a target
+        id: targets
+        continue-on-error: true
+        run: bash tests/gate-targets.sh
+
+      - name: pre-commit blocks conflict markers in a large file
+        id: markers
+        continue-on-error: true
+        run: bash tests/pre-commit-markers.sh
+
       - name: fail if any check failed
         run: |
           bad=0
-          for r in "${{ steps.deletions.outcome }}" "${{ steps.injections.outcome }}" "${{ steps.docs.outcome }}" "${{ steps.quotepath.outcome }}"; do
+          for r in "${{ steps.deletions.outcome }}" "${{ steps.injections.outcome }}" "${{ steps.docs.outcome }}" "${{ steps.quotepath.outcome }}" "${{ steps.targets.outcome }}" "${{ steps.markers.outcome }}"; do
             [ "$r" = failure ] && bad=1
           done
-          echo "deletions=${{ steps.deletions.outcome }} · injections=${{ steps.injections.outcome }} · docs=${{ steps.docs.outcome }} · quotepath=${{ steps.quotepath.outcome }}"
+          echo "deletions=${{ steps.deletions.outcome }} · injections=${{ steps.injections.outcome }} · docs=${{ steps.docs.outcome }} · quotepath=${{ steps.quotepath.outcome }} · targets=${{ steps.targets.outcome }} · markers=${{ steps.markers.outcome }}"
           exit $bad

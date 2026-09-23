@@ -85,6 +85,20 @@ fi
 
 # ── 어댑터 자동 발견: 마커 파일이 있는 디렉터리 = 그 언어의 루트 ──
 TARGETS=()
+# 바뀐 경로 중에 모듈 $1 아래의 것이 있나. $1 은 find 가 디스크에서 낸 이름이다.
+#
+# 문자 그대로 앞부분을 대조한다. `grep "^$rel/"` 로 쓰던 때는 모듈 경로가 정규식이 되어
+# `app[1]` 같은 루트가 자기 안의 파일과 안 맞았다. awk 에 -v 로 넘기지 않는 것은 -v 가
+# 역슬래시를 풀기 때문이다.
+# 목록을 파이프로 넘기지 않는다. pipefail 아래에서 받는 쪽이 첫 매치에서 끝나면 남은 목록을
+# 쓰던 쪽이 SIGPIPE 로 죽고 그것이 결과가 된다 — 변경 목록이 파이프 버퍼보다 긴 브랜치에서
+# 앞쪽 모듈이 "검사 대상 없음" 으로 빠졌다(실측).
+# 유니코드 정규화는 맞추지 않는다. macOS 에서 Finder 로 만든 한글 이름의 모듈 폴더는 디스크와
+# git 의 바이트가 달라 여기서 안 맞는다. 맞추려다 생긴 비용이 더 커서 안 하기로 했다 —
+# docs/process/kit-guide.md 4절.
+changed_under() {
+  P="$1/" awk 'index($0, ENVIRON["P"]) == 1 { f = 1; exit } END { exit !f }' <<< "$CHANGED"
+}
 discover() { # $1=마커파일 $2=어댑터명
   local marker dir rel
   # 깊이를 제한하지 않는다. 예전에는 maxdepth 3 이었는데 apps/svc/api/go.mod 같은
@@ -93,7 +107,7 @@ discover() { # $1=마커파일 $2=어댑터명
   # shellcheck disable=SC2046
   while IFS= read -r marker; do
     dir=$(dirname "$marker"); rel=${dir#./}; [ "$rel" = "." ] && rel=""
-    if [ "$ALL" = 1 ] || [ -z "$rel" ] || printf '%s\n' "$CHANGED" | grep -q "^${rel}/"; then
+    if [ "$ALL" = 1 ] || [ -z "$rel" ] || changed_under "$rel"; then
       TARGETS+=("$2|$dir")
     fi
   done < <(find . \( $(gate_prune_expr) \) -prune -o -name "$1" -print 2>/dev/null)

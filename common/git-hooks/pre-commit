@@ -75,7 +75,11 @@ if [ -n "$staged" ]; then
     # `=======` 는 보지 않는다 — 마크다운 setext 제목 밑줄과 구분되지 않는다.
     # 진짜 충돌에는 항상 세 마커가 다 있으므로, 뒤에 라벨이 붙어 모호하지 않은
     # 두 개만으로 충분하다.
-    if git show ":$f" 2>/dev/null | grep -qE '^(<<<<<<< |>>>>>>> )'; then
+    # 파이프로 받지 않는다. pipefail 아래에서 grep -q 가 첫 매치에서 끝나면 남은 내용을 쓰던
+    # git show 가 SIGPIPE 로 죽고 그것이 결과가 되어 "마커 없음" 이 된다 — 마커가 앞쪽에 있는
+    # 큰 package-lock.json 이 그렇게 통과했다(실측). `< <(…)` 로 넘기면 git show 의
+    # 종료코드가 조건에 들어가지 않는다.
+    if grep -qE '^(<<<<<<< |>>>>>>> )' < <(git show ":$f" 2>/dev/null); then
       bad="${bad}  $f"$'\n'
     fi
   done <<< "$staged"
