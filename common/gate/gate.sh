@@ -82,9 +82,25 @@ if [ "$ALL" = 0 ]; then
   [ -z "$CHANGED" ] && [ "$STAGED" != 1 ] && CHANGED=$(git -c core.quotePath=false diff --name-only HEAD 2>/dev/null || true)
   [ -z "$CHANGED" ] && ALL=1
 fi
+# 모듈 경로와 대조하기 전에 NFC 로 맞춘다(lib.sh 의 gate_nfc). 안 맞추면 macOS 에서 디스크에
+# NFD 로 있는 한글 모듈 루트가 "검사 대상 없음" 으로 조용히 빠졌다(실측). 게이트를 돌릴 때의
+# precomposeUnicode 는 상관없다 — 갈리는 것은 커밋할 때 git 에 무엇으로 기록됐느냐다.
+[ "$ALL" = 0 ] && CHANGED=$(printf '%s\n' "$CHANGED" | gate_nfc)
 
 # ── 어댑터 자동 발견: 마커 파일이 있는 디렉터리 = 그 언어의 루트 ──
 TARGETS=()
+# 바뀐 경로 중에 모듈 $1 아래의 것이 있나.
+#
+# 문자 그대로 앞부분을 대조한다. `grep "^$rel/"` 로 쓰던 때는 모듈 경로가 정규식이 되어
+# `app[1]` 같은 루트가 자기 안의 파일과 안 맞았다. awk 에 -v 로 넘기지 않는 것은 -v 가
+# 역슬래시를 풀기 때문이다.
+# 목록을 파이프로 넘기지 않는다. pipefail 아래에서 받는 쪽이 첫 매치에서 끝나면 남은 목록을
+# 쓰던 쪽이 SIGPIPE 로 죽고 그것이 결과가 된다 — 변경 목록이 파이프 버퍼보다 긴 브랜치에서
+# 앞쪽 모듈이 "검사 대상 없음" 으로 빠졌다(실측).
+changed_under() {
+  P="$(printf '%s' "$1" | gate_nfc)/" \
+    awk 'index($0, ENVIRON["P"]) == 1 { f = 1; exit } END { exit !f }' <<< "$CHANGED"
+}
 discover() { # $1=마커파일 $2=어댑터명
   local marker dir rel
   # 깊이를 제한하지 않는다. 예전에는 maxdepth 3 이었는데 apps/svc/api/go.mod 같은
@@ -93,7 +109,7 @@ discover() { # $1=마커파일 $2=어댑터명
   # shellcheck disable=SC2046
   while IFS= read -r marker; do
     dir=$(dirname "$marker"); rel=${dir#./}; [ "$rel" = "." ] && rel=""
-    if [ "$ALL" = 1 ] || [ -z "$rel" ] || printf '%s\n' "$CHANGED" | grep -q "^${rel}/"; then
+    if [ "$ALL" = 1 ] || [ -z "$rel" ] || changed_under "$rel"; then
       TARGETS+=("$2|$dir")
     fi
   done < <(find . \( $(gate_prune_expr) \) -prune -o -name "$1" -print 2>/dev/null)
