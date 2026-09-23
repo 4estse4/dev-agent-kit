@@ -88,11 +88,18 @@ jobs:
         continue-on-error: true
         run: bash tests/gate-go-ci.sh
 
+      # 에이전트 훅을 Claude Code 가 부르는 모양(표준입력 JSON)으로 돌린다. gh 는 가짜로 바꿔
+      # 떠 둔 코멘트를 읽힌다 — 네트워크도 토큰도 안 쓴다.
+      - name: the round comment hook blocks quotes missing from the answers
+        id: roundquotes
+        continue-on-error: true
+        run: bash tests/round-comment-quotes.sh
+
       - name: fail if any check failed
         run: |
           bad=0
-          for r in "${{ steps.deletions.outcome }}" "${{ steps.injections.outcome }}" "${{ steps.docs.outcome }}" "${{ steps.quotepath.outcome }}" "${{ steps.targets.outcome }}" "${{ steps.markers.outcome }}" "${{ steps.discovery.outcome }}" "${{ steps.gomin.outcome }}" "${{ steps.goci.outcome }}"; do
+          for r in "${{ steps.deletions.outcome }}" "${{ steps.injections.outcome }}" "${{ steps.docs.outcome }}" "${{ steps.quotepath.outcome }}" "${{ steps.targets.outcome }}" "${{ steps.markers.outcome }}" "${{ steps.discovery.outcome }}" "${{ steps.gomin.outcome }}" "${{ steps.goci.outcome }}" "${{ steps.roundquotes.outcome }}"; do
             [ "$r" = failure ] && bad=1
           done
-          echo "deletions=${{ steps.deletions.outcome }} · injections=${{ steps.injections.outcome }} · docs=${{ steps.docs.outcome }} · quotepath=${{ steps.quotepath.outcome }} · targets=${{ steps.targets.outcome }} · markers=${{ steps.markers.outcome }} · discovery=${{ steps.discovery.outcome }} · gomin=${{ steps.gomin.outcome }} · goci=${{ steps.goci.outcome }}"
+          echo "deletions=${{ steps.deletions.outcome }} · injections=${{ steps.injections.outcome }} · docs=${{ steps.docs.outcome }} · quotepath=${{ steps.quotepath.outcome }} · targets=${{ steps.targets.outcome }} · markers=${{ steps.markers.outcome }} · discovery=${{ steps.discovery.outcome }} · gomin=${{ steps.gomin.outcome }} · goci=${{ steps.goci.outcome }} · roundquotes=${{ steps.roundquotes.outcome }}"
           exit $bad

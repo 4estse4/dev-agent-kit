@@ -16,7 +16,9 @@
     "ask 는 '사람이 그 자리에서 정한다' 다.",
     "",
     "  gh pr comment    한 프로젝트에서 이것이 allow 에 있어서, 리뷰 라운드가 사람 승인",
-    "                   없이 20회 돌며 코멘트 40건이 나갔다.",
+    "                   없이 20회 돌며 코멘트 40건이 나갔다. 라운드 코멘트는 스킬의 승인",
+    "                   단계가 없어졌지만 여기서는 빼지 않는다 — 훅의 \"allow\" 는 ask 를",
+    "                   못 넘고, ask 를 훅으로 옮기면 훅이 죽을 때 모든 코멘트가 그냥 나간다.",
     "  gh pr create     auto mode 는 PR 생성을 기본으로 그냥 통과시킨다. 공식 문서가 이",
     "  gh pr merge      자리에 쓰라고 적어둔 것이 ask 다 — /docs/en/auto-mode-config 의",
     "  gh pr review     PR 에 글을 남기는 두 번째 경로. 스킬이 \"쓰지 마라\" 라고 적어둔 것을",
@@ -41,8 +43,15 @@
     "deny 로 쓰는 규칙이다.",
     "",
     "hooks 객체의 키는 훅 이벤트 이름만 허용된다. 주석 키를 넣으면 경고 후 무시된다.",
-    "**남은 훅 셋은 전부 '편의'다** — 자동 포맷 · 커밋 안 한 변경 알림 · 킷 낡음 알림.",
-    "막는 훅은 없다. 막는 것은 위의 permissions 다.",
+    "나머지 훅은 '편의'다 — 자동 포맷 · 커밋 안 한 변경 알림 · 킷 낡음 알림.",
+    "**막는 훅은 PreToolUse 의 round_comment_quotes.sh 다.** 라운드 코멘트의 (사람)",
+    "인용이 그 PR 의 3.5 코멘트에 없으면 그 gh pr comment 를 막고, 3.5 코멘트에는 ask 를",
+    "낸다. 명령 글자에 gh pr comment 가 보이면 결정 코멘트를 포함한 모든 게시에 한 줄",
+    "정규형(--body-file <절대 경로>)만 받고, 그 글자를 품은 검색 · heredoc 도 막는다.",
+    "여기 ask 규칙과 훅의 ask 가 겹칠 때 프롬프트가 몇 번 뜨는지는 아직 재지 않았다.",
+    "라운드 코멘트는 다음",
+    "라운드가 고치는 글이라 되돌릴 수 없는 것이 아니다. 되돌릴 수 없는 것은 위의",
+    "permissions 와 git 훅 · CI 가 막는다.",
     "",
     "statusLine 은 프로젝트 설정에서도 동작한다(공식 문서 확인). command 에서",
     "$CLAUDE_PROJECT_DIR 이 전개되는 것은 실측으로 확인했다 — 문서에 없어서 직접 재봤다.",
@@ -118,6 +127,18 @@
     ]
   },
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/round_comment_quotes.sh\"",
+            "timeout": 120
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
