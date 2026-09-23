@@ -36,19 +36,6 @@ gate_prune_expr() { # 출력: -name a -o -name b ...  (호출부가 \( \) 로 �
   done
 }
 
-# 경로를 NFC 로 맞춘다. 표준입력 → 표준출력.
-#
-# macOS 는 같은 한글 이름을 두 바이트열로 가질 수 있다. 디스크에는 NFD(자모)로 있는데
-# core.precomposeUnicode=true(macOS 의 git init 이 켠다)로 커밋하면 git 에는 NFC(음절)로
-# 기록된다. find 는 디스크의 것을, git diff 는 기록된 것을 내므로 그대로 대조하면 안 맞는다.
-# 리눅스의 git 은 디스크의 바이트를 그대로 기록하므로 맞출 것이 없다.
-#
-# macOS 의 iconv 는 이모지 같은 4바이트 문자나 UTF-8 이 아닌 바이트에서 멈추고, 거기까지만
-# 내고 실패한다. 긴 목록을 통째로 넣지 말고, 부른 쪽이 실패를 본다.
-gate_nfc() {
-  if [ "$(uname -s)" = Darwin ]; then iconv -f UTF-8-MAC -t UTF-8; else cat; fi
-}
-
 # Go 도구를 부르는 방법을 한 곳에서 정한다.
 #
 # go.mod 의 `tool` 지시어(Go 1.24+)가 선언한 도구는 `go tool <이름>` 으로 부를 수 있고,

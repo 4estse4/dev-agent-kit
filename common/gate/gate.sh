@@ -87,28 +87,17 @@ fi
 TARGETS=()
 # 바뀐 경로 중에 모듈 $1 아래의 것이 있나. $1 은 find 가 디스크에서 낸 이름이다.
 #
-# 모듈 경로를 두 모양으로 대조한다 — 디스크의 바이트 그대로와 NFC(lib.sh 의 gate_nfc).
-# git 은 둘 중 하나로 기록한다. macOS 에서 디스크의 이름이 NFD(자모)여도
-# core.precomposeUnicode=true 로 커밋하면 NFC(음절)로 기록되고, 게이트를 돌릴 때의 설정은
-# 상관없다. 한 모양으로만 대조하던 때 그런 한글 모듈 루트가 "검사 대상 없음" 으로 빠졌다(실측).
-# 변경 목록 쪽은 맞추지 않는다. 목록 전체를 macOS 의 iconv 에 넣었더니 이모지 같은 4바이트
-# 문자에서 멈춰 그 뒤의 목록이 사라졌다(실측). 모듈 이름에서 iconv 가 실패하면 NFC 모양만
-# 건너뛴다. git 도 그런 이름은 NFC 로 못 바꿔 디스크의 바이트 그대로 기록한다(실측).
-#
 # 문자 그대로 앞부분을 대조한다. `grep "^$rel/"` 로 쓰던 때는 모듈 경로가 정규식이 되어
 # `app[1]` 같은 루트가 자기 안의 파일과 안 맞았다. awk 에 -v 로 넘기지 않는 것은 -v 가
 # 역슬래시를 풀기 때문이다.
 # 목록을 파이프로 넘기지 않는다. pipefail 아래에서 받는 쪽이 첫 매치에서 끝나면 남은 목록을
 # 쓰던 쪽이 SIGPIPE 로 죽고 그것이 결과가 된다 — 변경 목록이 파이프 버퍼보다 긴 브랜치에서
 # 앞쪽 모듈이 "검사 대상 없음" 으로 빠졌다(실측).
+# 유니코드 정규화는 맞추지 않는다. macOS 에서 Finder 로 만든 한글 이름의 모듈 폴더는 디스크와
+# git 의 바이트가 달라 여기서 안 맞는다. 맞추려다 생긴 비용이 더 커서 안 하기로 했다 —
+# docs/process/kit-guide.md 4절.
 changed_under() {
-  local nfc
-  changed_prefix "$1/" && return 0
-  nfc=$(printf '%s' "$1" | gate_nfc 2>/dev/null) || return 1
-  [ "$nfc" != "$1" ] && changed_prefix "$nfc/"
-}
-changed_prefix() { # $1 로 시작하는 바뀐 경로가 있나
-  P="$1" awk 'index($0, ENVIRON["P"]) == 1 { f = 1; exit } END { exit !f }' <<< "$CHANGED"
+  P="$1/" awk 'index($0, ENVIRON["P"]) == 1 { f = 1; exit } END { exit !f }' <<< "$CHANGED"
 }
 discover() { # $1=마커파일 $2=어댑터명
   local marker dir rel
