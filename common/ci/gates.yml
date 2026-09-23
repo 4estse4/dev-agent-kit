@@ -112,7 +112,8 @@ jobs:
         run: |
           . .ai-kit/gate/lib.sh
           gate_go_min_check
-      # detect 의 gomod 는 go 줄이 가장 높은 go.mod 다. 세 잡의 setup-go 가 그것으로 Go 를 깐다.
+      # detect 의 gomod 는 깔 Go(toolchain 줄이 있으면 그 버전, 없으면 go 줄)가 가장 높은 go.mod 다.
+      # 세 잡의 setup-go 가 그것으로 Go 를 깐다.
       # go.mod 는 레포 루트에 없을 수 있고(backend/go.mod 같은 배치) 여럿일 수 있다. 한때
       # 루트의 go.mod 를 가리켜 그런 레포에서 세 잡이 다 죽었다(실측). setup-go 는
       # GOTOOLCHAIN=local 이라 더 높은 go 를 받아 오지 않으므로 가장 높은 것을 깐다.

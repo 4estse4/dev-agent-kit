@@ -9,10 +9,10 @@
 #
 # 깨끗한 레포에 킷을 설치하고 그 gates.yml 을 읽는다. 보는 것:
 #   · actions/setup-go 를 쓰는 잡마다, 그보다 앞선 스텝이 gate_go_min_check 를 부른다
-#   · 그 스텝의 run 을 설치한 레포에서 돌리면, go 줄이 가장 높은 go.mod(setup-go 가 그것으로
-#     Go 를 깐다)가 go_min 보다 낮거나 go 줄이 없을 때 그 파일을 이름대며 실패하고, 아니면
-#     통과한다. 그 파일에 toolchain 줄이 있으면 go 줄 대신 그것을 본다 — setup-go 가 그 버전을
-#     깐다. 더 낮은 보조 모듈이 섞여 있어도 통과한다. 도구 설치를 가르는 것은 돌고 있는
+#   · 그 스텝의 run 을 설치한 레포에서 돌리면, setup-go 가 Go 를 깔 go.mod(깔 Go 가 가장 높은
+#     것)의 그 버전이 go_min 보다 낮거나 없을 때 그 파일을 이름대며 실패하고, 아니면 통과한다.
+#     깔 Go 는 toolchain 줄이 있으면 그 버전, 없으면 go 줄이다 — setup-go 가 그렇게 깐다. 파일을
+#     고를 때도 같은 버전으로 순위를 매긴다. 더 낮은 보조 모듈이 섞여 있어도 통과한다. 도구 설치를 가르는 것은 돌고 있는
 #     go 하나이고, 낮은 go 줄의 모듈도 그 go 로 빌드된다. 러너의 기본 셸처럼 `bash -e` 로 돈다
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -65,9 +65,9 @@ IFS=. read -r ma mi _ <<< "$min"; below="$ma.$((mi - 1))"; lower="$ma.$((mi - 2)
 # 버전으로는 낮고 문자열로는 높은 것(go_min 이 1.2x 면 1.3). 문자열로 견주면 이것이 통과한다.
 short="$ma.$((mi / 10 + 1))"
 
-gomods() { # 인자=「경로:go 줄[:toolchain 줄]」. go 줄이 비면 그 줄 없이 만든다
+gomods() { # 인자=「경로:go 줄[:toolchain 줄]」. go 줄이 비면 그 줄 없이 만든다. 경로가 . 이면 루트
   local a p v tc
-  rm -rf "$R/backend" "$R/tools"
+  rm -rf "$R/go.mod" "$R/backend" "$R/tools"
   for a in "$@"; do
     p="${a%%:*}"; v="${a#*:}"; tc=""
     case "$v" in *:*) tc="${v#*:}"; v="${v%%:*}" ;; esac
@@ -109,6 +109,10 @@ for job in $steps; do
   # setup-go 는 그 go.mod 에 toolchain 줄이 있으면 그 버전을 깐다. 검사도 그 줄을 먼저 본다.
   check "$job" "go $below.0 + toolchain go$min.1"   pass ""             "backend:$below.0:go$min.1"
   check "$job" "go $lower + toolchain go$below.9"   fail backend/go.mod "backend:$lower:go$below.9"
+  # 파일을 고를 때도 toolchain 줄로 순위를 매긴다. 루트에만 toolchain 줄이 있고 하위 모듈의
+  # go 줄이 같거나 높으면, go 줄로만 고를 때 하위 모듈이 뽑혀 멈췄다(이슈 #99).
+  check "$job" "루트 go $below.0+toolchain go$min.2 · go $below.0" pass "" ".:$below.0:go$min.2" "tools/x:$below.0"
+  check "$job" "루트 go $lower.0+toolchain go$min.1 · go $below.0" pass "" ".:$lower.0:go$min.1" "tools/x:$below.0"
 done
 
 rm -rf "$T"
