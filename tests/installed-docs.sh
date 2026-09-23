@@ -20,9 +20,11 @@ fi
 [ -d "$R/.ai-kit" ] || { echo "  ✗ 설치 후에도 .ai-kit 이 없다 — 검사할 것이 없다"; exit 1; }
 
 # ① 설치본이 가리키는 킷 경로가 그 레포에 실제로 있나
-python3 - "$R" <<'PY' || fail=1
+python3 - "$R" "$KIT" <<'PY' || fail=1
 import re, sys, os, subprocess
 R = sys.argv[1]; bad = 0
+KIT = set(subprocess.run(['git', '-C', sys.argv[2], '-c', 'core.quotePath=false', 'ls-files'],
+                         capture_output=True, text=True, check=True).stdout.split('\n'))
 # **확장자로 고르지 않는다.** `.md`·`.yml`·`.json` 만 보던 탓에 `.sh` 와 훅 파일
 # (`pre-commit`·`pre-push`)이 통째로 검사 밖이었다 — 킷 경로를 가장 많이 적는 자리다.
 # 설치본 전부를 보고, 읽을 수 없는 것(바이너리)만 건너뛴다.
@@ -48,6 +50,17 @@ for f in found:
         m = m.split('|')[0]          # `.claude/skills|agents|hooks` 같은 표기
         if not os.path.exists(os.path.join(R, m)):
             print(f"  ✗ {f[len(R)+1:]} 가 없는 경로를 가리킨다 — {m}"); bad = 1
+    # **킷에만 있는 경로.** 위 접두어 밖(`docs/` 의 나머지 · `.github/` · `tests/`)은
+    # 설치된 레포에 없는 것이 정상일 수 있다 — 스킬이 만들 파일(`docs/HANDOFF.md`)이
+    # 그렇다. 그래서 이쪽은 「킷에는 있는데 설치된 트리에는 없다」일 때만 실패한다.
+    # 설치된 파일이 킷 자신의 기록(`docs/adr/0001-…` · `tests/…` · 킷 전용 워크플로)을
+    # 가리키던 것이 이 검사 밖이었다(이슈 #61). 예외 목록을 두지 않는다.
+    for m in re.findall(r'(?a)(?<![\w/-])((?:docs|\.github|tests)/[\w./-]+)', text):
+        m = m.rstrip('.')
+        if m.startswith('docs/process/'):
+            continue                 # 위에서 봤다
+        if m in KIT and not os.path.exists(os.path.join(R, m)):
+            print(f"  ✗ {f[len(R)+1:]} 가 킷에만 있는 경로를 가리킨다 — {m}"); bad = 1
 sys.exit(bad)
 PY
 [ "$fail" = 0 ] && echo "  ✓ 설치본의 킷 경로 참조가 전부 실재한다"
