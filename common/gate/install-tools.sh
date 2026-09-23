@@ -32,9 +32,13 @@ add() { case " ${need[*]:-} " in *" $1 "*) ;; *) need+=("$1") ;; esac; }
 if [ "$ALL" = 1 ]; then
   add goimports; add golangci-lint; add govulncheck; add ruff; add ktlint
 else
-  find . -name go.mod -not -path '*/node_modules/*' -maxdepth 3 2>/dev/null | grep -q . \
+  # 마커는 게이트와 같은 기준으로 찾는다 — 깊이를 제한하지 않고 gate_prune_expr 로 건너뛴다.
+  # 한때 maxdepth 3 이라, 네 단계 아래 go.mod 를 게이트는 검사하면서 도구가 없다며 이 스크립트를
+  # 안내하는데 이 스크립트는 「필요한 도구가 없습니다」라고 답했다. -print -quit 는 첫 하나에서
+  # 멈춘다. 멈추지 않으면 pipefail 아래에서 grep -q 가 먼저 끝날 때 find 가 SIGPIPE 로 죽는다.
+  find . \( $(gate_prune_expr) \) -prune -o -name go.mod -print -quit 2>/dev/null | grep -q . \
     && { add goimports; add golangci-lint; add govulncheck; }
-  find . -name pyproject.toml -maxdepth 3 2>/dev/null | grep -q . && add ruff
+  find . \( $(gate_prune_expr) \) -prune -o -name pyproject.toml -print -quit 2>/dev/null | grep -q . && add ruff
   # ktlint 는 Kotlin 린터다. 빌드 파일만 보고 넣으면 Java 전용 프로젝트에 쓸모없는
   # 도구를 깔게 된다 — 실제 .kt 파일이 있을 때만 넣는다.
   find . -name '*.kt' -not -path '*/build/*' -print -quit 2>/dev/null | grep -q . && add ktlint
