@@ -36,6 +36,19 @@ gate_prune_expr() { # 출력: -name a -o -name b ...  (호출부가 \( \) 로 �
   done
 }
 
+# go.mod 경로들(표준입력, 한 줄에 하나) 가운데 go 줄이 가장 높은 것을 낸다.
+# CI 의 setup-go 가 이 파일로 Go 를 깐다. setup-go 는 GOTOOLCHAIN=local 을 설정해 더 높은
+# go 를 받아 오지 않으므로(실측), 모듈이 여럿이면 가장 높은 것을 깔아야 모든 모듈이 돈다.
+# go 줄이 같으면 경로 순으로 뒤의 것이다.
+gate_go_highest() {
+  local f v
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    v=$(awk '$1 == "go" { print $2; exit }' "$f")
+    printf '%s\t%s\n' "${v:-0}" "$f"
+  done | sort -V | tail -1 | cut -f2-
+}
+
 # Go 도구를 부르는 방법을 한 곳에서 정한다.
 #
 # go.mod 의 `tool` 지시어(Go 1.24+)가 선언한 도구는 `go tool <이름>` 으로 부를 수 있고,

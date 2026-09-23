@@ -16,6 +16,11 @@
 #
 # 형식: <이름>=<버전>  (셸이 source 할 수 있게 공백 없이)
 
+# Go 의 최소 버전. 런타임은 위대로 go.mod 가 정하지만, 아래에 핀한 Go 도구가 이보다 낮은
+# go 로는 설치되지 않는다(goimports 의 x/tools 와 govulncheck 가 이 버전을 요구한다).
+# CI 는 go.mod 의 go 줄이 이보다 낮으면 그 이유를 말하며 멈춘다. 도구 핀을 올리면 이 값도 본다.
+go_min=1.25
+
 # Go — go install 로 받는다. go.mod 의 tool 지시어를 쓰는 프로젝트는 그쪽이 우선한다.
 goimports=v0.45.0
 golangci_lint=v2.13.1
