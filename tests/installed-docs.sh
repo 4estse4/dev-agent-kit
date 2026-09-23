@@ -20,9 +20,11 @@ fi
 [ -d "$R/.ai-kit" ] || { echo "  ✗ 설치 후에도 .ai-kit 이 없다 — 검사할 것이 없다"; exit 1; }
 
 # ① 설치본이 가리키는 킷 경로가 그 레포에 실제로 있나
-python3 - "$R" <<'PY' || fail=1
+python3 - "$R" "$KIT" <<'PY' || fail=1
 import re, sys, os, subprocess
 R = sys.argv[1]; bad = 0
+KIT = set(subprocess.run(['git', '-C', sys.argv[2], '-c', 'core.quotePath=false', 'ls-files'],
+                         capture_output=True, text=True, check=True).stdout.split('\n'))
 # **확장자로 고르지 않는다.** `.md`·`.yml`·`.json` 만 보던 탓에 `.sh` 와 훅 파일
 # (`pre-commit`·`pre-push`)이 통째로 검사 밖이었다 — 킷 경로를 가장 많이 적는 자리다.
 # 설치본 전부를 보고, 읽을 수 없는 것(바이너리)만 건너뛴다.
@@ -43,11 +45,41 @@ for f in found:
     # 그래서 `…verification-stages.md에` 처럼 경로에 붙은 조사를 통째로 삼켜 없는 경로로
     # 읽었다(실측: 그 상태에서 이 검사가 종료코드 1). 백틱 제약을 뺀 대가다 — 백틱이
     # 없으면 「경로 뒤에 공백」이라는 표기 관습도 같이 사라진다.
-    for m in re.findall(r'(?a)(?<![\w/-])((?:common|\.ai-kit|\.claude|docs/process)/[\w./|-]+)', text):
+    # 앞의 `./` · `../` 는 떼고 레포 뿌리에서 본다 — 아래 킷 전용 경로 검사와 같다.
+    for m in re.findall(r'(?a)(?<![\w/-])(?:\.\.?/)*((?:common|\.ai-kit|\.claude|docs/process)/[\w./|-]+)', text):
         m = m.rstrip('.')            # 문장 끝 마침표가 붙어 온다
         m = m.split('|')[0]          # `.claude/skills|agents|hooks` 같은 표기
         if not os.path.exists(os.path.join(R, m)):
             print(f"  ✗ {f[len(R)+1:]} 가 없는 경로를 가리킨다 — {m}"); bad = 1
+    # **킷에만 있는 경로.** 위 접두어 밖(`docs/` 의 나머지 · `.github/` · `tests/`)은
+    # 설치된 레포에 없는 것이 정상일 수 있다 — 스킬이 만들 파일(`docs/HANDOFF.md`)이
+    # 그렇다. 그래서 이쪽은 「킷에는 있는데 설치된 트리에는 없다」일 때만 실패한다.
+    # 설치된 파일이 킷 자신의 기록(`docs/adr/0001-…` · `tests/…` · 킷 전용 워크플로)을
+    # 가리키던 것이 이 검사 밖이었다(이슈 #61). 예외 목록을 두지 않는다.
+    # 앞의 `./` · `../` 는 떼고 레포 뿌리에서 본다. 마크다운 상대 링크가 흔히 그 모양이다.
+    # 디렉터리만 적은 것(`tests/`)은 킷 파일 중 그 접두어로 시작하는 것이 있으면 킷 경로다.
+    # `0001-…` 처럼 줄인 이름은 실제 경로로 풀 수 없어 보지 않는다.
+    for m in re.findall(r'(?a)(?<![\w/-])(?:\.\.?/)*((?:docs|\.github|tests)/[\w./-]*)', text):
+        m = m.rstrip('.').rstrip('/')
+        if m.startswith('docs/process'):
+            continue                 # 위에서 봤다
+        in_kit = m in KIT or any(k.startswith(m + '/') for k in KIT)
+        if in_kit and not os.path.exists(os.path.join(R, m)):
+            print(f"  ✗ {f[len(R)+1:]} 가 킷에만 있는 경로를 가리킨다 — {m}"); bad = 1
+    # **킷 레포 이름.** 파일이든 PR 이든 킷 레포로 보내는 것은 같다(이슈 #61 의 결정).
+    # 주소만 보면 `gh api repos/…` · `-R …` · `owner/repo#N` 이 빠져나간다. 그래서 이름을
+    # 본다. 레포 홈 주소만 둔다 — 설치본이 어디서 왔는지 밝히는 자리(`.ai-kit/README.md`)다.
+    # 대소문자를 가리지 않는다. `gh api repos/4ESTSE4/AI-Native-Kit` 도 킷 레포를 낸다.
+    # 홈 주소 뒤는 막을 글자로 본다 — 영숫자 · `@` · `#` · `-`, 그리고 `/` · `.` · `:` 뒤에
+    # 이어지는 경로. 뒤에 올 글자를 허용 목록으로 보던 때는
+    # 쉼표 · 조사 · 끝 슬래시 · 콜론에서 오탐이 났다.
+    for mo in re.finditer(r'(?i)4estse4/ai-native-kit', text):
+        s, e = mo.span()
+        home = (text[max(0, s - 19):s].lower() == 'https://github.com/'
+                and not re.match(r'(?a)[\w@#-]|[/.:][\w#-]', text[e:e + 2]))
+        if not home:
+            line = text[text.rfind('\n', 0, s) + 1:].split('\n')[0].strip()[:100]
+            print(f"  ✗ {f[len(R)+1:]} 가 킷 레포를 가리킨다 — {line}"); bad = 1
 sys.exit(bad)
 PY
 [ "$fail" = 0 ] && echo "  ✓ 설치본의 킷 경로 참조가 전부 실재한다"
