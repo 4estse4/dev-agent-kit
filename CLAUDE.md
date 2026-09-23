@@ -98,11 +98,11 @@ gh issue list -R 4estse4/ai-native-kit
 > 걸 것인가)이 아직 열려 있다는 뜻**이다. 자기 규칙을 자기가 못 지키는 상태다.
 >
 > **`CI` 가 무엇을 덮는지 재서 적었다.** `kit-tests.yml` 이 실행하는 것은 `install.sh`
-> (테스트가 부른다)와 `tests/` 의 검사들뿐이다. 게이트와 훅은 `tests/` 가 부르는 자리만
-> 실제로 돈다 — `gate.sh` 의 대상 선정과 `pre-commit` 의 충돌 마커 검사다. 나머지 셸
-> (`common/gate/*` · `claude-code/hooks/*` · `common/ci/*.sh` · `statusline-command.sh`)은
-> `bash -n` 만 받는다. **실패 쪽으로 발동하는 것을 CI 가 보는 것은 충돌 마커 검사뿐이고,
-> 게이트의 검사(린트 · 테스트 · 시크릿)는 0건**이다.
+> (테스트가 부른다)와 `tests/` 의 검사들뿐이다. 게이트와 훅 중 CI 가 결과를 확인하는 것은
+> `tests/` 가 겨눈 자리뿐이다 — `gate.sh` 의 대상 선정과 `pre-commit` 의 충돌 마커
+> 검사다. 나머지 셸(`common/gate/*` · `claude-code/hooks/*` · `common/ci/*.sh` ·
+> `statusline-command.sh`)은 `bash -n` 만 받는다. **실패 쪽으로 발동하는 것을 CI 가 보는
+> 것은 충돌 마커 검사뿐이고, 게이트의 검사(린트 · 테스트 · 시크릿)는 0건**이다.
 > 수를 여기 적지 않는다 — 한 번 적었다가 테스트를 하나 더하면서 안 고쳐, CI 로그의
 > `shell N개` 와 이 문장이 어긋났다. 한때 이 표에 그 둘을 통짜 `CI` 로 적었다가 되돌렸다 — 「누가 막나」
 > 칸에 거짓을 적는 것이 이 킷이 막으려는 것 자체다.

@@ -42,6 +42,9 @@ gate_prune_expr() { # 출력: -name a -o -name b ...  (호출부가 \( \) 로 �
 # core.precomposeUnicode=true(macOS 의 git init 이 켠다)로 커밋하면 git 에는 NFC(음절)로
 # 기록된다. find 는 디스크의 것을, git diff 는 기록된 것을 내므로 그대로 대조하면 안 맞는다.
 # 리눅스의 git 은 디스크의 바이트를 그대로 기록하므로 맞출 것이 없다.
+#
+# macOS 의 iconv 는 이모지 같은 4바이트 문자나 UTF-8 이 아닌 바이트에서 멈추고, 거기까지만
+# 내고 실패한다. 긴 목록을 통째로 넣지 말고, 부른 쪽이 실패를 본다.
 gate_nfc() {
   if [ "$(uname -s)" = Darwin ]; then iconv -f UTF-8-MAC -t UTF-8; else cat; fi
 }
