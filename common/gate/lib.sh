@@ -72,7 +72,7 @@ gate_go_min_check() {
     if [ -n "$v" ]; then what="go 줄이 $v 입니다"; else what="go 줄이 없습니다"; fi
   fi
   [ -n "$v" ] && [ "$(printf '%s\n%s\n' "$min" "$v" | sort -V | head -1)" = "$min" ] && return 0
-  echo "::error file=${f#./}::${f#./} 의 $what. CI 는 go 줄이 가장 높은 이 파일로 Go 를 깝니다(toolchain 줄이 있으면 그 버전). 킷은 Go $min 이상만 지원합니다 — 핀한 Go 도구(goimports · govulncheck)가 그보다 낮은 go 로는 설치되지 않습니다. ${raise} 올리세요."
+  echo "::error file=${f#./}::${f#./} 의 $what. CI 는 go 줄이 가장 높은 이 파일로 Go 를 깝니다(toolchain 줄이 있으면 그 버전). 킷은 Go $min 이상만 지원합니다 — 핀한 Go 도구(goimports · golangci-lint · govulncheck)가 그보다 낮은 go 로는 설치되지 않습니다. ${raise} 올리세요."
   return 1
 }
 

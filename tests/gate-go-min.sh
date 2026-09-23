@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # CI 에서 Go 를 까는 잡은 모두 그 앞에서 킷의 Go 최소 버전을 본다.
 #
-# 이 테스트가 있는 이유: 핀한 Go 도구(goimports · govulncheck)는 tool-versions 의 go_min 보다
+# 이 테스트가 있는 이유: 핀한 Go 도구(goimports · golangci-lint · govulncheck)는 tool-versions 의 go_min 보다
 # 낮은 go 로는 설치되지 않는다. gates.yml 의 잡은 저마다 setup-go 로 Go 를 까는데, go 1.24 로
 # Go 를 깐 security 잡은 govulncheck 설치에서 「requires go >= 1.25.0」으로 죽었다(이슈 #93).
 # 검사가 한 잡에만 있으면 security 는 그렇게 다른 말을 하며 죽고, 도구를 깔지 않는 coverage 는
@@ -62,7 +62,7 @@ awk -v out="$T/step." '
 min=$(sed -n 's/^go_min=//p' "$R/.ai-kit/gate/tool-versions")
 [ -n "$min" ] || { echo "  ✗ 설치된 tool-versions 에 go_min 이 없다"; exit 1; }
 IFS=. read -r ma mi _ <<< "$min"; below="$ma.$((mi - 1))"; lower="$ma.$((mi - 2))"
-# 버전으로는 낮고 문자열로는 높은 것(1.25 에 대해 1.3). 문자열로 견주면 이것이 통과한다.
+# 버전으로는 낮고 문자열로는 높은 것(go_min 이 1.2x 면 1.3). 문자열로 견주면 이것이 통과한다.
 short="$ma.$((mi / 10 + 1))"
 
 gomods() { # 인자=「경로:go 줄[:toolchain 줄]」. go 줄이 비면 그 줄 없이 만든다
