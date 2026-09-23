@@ -36,43 +36,54 @@ gate_prune_expr() { # 출력: -name a -o -name b ...  (호출부가 \( \) 로 �
   done
 }
 
-# go.mod 경로들(표준입력, 한 줄에 하나) 가운데 go 줄이 가장 높은 것을 낸다.
-# CI 의 setup-go 가 이 파일로 Go 를 깐다. setup-go 는 GOTOOLCHAIN=local 을 설정해 더 높은
-# go 를 받아 오지 않으므로(실측), 모듈이 여럿이면 가장 높은 것을 깔아야 모든 모듈이 돈다.
-# go 줄이 같으면 경로 순으로 뒤의 것이다.
+# go.mod 하나에서 setup-go 가 깔 Go 버전과 그 줄 이름을 낸다: 「<버전> toolchain」 또는
+# 「<버전> go」. 둘 다 없으면 아무것도 안 낸다.
+# setup-go 는 그 파일에 `toolchain go1.*` 줄이 있으면 그 버전을, 없으면 go 줄을 깐다(setup-go v7 의
+# parseGoVersionFile, 러너에서 봤다). go 줄을 올리는 go 명령이 toolchain 줄에 자기 버전을 같이
+# 쓰므로(go.dev/doc/toolchain), go 줄을 낮게 둔 채 새 Go 로 빌드하는 모듈이 흔하다.
+# 파일을 고르는 gate_go_highest 와 판정하는 gate_go_min_check 가 이 하나를 쓴다. 한때 판정만
+# toolchain 줄을 봐서, 루트에만 그 줄이 있으면 하위 모듈을 골라 멈췄다(이슈 #99).
+gate_go_setup_version() { # $1=go.mod
+  local tc v
+  tc=$(awk '$1 == "toolchain" { print $2; exit }' "$1")
+  if [ "${tc#go1.}" != "$tc" ]; then echo "${tc#go} toolchain"; return; fi
+  v=$(awk '$1 == "go" { print $2; exit }' "$1")
+  [ -z "$v" ] || echo "$v go"
+}
+
+# go.mod 경로들(표준입력, 한 줄에 하나) 가운데 setup-go 가 깔 Go(위 gate_go_setup_version)가 가장
+# 높은 것을 낸다. CI 의 setup-go 가 이 파일로 Go 를 깐다. setup-go 는 GOTOOLCHAIN=local 을 설정해
+# 더 높은 go 를 받아 오지 않으므로(실측), 모듈이 여럿이면 가장 높은 것을 깔아야 모든 모듈이 돈다.
+# 같으면 경로 순으로 뒤의 것이다.
 gate_go_highest() {
   local f v
   while IFS= read -r f; do
     [ -n "$f" ] || continue
-    v=$(awk '$1 == "go" { print $2; exit }' "$f")
+    v=$(gate_go_setup_version "$f"); v="${v%% *}"
     printf '%s\t%s\n' "${v:-0}" "$f"
   done | sort -V | tail -1 | cut -f2-
 }
 
-# CI 가 Go 를 까는 go.mod(go 줄이 가장 높은 것, 위 gate_go_highest)에서 setup-go 가 깔 버전이
-# tool-versions 의 go_min 이상인지 본다. 아니면 그 파일과 이유를 GitHub 주석(::error)으로 내고
-# 실패한다. setup-go 는 그 파일에 toolchain 줄이 있으면 그 버전을, 없으면 go 줄을 깐다
-# (setup-go v7 의 parseGoVersionFile). 검사도 같은 순서로 본다. toolchain 줄은 go 줄을 낮게
-# 둔 채 새 Go 로 빌드하려고 쓰는 것이라, go 줄만 보면 도는 레포를 거짓 이유로 멈춘다.
+# CI 가 Go 를 까는 go.mod(위 gate_go_highest)에서 setup-go 가 깔 버전이 tool-versions 의 go_min
+# 이상인지 본다. 아니면 그 파일과 이유를 GitHub 주석(::error)으로 내고 실패한다.
 # 보는 것은 그 하나다. 핀한 Go 도구의 설치를 가르는 것은 돌고 있는 go 이고, go 줄이 더 낮은
 # 보조 모듈도 그 go 로 빌드된다. 모든 go.mod 를 보면 전에 돌던 멀티모듈 레포가 멈춘다.
 # CI 에서 setup-go 를 쓰는 잡이 모두 그 앞에서 부른다. 잡은 저마다 Go 를 깔아서, 한 잡에만 두면
 # security 는 govulncheck 설치에서 「requires go >= …」로 다른 말을 하며 죽고(실측), 도구를
 # 깔지 않는 coverage 는 킷이 지원하지 않는 Go 로 초록을 낸다(실측).
 gate_go_min_check() {
-  local min f tc v what raise
+  local min f v line what raise
   min=$(gate_tool_version go_min)
   [ -n "$min" ] || { echo "::error::.ai-kit/gate/tool-versions 에 go_min 이 없습니다 — 킷을 갱신하세요"; return 1; }
   f=$(find . \( $(gate_prune_expr) \) -prune -o -name go.mod -print | gate_go_highest)
-  tc=$(awk '$1 == "toolchain" { print $2; exit }' "$f")
-  if [ "${tc#go1.}" != "$tc" ]; then
-    v="${tc#go}"; what="toolchain 줄이 $tc 입니다"; raise="toolchain 줄을 go$min 이상으로"
-  else
-    v=$(awk '$1 == "go" { print $2; exit }' "$f"); raise="go 줄을 $min 이상으로"
-    if [ -n "$v" ]; then what="go 줄이 $v 입니다"; else what="go 줄이 없습니다"; fi
-  fi
+  read -r v line <<< "$(gate_go_setup_version "$f")"
   [ -n "$v" ] && [ "$(printf '%s\n%s\n' "$min" "$v" | sort -V | head -1)" = "$min" ] && return 0
-  echo "::error file=${f#./}::${f#./} 의 $what. CI 는 go 줄이 가장 높은 이 파일로 Go 를 깝니다(toolchain 줄이 있으면 그 버전). 킷은 Go $min 이상만 지원합니다 — 핀한 Go 도구(goimports · golangci-lint · govulncheck)가 그보다 낮은 go 로는 설치되지 않습니다. ${raise} 올리세요."
+  case "$line" in
+    toolchain) what="toolchain 줄이 go$v 입니다"; raise="toolchain 줄을 go$min 이상으로" ;;
+    go)        what="go 줄이 $v 입니다";          raise="go 줄을 $min 이상으로" ;;
+    *)         what="go 줄이 없습니다";           raise="go 줄을 $min 이상으로" ;;
+  esac
+  echo "::error file=${f#./}::${f#./} 의 $what. CI 는 레포의 go.mod 가운데 깔 Go 가 가장 높은 이 파일로 Go 를 깝니다(toolchain 줄이 있으면 그 버전, 없으면 go 줄). 킷은 Go $min 이상만 지원합니다 — 핀한 Go 도구(goimports · golangci-lint · govulncheck)가 그보다 낮은 go 로는 설치되지 않습니다. ${raise} 올리세요."
   return 1
 }
 

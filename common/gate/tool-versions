@@ -20,8 +20,8 @@
 # go 로는 설치되지 않는다. 아래 Go 도구 셋이 각각 요구하는 go(그 모듈의 go 줄) 가운데 가장 높은
 # 것이 이 값이다. 한때 goimports 와 govulncheck 만 보고 정했다가, 더 높은 go 를 요구하는
 # golangci-lint 가 러너에서 「requires go >= …」 로 죽었다(실측).
-# CI 는 go 줄이 가장 높은 go.mod 로 Go 를 깔고(그 파일에 toolchain 줄이 있으면 그 버전), 그 버전이
-# 이보다 낮으면 그 이유를 말하며 멈춘다.
+# CI 는 깔 Go(toolchain 줄이 있으면 그 버전, 없으면 go 줄)가 가장 높은 go.mod 로 Go 를 깔고, 그
+# 버전이 이보다 낮으면 그 이유를 말하며 멈춘다.
 # 도구 핀을 올리면 이 값도 본다. 각 도구 모듈의 go 줄은 proxy.golang.org 의 <모듈>/@v/<버전>.mod 에 있다.
 go_min=1.26
 
