@@ -32,9 +32,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - id: d
-        # 여기서 감지하지 못한 언어는 gate 잡의 모든 단계가 건너뛰어지고
-        # 잡이 초록으로 끝난다 — 아무것도 검사하지 않은 채로. 어댑터를 추가하면
-        # 반드시 여기도 같이 추가해야 한다.
+        # 여기서 감지하지 못한 언어는 도구와 의존성을 설치하는 스텝이 건너뛰어진다.
+        # gate 잡의 마지막 스텝(gate.sh --all)은 그래도 그 모듈을 찾아 도구가 없다며
+        # 빨갛게 끝나지만, security 잡의 언어별 취약점 검사는 조용히 건너뛰어진다.
+        # 어댑터를 추가하면 반드시 여기도 같이 추가해야 한다.
         #
         # 마커를 찾는 기준은 게이트(gate.sh)와 같다. 깊이를 제한하지 않고, 건너뛸 디렉터리는
         # lib.sh 의 gate_prune_expr 하나를 쓴다. 한때 여기만 maxdepth 3 이라 네 단계 아래의
@@ -295,6 +296,7 @@ jobs:
           # 줄 단위로 읽는다. `for d in $(…)` 는 공백 든 경로에서 낱말이 갈려 cd 가 죽었다.
           . .ai-kit/gate/lib.sh
           while IFS= read -r f; do
+            echo "── $(dirname "$f") ──"
             (cd "$(dirname "$f")" && npm ci --no-audit --no-fund)
           done < <(find . \( $(gate_prune_expr) \) -prune -o -name package.json -print)
 
@@ -391,6 +393,7 @@ jobs:
           # 줄 단위로 읽는다 — 위 npm ci 단계와 같은 이유다.
           . .ai-kit/gate/lib.sh
           while IFS= read -r f; do
+            echo "── $(dirname "$f") ──"
             (cd "$(dirname "$f")" && npm audit --audit-level=high)
           done < <(find . \( $(gate_prune_expr) \) -prune -o -name package-lock.json -print)
 

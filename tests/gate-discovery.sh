@@ -8,9 +8,13 @@
 # 한쪽만 고쳐진다. 새로 쓰는 자리를 잡는 것은 이 검사뿐이다.
 #
 # 보는 것: `.md` 가 아닌 설치되는 파일(common/ · claude-code/)과 install.sh 에서 주석이 아닌 줄.
-#   · 마커 이름을 `-name` 으로 찾는 find 는 gate_prune_expr 를 쓰고 -maxdepth 를 쓰지 않는다
+#   · 마커를 찾는 find 는 gate_prune_expr 를 쓰고, -maxdepth 를 쓰지 않고, -not -path 로
+#     따로 거르지 않는다. 건너뛸 것은 gate_prune_expr 하나가 정한다
 #   · 경로 목록을 `for x in $(find …)` · `$(dirname …)` 로 돌지 않는다 — 공백 든 경로에서
 #     낱말이 갈린다(이슈 #80)
+# 마커를 찾는 find 는 `-name` 뒤에 마커 이름이 글자로 오거나 변수(`-name "$1"`)가 오는 것이다.
+# 변수 쪽을 빼면 기준이 되는 gate.sh 와 설치기의 탐색이 검사 밖에 남는다 — 첫 판이 그랬고,
+# gate.sh 를 maxdepth 3 으로 되돌려도 초록이었다.
 # `\` 로 이어진 줄은 붙여서 본다. find 가 여러 줄에 걸쳐 있다.
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -32,7 +36,7 @@ logical() {
   done <<< "$files"
 }
 
-MARKER="-name[[:space:]]+['\"]?(go\\.mod|package(-lock)?\\.json|pyproject\\.toml|settings\\.gradle(\\.kts)?|build\\.gradle(\\.kts)?|pom\\.xml)"
+MARKER="-name[[:space:]]+(['\"]?(go\\.mod|package(-lock)?\\.json|pyproject\\.toml|settings\\.gradle(\\.kts)?|build\\.gradle(\\.kts)?|pom\\.xml)|\"?\\$)"
 finds=$(logical | grep -E "find[[:space:]].*$MARKER")
 [ -n "$finds" ] || { echo "  ✗ 마커를 찾는 find 가 하나도 안 걸렸다 — 정규식이 틀렸나"; exit 1; }
 
@@ -49,6 +53,12 @@ if [ -n "$bad" ]; then
   printf '%s\n' "$bad" | cut -c1-160 | sed 's/^/      /'
   fail=1
 fi
+bad=$(printf '%s\n' "$finds" | grep -E '(-not|!)[[:space:]]+-path')
+if [ -n "$bad" ]; then
+  echo "  ✗ 마커를 찾는 find 가 -not -path 로 따로 거른다:"
+  printf '%s\n' "$bad" | cut -c1-160 | sed 's/^/      /'
+  fail=1
+fi
 bad=$(logical | grep -E 'for[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]+in[[:space:]]+\$\((dirname|find)[[:space:]]')
 if [ -n "$bad" ]; then
   echo "  ✗ 경로 목록을 for … in \$(find|dirname …) 로 돈다:"
@@ -58,6 +68,6 @@ fi
 
 if [ "$fail" = 0 ]; then
   n=$(printf '%s\n' "$finds" | wc -l | tr -d ' ')
-  echo "  ✓ 마커를 찾는 find ${n}개가 전부 gate_prune_expr 를 쓰고 깊이를 제한하지 않는다 · for \$(find) 루프 없음"
+  echo "  ✓ 마커를 찾는 find ${n}개(이름을 변수로 받는 것 포함)가 전부 gate_prune_expr 하나로 거르고 깊이를 제한하지 않는다 · for \$(find) 루프 없음"
 fi
 exit $fail
