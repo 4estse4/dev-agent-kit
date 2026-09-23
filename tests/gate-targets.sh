@@ -60,10 +60,12 @@ R=$(mkrepo 'app[1]'); change "$R" 'app[1]/index.ts'; expect "대괄호 든 모�
 # 대조가 너무 넓어지는 회귀는 여기서만 드러난다. 앞부분 끝의 / 를 빠뜨리면 svc 가
 # svc2/ 의 변경에도 맞는다.
 R=$(mkrepo svc svc2); change "$R" svc2/index.ts;     expect "안 바뀐 모듈은 안 잡힌다" 1 "$R"
-# 경로 3,000개면 목록이 100KB 를 넘는다. 파이프 버퍼(64KB)를 넉넉히 넘기는 수다.
-# 모듈 뒤로 정렬되는 경로에 둔다. 매치 뒤에 남은 목록이 버퍼보다 커야 앞쪽이 죽는다.
+# 모듈 뒤로 정렬되는 경로에 둔다. 매치 뒤에 남은 목록이 받는 쪽이 미리 읽는 양보다 커야
+# 앞쪽이 죽는다. 파이프 버퍼(64KB)만 넘기면 모자란다 — 리눅스의 mawk 는 입력을 크게 미리
+# 읽어서, 목록이 100KB 남짓일 때는 awk 에 파이프로 넘기는 회귀를 못 잡았다(실측). 경로를
+# 20,000개 두면 목록이 700KB 를 넘는다.
 R=$(mkrepo svc); mkdir -p "$R/zz/src/components"
-for ((i = 1; i <= 3000; i++)); do : > "$R/zz/src/components/Component$i.tsx"; done
-change "$R" svc/index.ts; expect "파일 3,000개가 같이 바뀐 브랜치의 모듈" 1 "$R"
+for ((i = 1; i <= 20000; i++)); do : > "$R/zz/src/components/Component$i.tsx"; done
+change "$R" svc/index.ts; expect "변경 목록이 아주 긴 브랜치의 모듈" 1 "$R"
 
 exit $fail
