@@ -76,7 +76,7 @@ git_info=""
 if [ -n "$cwd" ]; then
   branch=$(git -C "$cwd" --no-optional-locks symbolic-ref --short HEAD 2>/dev/null)
   if [ -n "$branch" ]; then
-    dirty=$(git -C "$cwd" --no-optional-locks status --porcelain 2>/dev/null)
+    dirty=$(git -C "$cwd" -c core.quotePath=false --no-optional-locks status --porcelain 2>/dev/null)
     if [ -n "$dirty" ]; then
       git_info="${branch}*"
     else
