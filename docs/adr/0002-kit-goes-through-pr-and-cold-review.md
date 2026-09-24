@@ -80,5 +80,5 @@ $ gh api repos/4estse4/ai-native-kit/rulesets --jq '.[] | {name, enforcement, ta
 `--protect` 를 룰셋으로 바꿀지는 #4 가 가진 일이다. 룰셋의
 `require_extra_approval_for_unattributed_changes` 가 `true` 라 머지가 막히면 그것부터 본다.
 
-되돌리려면 룰셋과 `CLAUDE.md` 하드룰 첫 줄을 같이 건드려야 한다. 룰셋만 끄면 규칙은
-남고 강제만 사라진다.
+되돌리려면 룰셋과, `CLAUDE.md` 하드룰 표에서 룰셋을 드는 줄(첫 줄과 「킷 히스토리를
+재작성하지 마라」 줄)을 같이 건드려야 한다. 룰셋만 끄면 규칙은 남고 강제만 사라진다.
