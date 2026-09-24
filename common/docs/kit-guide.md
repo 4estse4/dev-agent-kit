@@ -34,11 +34,11 @@ bash .ai-kit/gate/gate.sh --all                 # 전부 (CI 가 부르는 것)
 | `docs/traceability.md` | SPEC 의 모든 요구에 한 행 | CI 의 `trace` 잡이 실패한다 |
 
 > **하드룰마다 누가 막나를 반드시 적는다** — 라벨이 아니라 평문으로.
-> **`리뷰`·`사람` 만 적힌 규칙은 안 지켜진다고 치고 계획을 세워라.** 불편하면 기계로 바꾼다.
+> **`리뷰`·`사람` 만 적힌 규칙은 안 지켜진다고 보고 계획을 정하라.** 불편하면 기계로 바꾼다.
 > 어휘와 각각의 우회는 `verification-stages.md` 3.3 에 있다.
 
 `docs/process/` 의 두 문서가 그 이유를 설명한다 — `artifact-rules.md`(R1~R7)와
-`verification-stages.md`(어느 검사를 어디에 둘지, 실측 수치 포함).
+`verification-stages.md`(어느 검사를 어디에 둘지, 측정한 시간 포함).
 
 ## 3. 설치 **전에** 확인했어야 하는 것
 

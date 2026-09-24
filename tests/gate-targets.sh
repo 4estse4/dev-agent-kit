@@ -62,7 +62,7 @@ R=$(mkrepo 'app[1]'); change "$R" 'app[1]/index.ts'; expect "대괄호 든 모�
 R=$(mkrepo svc svc2); change "$R" svc2/index.ts;     expect "안 바뀐 모듈은 안 잡힌다" 1 "$R"
 # 모듈 뒤로 정렬되는 경로에 둔다. 매치 뒤에 남은 목록이 받는 쪽이 미리 읽는 양보다 커야
 # 앞쪽이 죽는다. 파이프 버퍼(64KB)만 넘기면 모자란다 — 리눅스의 mawk 는 입력을 크게 미리
-# 읽어서, 목록이 100KB 남짓일 때는 awk 에 파이프로 넘기는 회귀를 못 잡았다(실측). 경로를
+# 읽어서, 목록이 100KB 남짓일 때는 awk 에 파이프로 전달하는 회귀를 찾아내지 못했다(실제로 확인함). 경로를
 # 20,000개 두면 목록이 700KB 를 넘는다.
 R=$(mkrepo svc); mkdir -p "$R/zz/src/components"
 for ((i = 1; i <= 20000; i++)); do : > "$R/zz/src/components/Component$i.tsx"; done
