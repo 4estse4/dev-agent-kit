@@ -892,3 +892,22 @@ dev-log 에만 있다. 템플릿과 스킬에는 넣지 않는다(ADR-0001).
   머지 승인 때). go.dev/doc/toolchain 원문으로 확인하고 이슈 #99 를 열었다.
 - **이관**: `GOTOOLCHAIN: local` 회귀 → 머지 결정 코멘트. `toolchain go1.26rc1` 같은 rc 줄이 `sort -V` 에서
   `1.26` 과 `1.26.0` 사이에 놓여 최소 버전 검사를 지나가는 것(PR #97 부터) → 1라운드 셀프 리뷰의 남기는 위험.
+
+## 2026-09-24 — CI 가 루트의 `.nvmrc` 를 요구하고 setup-node 의 실패를 덮지 않는다 (PR #104)
+
+- **작업**: gate · security 두 잡이 setup-node 앞에서 `gate_nvmrc_check` 로 루트 `.nvmrc` 를 요구하고(하위
+  디렉터리에서 찾은 것이 있으면 같이 말한다), 두 setup-node 에서 `continue-on-error` 를 뺐다. gate 잡의 npm
+  cache 는 레포 전체의 `package-lock.json` · `npm-shrinkwrap.json` 에서 키를 잡고, security 잡의 npm audit 는
+  두 파일을 다 찾는다(이슈 #95).
+- **채택**: `[사용자]` 「(A) 루트 .nvmrc 요구」 · 「(i) glob · probe 두 단계」(계획) — py 의 `.python-version`
+  과 같은 모양. probe PR #11 이 러너에서 두 단계(확인 스텝에서 멈춤 · 전부 초록과 cache 저장)를 봤다.
+  `[사용자]` "security 잡 npm audit 루프가 npm-shrinkwrap.json 도 찾게 2라운드 전에 이 PR 에 넣어."(1라운드
+  답) — 필수를 고치며 같은 부류로 찾아 올린 것이다.
+- **폐기**: `[AI]` 「`package-lock.json` 이 하나도 없으면 뒤의 `npm ci` 가 어차피 죽는다」를 위험으로 받아들임 →
+  `npm-shrinkwrap.json` 만 둔 레포는 `npm ci` 가 돌아서 main 에서 돌던 레포를 멈추는 회귀였다.
+- **리뷰가 잡은 것**: 1라운드 콜드 — `cache-dependency-path` 가 shrinkwrap 을 못 잡음, 테스트가 경로의 값을
+  안 봄, `--lang` 필터가 앞 스텝을 떨어뜨릴 때 뒤 스텝의 설명 주석까지 지움. 1라운드 셀프 — 테스트가 따옴표
+  친 `cache` 값을 못 봄.
+- **이관**: `--lang` 필터의 주석 지우기 → 이슈 #106. 빈 `.nvmrc` 는 확인을 지나고 setup-node 가 경고만 내는
+  것 → 1 · 2라운드 셀프 리뷰의 남기는 위험. 여러 줄 `cache-dependency-path` 는 러너에서 보지 않았다(2라운드
+  콜드의 확인 못 한 것).
