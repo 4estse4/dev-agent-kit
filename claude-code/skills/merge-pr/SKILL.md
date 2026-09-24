@@ -355,11 +355,17 @@ URL 이다:
 실패하는 것이 정상이다.** base 를 원래 체크아웃이 쓰고 있다. 그때는 fetch 한 뒤 `origin/<baseRefName>` 에
 detach 한다. PR 브랜치에서 내려와야 아래에서 그 브랜치를 지울 수 있다.
 
-**이 줄의 종료 코드가 0 이 아니면 중단한다.** fetch 가 실패하면(네트워크 · 권한 프롬프트 거절) 그 줄이
-실패한다. fetch 를 따로 두면 fetch 가 실패해도 받아 둔 옛 `origin/<baseRefName>` 에 조용히 detach 해서,
-머지 전 커밋에 있는 채 브랜치를 지우고 5절이 그 SHA 를 보고한다. worktree 경로의 `git fetch` 는 설치되는
-`settings.json` 의 `allow` 에 없어 권한 프롬프트를 거친다. base 로 옮기는 경로는 `git pull --ff-only` 가
+**이 줄의 종료 코드가 0 이 아니면 중단한다.** fetch 가 네트워크 때문에 실패하면 그 줄이 실패한다.
+fetch 를 따로 두면 fetch 가 실패해도 받아 둔 옛 `origin/<baseRefName>` 에 조용히 detach 해서, 머지 전
+커밋에 있는 채 브랜치를 지우고 5절이 그 SHA 를 보고한다. base 로 옮기는 경로는 `git pull --ff-only` 가
 fetch 한다.
+
+**이 줄은 설치된 레포에서 어느 갈래로 가든 권한 프롬프트를 거친다.** Claude Code 는 `;` · `&&` 로 나뉜
+조각마다 규칙을 맞추고(권한 문서의 Compound commands: "A rule must match each subcommand
+independently."), `git fetch` 는 설치되는 `settings.json` 의 `allow` 에 없다. 어느 갈래가 실행될지는
+실행 전에 모른다. 사람이 거절하면 줄 전체가 실행되지 않는다. 그때도 중단하고, 5절의 보고에 머지는
+끝났고 base 복귀와 브랜치 삭제는 하지 않았다고 적는다. 스킬을 다시 불러도 2절에서 멈추므로(`state` 가
+`OPEN` 이 아니다) 남은 일은 사람이 정한다.
 
 **원격 브랜치를 지운다. `isCrossRepository` 가 `true` 면 지우지 않는다:**
 
