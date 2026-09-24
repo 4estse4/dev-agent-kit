@@ -18,7 +18,8 @@
 #   · ruff 가 실패해도(0.15 는 `.md` 에 rc=2) 훅은 rc=0 이다. 0.15 의 게이트는 `.md` 를 안 본다
 #   · ruff 는 게이트처럼 그 조상의 `.venv` → `venv` → PATH 순으로 고른다. `.md` 도 `.py` 도.
 #     venv 는 그 조상의 것만 본다 — 레포 루트의 venv 는 하위 디렉터리의 pyproject 에 안 쓴다
-#   · `.py` 는 전처럼 훅이 도는 자리에서 `ruff format <파일>` 을 부른다
+#   · `.py` 는 전처럼 훅이 도는 자리에서 부르되 `--force-exclude` 를 붙인다. 없으면 프로젝트가
+#     extend-exclude 로 뺀 `.py`(마이그레이션 등)도 포맷했다(PR #112 3라운드 콜드 리뷰)
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 HOOK="$KIT/claude-code/hooks/post_edit.sh"
@@ -77,13 +78,13 @@ layout repo;      run "루트에 pyproject · ruff 가 rc=2(0.15)"     README.md
 layout;           run "pyproject 없음 · README.md"               README.md    ""
 layout repo/py;   run "pyproject 가 옆 py/ 에만 · README.md"      README.md    ""
 layout .;         run "pyproject 가 레포 밖에만 · README.md"      README.md    ""
-layout repo;      run ".py 는 전처럼 ruff format"                 m.py         "$R|format $R/m.py"
+layout repo;      run ".py 도 --force-exclude 로"                 m.py         "$R|format --force-exclude $R/m.py"
 
 # 게이트의 _py 처럼 그 조상의 venv 를 PATH 보다 먼저 본다.
 layout repo;    venv .venv;    run ".md · 루트 .venv 의 ruff"            README.md    "venv|$R|format --force-exclude $R/README.md"
 layout repo/py; venv py/venv;  run ".md · py/venv 의 ruff"               py/docs/x.md "venv|$R/py|format --force-exclude $R/py/docs/x.md"
-layout repo;    venv .venv;    run ".py · 루트 .venv 의 ruff"            m.py         "venv|$R|format $R/m.py"
-layout repo/py; venv py/.venv; run ".py · py/.venv 의 ruff"              py/m.py      "venv|$R|format $R/py/m.py"
+layout repo;    venv .venv;    run ".py · 루트 .venv 의 ruff"            m.py         "venv|$R|format --force-exclude $R/m.py"
+layout repo/py; venv py/.venv; run ".py · py/.venv 의 ruff"              py/m.py      "venv|$R|format --force-exclude $R/py/m.py"
 layout repo/py; venv .venv;    run ".md · venv 가 레포 루트에만(pyproject 는 py/)" py/docs/x.md "$R/py|format --force-exclude $R/py/docs/x.md"
 
 rm -rf "$T"

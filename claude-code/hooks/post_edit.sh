@@ -93,8 +93,11 @@ case "$file" in
     done
     ;;
   *.py)
+    # --force-exclude 는 .md 와 같은 이유다. 없으면 프로젝트가 extend-exclude 로 뺀 .py(마이그레이션 ·
+    # 생성 코드)도 포맷해, 게이트가 보지 않는 파일에 포맷 변경이 섞였다(PR #112 3라운드 콜드 리뷰).
+    # 제외된 파일에는 경고와 rc=0 을 내므로 실패 판정은 그대로다.
     if r=$(_ruff "$(_pyroot "$file")"); then
-      "$r" format "$file" >/dev/null 2>&1 || _failed="ruff"
+      "$r" format --force-exclude "$file" >/dev/null 2>&1 || _failed="ruff"
     else _missing="ruff"; fi
     ;;
   *.kt|*.kts)
