@@ -11,7 +11,9 @@
 #   · detect 스텝을 돌리면 setup-go 가 깔 Go(toolchain 줄이 있으면 그 버전, 없으면 go 줄)가 가장
 #     높은 go.mod 를 gomod 로 낸다. 루트에 없어도, 문자열로는 더 높아 보이는 것(1.3)이 있어도
 #     그렇다. go.mod 가 없으면 go=false 다
-#   · detect 잡이 gomod 를 내보내고, setup-go 를 쓰는 잡마다 go-version-file 로 그것을 받는다
+#   · detect 잡이 gomod 를 내보내고, setup-go 를 쓰는 잡마다 go-version-file 로 그것을 받는다.
+#     캐시를 켜고, 그 키를 레포 전체의 go.mod 와 go.sum 으로 만든다(`cache-dependency-path`).
+#     루트에 go.mod 가 없는 레포에서 캐시가 복원도 저장도 되지 않았다(이슈 #96)
 #   · coverage 스텝을 go 대역으로 돌리면 모듈마다 그 디렉터리에서 go test 를 부르고, 한 모듈이
 #     실패하면 이유를 말하며 실패하고, COVER_MIN 을 넘는지 판정한다. 숫자로 된 커버리지 줄이
 #     하나도 없을 때 말없이 실패하지 않는다
@@ -95,20 +97,52 @@ fi
 # ── 배선 ───────────────────────────────────────────────────────────────
 grep -qE '^      gomod: \$\{\{ steps\.d\.outputs\.gomod \}\}$' "$Y" \
   && ok "detect 잡이 gomod 를 내보낸다" || bad "detect 잡의 outputs 에 gomod 가 없다"
-wiring=$(awk '
+# setup-go 스텝마다 판정한다. 주석 줄은 보지 않는다. 캐시 키는 `cache-dependency-path` 에 맞는 파일의
+# 해시다. 이 입력이 없으면 setup-go 는 레포 루트의 go.mod 하나만 찾고, 없으면 경고만 내고 캐시를
+# 복원도 저장도 하지 않는다(이슈 #96, probe 실행 35847040603 의 「Primary key was not generated」).
+# 패턴은 `cache-dependency-path: |` 블록의 줄로만 읽는다. 스텝 글 어디에 있든 받으면 키 이름이
+# 틀리거나(setup-go 는 입력이 없는 것으로 읽는다) 공백으로 이은 한 줄이어도(hashFiles 가 아무것도
+# 맞히지 못한다) 통과했다(PR #114 1라운드 콜드 리뷰). 블록 안의 빈 줄은 블록의 끝이 아니다.
+# cache 값은 따옴표를 쳐도, 뒤에 주석이 있어도 같다(PR #114 2라운드 콜드 리뷰).
+wiring=$(awk -v q="'" '
+  function blockpaths(s,   n, i, lines, ind, inb, l, t) {
+    delete deps; n = split(s, lines, "\n"); inb = 0
+    for (i = 1; i <= n; i++) {
+      l = lines[i]
+      if (l ~ /^ *cache-dependency-path: *\|[-+]? *$/) { match(l, /^ */); ind = RLENGTH; inb = 1; continue }
+      if (inb) {
+        if (l ~ /^ *$/) continue
+        match(l, /^ */)
+        if (RLENGTH > ind) { t = l; sub(/^ +/, "", t); sub(/ +$/, "", t); deps[t] = 1 }
+        else inb = 0
+      }
+    }
+  }
+  function endstep() {
+    if (step ~ /uses: actions\/setup-go@/) {
+      n++; msg = ""; blockpaths(step)
+      if (!index(step, "go-version-file: " q "${{ needs.detect.outputs.gomod }}" q)) msg = msg " detect 의 gomod 를 go-version-file 로 받지 않는다."
+      if (step !~ ("cache: *[\"" q "]?true[\"" q "]? *[,}#\n]")) msg = msg " cache 가 켜져 있지 않다."
+      else if (!(("**/go.mod" in deps) && ("**/go.sum" in deps)))
+        msg = msg " cache-dependency-path 블록에 레포 전체의 go.mod 와 go.sum 이 다 있지 않다."
+      print (msg == "" ? "ok" : "bad") "\t" job "\t" msg
+    }
+    step = ""
+  }
   /^jobs:$/ { injobs = 1; next }
-  !injobs || /^[[:space:]]*#/ { next }
-  /^  [a-z_-]+:$/ { job = $1; sub(/:$/, "", job); next }
-  /uses: actions\/setup-go@/ { n++; pend = 1; next }
-  pend { print (index($0, "go-version-file: '\''${{ needs.detect.outputs.gomod }}'\''") ? "ok " : "bad ") job; pend = 0 }
-  END { if (!n) print "none" }
+  !injobs { next }
+  /^  [a-z_-]+:$/ { endstep(); job = $1; sub(/:$/, "", job); next }
+  /^      - / { endstep() }
+  /^[[:space:]]*#/ { next }
+  { step = step $0 "\n" }
+  END { endstep(); if (!n) print "none" }
 ' "$Y")
 case "$wiring" in
-  none) bad "setup-go 를 쓰는 잡이 하나도 안 걸렸다 — gates.yml 이 바뀌었나" ;;
+  none) bad "setup-go 를 쓰는 스텝이 하나도 검색되지 않았다 — gates.yml 이 바뀌었나" ;;
   *)
-    while read -r st job; do
-      if [ "$st" = ok ]; then ok "$job 잡의 setup-go 가 detect 의 gomod 로 Go 를 깐다"
-      else bad "$job 잡의 setup-go 가 detect 의 gomod 를 받지 않는다"; fi
+    while IFS=$'\t' read -r st job msg; do
+      if [ "$st" = ok ]; then ok "$job 잡의 setup-go 가 detect 의 gomod 로 Go 를 설치하고, 캐시 키를 레포 전체의 go.mod · go.sum 으로 만든다"
+      else bad "$job 잡의 setup-go:$msg"; fi
     done <<< "$wiring"
     ;;
 esac
