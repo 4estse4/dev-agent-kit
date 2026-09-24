@@ -29,8 +29,8 @@ $ARGUMENTS
 
 ### 그다음 — 하나라도 실패하면 즉시 중단
 
-- `gh pr view <N> --json state,headRefName,headRefOid` → `state` 가 `OPEN` 이 아니면 중단.
-  나머지 둘은 바로 아래와 4절이 쓴다. **셸 변수에 담지 마라. 읽어서 출력한다** — 명령을 여러
+- `gh pr view <N> --json state,headRefName,headRefOid,baseRefName` → `state` 가 `OPEN` 이 아니면 중단.
+  나머지 셋은 바로 아래와 4절이 쓴다. **셸 변수에 담지 마라. 읽어서 출력한다** — 명령을 여러
   번 부르는 사이에 셸 상태는 유지되지 않는다(`open-pr` 3.1 이 그 사고로 적어둔 규칙이다).
 - `gh pr checks <N>` → `fail` 또는 `pending` 이 하나라도 있으면 중단하고 해당 체크를 나열한다.
 - 위 `git status --porcelain` 이 비어 있지 않으면 중단.
@@ -42,9 +42,9 @@ $ARGUMENTS
   사람에게 말한다.** 대개 커밋만 하고 안 민 것이 있는 것이다. 로컬이 뒤처진 경우도 여기서
   멈추는데, 그쪽은 멈춰도 잃는 것이 없다.
 
-  **왜 머지 전인가.** 3절의 `--delete-branch` 는 도움말이 `Delete the local and remote branch
-  after merge` 라고 적는다. 로컬에만 있는 커밋이 있어도 그 브랜치째 지워질 수 있으므로
-  **지워지기 전인 여기서 본다.** gh 가 실제로 지웠는지는 머지 뒤에 4절이 확인한다.
+  **왜 머지 전인가.** 4절의 `git branch -D` 는 로컬에만 있는 커밋이 있어도 그 브랜치째 지운다.
+  그리고 안 민 커밋은 머지에도 들어가지 않는다. 그래서 **머지하기 전이자 지우기 전인 여기서
+  본다.**
 
   **왜 글자로 견주나.** 두 커밋의 관계(`git merge-base --is-ancestor`)를 보면 서버 쪽 커밋이
   로컬에 있어야 판정되고, 없으면 `rc=128` 로 떨어져 멀쩡한 머지를 막는다. 글자 비교는 로컬
@@ -161,6 +161,11 @@ $ARGUMENTS
 거절하면 아래 거절 경로가 돌아 결정 코멘트가 두 벌이 된다. 그래서 사람이 본문을 보는
 자리는 여기다.
 
+**4절의 삭제 명령 둘도 같이 보인다.** 원격 브랜치를 지우는 `git push origin --delete
+<headRefName>` 과 로컬 브랜치를 지우는 `git branch -D <headRefName>` 이다. 머지 명령이
+브랜치를 지우지 않으므로(아래 머지 명령 뒤의 설명) 이 둘은 머지 뒤에 따로 실행되지만, 승인은
+머지와 함께 여기서 받는다. 원격 삭제는 레포 밖으로 나가는 행동이고, 둘 다 되돌리기 어렵다.
+
     gh pr comment <N> --body-file <절대 경로>
 
 이 한 줄로만 친다. 다른 명령과 이은 것과 상대 경로는 `open-pr` 3.4 의 훅이 막는다.
@@ -263,13 +268,21 @@ $ARGUMENTS
 아니라 설계다 — 이유는 `docs/process/verification-stages.md` 4. 열한 라운드 동안 본문을
 갱신하다 **여섯 번 거짓이 된** 기록이 그 절에 있다.
 
-    gh pr merge <N> --squash --delete-branch --body "- PR: <이 PR 의 URL>
+    gh pr merge <N> --squash --body "- PR: <이 PR 의 URL>
     - Issue: <닫히는 이슈의 URL>
 
     <브랜치 커밋의 트레일러 줄>"
 
 **이어지는 줄은 첫 칸에서 시작한다.** 위 블록의 들여쓰기는 마크다운의 것이다. 들여쓴 채
 넘기면 트레일러 줄이 공백으로 시작해 git 이 그것을 트레일러로 읽지 못한다.
+
+**`--delete-branch` 를 붙이지 마라. 브랜치는 4절이 지운다.** gh 는 머지 뒤 로컬 브랜치를 먼저
+지우는데, git worktree 에서는 거기서 실패한다. detached 면 현재 브랜치를 못 읽고, PR 브랜치에
+있으면 base 로 옮기려는데 base 를 다른 worktree 가 쓰고 있다. 원래 체크아웃에서 번호로 머지해도
+PR 브랜치를 다른 worktree 가 쓰면 그 브랜치를 지우지 못한다. 로컬 삭제가 실패하면 gh 는 원격
+삭제도 건너뛰고 `rc=1` 로 끝난다(gh v2.92.0 `pkg/cmd/pr/merge/merge.go`). 서버의 머지는 이미
+끝났는데 명령은 실패한 것처럼 보인다(이슈 #91). `--squash` 를 주고 `--delete-branch` 를 빼면
+gh 는 브랜치를 묻지도 지우지도 않는다.
 
 **`-R` 을 붙이지 마라.** 이 스킬은 클론 안에서 도므로 필요 없다.
 
@@ -325,19 +338,40 @@ URL 이다:
 여러 줄 본문까지 프롬프트에 보이는지는 확인하지 않았고, 결정 코멘트는 `--body-file` 이라
 **프롬프트에 파일 경로만 보인다.**
 
-## 4. main 복귀와 로컬 브랜치 삭제
-`git checkout main` → `git pull --ff-only`.
-fast-forward 실패 시 중단: `Error: main 을 fast-forward 할 수 없습니다.`
+## 4. base 복귀와 브랜치 삭제
 
-**남아 있으면 지운다.** 2절이 로컬과 서버가 같다는 것을 머지 전에 확인했으므로 지워도 잃을
-것이 없다:
+`<baseRefName>` 과 `<headRefName>` 은 2절이 받아둔 값이다. **이름을 여기서 새로 구하지 마라.**
+이 절은 base 로 옮긴 **뒤**에 브랜치를 지우고, `$ARGUMENTS` 로 **다른 PR 을 번호로 머지하는
+것이 정상 경로**다(`argument-hint`).
 
-    git rev-parse --verify --quiet <headRefName>   # 출력이 없으면 이미 지워졌다. 5절로 간다
+**base 로 돌아온다:**
+
+    git fetch origin
+    if git switch <baseRefName>; then git pull --ff-only; else git switch --detach origin/<baseRefName>; fi
+
+`git switch` 가 되면 base 브랜치에서 fast-forward 한다. fast-forward 실패 시 중단:
+`Error: <baseRefName> 을 fast-forward 할 수 없습니다.`
+**git worktree 에서는 `git switch` 가 `fatal: '<baseRefName>' is already used by worktree at …` 로
+실패하는 것이 정상이다.** base 를 원래 체크아웃이 쓰고 있다. 그때는 `origin/<baseRefName>` 에
+detach 한다. PR 브랜치에서 내려와야 아래에서 그 브랜치를 지울 수 있다.
+
+**원격 브랜치를 지운다:**
+
+    git push origin --delete <headRefName>
+
+`remote ref does not exist` 로 실패하면 이미 지워진 것이다. 레포가 머지 뒤 원격 브랜치를
+자동으로 지우는 설정이면 그렇다. 그 밖의 실패는 5절의 보고에 한 줄 덧붙인다. 이 명령은
+`settings.json` 의 `ask` 에 있어 권한 프롬프트를 거친다. 승인은 3절에서 명령을 보이고 받았다.
+
+**로컬 브랜치가 남아 있으면 지운다.** 2절이 로컬과 서버가 같다는 것을 머지 전에 확인했으므로
+지워도 잃을 것이 없다:
+
+    git rev-parse --verify --quiet <headRefName>   # 출력이 없으면 로컬에 없다. 5절로 간다
     git branch -D <headRefName>                    # 출력이 있으면 지운다
 
-`<headRefName>` 은 2절이 받아둔 값이다. **이름을 여기서 새로 구하지 마라.** 이 절은
-`git checkout main` **뒤**라 현재 브랜치는 `main` 이고, `$ARGUMENTS` 로 **다른 PR 을 번호로
-머지하는 것이 정상 경로**다(`argument-hint`).
+`cannot delete branch '<headRefName>' used by worktree at <경로>` 로 실패하면 다른 worktree 가
+그 브랜치를 쓰고 있다. 원래 체크아웃에서 번호로 머지했고 PR 브랜치는 worktree 의 세션이 쓰는
+경우다. 지우지 말고 남긴 채 5절로 가서, 그 경로와 함께 남겼다고 한 줄 덧붙인다.
 
 **`-d` 가 아니라 `-D` 인 이유.** 원격 추적 ref 가 pruned 된 레포에서는 `-d` 가 다 민
 브랜치도 거부한다. 2절이 이미 확인한 것을 다시 확인하느라 멀쩡한 삭제를 막을 까닭이 없다.
@@ -352,7 +386,7 @@ fast-forward 실패 시 중단: `Error: main 을 fast-forward 할 수 없습니�
     $ git rev-parse nosuchbranch                    → stdout `nosuchbranch`, rc=128
     $ git rev-parse --verify --quiet nosuchbranch   → 출력 없음, rc=1
 
-**머지 뒤에야 나오는 것.** 머지해야 비로소 확인되는 것이 있다(머지 명령이 로컬 브랜치를 지우는지
+**머지 뒤에야 나오는 것.** 머지해야 비로소 확인되는 것이 있다(4절의 삭제가 실제로 됐는지
 처럼). **결정 코멘트는 머지 전에 닫혔으므로 그 결과를 결정 코멘트에 넣지 마라.** 3절의
 「같은 코멘트를 다시 올리지 마라 — 그 뒤에 코멘트로」와 같은 방식으로 **결정 코멘트 뒤에
 코멘트를 하나 더 붙인다.** 결정 코멘트를 편집으로 채우면 한 번 올린 기록이 바뀌고, 편집한
