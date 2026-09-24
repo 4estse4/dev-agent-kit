@@ -347,7 +347,7 @@ fast-forward 실패 시 중단: `Error: main 을 fast-forward 할 수 없습니�
 
 **`--verify --quiet` 를 빼지 마라.** 맨 `git rev-parse <없는 브랜치>` 는 `rc=128` 로 죽으면서
 **인자를 stdout 으로 되뱉는다**(`fatal:` 은 stderr 로 간다). 읽는 쪽이 그것을 SHA 자리에서
-받으면, 이미 지워진 **정상 경로에서 이 절이 멈춘다.** 실행한 결과:
+받으면, 이미 지워진 **정상 경로에서 이 절이 멈춘다.** 실제로 확인한 결과:
 
     $ git rev-parse nosuchbranch                    → stdout `nosuchbranch`, rc=128
     $ git rev-parse --verify --quiet nosuchbranch   → 출력 없음, rc=1

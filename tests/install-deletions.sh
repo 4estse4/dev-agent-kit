@@ -73,7 +73,7 @@ for phase in 첫설치 재설치 교체있음 보존있음 삭제있음; do
     # 교체하고도 교체 0건" 이라고 적은 그 결함의 칸이 바로 여기다.
     교체있음) echo '# 프로젝트가 킷 파일을 고쳐둠' >> "$R/.ai-kit/gate/gate.sh" ;;
     # 프로젝트 소유는 둘이다 — CLAUDE.md 와 .claude/settings.json. 하나만 고쳐두면
-    # 다른 하나의 소유 판정이 깨져도 이 검사가 실패하지 않는다(실행해 확인함: settings.json 쪽을
+    # 다른 하나의 소유 판정이 깨져도 이 검사가 실패하지 않는다(실제로 확인함: settings.json 쪽을
     # 킷 소유로 오판하게 만들어도 초록이었다).
     보존있음) printf '\n# 이 프로젝트가 적은 줄\n' >> "$R/CLAUDE.md"
               python3 - "$R/.claude/settings.json" <<'PYEOF'

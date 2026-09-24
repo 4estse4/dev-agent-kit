@@ -20,7 +20,7 @@
 # go 로는 설치되지 않는다. 아래 Go 도구 셋이 각각 요구하는 go(그 모듈의 go 줄) 가운데 가장 높은
 # 것이 이 값이고, 패치까지 그대로 적는다 — Go 의 버전 순서로 1.26 < 1.26.0 < 1.26.1 이다
 # (go.dev/doc/toolchain). 한때 goimports 와 govulncheck 만 보고 정했다가, 더 높은 go 를 요구하는
-# golangci-lint 가 러너에서 「requires go >= …」 로 실패했다(실제로 있었던 일).
+# golangci-lint 가 러너에서 「requires go >= …」 로 실패했다(실제로 확인함).
 # CI 는 깔 Go(toolchain 줄이 있으면 그 버전, 없으면 go 줄)가 가장 높은 go.mod 로 Go 를 깔고, 그
 # 버전이 이보다 낮으면 그 이유를 말하며 멈춘다. go 줄이 1.26 처럼 패치가 없으면 setup-go 가 그
 # 계열의 패치 하나를 깔므로 계열끼리 견준다.
