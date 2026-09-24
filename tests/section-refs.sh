@@ -6,7 +6,7 @@
 #
 # **번호가 밀리면 참조는 초록인 채로 다른 절을 가리킨다.** 그래서 (번호, 제목) 을 아래
 # `SECTIONS` 에 고정한다. 사본은 여기 한 벌이다. 절을 더하거나 제목을 고치면 이 목록도 같이
-# 고친다. 번호는 바꾸지 않는다 — 새 절은 끝에 붙이거나 이어지는 번호를 쓴다. 보는 것:
+# 고친다. 번호를 어떻게 매기는지는 그 문서 머리의 규칙을 따른다. 보는 것:
 # - 그 문서의 `##` · `###` 제목이 `SECTIONS` 와 순서까지 같다. 번호가 밀리거나 겹치면 빨갛다
 # - 파일을 가리킨 바로 뒤에 「」 인용이 오지 않는다(`verification-stages.md` 의 「…」)
 # - 옛 문장 제목이 어디에도 「」 로 남아 있지 않다. 짧은 새 제목(「이월」 같은)은 용어로도
@@ -63,6 +63,17 @@ if heads != pinned:
              if k >= len(heads) or k >= len(pinned) or heads[k] != pinned[k])
     bad('절 제목이 SECTIONS 와 다르다 — %d번째: 문서 「%s」 · SECTIONS 「%s」'
         % (i + 1, heads[i] if i < len(heads) else '없음', pinned[i] if i < len(pinned) else '없음'))
+    # 끼워 넣어 밀린 것과 끝에 붙인 것을 가른다. 앞의 것을 보고 SECTIONS 를 문서에 맞추면
+    # 번호가 밀린 채 초록이 되고, 참조는 다른 절을 가리킨다
+    at = {}
+    for h in heads:
+        m = re.match(r'(\d+(?:\.\d+)?) (.*)$', h)
+        if m:
+            at[m.group(2)] = m.group(1)
+    moved = ['「%s」 %s → %s' % (t, n, at[t]) for n, t in SECTIONS if t in at and at[t] != n]
+    if moved:
+        bad('번호가 바뀌었다 — %s. 번호는 바꾸지 않는다(그 문서 머리). SECTIONS 를 문서에 맞추지 마라'
+            % ' · '.join(moved))
 else:
     print('  ✓ 절 제목이 SECTIONS 와 순서까지 같다(%d개)' % len(heads))
 
