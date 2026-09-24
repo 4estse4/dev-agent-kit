@@ -113,10 +113,10 @@ jobs:
         run: bash tests/round-comment-quotes.sh
 
       # 편집 직후 포맷 훅도 같은 모양으로 돌린다. ruff 는 부른 자리와 인자를 적는 가짜다.
-      - name: the edit hook formats Markdown with ruff where the gate checks it
+      - name: the edit hook runs the gate's ruff where the gate runs it
         id: postedit
         continue-on-error: true
-        run: bash tests/post-edit-md.sh
+        run: bash tests/post-edit-ruff.sh
 
       - name: PR evidence is appended by a command, not copied by hand
         id: evidence

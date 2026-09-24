@@ -1,19 +1,24 @@
 #!/usr/bin/env bash
-# 편집 직후 포맷 훅(`claude-code/hooks/post_edit.sh`)이 `.md` 를 게이트가 ruff 를 도는 자리에서
-# ruff 로도 포맷하는가.
+# 편집 직후 포맷 훅(`claude-code/hooks/post_edit.sh`)이 게이트와 같은 자리에서 같은 ruff 를 부르는가.
 #
 # 이 테스트가 있는 이유: ruff 0.16 부터 게이트의 `ruff format --check .`(adapters/py.sh)가 `.md` 의
 # Python 코드 블록도 본다. 훅은 `.md` 를 prettier 에만 넘겨서, 에이전트가 README 의 Python 블록을
 # 고쳐도 훅은 아무것도 안 하고 pre-commit 게이트가 그제서야 막았다(PR #112 1라운드 콜드 리뷰).
+# 그것을 고친 뒤에도 훅은 PATH 의 ruff 만 봤다. 게이트는 그 자리의 `.venv` · `venv` 의 ruff 를 먼저
+# 쓰므로, 프로젝트가 ruff 를 venv 에 둔 레포에서는 같은 일이 났고 `.py` 는 「포매터가 없어」로
+# 거짓 알림을 냈다(PR #112 2라운드 콜드 리뷰).
 #
-# 훅을 Claude Code 가 부르는 모양(표준입력 JSON)으로 부른다. ruff 는 PATH 앞에 둔 가짜로, 부른
-# 자리와 받은 인자를 적는다. 진짜 ruff 가 `--force-exclude` 로 `extend-exclude` 를 지키는지는
-# PR #112 에 실측으로 있다. 보는 것:
-#   · pyproject.toml 이 있는 가장 가까운 조상에서 `ruff format --force-exclude <파일>` 을 부른다
-#     — 루트에 있을 때와 하위 디렉터리에 있을 때
+# 훅을 Claude Code 가 부르는 모양(표준입력 JSON)으로 부른다. ruff 는 가짜로, 부른 자리와 받은
+# 인자를 적는다. PATH 의 것과 venv 의 것은 기록의 머리(`venv|`)로 가른다. 진짜 ruff 가
+# `--force-exclude` 로 `extend-exclude` 를 지키는지는 PR #112 의 2라운드 코멘트에 실측으로 있다.
+# 보는 것:
+#   · `.md` 면 pyproject.toml 이 있는 가장 가까운 조상에서 `ruff format --force-exclude <파일>` 을
+#     부른다 — 루트에 있을 때와 하위 디렉터리에 있을 때
 #   · 레포 안에 그런 조상이 없으면 부르지 않는다 — pyproject 가 옆 디렉터리나 레포 밖에만 있어도
 #   · ruff 가 실패해도(0.15 는 `.md` 에 rc=2) 훅은 rc=0 이다. 0.15 의 게이트는 `.md` 를 안 본다
-#   · `.py` 는 전처럼 `ruff format <파일>` 을 부른다
+#   · ruff 는 게이트처럼 그 조상의 `.venv` → `venv` → PATH 순으로 고른다. `.md` 도 `.py` 도.
+#     venv 는 그 조상의 것만 본다 — 레포 루트의 venv 는 하위 디렉터리의 pyproject 에 안 쓴다
+#   · `.py` 는 전처럼 훅이 도는 자리에서 `ruff format <파일>` 을 부른다
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 HOOK="$KIT/claude-code/hooks/post_edit.sh"
@@ -31,7 +36,12 @@ cat > "$T/bin/ruff" <<'EOF'
 printf '%s|%s\n' "$PWD" "$*" >> "$STUB_RUFF_LOG"
 exit "${STUB_RUFF_RC:-0}"
 EOF
-chmod +x "$T/bin/ruff"
+cat > "$T/venv-ruff" <<'EOF'
+#!/usr/bin/env bash
+printf 'venv|%s|%s\n' "$PWD" "$*" >> "$STUB_RUFF_LOG"
+exit "${STUB_RUFF_RC:-0}"
+EOF
+chmod +x "$T/bin/ruff" "$T/venv-ruff"
 
 # 훅은 이 디렉터리들이 PATH 에 없으면 앞에 붙인다. 거기 진짜 ruff 가 있으면 가짜를 가리므로
 # 가짜 뒤에 미리 넣어 둔다.
@@ -39,10 +49,15 @@ extra="$HOME/go/bin:$HOME/.local/bin:/usr/local/bin:/opt/homebrew/bin"
 command -v go >/dev/null 2>&1 && extra="$(go env GOPATH)/bin:$extra"
 P="$T/bin:$extra:$PATH"
 
-layout() { # 인자=pyproject.toml 을 둘 디렉터리($T 기준). 나머지 pyproject.toml 은 지운다
+layout() { # 인자=pyproject.toml 을 둘 디렉터리($T 기준). 나머지 pyproject.toml 과 venv 는 지운다
   local d
   find "$T" -name pyproject.toml -delete
+  rm -rf "$R/.venv" "$R/venv" "$R/py/.venv" "$R/py/venv"
   for d in "$@"; do mkdir -p "$T/$d"; printf '[project]\nname="x"\nversion="0"\n' > "$T/$d/pyproject.toml"; done
+}
+
+venv() { # $1=venv 디렉터리($R 기준, 예: .venv · py/venv). 그 안의 bin/ruff 에 가짜를 둔다
+  mkdir -p "$R/$1/bin"; cp "$T/venv-ruff" "$R/$1/bin/ruff"
 }
 
 run() { # $1=설명 $2=편집한 파일($R 기준) $3=가짜 ruff 에 남아야 할 기록(비면 안 불려야 한다) [$4=가짜 ruff 의 rc]
@@ -63,6 +78,13 @@ layout;           run "pyproject 없음 · README.md"               README.md   
 layout repo/py;   run "pyproject 가 옆 py/ 에만 · README.md"      README.md    ""
 layout .;         run "pyproject 가 레포 밖에만 · README.md"      README.md    ""
 layout repo;      run ".py 는 전처럼 ruff format"                 m.py         "$R|format $R/m.py"
+
+# 게이트의 _py 처럼 그 조상의 venv 를 PATH 보다 먼저 본다.
+layout repo;    venv .venv;    run ".md · 루트 .venv 의 ruff"            README.md    "venv|$R|format --force-exclude $R/README.md"
+layout repo/py; venv py/venv;  run ".md · py/venv 의 ruff"               py/docs/x.md "venv|$R/py|format --force-exclude $R/py/docs/x.md"
+layout repo;    venv .venv;    run ".py · 루트 .venv 의 ruff"            m.py         "venv|$R|format $R/m.py"
+layout repo/py; venv py/.venv; run ".py · py/.venv 의 ruff"              py/m.py      "venv|$R|format $R/py/m.py"
+layout repo/py; venv .venv;    run ".md · venv 가 레포 루트에만(pyproject 는 py/)" py/docs/x.md "$R/py|format --force-exclude $R/py/docs/x.md"
 
 rm -rf "$T"
 exit $fail
