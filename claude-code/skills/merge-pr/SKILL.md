@@ -29,8 +29,8 @@ $ARGUMENTS
 
 ### 그다음 — 하나라도 실패하면 즉시 중단
 
-- `gh pr view <N> --json state,headRefName,headRefOid,baseRefName` → `state` 가 `OPEN` 이 아니면 중단.
-  나머지 셋은 바로 아래와 4절이 쓴다. **셸 변수에 담지 마라. 읽어서 출력한다** — 명령을 여러
+- `gh pr view <N> --json state,headRefName,headRefOid,baseRefName,isCrossRepository` → `state` 가 `OPEN` 이 아니면 중단.
+  나머지 넷은 바로 아래와 4절이 쓴다. **셸 변수에 담지 마라. 읽어서 출력한다** — 명령을 여러
   번 부르는 사이에 셸 상태는 유지되지 않는다(`open-pr` 3.1 이 그 사고로 적어둔 규칙이다).
 - `gh pr checks <N>` → `fail` 또는 `pending` 이 하나라도 있으면 중단하고 해당 체크를 나열한다.
 - 위 `git status --porcelain` 이 비어 있지 않으면 중단.
@@ -164,7 +164,8 @@ $ARGUMENTS
 **4절의 삭제 명령 둘도 같이 보인다.** 원격 브랜치를 지우는 `git push origin --delete
 <headRefName>` 과 로컬 브랜치를 지우는 `git branch -D <headRefName>` 이다. 머지 명령이
 브랜치를 지우지 않으므로(아래 머지 명령 뒤의 설명) 이 둘은 머지 뒤에 따로 실행되지만, 승인은
-머지와 함께 여기서 받는다. 원격 삭제는 레포 밖으로 나가는 행동이고, 둘 다 되돌리기 어렵다.
+머지와 함께 여기서 받는다. 원격 삭제는 레포 밖으로 나가는 행동이고, 둘 다 되돌리기 어렵다. fork 에서 온 PR 이면 원격 삭제는
+하지 않으므로(4절) 로컬 삭제 하나만 보인다.
 
     gh pr comment <N> --body-file <절대 경로>
 
@@ -340,28 +341,39 @@ URL 이다:
 
 ## 4. base 복귀와 브랜치 삭제
 
-`<baseRefName>` 과 `<headRefName>` 은 2절이 받아둔 값이다. **이름을 여기서 새로 구하지 마라.**
+`<baseRefName>` · `<headRefName>` · `isCrossRepository` 는 2절이 받아둔 값이다. **이름을 여기서 새로 구하지 마라.**
 이 절은 base 로 옮긴 **뒤**에 브랜치를 지우고, `$ARGUMENTS` 로 **다른 PR 을 번호로 머지하는
 것이 정상 경로**다(`argument-hint`).
 
 **base 로 돌아온다:**
 
-    git fetch origin
-    if git switch <baseRefName>; then git pull --ff-only; else git switch --detach origin/<baseRefName>; fi
+    if git switch <baseRefName>; then git pull --ff-only; else git fetch origin && git switch --detach origin/<baseRefName>; fi
 
 `git switch` 가 되면 base 브랜치에서 fast-forward 한다. fast-forward 실패 시 중단:
 `Error: <baseRefName> 을 fast-forward 할 수 없습니다.`
 **git worktree 에서는 `git switch` 가 `fatal: '<baseRefName>' is already used by worktree at …` 로
-실패하는 것이 정상이다.** base 를 원래 체크아웃이 쓰고 있다. 그때는 `origin/<baseRefName>` 에
+실패하는 것이 정상이다.** base 를 원래 체크아웃이 쓰고 있다. 그때는 fetch 한 뒤 `origin/<baseRefName>` 에
 detach 한다. PR 브랜치에서 내려와야 아래에서 그 브랜치를 지울 수 있다.
 
-**원격 브랜치를 지운다:**
+**이 줄의 종료 코드가 0 이 아니면 중단한다.** fetch 가 실패하면(네트워크 · 권한 프롬프트 거절) 그 줄이
+실패한다. fetch 를 따로 두면 fetch 가 실패해도 받아 둔 옛 `origin/<baseRefName>` 에 조용히 detach 해서,
+머지 전 커밋에 있는 채 브랜치를 지우고 5절이 그 SHA 를 보고한다. worktree 경로의 `git fetch` 는 설치되는
+`settings.json` 의 `allow` 에 없어 권한 프롬프트를 거친다. base 로 옮기는 경로는 `git pull --ff-only` 가
+fetch 한다.
+
+**원격 브랜치를 지운다. `isCrossRepository` 가 `true` 면 지우지 않는다:**
 
     git push origin --delete <headRefName>
+
+fork 에서 온 PR 의 head 브랜치는 fork 에 있다. origin 에 같은 이름의 브랜치가 있으면 그것은 base
+레포의 다른 브랜치다. gh 도 이 경우 원격 삭제를 건너뛰었다(v2.92.0 `deleteRemoteBranch` 의
+`crossRepoPR`). 그때는 명령을 실행하지 않고 5절에 「fork PR 이라 원격 브랜치를 지우지 않았다」고 적는다.
 
 `remote ref does not exist` 로 실패하면 이미 지워진 것이다. 레포가 머지 뒤 원격 브랜치를
 자동으로 지우는 설정이면 그렇다. 그 밖의 실패는 5절의 보고에 한 줄 덧붙인다. 이 명령은
 `settings.json` 의 `ask` 에 있어 권한 프롬프트를 거친다. 승인은 3절에서 명령을 보이고 받았다.
+사람이 이 프롬프트에서 거절하면 원격 브랜치를 남긴 채 아래 로컬 삭제로 가고, 5절에 남겼다고 한
+줄 덧붙인다.
 
 **로컬 브랜치가 남아 있으면 지운다.** 2절이 로컬과 서버가 같다는 것을 머지 전에 확인했으므로
 지워도 잃을 것이 없다:

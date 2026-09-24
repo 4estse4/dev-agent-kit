@@ -11,8 +11,15 @@
 #   · 3절의 머지 명령에 --delete-branch 가 없다
 #   · 4절의 명령 가운데 브랜치를 지우는 것(git push · git branch -D)은 킷 settings.json 의 ask 규칙에
 #     맞는다. 원격 삭제가 gh pr merge 의 ask 밖으로 나오므로 따로 사람을 거쳐야 한다
+#   · fork 에서 온 PR 이면 원격 삭제를 하지 않는다. 조건이 글에 있어 실행으로는 못 보므로, 2절이
+#     isCrossRepository 를 받고 4절이 그것을 쓰는지 글자로 본다
 #   · 4절의 명령을 bare origin 이 있는 스크래치 레포에서 다섯 경우로 실행하면 끝 상태가 맞다.
 #     원격 브랜치 · 로컬 브랜치 · HEAD · 원래 체크아웃을 본다
+#   · worktree 에서 fetch 가 실패하면 base 복귀 줄이 실패하고, 받아 둔 옛 origin/<base> 에 detach 하지 않는다
+#
+# 스크래치 레포는 git 의 기본 브랜치 설정과 상관없이 main 으로 만든다. 한때 설정에 기대어, 설정이 있는
+# 기계에서만 통과하고 CI 에서는 다섯 경우가 모두 실패했다. setup 이 머지된 커밋을 origin 에 올리지 못하면
+# 스킬의 결함이 아니라 setup 실패로 보고한다.
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 SK="$KIT/claude-code/skills/merge-pr/SKILL.md"
@@ -31,6 +38,19 @@ else
     *) ok "3절의 머지 명령이 --delete-branch 를 쓰지 않는다" ;;
   esac
 fi
+
+# ── fork 에서 온 PR ── origin 의 같은 이름 브랜치는 base 레포의 다른 브랜치다. gh 도 이 경우 원격
+# 삭제를 건너뛰었다(v2.92.0 `deleteRemoteBranch` 의 crossRepoPR).
+v=$(grep -E '^- `gh pr view <N> --json [A-Za-z,]*`' "$SK")
+s4=$(awk '/^## 4\./{s=1} /^## 5\./{s=0} s' "$SK")
+case "$v" in
+  *isCrossRepository*)
+    case "$s4" in
+      *isCrossRepository*) ok "2절이 isCrossRepository 를 받고 4절이 그것으로 fork PR 의 원격 삭제를 가른다" ;;
+      *) bad "2절은 isCrossRepository 를 받지만 4절이 그것을 쓰지 않는다" ;;
+    esac ;;
+  *) bad "2절의 gh pr view 가 isCrossRepository 를 받지 않는다 — fork PR 이면 base 레포의 같은 이름 브랜치를 지운다" ;;
+esac
 
 # ── 4절: 명령 ── `## 4.` 부터 `## 5.` 앞까지, 4칸 들여쓴 줄 가운데 `$` 로 시작하지 않는 것
 # (`$` 로 시작하는 줄은 실행 결과를 보여 주는 예시다)
@@ -60,10 +80,11 @@ gc() { git -c user.email=t@example.com -c user.name=T "$@"; }
 
 # $1=경우 이름. origin(bare) · main(원래 체크아웃, main 브랜치) · 그 둘에 민 feat 를 만든다.
 # 머지를 흉내 내려고 다른 클론에서 origin/main 에 커밋 하나(스쿼시 커밋 자리)를 더 민다.
+# 그 커밋이 origin 의 main 에 올라가지 않았으면 setup 실패로 보고하고 1 을 반환한다.
 setup() {
   local R="$T/$1"
   mkdir -p "$R"
-  git init -q --bare "$R/origin.git"
+  git init -q --bare -b main "$R/origin.git"
   git clone -q "$R/origin.git" "$R/main" 2>/dev/null
   git -C "$R/main" symbolic-ref HEAD refs/heads/main
   gc -C "$R/main" commit -q --allow-empty -m init
@@ -75,15 +96,21 @@ setup() {
   git clone -q "$R/origin.git" "$R/other" 2>/dev/null
   gc -C "$R/other" commit -q --allow-empty -m squash
   git -C "$R/other" push -q origin main 2>/dev/null
+  if [ "$(git -C "$R/origin.git" rev-parse -q --verify refs/heads/main)" != "$(git -C "$R/other" rev-parse HEAD)" ]; then
+    bad "$1: setup 이 머지된 커밋을 origin 의 main 에 올리지 못했다 — 스킬이 아니라 테스트의 준비가 실패했다"
+    return 1
+  fi
 }
 
 # $1=경우 이름  $2=명령을 실행할 디렉터리. 4절의 명령을 한 줄씩 실행한다. 한 줄이 실패해도 다음 줄로 간다
 # (원격 브랜치가 이미 없거나 다른 worktree 가 PR 브랜치를 쓰면 그 줄은 실패하는 것이 맞다).
+# 줄마다 종료 코드를 `<경우>.rc` 에 「코드<탭>명령」으로 적는다.
 run4() {
-  local c
+  local c rc
   while IFS= read -r c; do
     c=${c//<headRefName>/feat}; c=${c//<baseRefName>/main}
-    ( cd "$2" && bash -c "$c" ) >> "$T/$1.log" 2>&1
+    ( cd "$2" && bash -c "$c" ) >> "$T/$1.log" 2>&1; rc=$?
+    printf '%s\t%s\n' "$rc" "$c" >> "$T/$1.rc"
   done < "$T/cmds"
 }
 
@@ -114,42 +141,66 @@ check() {
 }
 
 # 1) 원래 체크아웃이 PR 브랜치에 있다 — 한 체크아웃만 쓰는 흔한 경로
-setup main-on-pr
-git -C "$T/main-on-pr/main" switch -q feat
-run4 main-on-pr "$T/main-on-pr/main"
-check main-on-pr "원래 체크아웃이 PR 브랜치에 있다: 두 브랜치가 지워지고 main 으로 돌아와 fast-forward 된다" \
-  "$T/main-on-pr/main" gone branch ""
+if setup main-on-pr; then
+  git -C "$T/main-on-pr/main" switch -q feat
+  run4 main-on-pr "$T/main-on-pr/main"
+  check main-on-pr "원래 체크아웃이 PR 브랜치에 있다: 두 브랜치가 지워지고 main 으로 돌아와 fast-forward 된다" \
+    "$T/main-on-pr/main" gone branch ""
+fi
 
 # 2) worktree 가 PR 브랜치에 있고 main 은 원래 체크아웃이 쓴다
-setup wt-on-pr
-git -C "$T/wt-on-pr/main" worktree add -q "$T/wt-on-pr/wt" feat 2>/dev/null
-b=$(git -C "$T/wt-on-pr/main" rev-parse HEAD)
-run4 wt-on-pr "$T/wt-on-pr/wt"
-check wt-on-pr "worktree 가 PR 브랜치에 있다: 두 브랜치가 지워지고 worktree 는 origin/main 에 detach, 원래 체크아웃은 그대로다" \
-  "$T/wt-on-pr/wt" gone detached "$b"
+if setup wt-on-pr; then
+  git -C "$T/wt-on-pr/main" worktree add -q "$T/wt-on-pr/wt" feat 2>/dev/null
+  b=$(git -C "$T/wt-on-pr/main" rev-parse HEAD)
+  run4 wt-on-pr "$T/wt-on-pr/wt"
+  check wt-on-pr "worktree 가 PR 브랜치에 있다: 두 브랜치가 지워지고 worktree 는 origin/main 에 detach, 원래 체크아웃은 그대로다" \
+    "$T/wt-on-pr/wt" gone detached "$b"
+fi
 
 # 3) worktree 가 detached 다 — gh 가 현재 브랜치를 못 읽던 경우(PR #88)
-setup wt-detached
-git -C "$T/wt-detached/main" worktree add -q --detach "$T/wt-detached/wt" feat 2>/dev/null
-b=$(git -C "$T/wt-detached/main" rev-parse HEAD)
-run4 wt-detached "$T/wt-detached/wt"
-check wt-detached "worktree 가 detached 다: 두 브랜치가 지워지고 worktree 는 origin/main 에 detach, 원래 체크아웃은 그대로다" \
-  "$T/wt-detached/wt" gone detached "$b"
+if setup wt-detached; then
+  git -C "$T/wt-detached/main" worktree add -q --detach "$T/wt-detached/wt" feat 2>/dev/null
+  b=$(git -C "$T/wt-detached/main" rev-parse HEAD)
+  run4 wt-detached "$T/wt-detached/wt"
+  check wt-detached "worktree 가 detached 다: 두 브랜치가 지워지고 worktree 는 origin/main 에 detach, 원래 체크아웃은 그대로다" \
+    "$T/wt-detached/wt" gone detached "$b"
+fi
 
 # 4) 원래 체크아웃에서 번호로 머지하는데 PR 브랜치를 다른 worktree 가 쓴다 — 로컬 브랜치는 남긴다
-setup other-wt
-git -C "$T/other-wt/main" worktree add -q "$T/other-wt/wt" feat 2>/dev/null
-run4 other-wt "$T/other-wt/main"
-check other-wt "다른 worktree 가 PR 브랜치를 쓴다: 원격만 지워지고 그 로컬 브랜치는 남으며 main 은 fast-forward 된다" \
-  "$T/other-wt/main" kept branch ""
+if setup other-wt; then
+  git -C "$T/other-wt/main" worktree add -q "$T/other-wt/wt" feat 2>/dev/null
+  run4 other-wt "$T/other-wt/main"
+  check other-wt "다른 worktree 가 PR 브랜치를 쓴다: 원격만 지워지고 그 로컬 브랜치는 남으며 main 은 fast-forward 된다" \
+    "$T/other-wt/main" kept branch ""
+fi
 
 # 5) 원격 브랜치가 이미 없다 — 레포가 머지 뒤 원격 브랜치를 자동으로 지우는 경우
-setup remote-gone
-git -C "$T/remote-gone/main" switch -q feat
-git -C "$T/remote-gone/origin.git" branch -q -D feat
-run4 remote-gone "$T/remote-gone/main"
-check remote-gone "원격 브랜치가 이미 없다: 로컬 브랜치가 지워지고 main 으로 돌아와 fast-forward 된다" \
-  "$T/remote-gone/main" gone branch ""
+if setup remote-gone; then
+  git -C "$T/remote-gone/main" switch -q feat
+  git -C "$T/remote-gone/origin.git" branch -q -D feat
+  run4 remote-gone "$T/remote-gone/main"
+  check remote-gone "원격 브랜치가 이미 없다: 로컬 브랜치가 지워지고 main 으로 돌아와 fast-forward 된다" \
+    "$T/remote-gone/main" gone branch ""
+fi
+
+# 6) worktree 에서 fetch 가 실패한다(네트워크 · 권한 프롬프트 거절). base 복귀 줄이 실패해야 세션이
+#    멈춘다. 받아 둔 옛 origin/main 에 detach 하면 머지 전 커밋에 detach 한 채 다음 줄로 간다.
+#    뒤의 줄은 보지 않는다 — 실제 세션은 실패한 줄에서 멈춘다.
+if setup fetch-fails; then
+  R="$T/fetch-fails"
+  git -C "$R/main" worktree add -q --detach "$R/wt" feat 2>/dev/null
+  git -C "$R/main" remote set-url origin "$R/nowhere.git"
+  old=$(git -C "$R/main" rev-parse refs/remotes/origin/main)
+  run4 fetch-fails "$R/wt"
+  r=$(awk -F'\t' '$2 ~ /^if git switch/ { print $1 }' "$T/fetch-fails.rc")
+  h=$(git -C "$R/wt" rev-parse HEAD)
+  if [ -n "$r" ] && [ "$r" != 0 ] && [ "$h" != "$old" ]; then
+    ok "worktree 에서 fetch 가 실패한다: base 복귀 줄이 실패하고 옛 origin/main 에 detach 하지 않는다"
+  else
+    bad "worktree 에서 fetch 가 실패한다: base 복귀 줄의 rc=${r:-없음}, HEAD 가 옛 origin/main 인가=$([ "$h" = "$old" ] && echo 예 || echo 아니오)"
+    sed 's/^/      | /' "$T/fetch-fails.log"
+  fi
+fi
 
 rm -rf "$T"
 exit $fail
