@@ -54,7 +54,7 @@ PR 없이 · 콜드 리뷰 없이 8커밋을 넣었고, 뒤늦게 콜드 리뷰�
 
 ## 결과
 
-킷 `CLAUDE.md` 하드룰의 첫 줄이 이것이다. 「누가 막나」는 처음에 `사람` 뿐이었다.
+킷 `CLAUDE.md` 하드룰의 첫 줄이 이것이다. 「누가 막나」는 처음에 `사람`(지금의 `막는 것 없음`) 뿐이었다.
 
 **2026-09-12 에 사람이 `main` 에 룰셋을 켰다.** enforcement 는 active, bypass 목록은
 비어 있어 레포 주인에게도 적용된다, 대상은 기본 브랜치, 머지 방법은 스쿼시만, 승인 수는
@@ -69,7 +69,7 @@ $ gh api repos/4estse4/ai-native-kit/rulesets --jq '.[] | {name, enforcement, ta
 ```
 
 룰셋이 막는 것은 PR 없는 push · `tests` 가 빨간 채로 머지 · 스쿼시 아닌 머지 · `main`
-삭제까지다. **콜드 리뷰를 돌렸는지는 룰셋이 안 본다.** 그것은 여전히 `사람` 이다.
+삭제까지다. **콜드 리뷰를 돌렸는지는 룰셋이 안 본다.** 그것은 여전히 `사람`(지금의 `막는 것 없음`) 이다.
 
 룰셋 때문에 낡은 자리가 있고, 그것은 이슈 #4 가 든다. `.github/workflows/kit-tests.yml`
 머리는 「이것은 required check 가 아니다」라고 적는다. `merge-pr` 2절에는 보호를 확인하는
@@ -80,5 +80,5 @@ $ gh api repos/4estse4/ai-native-kit/rulesets --jq '.[] | {name, enforcement, ta
 `--protect` 를 룰셋으로 바꿀지는 #4 가 가진 일이다. 룰셋의
 `require_extra_approval_for_unattributed_changes` 가 `true` 라 머지가 막히면 그것부터 본다.
 
-되돌리려면 룰셋과 `CLAUDE.md` 하드룰 첫 줄을 같이 건드려야 한다. 룰셋만 끄면 규칙은
-남고 강제만 사라진다.
+되돌리려면 룰셋과, `CLAUDE.md` 하드룰 표에서 룰셋을 드는 줄(첫 줄과 「킷 히스토리를
+재작성하지 마라」 줄)을 같이 건드려야 한다. 룰셋만 끄면 규칙은 남고 강제만 사라진다.
