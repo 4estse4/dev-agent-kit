@@ -12,16 +12,20 @@
 # go 줄을 그대로 적는다. 패치가 없는 go 줄을 계열로 받아 주는 것은 레포 쪽을 보는
 # gate_go_min_check 의 일이다.
 #
-# 도구 목록은 gates.yml 의 `go install [플래그…] <패키지>@${{ steps.tv.outputs.<키> }}` 줄에서
-# 읽는다 — CI 가 실제로 까는 목록이라 따로 적지 않는다. 주석이 아닌 go install 줄 가운데 이 모양으로
-# 못 읽은 것이 있으면 판정하지 않는다. 도구 일부만 보고 내린 판정이 #98 의 모양이다.
+# go_min 에 0 이 아닌 패치가 들어가는 날에는 gate_go_min_check 의 전제를 다시 본다. 그쪽은 패치
+# 없는 go 줄을 계열로 통과시키는데, 그 레포에 setup-go 가 까는 것은 러너 캐시의 그 계열 패치이고
+# 그것이 go_min 의 패치보다 낮으면 검사를 지나고도 도구 설치가 「requires go >= …」로 죽는다.
+#
+# 도구 목록은 gates.yml 의 `go install [플래그…] <패키지>@${{ steps.tv.outputs.<키> }}` 에서
+# 읽는다 — CI 가 실제로 까는 목록이라 따로 적지 않는다. 주석이 아닌 줄에 이 모양으로 못 읽은
+# go install 이 있으면 판정하지 않는다. 도구 일부만 보고 내린 판정이 #98 의 모양이다.
 # 모듈의 go 줄은 Go 모듈 proxy 의 <모듈>/@v/<버전>.mod 에 있고, 모듈 경로는 패키지 경로의 뒤를
 # 하나씩 떼며 처음 받아지는 것이다. proxy 의 그 파일은 버전마다 바뀌지 않으므로 결과가 달라지는
 # 것은 핀이나 go install 줄이 바뀔 때뿐이다.
 #
 #   check-go-min.sh        AI_KIT_GOPROXY 로 proxy 주소를 바꾼다(기본 https://proxy.golang.org)
 #
-# 종료코드: 0 맞음 · 1 어긋남 · 2 판정 못 함(조회 실패 · 키 없음 · go install 줄 없음 · 못 읽은 go install 줄).
+# 종료코드: 0 맞음 · 1 어긋남 · 2 판정 못 함(조회 실패 · 키 없음 · go install 줄 없음 · 못 읽은 go install).
 # 판정 못 한 것을 통과로 치지 않는다 — check-action-pins.sh 와 같다.
 set -uo pipefail
 SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -35,11 +39,17 @@ command -v curl >/dev/null 2>&1 || { echo "check-go-min: curl 이 필요합니�
 min=$(sed -n 's/^go_min=//p' "$TV" | head -1)
 [ -n "$min" ] || { echo "check-go-min: tool-versions 에 go_min 이 없습니다" >&2; exit 2; }
 pat='go install \(-[^ ]* \)*\([^@ ]*\)@\${{ steps\.tv\.outputs\.\([a-z_]*\) }}'
-rows=$(sed -n "s/.*$pat.*/\2 \3/p" "$G")
+body=$(grep -v '^[[:space:]]*#' "$G")
+# 줄이 아니라 나온 것마다 읽는다. 한 줄에 `&&` 로 둘을 이으면 줄 단위로는 하나만 뽑혔다.
+rows=$(printf '%s\n' "$body" | grep -o "$pat" | sed "s/^$pat\$/\2 \3/")
 [ -n "$rows" ] || { echo "check-go-min: gates.yml 에서 go install 줄을 찾지 못했습니다" >&2; exit 2; }
-unread=$(grep -v '^[[:space:]]*#' "$G" | grep 'go install ' | grep -v "$pat")
+# 읽은 것을 지우고도 go install 이 남는 줄. 한 줄에 둘이 있고 하나만 읽힌 줄도 여기 걸린다.
+unread=$(printf '%s\n' "$body" | while IFS= read -r l; do
+  case "$l" in (*'go install '*) ;; (*) continue ;; esac
+  case "$(printf '%s\n' "$l" | sed "s/$pat//g")" in (*'go install '*) printf '%s\n' "$l" ;; esac
+done)
 if [ -n "$unread" ]; then
-  echo "check-go-min: gates.yml 에 도구와 키를 읽지 못한 go install 줄이 있어 판정할 수 없습니다 — go install [플래그…] <패키지>@\${{ steps.tv.outputs.<키> }} 모양이어야 합니다" >&2
+  echo "check-go-min: gates.yml 에 도구와 키를 읽지 못한 go install 이 있어 판정할 수 없습니다 — go install [플래그…] <패키지>@\${{ steps.tv.outputs.<키> }} 모양이어야 합니다" >&2
   printf '%s\n' "$unread" | sed 's/^[[:space:]]*/  ? /' >&2
   exit 2
 fi

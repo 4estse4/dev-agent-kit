@@ -14,7 +14,8 @@
 #   · 견주는 순서는 Go 의 버전 순서다 — 1.26 < 1.26.0 < 1.26.1 (go.dev/doc/toolchain)
 #   · 가장 높은 go 줄은 첫 도구가 아니라 마지막 도구에 둔다 — 도구 일부만 보는 스크립트가 통과하지
 #     못하게. 도구 이름은 진행 줄(도구마다 찍는 줄)을 빼고 찾는다. 거기에는 모든 도구가 있다
-#   · go install 에 플래그가 붙은 줄도 읽고, 읽지 못한 go install 줄이 있으면 rc=2(판정 못 함)
+#   · go install 에 플래그가 붙은 줄도 읽고, 읽지 못한 go install 이 있으면 rc=2(판정 못 함).
+#     줄이 아니라 나온 것마다 본다 — 한 줄에 `&&` 로 둘을 이으면 앞의 것이 빠졌다(2라운드 콜드)
 #   · 도구의 go.mod 를 못 받거나 go_min 이 없으면 rc=2
 #   · 모듈 경로는 패키지 경로의 뒤를 떼며 찾는다(가짜 proxy 에는 모듈 경로에만 둔다)
 set -u
@@ -34,13 +35,18 @@ tools=$(sed -n 's/.*go install \([^@ ]*\)@\${{ steps\.tv\.outputs\.\([a-z_]*\) }
 [ "$(printf '%s\n' "$tools" | grep -c .)" -ge 2 ] || { bad "gates.yml 에서 go install 줄을 둘 이상 못 찾았다 — 테스트의 패턴이 낡았나"; exit 1; }
 hi=$(printf '%s\n' "$tools" | tail -1 | cut -d' ' -f2)
 hipkg=$(printf '%s\n' "$tools" | tail -1 | cut -d' ' -f1)
+firstpkg=$(printf '%s\n' "$tools" | head -1 | cut -d' ' -f1)
 
 # 임시 트리의 gates.yml. $1 이 flag 면 $hi 의 go install 에 -v 를 붙이고, unread 면 그 줄의 버전을
-# 스크립트가 못 읽는 모양(@latest)으로 바꾼다.
+# 스크립트가 못 읽는 모양(@latest)으로 바꾼다. joined 면 $hi 의 줄을 지우고 그 설치를 첫 도구의 줄
+# 앞에 `&&` 로 잇는다 — 한 줄에 go install 이 둘이다. joinedunread 는 그렇게 이은 것을 @latest 로 둔다.
 yml() {
-  awk -v p="go install $hipkg@" -v mode="${1:-}" '
+  awk -v p="go install $hipkg@" -v q="go install $firstpkg@" -v k="$hi" -v mode="${1:-}" '
     mode == "flag"   { i = index($0, p); if (i) $0 = substr($0, 1, i - 1) "go install -v " substr($0, i + 11) }
     mode == "unread" { i = index($0, p); if (i) $0 = substr($0, 1, i - 1) p "latest" }
+    mode ~ /^joined/ && index($0, p) { next }
+    mode == "joined"       { i = index($0, q); if (i) $0 = substr($0, 1, i - 1) p "${{ steps.tv.outputs." k " }} && " substr($0, i) }
+    mode == "joinedunread" { i = index($0, q); if (i) $0 = substr($0, 1, i - 1) p "latest && " substr($0, i) }
     { print }' "$KIT/common/ci/gates.yml" > "$T/kit/common/ci/gates.yml"
 }
 
@@ -85,6 +91,10 @@ yml flag
 proxy 1.26.0 1.25.0;   tv 1.26.0; run "$hi 의 go install 에 -v 가 붙어도 읽는다"         0 "$hi"
 yml unread
 proxy 1.26.0 1.25.0;   tv 1.26.0; run "읽지 못한 go install 줄이 있다"                    2 "$hipkg"
+yml joined
+proxy 1.26.0 1.25.0;   tv 1.26.0; run "한 줄에 go install 이 둘이어도 둘 다 읽는다"        0 "$hi"
+yml joinedunread
+proxy 1.26.0 1.25.0;   tv 1.26.0; run "한 줄의 go install 둘 가운데 하나를 못 읽는다"      2 "$hipkg"
 yml
 proxy 1.26.0 1.25.0 "$hi"; tv 1.26.0; run "$hi 의 go.mod 를 못 받음"                    2 "$hi"
 proxy 1.26.0 1.25.0;   tv "";     run "tool-versions 에 go_min 없음"                     2 ""
