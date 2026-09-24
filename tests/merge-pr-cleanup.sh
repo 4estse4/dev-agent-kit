@@ -16,6 +16,8 @@
 #   · 4절의 명령을 bare origin 이 있는 스크래치 레포에서 다섯 경우로 실행하면 끝 상태가 맞다.
 #     원격 브랜치 · 로컬 브랜치 · HEAD · 원래 체크아웃을 본다
 #   · worktree 에서 fetch 가 실패하면 base 복귀 줄이 실패하고, 받아 둔 옛 origin/<base> 에 detach 하지 않는다
+#   · 원래 체크아웃이 다른 브랜치에 있어도 worktree 는 base 브랜치로 옮기지 않고 detach 한다. worktree 가
+#     base 에 있으면 원래 체크아웃이 base 로 옮기지 못한다(이슈 #121)
 #
 # 스크래치 레포는 git 의 기본 브랜치 설정과 상관없이 main 으로 만든다. 한때 설정에 기대어, 설정이 있는
 # 기계에서만 통과하고 CI 에서는 다섯 경우가 모두 실패했다. setup 이 머지된 커밋을 origin 에 올리지 못하면
@@ -192,13 +194,31 @@ if setup fetch-fails; then
   git -C "$R/main" remote set-url origin "$R/nowhere.git"
   old=$(git -C "$R/main" rev-parse refs/remotes/origin/main)
   run4 fetch-fails "$R/wt"
-  r=$(awk -F'\t' '$2 ~ /^if git switch/ { print $1 }' "$T/fetch-fails.rc")
+  r=$(awk -F'\t' '$2 ~ /^if .*git switch/ { print $1 }' "$T/fetch-fails.rc")
   h=$(git -C "$R/wt" rev-parse HEAD)
   if [ -n "$r" ] && [ "$r" != 0 ] && [ "$h" != "$old" ]; then
     ok "worktree 에서 fetch 가 실패한다: base 복귀 줄이 실패하고 옛 origin/main 에 detach 하지 않는다"
   else
     bad "worktree 에서 fetch 가 실패한다: base 복귀 줄의 rc=${r:-없음}, HEAD 가 옛 origin/main 인가=$([ "$h" = "$old" ] && echo 예 || echo 아니오)"
     sed 's/^/      | /' "$T/fetch-fails.log"
+  fi
+fi
+
+# 7) 원래 체크아웃이 다른 브랜치에 있고 worktree 가 PR 브랜치에 있다 — 병렬 세션에서 흔하다. 원래 체크아웃이
+#    main 을 쓰지 않으므로 worktree 의 `git switch main` 은 성공한다. 그래도 worktree 는 detach 해야 원래
+#    체크아웃이 나중에 main 으로 옮길 수 있다.
+if setup other-work; then
+  R="$T/other-work"
+  git -C "$R/main" switch -q -c other-work
+  git -C "$R/main" worktree add -q "$R/wt" feat 2>/dev/null
+  b=$(git -C "$R/main" rev-parse HEAD)
+  run4 other-work "$R/wt"
+  check other-work "원래 체크아웃이 다른 브랜치에 있다: 두 브랜치가 지워지고 worktree 는 origin/main 에 detach 한다" \
+    "$R/wt" gone detached ""
+  if git -C "$R/main" switch -q main 2>"$T/other-work.switch"; then
+    ok "원래 체크아웃이 다른 브랜치에 있다: 그 뒤 원래 체크아웃이 main 으로 옮길 수 있다"
+  else
+    bad "원래 체크아웃이 다른 브랜치에 있다: 원래 체크아웃이 main 으로 옮기지 못한다 — $(head -1 "$T/other-work.switch")"
   fi
 fi
 

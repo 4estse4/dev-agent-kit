@@ -347,13 +347,16 @@ URL 이다:
 
 **base 로 돌아온다:**
 
-    if git switch <baseRefName>; then git pull --ff-only; else git fetch origin && git switch --detach origin/<baseRefName>; fi
+    if [ "$(git rev-parse --absolute-git-dir)" = "$(git rev-parse --path-format=absolute --git-common-dir)" ] && git switch <baseRefName>; then git pull --ff-only; else git fetch origin && git switch --detach origin/<baseRefName>; fi
 
-`git switch` 가 되면 base 브랜치에서 fast-forward 한다. fast-forward 실패 시 중단:
-`Error: <baseRefName> 을 fast-forward 할 수 없습니다.`
-**git worktree 에서는 `git switch` 가 `fatal: '<baseRefName>' is already used by worktree at …` 로
-실패하는 것이 정상이다.** base 를 원래 체크아웃이 쓰고 있다. 그때는 fetch 한 뒤 `origin/<baseRefName>` 에
-detach 한다. PR 브랜치에서 내려와야 아래에서 그 브랜치를 지울 수 있다.
+원래 체크아웃에서(`--absolute-git-dir` 와 `--git-common-dir` 가 같다) `git switch` 가 되면 base 브랜치에서
+fast-forward 한다. fast-forward 실패 시 중단: `Error: <baseRefName> 을 fast-forward 할 수 없습니다.`
+
+**git worktree 에서는 base 로 옮기지 않는다. fetch 한 뒤 `origin/<baseRefName>` 에 detach 한다.** worktree 가
+base 브랜치에 있으면 원래 체크아웃이 base 로 옮기지 못한다. 원래 체크아웃이 다른 브랜치에 있으면 worktree 의
+`git switch` 는 성공하므로, 되는지를 보지 않고 worktree 인지로 가른다(이슈 #121). 원래 체크아웃에서도 다른
+worktree 가 base 를 쓰면 `git switch` 가 `fatal: '<baseRefName>' is already used by worktree at …` 로 실패하고,
+그때도 detach 한다. PR 브랜치에서 내려와야 아래에서 그 브랜치를 지울 수 있다.
 
 **이 줄의 종료 코드가 0 이 아니면 중단한다.** fetch 가 네트워크 때문에 실패하면 그 줄이 실패한다.
 fetch 를 따로 두면 fetch 가 실패해도 받아 둔 옛 `origin/<baseRefName>` 에 조용히 detach 해서, 머지 전
