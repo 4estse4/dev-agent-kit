@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CI 의 setup-node 는 레포 루트의 .nvmrc 로 node 를 깔고, 실패를 덮지 않는다.
+# CI 의 setup-node 는 레포 루트의 .nvmrc 로 node 를 설치하고, 실패를 덮지 않는다.
 #
 # 이 테스트가 있는 이유: gates.yml 의 setup-node 둘이 루트의 .nvmrc 와 lockfile 을 가정했고,
 # 둘 다 continue-on-error 라 실패가 초록으로 덮였다(이슈 #95). lockfile 이 하위 디렉터리에만 있는

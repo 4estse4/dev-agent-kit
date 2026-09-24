@@ -8,7 +8,7 @@
 # 드러났고, 이 레포의 검사는 그 자리를 하나도 보지 않았다.
 #
 # 깨끗한 레포에 킷을 설치하고 그 gates.yml 을 읽는다. 보는 것:
-#   · detect 스텝을 돌리면 setup-go 가 깔 Go(toolchain 줄이 있으면 그 버전, 없으면 go 줄)가 가장
+#   · detect 스텝을 돌리면 setup-go 가 설치할 Go(toolchain 줄이 있으면 그 버전, 없으면 go 줄)가 가장
 #     높은 go.mod 를 gomod 로 낸다. 루트에 없어도, 문자열로는 더 높아 보이는 것(1.3)이 있어도
 #     그렇다. go.mod 가 없으면 go=false 다
 #   · detect 잡이 gomod 를 내보내고, setup-go 를 쓰는 잡마다 go-version-file 로 그것을 받는다.
@@ -84,7 +84,7 @@ else
   detect "루트 1.25 · backend 1.26"     backend/go.mod  .:1.25 backend:1.26
   detect "루트 1.26 · backend 1.25"     go.mod          .:1.26 backend:1.25
   detect "backend 1.26.1 · tools/x 1.3" backend/go.mod  backend:1.26.1 tools/x:1.3
-  # setup-go 는 고른 파일에 toolchain 줄이 있으면 그 버전을 깐다. 순위도 그 버전으로 매긴다.
+  # setup-go 는 고른 파일에 toolchain 줄이 있으면 그 버전을 설치한다. 순위도 그 버전으로 매긴다.
   # go 줄을 올리는 go 명령이 toolchain 줄을 같이 쓰므로(go.dev/doc/toolchain) 루트에만 그 줄이
   # 있고 하위 모듈의 go 줄이 같은 배치가 흔하다(이슈 #99).
   detect "루트 1.25.0+toolchain go1.26.2 · tools/x 1.25.0" go.mod         .:1.25.0:go1.26.2 tools/x:1.25.0

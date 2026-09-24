@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # common/ci/check-go-min.sh 가 go_min 과 핀한 Go 도구의 go 줄이 어긋난 것을 잡는가.
 #
-# 이 테스트가 있는 이유: tool-versions 의 go_min 은 gates.yml 이 go install 로 까는 도구들이 요구하는
+# 이 테스트가 있는 이유: tool-versions 의 go_min 은 gates.yml 이 go install 로 설치하는 도구들이 요구하는
 # go(그 모듈의 go 줄) 가운데 가장 높은 것과 같아야 한다. 낮으면 도구가 설치되지 않고, 높으면
 # gate_go_min_check 의 「핀한 Go 도구가 그보다 낮은 go 로는 설치되지 않습니다」가 거짓이 된다.
 # 한때 go_min 을 goimports 와 govulncheck 만 보고 1.25 로 정했다가, 1.26 을 요구하는 golangci-lint 가
