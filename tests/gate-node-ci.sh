@@ -41,8 +41,9 @@ report=$(awk -v q="'" '
       l = lines[i]
       if (l ~ /^ *cache-dependency-path: *\|[-+]? *$/) { match(l, /^ */); ind = RLENGTH; inb = 1; continue }
       if (inb) {
+        if (l ~ /^ *$/) continue
         match(l, /^ */)
-        if (l !~ /^ *$/ && RLENGTH > ind) { t = l; sub(/^ +/, "", t); sub(/ +$/, "", t); deps[t] = 1 }
+        if (RLENGTH > ind) { t = l; sub(/^ +/, "", t); sub(/ +$/, "", t); deps[t] = 1 }
         else inb = 0
       }
     }

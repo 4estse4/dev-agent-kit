@@ -102,7 +102,8 @@ grep -qE '^      gomod: \$\{\{ steps\.d\.outputs\.gomod \}\}$' "$Y" \
 # 복원도 저장도 하지 않는다(이슈 #96, probe 실행 35847040603 의 「Primary key was not generated」).
 # 패턴은 `cache-dependency-path: |` 블록의 줄로만 읽는다. 스텝 글 어디에 있든 받으면 키 이름이
 # 틀리거나(setup-go 는 입력이 없는 것으로 읽는다) 공백으로 이은 한 줄이어도(hashFiles 가 아무것도
-# 맞히지 못한다) 통과했다(PR #114 1라운드 콜드 리뷰). cache 값은 따옴표를 쳐도 같다.
+# 맞히지 못한다) 통과했다(PR #114 1라운드 콜드 리뷰). 블록 안의 빈 줄은 블록의 끝이 아니다.
+# cache 값은 따옴표를 쳐도, 뒤에 주석이 있어도 같다(PR #114 2라운드 콜드 리뷰).
 wiring=$(awk -v q="'" '
   function blockpaths(s,   n, i, lines, ind, inb, l, t) {
     delete deps; n = split(s, lines, "\n"); inb = 0
@@ -110,8 +111,9 @@ wiring=$(awk -v q="'" '
       l = lines[i]
       if (l ~ /^ *cache-dependency-path: *\|[-+]? *$/) { match(l, /^ */); ind = RLENGTH; inb = 1; continue }
       if (inb) {
+        if (l ~ /^ *$/) continue
         match(l, /^ */)
-        if (l !~ /^ *$/ && RLENGTH > ind) { t = l; sub(/^ +/, "", t); sub(/ +$/, "", t); deps[t] = 1 }
+        if (RLENGTH > ind) { t = l; sub(/^ +/, "", t); sub(/ +$/, "", t); deps[t] = 1 }
         else inb = 0
       }
     }
@@ -120,7 +122,7 @@ wiring=$(awk -v q="'" '
     if (step ~ /uses: actions\/setup-go@/) {
       n++; msg = ""; blockpaths(step)
       if (!index(step, "go-version-file: " q "${{ needs.detect.outputs.gomod }}" q)) msg = msg " detect 의 gomod 를 go-version-file 로 받지 않는다."
-      if (step !~ ("cache: *[\"" q "]?true[\"" q "]? *[,}\n]")) msg = msg " cache 가 켜져 있지 않다."
+      if (step !~ ("cache: *[\"" q "]?true[\"" q "]? *[,}#\n]")) msg = msg " cache 가 켜져 있지 않다."
       else if (!(("**/go.mod" in deps) && ("**/go.sum" in deps)))
         msg = msg " cache-dependency-path 블록에 레포 전체의 go.mod 와 go.sum 이 다 있지 않다."
       print (msg == "" ? "ok" : "bad") "\t" job "\t" msg
