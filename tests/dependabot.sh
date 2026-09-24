@@ -10,11 +10,13 @@
 #   · 여러 --lang 조합과 --lang 없는 설치에서, YAML 로 읽은 updates 의 생태계가 github-actions 하나다
 #   · 킷의 어댑터 언어(install.sh 의 ALL_LANGS)마다 주석 블록이 있고, 그 주석을 풀면 YAML 로 읽히며 그
 #     생태계가 updates 에 들어간다. 주석을 푸는 사람이 받는 것이 그대로 쓸 수 있는 설정이어야 한다
-#   · 블록에 붙은 설명 줄까지 2칸 주석을 모두 풀어도 파일이 읽힌다
+#   · updates 안의 2칸 주석을 모두 풀어도 파일이 읽힌다. 에디터로 블록을 고를 때 곁의 줄까지 함께 풀려도
+#     파일이 깨지지 않아야 한다
 #   · 두 경우 모두 항목마다 Dependabot 의 필수 키(directory 또는 directories · schedule.interval)가 있다
 #
 # 주석 블록은 `  # - package-ecosystem: …` 와 그 아래 `  #   <키>: …` 줄이다. 앞의 `  # ` 를 `  ` 로 바꾸면
-# 풀린다. 블록 사이의 설명 주석은 이 모양이 아니어서 그대로 남는다.
+# 풀린다. 블록의 설명은 `- package-ecosystem:` 줄의 끝 주석에 둔다. updates 안에 2칸 들여쓴 설명 줄을
+# 따로 두면 모두 푼 파일이 읽히지 않아 이 테스트가 실패한다.
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 T=$(mktemp -d)
