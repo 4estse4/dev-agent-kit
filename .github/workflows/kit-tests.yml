@@ -105,11 +105,16 @@ jobs:
         continue-on-error: true
         run: bash tests/pr-evidence.sh
 
+      - name: verification-stages sections are referenced by number
+        id: sections
+        continue-on-error: true
+        run: bash tests/section-refs.sh
+
       - name: fail if any check failed
         run: |
           bad=0
-          for r in "${{ steps.deletions.outcome }}" "${{ steps.injections.outcome }}" "${{ steps.docs.outcome }}" "${{ steps.quotepath.outcome }}" "${{ steps.targets.outcome }}" "${{ steps.markers.outcome }}" "${{ steps.discovery.outcome }}" "${{ steps.gomin.outcome }}" "${{ steps.goci.outcome }}" "${{ steps.nodeci.outcome }}" "${{ steps.roundquotes.outcome }}" "${{ steps.evidence.outcome }}"; do
+          for r in "${{ steps.deletions.outcome }}" "${{ steps.injections.outcome }}" "${{ steps.docs.outcome }}" "${{ steps.quotepath.outcome }}" "${{ steps.targets.outcome }}" "${{ steps.markers.outcome }}" "${{ steps.discovery.outcome }}" "${{ steps.gomin.outcome }}" "${{ steps.goci.outcome }}" "${{ steps.nodeci.outcome }}" "${{ steps.roundquotes.outcome }}" "${{ steps.evidence.outcome }}" "${{ steps.sections.outcome }}"; do
             [ "$r" = failure ] && bad=1
           done
-          echo "deletions=${{ steps.deletions.outcome }} · injections=${{ steps.injections.outcome }} · docs=${{ steps.docs.outcome }} · quotepath=${{ steps.quotepath.outcome }} · targets=${{ steps.targets.outcome }} · markers=${{ steps.markers.outcome }} · discovery=${{ steps.discovery.outcome }} · gomin=${{ steps.gomin.outcome }} · goci=${{ steps.goci.outcome }} · nodeci=${{ steps.nodeci.outcome }} · roundquotes=${{ steps.roundquotes.outcome }} · evidence=${{ steps.evidence.outcome }}"
+          echo "deletions=${{ steps.deletions.outcome }} · injections=${{ steps.injections.outcome }} · docs=${{ steps.docs.outcome }} · quotepath=${{ steps.quotepath.outcome }} · targets=${{ steps.targets.outcome }} · markers=${{ steps.markers.outcome }} · discovery=${{ steps.discovery.outcome }} · gomin=${{ steps.gomin.outcome }} · goci=${{ steps.goci.outcome }} · nodeci=${{ steps.nodeci.outcome }} · roundquotes=${{ steps.roundquotes.outcome }} · evidence=${{ steps.evidence.outcome }} · sections=${{ steps.sections.outcome }}"
           exit $bad

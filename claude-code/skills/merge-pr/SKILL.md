@@ -152,7 +152,7 @@ $ARGUMENTS
 
 **올리기 전에 초안 전문을 사람에게 보이고 승인받는다.** 머지와 한 몸이고 머지 전에 쓰는
 마지막 기록이라 사람의 승인을 받는 행동이다. 기준은
-`docs/process/verification-stages.md` 의 「사람의 승인이 필요한 행동」에 있다. 아래 권한
+`docs/process/verification-stages.md` 6.3 에 있다. 아래 권한
 프롬프트는 이 승인을 대신하지 못한다 — 파일 경로만 보인다.
 
 **초안과 함께 아래 머지 명령 전문도 보인다.** 스쿼시 커밋의 본문이 그 명령 안에 있고,
@@ -260,8 +260,8 @@ $ARGUMENTS
 모른다.
 
 **본문을 고쳐서 맞추려 하지 마라.** 본문은 연 시점의 기록이고, 그것이 낡는 것은 결함이
-아니라 설계다 — 이유는 `docs/process/verification-stages.md` 의 「PR 본문은 열 때 쓰고
-끝이다」. 열한 라운드 동안 본문을 갱신하다 **여섯 번 거짓이 된** 기록이 그 절에 있다.
+아니라 설계다 — 이유는 `docs/process/verification-stages.md` 4. 열한 라운드 동안 본문을
+갱신하다 **여섯 번 거짓이 된** 기록이 그 절에 있다.
 
     gh pr merge <N> --squash --delete-branch --body "- PR: <이 PR 의 URL>
     - Issue: <닫히는 이슈의 URL>
