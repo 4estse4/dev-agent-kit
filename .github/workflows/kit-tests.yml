@@ -128,6 +128,11 @@ jobs:
         continue-on-error: true
         run: bash tests/section-refs.sh
 
+      - name: kit files do not use translated verbs or the words the kit replaced
+        id: terms
+        continue-on-error: true
+        run: bash tests/term-rules.sh
+
       - name: the --lang filter keeps the comments of the steps it keeps
         id: filterlangs
         continue-on-error: true
@@ -136,8 +141,8 @@ jobs:
       - name: fail if any check failed
         run: |
           bad=0
-          for r in "${{ steps.deletions.outcome }}" "${{ steps.injections.outcome }}" "${{ steps.docs.outcome }}" "${{ steps.quotepath.outcome }}" "${{ steps.targets.outcome }}" "${{ steps.markers.outcome }}" "${{ steps.discovery.outcome }}" "${{ steps.gomin.outcome }}" "${{ steps.goci.outcome }}" "${{ steps.nodeci.outcome }}" "${{ steps.gominpins.outcome }}" "${{ steps.checkgomin.outcome }}" "${{ steps.roundquotes.outcome }}" "${{ steps.postedit.outcome }}" "${{ steps.evidence.outcome }}" "${{ steps.sections.outcome }}" "${{ steps.filterlangs.outcome }}"; do
+          for r in "${{ steps.deletions.outcome }}" "${{ steps.injections.outcome }}" "${{ steps.docs.outcome }}" "${{ steps.quotepath.outcome }}" "${{ steps.targets.outcome }}" "${{ steps.markers.outcome }}" "${{ steps.discovery.outcome }}" "${{ steps.gomin.outcome }}" "${{ steps.goci.outcome }}" "${{ steps.nodeci.outcome }}" "${{ steps.gominpins.outcome }}" "${{ steps.checkgomin.outcome }}" "${{ steps.roundquotes.outcome }}" "${{ steps.postedit.outcome }}" "${{ steps.evidence.outcome }}" "${{ steps.sections.outcome }}" "${{ steps.terms.outcome }}" "${{ steps.filterlangs.outcome }}"; do
             [ "$r" = failure ] && bad=1
           done
-          echo "deletions=${{ steps.deletions.outcome }} · injections=${{ steps.injections.outcome }} · docs=${{ steps.docs.outcome }} · quotepath=${{ steps.quotepath.outcome }} · targets=${{ steps.targets.outcome }} · markers=${{ steps.markers.outcome }} · discovery=${{ steps.discovery.outcome }} · gomin=${{ steps.gomin.outcome }} · goci=${{ steps.goci.outcome }} · nodeci=${{ steps.nodeci.outcome }} · gominpins=${{ steps.gominpins.outcome }} · checkgomin=${{ steps.checkgomin.outcome }} · roundquotes=${{ steps.roundquotes.outcome }} · postedit=${{ steps.postedit.outcome }} · evidence=${{ steps.evidence.outcome }} · sections=${{ steps.sections.outcome }} · filterlangs=${{ steps.filterlangs.outcome }}"
+          echo "deletions=${{ steps.deletions.outcome }} · injections=${{ steps.injections.outcome }} · docs=${{ steps.docs.outcome }} · quotepath=${{ steps.quotepath.outcome }} · targets=${{ steps.targets.outcome }} · markers=${{ steps.markers.outcome }} · discovery=${{ steps.discovery.outcome }} · gomin=${{ steps.gomin.outcome }} · goci=${{ steps.goci.outcome }} · nodeci=${{ steps.nodeci.outcome }} · gominpins=${{ steps.gominpins.outcome }} · checkgomin=${{ steps.checkgomin.outcome }} · roundquotes=${{ steps.roundquotes.outcome }} · postedit=${{ steps.postedit.outcome }} · evidence=${{ steps.evidence.outcome }} · sections=${{ steps.sections.outcome }} · terms=${{ steps.terms.outcome }} · filterlangs=${{ steps.filterlangs.outcome }}"
           exit $bad

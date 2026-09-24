@@ -105,7 +105,7 @@ jobs:
           done < "$f"
 
       # 킷이 지원하는 Go 는 tool-versions 의 go_min 이상이다. setup-go 가 까는 Go 가 그보다 낮으면
-      # 아래 설치 스텝이 「requires go >= …」로 죽는다(실측). 그 전에 어느 go.mod 가 몇인지 말하며
+      # 아래 설치 스텝이 「requires go >= …」로 실패한다(실제로 확인함). 그 전에 어느 go.mod 가 몇인지 말하며
       # 멈춘다. setup-go 를 쓰는 잡마다 그 앞에서 부른다(lib.sh 의 gate_go_min_check).
       - if: needs.detect.outputs.go == 'true'
         name: require the kit's minimum Go
@@ -115,10 +115,10 @@ jobs:
       # detect 의 gomod 는 깔 Go(toolchain 줄이 있으면 그 버전, 없으면 go 줄)가 가장 높은 go.mod 다.
       # 세 잡의 setup-go 가 그것으로 Go 를 깐다.
       # go.mod 는 레포 루트에 없을 수 있고(backend/go.mod 같은 배치) 여럿일 수 있다. 한때
-      # 루트의 go.mod 를 가리켜 그런 레포에서 세 잡이 다 죽었다(실측). setup-go 는
+      # 루트의 go.mod 를 가리켜 그런 레포에서 세 잡이 모두 실패했다(실제로 확인함). setup-go 는
       # GOTOOLCHAIN=local 이라 더 높은 go 를 받아 오지 않으므로 가장 높은 것을 깐다.
       # 캐시 키는 레포 전체의 go.mod 와 go.sum 으로 만든다. `cache-dependency-path` 가 없으면 setup-go 는
-      # 레포 루트의 go.mod 하나만 찾고, 없으면 경고만 출력하고 캐시를 복원도 저장도 하지 않는다(실측,
+      # 레포 루트의 go.mod 하나만 찾고, 없으면 경고만 출력하고 캐시를 복원도 저장도 하지 않는다(실제로 확인함,
       # 이슈 #96). go.sum 은 의존성이 없는 모듈에는 없으므로 go.mod 도 같이 적는다 — Go 잡은 go.mod 가
       # 있을 때만 실행되므로 맞는 파일이 늘 있다. coverage · security 잡도 같다.
       - if: needs.detect.outputs.go == 'true'
@@ -314,7 +314,7 @@ jobs:
 
       # node 버전은 **레포 루트의 `.nvmrc`** 가 정한다. 없으면 여기서 이유를 말하며 멈춘다
       # (lib.sh 의 gate_nvmrc_check). 한때 setup-node 가 루트의 `.nvmrc` 와 lockfile 을 가정했고,
-      # 그 실패를 continue-on-error 가 초록으로 덮었다(실측). lockfile 은 모듈마다 있을 수 있어
+      # 그 실패를 continue-on-error 가 초록으로 덮었다(실제로 확인함). lockfile 은 모듈마다 있을 수 있어
       # cache 키를 레포 어디의 lockfile 에서든 잡는다. 이 값을 주면 setup-node 는 기본 패턴 대신
       # 이것만 보고, 하나도 안 맞으면 멈추므로 npm ci 가 읽는 둘을 다 적는다.
       - if: needs.detect.outputs.node == 'true'
@@ -369,7 +369,7 @@ jobs:
       #
       # 모듈마다 돈다. go.mod 가 루트에 없을 수 있고 여럿일 수 있다.
       # go test 가 실패하면 이 잡도 실패한다. 한때 `go test | tee` 에 pipefail 이 없어 테스트가
-      # 실패해도 「보고만 합니다」로 초록이었다(실측). 틀린 숫자를 초록으로 내지 않는다.
+      # 실패해도 「보고만 합니다」로 초록이었다(실제로 확인함). 틀린 숫자를 초록으로 내지 않는다.
       # pipefail 을 스텝 전체에 걸지 않고 go test 의 종료 코드만 본다. 걸면 아래 COVER_MIN 판정의
       # grep 이 커버리지 숫자를 못 찾을 때 그 대입이 스텝을 말없이 끝낸다.
       - name: 패키지별 커버리지

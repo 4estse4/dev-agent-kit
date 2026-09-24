@@ -12,7 +12,7 @@ fail=0
 R=$(mktemp -d)/repo; mkdir -p "$R"
 git init -q "$R"; git -C "$R" config user.email t@example.com; git -C "$R" config user.name T
 # **설치가 실패하면 그 자리에서 죽는다.** 종료코드를 버리면 빈 레포를 훑고
-# "전부 실재한다" 를 찍는다(실측). 부재는 통과가 아니다.
+# "전부 실재한다" 를 출력한다(실제로 확인함). 부재는 통과가 아니다.
 if ! out=$(bash "$KIT/install.sh" --hooks --templates --lint --ci --agent "$R" 2>&1); then
   echo "  ✗ 설치가 실패해 아무것도 검사하지 못했다"; printf '%s\n' "$out" | tail -5 | sed 's/^/      /'
   exit 1
@@ -43,7 +43,7 @@ for f in found:
     # 개명 뒤에도 초록이었고, 그 파일은 설치되므로 모든 프로젝트가 없는 경로를 가리켰다.
     # **`(?a)` 가 있어야 한다.** `\w` 는 파이썬에서 유니코드라 한글 음절을 문자로 세고,
     # 그래서 `…verification-stages.md에` 처럼 경로에 붙은 조사를 통째로 삼켜 없는 경로로
-    # 읽었다(실측: 그 상태에서 이 검사가 종료코드 1). 백틱 제약을 뺀 대가다 — 백틱이
+    # 읽었다(실제로 확인함: 그 상태에서 이 검사가 종료코드 1). 백틱 제약을 뺀 대가다 — 백틱이
     # 없으면 「경로 뒤에 공백」이라는 표기 관습도 같이 사라진다.
     # 앞의 `./` · `../` 는 떼고 레포 뿌리에서 본다 — 아래 킷 전용 경로 검사와 같다.
     for m in re.findall(r'(?a)(?<![\w/-])(?:\.\.?/)*((?:common|\.ai-kit|\.claude|docs/process)/[\w./|-]+)', text):
