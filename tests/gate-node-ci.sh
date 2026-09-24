@@ -32,14 +32,28 @@ ok() { echo "  ✓ $1"; }
 bad() { echo "  ✗ $1"; fail=1; }
 
 # setup-node 스텝마다 판정한다. 주석 줄은 보지 않는다.
+# 패턴은 `cache-dependency-path: |` 블록의 줄로만 읽는다. 스텝 글 어디에 있든 받으면 키 이름이
+# 틀리거나 공백으로 이은 한 줄이어도 통과했다(PR #114 1라운드 콜드 리뷰, setup-go 검사와 같은 모양).
 report=$(awk -v q="'" '
+  function blockpaths(s,   n, i, lines, ind, inb, l, t) {
+    delete deps; n = split(s, lines, "\n"); inb = 0
+    for (i = 1; i <= n; i++) {
+      l = lines[i]
+      if (l ~ /^ *cache-dependency-path: *\|[-+]? *$/) { match(l, /^ */); ind = RLENGTH; inb = 1; continue }
+      if (inb) {
+        match(l, /^ */)
+        if (l !~ /^ *$/ && RLENGTH > ind) { t = l; sub(/^ +/, "", t); sub(/ +$/, "", t); deps[t] = 1 }
+        else inb = 0
+      }
+    }
+  }
   function endstep() {
     if (step ~ /uses: actions\/setup-node@/) {
-      n++; msg = ""
+      n++; msg = ""; blockpaths(step)
       if (step ~ /continue-on-error:/) msg = msg " continue-on-error 가 있다."
       if (!checked) msg = msg " 앞에서 gate_nvmrc_check 를 안 부른다."
-      if (step ~ ("cache: *[\"" q "]?npm") && !(index(step, "**/package-lock.json") && index(step, "**/npm-shrinkwrap.json")))
-        msg = msg " cache 가 npm 인데 cache-dependency-path 가 레포 전체의 package-lock.json 과 npm-shrinkwrap.json 을 다 잡지 않는다."
+      if (step ~ ("cache: *[\"" q "]?npm") && !(("**/package-lock.json" in deps) && ("**/npm-shrinkwrap.json" in deps)))
+        msg = msg " cache 가 npm 인데 cache-dependency-path 블록에 레포 전체의 package-lock.json 과 npm-shrinkwrap.json 이 다 있지 않다."
       print (msg == "" ? "ok" : "bad") "\t" job "\t" msg
     }
     if (hit) checked = 1
