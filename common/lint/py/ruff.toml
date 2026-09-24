@@ -4,7 +4,7 @@ line-length = 100
 target-version = "py312"
 
 [lint]
-# 기본(E,F)에 더해 실제로 버그를 잡는 것들만 켠다. 스타일 취향 규칙은 넣지 않는다 —
+# E · F 에 더해 실제로 버그를 잡는 것들만 켠다. 스타일 취향 규칙은 넣지 않는다 —
 # 규칙이 많을수록 끄게 되고, 끄는 린터는 없는 린터다.
 select = [
   "E", "F",      # pycodestyle 오류 · pyflakes
