@@ -28,8 +28,7 @@ gh issue list -R 4estse4/ai-native-kit
 닫힐 수 있는 이슈를 보인다(`merge-pr` 3절). 권한 프롬프트는 이 레포에서
 안 뜬다 — 킷의 `settings.json` 이 여기서는 로드되지 않는다(#4). 한때 이 줄이 「그 자리에서
 이슈로 만든다」였고, 그대로 따른 세션이 사람 승인 없이 이슈 둘(#61 · #62)을 열었다.
-어떤 행동에 사람의 승인이 필요한지는 `common/docs/verification-stages.md`
-「사람의 승인이 필요한 행동」에 있다.
+어떤 행동에 사람의 승인이 필요한지는 `common/docs/verification-stages.md` 6.3 에 있다.
 
 **열기 전에 위 명령으로 목록을 본다.** 열린 이슈가 한 화면에 안 들어오므로 안 보면
 겹치는지 알 수 없다. 실제로 그렇게 열린 이슈가 있었다 — 「킷이 자기 레포에 자기 계층을 안 건다」를 새로
@@ -106,8 +105,7 @@ gh issue list -R 4estse4/ai-native-kit
 > **한 줄이 `사람` 에서 `CI` 로 옮겨간 경위가 그 결정의 첫 실측이다.** 설치기 재현을
 > 사람에게 맡겨둔 동안 회귀가 한 번 통과했고, 그래서 검사를 `kit-tests.yml` 로 옮겼다.
 > 그런데 **옮긴 검사가 자기가 이름 붙인 회귀를 통과시켰다** — 그 경위와 그래서 세운 규칙
-> 셋은 `common/docs/verification-stages.md` 의 「검사를 밖에 옮겼다고 그 검사가 무언가를
-> 막는 것은 아니다」에 있다. 새로 추가한 셋째 줄이 `사람` 인 것은 아직 기계로 못 세워서다.
+> 셋은 `common/docs/verification-stages.md` 6.1 에 있다. 새로 추가한 셋째 줄이 `사람` 인 것은 아직 기계로 못 세워서다.
 
 **파일 수정을 bash 로 하지 않는 근거.** 킷이 배포하는 `PostToolUse` 훅은 `matcher` 가
 `Edit|Write` 다(`claude-code/settings.json`). **bash 편집은 그 훅을 건너뛴다.**
