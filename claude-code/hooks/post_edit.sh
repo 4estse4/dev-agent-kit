@@ -30,6 +30,32 @@ for d in "$(command -v go >/dev/null 2>&1 && go env GOPATH 2>/dev/null)/bin" \
 done
 export PATH
 
+# 게이트가 ruff 를 도는 자리 — pyproject.toml 이 있는 가장 가까운 조상(레포 루트까지) — 를 낸다.
+# 없으면 아무것도 안 내고 실패한다.
+_pyroot() { # $1=파일
+  local d
+  d=$(dirname "$1")
+  while [ "$d" != "/" ] && [ "$d" != "." ]; do
+    [ -f "$d/pyproject.toml" ] && { printf '%s' "$d"; return 0; }
+    [ "$d" = "$root" ] && break
+    d=$(dirname "$d")
+  done
+  return 1
+}
+
+# 그 자리의 ruff 를 게이트(adapters/py.sh 의 _py)와 같은 순서로 고른다: .venv → venv → PATH.
+# 한때 PATH 만 봐서, ruff 를 venv 에 둔 레포에서 게이트와 다른 ruff 를 부르거나 「포매터가
+# 없어」로 거짓 알림을 냈다(PR #112 2라운드 콜드 리뷰).
+_ruff() { # $1=_pyroot 가 낸 디렉터리(비어도 된다)
+  local v
+  if [ -n "$1" ]; then
+    for v in .venv venv; do
+      [ -x "$1/$v/bin/ruff" ] && { printf '%s' "$1/$v/bin/ruff"; return 0; }
+    done
+  fi
+  command -v ruff 2>/dev/null
+}
+
 case "$file" in
   *.go)
     # 부재와 실행 실패를 구분한다. gofmt 는 구문 오류에 exit 2 를 내는데, 그것을
@@ -42,6 +68,19 @@ case "$file" in
     else _missing="${_missing:+$_missing, }goimports"; fi
     ;;
   *.ts|*.tsx|*.js|*.jsx|*.mjs|*.css|*.scss|*.json|*.md|*.html|*.yml|*.yaml)
+    # ruff 0.16 부터 게이트의 `ruff format --check .`(adapters/py.sh)가 .md 의 Python 코드 블록도
+    # 본다. 그 게이트가 도는 자리(_pyroot)에서 그 게이트의 ruff(_ruff)로도 포맷한다.
+    # --force-exclude 가 없으면 이름을 준 파일은 extend-exclude 로 뺀 .md 여도 포맷된다.
+    # 실패는 알리지 않는다. 0.15 는 .md 에 rc=2 를 내는데 그 게이트는 .md 를 안 본다.
+    # 이것이 없던 동안 훅은 .md 를 prettier 에만 넘겨서 pre-commit 게이트가 그제서야 막았다
+    # (PR #112 1라운드 콜드 리뷰).
+    case "$file" in
+      *.md)
+        if d=$(_pyroot "$file") && r=$(_ruff "$d"); then
+          ( cd "$d" && "$r" format --force-exclude "$file" >/dev/null 2>&1 )
+        fi
+        ;;
+    esac
     # package.json 이 있는 가장 가까운 조상에서 prettier 를 찾는다.
     d=$(dirname "$file")
     while [ "$d" != "/" ] && [ "$d" != "." ]; do
@@ -54,8 +93,11 @@ case "$file" in
     done
     ;;
   *.py)
-    if command -v ruff >/dev/null 2>&1; then
-      ruff format "$file" >/dev/null 2>&1 || _failed="ruff"
+    # --force-exclude 는 .md 와 같은 이유다. 없으면 프로젝트가 extend-exclude 로 뺀 .py(마이그레이션 ·
+    # 생성 코드)도 포맷해, 게이트가 보지 않는 파일에 포맷 변경이 섞였다(PR #112 3라운드 콜드 리뷰).
+    # 제외된 파일에는 경고와 rc=0 을 내므로 실패 판정은 그대로다.
+    if r=$(_ruff "$(_pyroot "$file")"); then
+      "$r" format --force-exclude "$file" >/dev/null 2>&1 || _failed="ruff"
     else _missing="ruff"; fi
     ;;
   *.kt|*.kts)

@@ -112,6 +112,12 @@ jobs:
         continue-on-error: true
         run: bash tests/round-comment-quotes.sh
 
+      # 편집 직후 포맷 훅도 같은 모양으로 돌린다. ruff 는 부른 자리와 인자를 적는 가짜다.
+      - name: the edit hook runs the gate's ruff where the gate runs it
+        id: postedit
+        continue-on-error: true
+        run: bash tests/post-edit-ruff.sh
+
       - name: PR evidence is appended by a command, not copied by hand
         id: evidence
         continue-on-error: true
@@ -125,8 +131,8 @@ jobs:
       - name: fail if any check failed
         run: |
           bad=0
-          for r in "${{ steps.deletions.outcome }}" "${{ steps.injections.outcome }}" "${{ steps.docs.outcome }}" "${{ steps.quotepath.outcome }}" "${{ steps.targets.outcome }}" "${{ steps.markers.outcome }}" "${{ steps.discovery.outcome }}" "${{ steps.gomin.outcome }}" "${{ steps.goci.outcome }}" "${{ steps.nodeci.outcome }}" "${{ steps.gominpins.outcome }}" "${{ steps.checkgomin.outcome }}" "${{ steps.roundquotes.outcome }}" "${{ steps.evidence.outcome }}" "${{ steps.sections.outcome }}"; do
+          for r in "${{ steps.deletions.outcome }}" "${{ steps.injections.outcome }}" "${{ steps.docs.outcome }}" "${{ steps.quotepath.outcome }}" "${{ steps.targets.outcome }}" "${{ steps.markers.outcome }}" "${{ steps.discovery.outcome }}" "${{ steps.gomin.outcome }}" "${{ steps.goci.outcome }}" "${{ steps.nodeci.outcome }}" "${{ steps.gominpins.outcome }}" "${{ steps.checkgomin.outcome }}" "${{ steps.roundquotes.outcome }}" "${{ steps.postedit.outcome }}" "${{ steps.evidence.outcome }}" "${{ steps.sections.outcome }}"; do
             [ "$r" = failure ] && bad=1
           done
-          echo "deletions=${{ steps.deletions.outcome }} · injections=${{ steps.injections.outcome }} · docs=${{ steps.docs.outcome }} · quotepath=${{ steps.quotepath.outcome }} · targets=${{ steps.targets.outcome }} · markers=${{ steps.markers.outcome }} · discovery=${{ steps.discovery.outcome }} · gomin=${{ steps.gomin.outcome }} · goci=${{ steps.goci.outcome }} · nodeci=${{ steps.nodeci.outcome }} · gominpins=${{ steps.gominpins.outcome }} · checkgomin=${{ steps.checkgomin.outcome }} · roundquotes=${{ steps.roundquotes.outcome }} · evidence=${{ steps.evidence.outcome }} · sections=${{ steps.sections.outcome }}"
+          echo "deletions=${{ steps.deletions.outcome }} · injections=${{ steps.injections.outcome }} · docs=${{ steps.docs.outcome }} · quotepath=${{ steps.quotepath.outcome }} · targets=${{ steps.targets.outcome }} · markers=${{ steps.markers.outcome }} · discovery=${{ steps.discovery.outcome }} · gomin=${{ steps.gomin.outcome }} · goci=${{ steps.goci.outcome }} · nodeci=${{ steps.nodeci.outcome }} · gominpins=${{ steps.gominpins.outcome }} · checkgomin=${{ steps.checkgomin.outcome }} · roundquotes=${{ steps.roundquotes.outcome }} · postedit=${{ steps.postedit.outcome }} · evidence=${{ steps.evidence.outcome }} · sections=${{ steps.sections.outcome }}"
           exit $bad
