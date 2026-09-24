@@ -8,8 +8,9 @@
 #
 # `install.sh <레포> --ci [--lang …]` 으로 설치한 파일을 본다:
 #   · 여러 --lang 조합과 --lang 없는 설치에서, YAML 로 읽은 updates 의 생태계가 github-actions 하나다
-#   · 킷의 어댑터 언어(go · ts · py · jvm)마다 주석 블록이 있고, 그 주석을 풀면 YAML 로 읽히며 그 생태계가
-#     updates 에 들어간다. 주석을 푸는 사람이 받는 것이 그대로 쓸 수 있는 설정이어야 한다
+#   · 킷의 어댑터 언어(install.sh 의 ALL_LANGS)마다 주석 블록이 있고, 그 주석을 풀면 YAML 로 읽히며 그
+#     생태계가 updates 에 들어간다. 주석을 푸는 사람이 받는 것이 그대로 쓸 수 있는 설정이어야 한다
+#   · 블록에 붙은 설명 줄까지 2칸 주석을 모두 풀어도 파일이 읽힌다
 #   · 두 경우 모두 항목마다 Dependabot 의 필수 키(directory 또는 directories · schedule.interval)가 있다
 #
 # 주석 블록은 `  # - package-ecosystem: …` 와 그 아래 `  #   <키>: …` 줄이다. 앞의 `  # ` 를 `  ` 로 바꾸면
@@ -62,11 +63,23 @@ except Exception as x:
     sys.exit(1)
 want = {"go": ["gomod"], "ts": ["npm"], "py": ["uv", "pip"], "jvm": ["gradle", "maven"]}
 bad = 0
+# 어댑터 언어는 install.sh 의 ALL_LANGS 에서 받는다. 언어를 더하면서 이 파일을 잊으면 여기서 실패한다.
+for lang in sys.argv[3].split():
+    if lang not in want:
+        print(f"{lang}: 어댑터 언어인데 이 테스트의 생태계 목록(want)에 없다 — dependabot.yml 에 블록을 더하고 want 에도 더한다")
+        bad = 1
 for lang, names in want.items():
     missing = [n for n in names if n not in e]
     if missing:
         print(f"{lang}: 주석 블록이 없다 — {', '.join(missing)}")
         bad = 1
+# 2칸 들여쓴 주석을 모두 풀어도 읽혀야 한다. 에디터로 블록을 고를 때 블록에 붙은 설명 줄까지 함께 풀리기
+# 쉽다. 그 줄이 따로 서 있으면 updates 안에 YAML 이 아닌 줄이 남아 파일 전체가 읽히지 않는다.
+try:
+    ecosystems(re.sub(r"(?m)^  # ", "  ", text))
+except Exception as x:
+    print("2칸 주석을 모두 푼 파일이 Dependabot 설정으로 읽히지 않는다: " + str(x).splitlines()[0])
+    bad = 1
 print(f"주석을 푼 생태계 {e}")
 sys.exit(bad)
 PY
@@ -92,8 +105,10 @@ done
 
 # 주석 블록은 --lang 과 상관없이 같은 파일이다. 한 설치본으로 본다.
 y="$T/repo-all/.github/dependabot.yml"
+all=$(sed -n 's/^ALL_LANGS="\(.*\)"$/\1/p' "$KIT/install.sh")
+[ -n "$all" ] || bad "install.sh 에서 ALL_LANGS 를 읽지 못했다"
 if [ -f "$y" ]; then
-  out=$(python3 "$T/check.py" "$y" examples 2>&1)
+  out=$(python3 "$T/check.py" "$y" examples "$all" 2>&1)
   if [ $? -eq 0 ]; then ok "어댑터 언어마다 주석 블록이 있고, 풀면 YAML 로 읽혀 그 생태계가 켜진다 ($(printf '%s\n' "$out" | tail -1))"
   else bad "주석 블록:"; printf '%s\n' "$out" | sed 's/^/      /'; fi
 fi
