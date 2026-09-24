@@ -43,7 +43,7 @@ $ARGUMENTS
   멈추는데, 그쪽은 멈춰도 잃는 것이 없다.
 
   **왜 머지 전인가.** 4절의 `git branch -D` 는 로컬에만 있는 커밋이 있어도 그 브랜치째 지운다.
-  그리고 안 민 커밋은 머지에도 들어가지 않는다. 그래서 **머지하기 전이자 지우기 전인 여기서
+  그리고 푸시하지 않은 커밋은 머지에도 들어가지 않는다. 그래서 **머지하기 전이자 지우기 전인 여기서
   본다.**
 
   **왜 글자로 견주나.** 두 커밋의 관계(`git merge-base --is-ancestor`)를 보면 서버 쪽 커밋이
@@ -361,7 +361,7 @@ fetch 를 따로 두면 fetch 가 실패해도 받아 둔 옛 `origin/<baseRefNa
 fetch 한다.
 
 **이 줄은 설치된 레포에서 어느 갈래로 가든 권한 프롬프트를 거친다.** Claude Code 는 `;` · `&&` 로 나뉜
-조각마다 규칙을 맞추고(권한 문서의 Compound commands: "A rule must match each subcommand
+조각마다 따로 규칙에 맞는지 보고(권한 문서의 Compound commands: "A rule must match each subcommand
 independently."), `git fetch` 는 설치되는 `settings.json` 의 `allow` 에 없다. 어느 갈래가 실행될지는
 실행 전에 모른다. 사람이 거절하면 줄 전체가 실행되지 않는다. 그때도 중단하고, 5절의 보고에 머지는
 끝났고 base 복귀와 브랜치 삭제는 하지 않았다고 적는다. 스킬을 다시 불러도 2절에서 멈추므로(`state` 가

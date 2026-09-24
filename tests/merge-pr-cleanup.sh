@@ -57,7 +57,7 @@ esac
 awk '/^## 4\./{s=1; next} /^## 5\./{s=0} s && /^    [^ $]/ { sub(/^    /, ""); print }' "$SK" > "$T/cmds"
 if [ ! -s "$T/cmds" ]; then bad "4절에서 명령을 못 찾았다"; rm -rf "$T"; exit 1; fi
 
-# 지우는 명령은 ask 규칙에 맞아야 한다. 규칙은 `Bash(<glob>)` 이고 명령 문자열 전체에 맞춘다.
+# 지우는 명령은 ask 규칙에 맞아야 한다. 규칙은 `Bash(<glob>)` 이고, 명령 문자열 전체가 그 glob 에 맞는지 본다.
 out=$(python3 - "$SET" "$T/cmds" <<'PY'
 import fnmatch, json, re, sys
 ask = [r[5:-1] for r in json.load(open(sys.argv[1]))["permissions"]["ask"] if r.startswith("Bash(")]
@@ -78,8 +78,8 @@ else bad "4절의 삭제 명령 가운데 ask 규칙에 맞지 않는 것이 있
 
 gc() { git -c user.email=t@example.com -c user.name=T "$@"; }
 
-# $1=경우 이름. origin(bare) · main(원래 체크아웃, main 브랜치) · 그 둘에 민 feat 를 만든다.
-# 머지를 흉내 내려고 다른 클론에서 origin/main 에 커밋 하나(스쿼시 커밋 자리)를 더 민다.
+# $1=경우 이름. origin(bare) · main(원래 체크아웃, main 브랜치) · 그 둘에 푸시한 feat 를 만든다.
+# 머지를 흉내 내려고 다른 클론에서 origin/main 에 커밋 하나(스쿼시 커밋 자리)를 더 푸시한다.
 # 그 커밋이 origin 의 main 에 올라가지 않았으면 setup 실패로 보고하고 1 을 반환한다.
 setup() {
   local R="$T/$1"
