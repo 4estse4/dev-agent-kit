@@ -12,7 +12,7 @@ fail=0
 R=$(mktemp -d)/repo; mkdir -p "$R"
 git init -q "$R"; git -C "$R" config user.email t@example.com; git -C "$R" config user.name T
 # **설치가 실패하면 그 자리에서 죽는다.** 종료코드를 버리면 빈 레포를 훑고
-# "전부 실재한다" 를 찍는다(실행해 확인함). 부재는 통과가 아니다.
+# "전부 실재한다" 를 출력한다(실행해 확인함). 부재는 통과가 아니다.
 if ! out=$(bash "$KIT/install.sh" --hooks --templates --lint --ci --agent "$R" 2>&1); then
   echo "  ✗ 설치가 실패해 아무것도 검사하지 못했다"; printf '%s\n' "$out" | tail -5 | sed 's/^/      /'
   exit 1

@@ -53,7 +53,7 @@ while read -r local_ref local_sha _remote_ref remote_sha; do
   bash "$KIT/gate/secrets.sh" --range "$secrets_range" || fail=1
   bash "$KIT/gate/gate.sh" --base "$base" || fail=1
   # 브랜치를 올리는 푸시일 때만 표시한다. 태그 푸시는 추적표와 상관이 없고,
-  # 그것까지 세면 태그 하나 붙이는 데 작업 트리의 WIP 가 발목을 잡는다(실제로 있었던 일).
+  # 그것까지 세면 태그 하나를 푸시할 때도 작업 트리의 WIP 때문에 푸시가 막힌다(실제로 있었던 일).
   case "$local_ref" in refs/heads/*) pushed_code=1 ;; esac
 done
 
