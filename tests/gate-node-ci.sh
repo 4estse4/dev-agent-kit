@@ -14,6 +14,8 @@
 #     resolved」로 멈춘다. 값이 없으면 레포 루트에서만 lockfile 을 찾는다
 #   · 그 확인 스텝의 run 을 설치한 레포에서 돌리면, 루트에 .nvmrc 가 없을 때(하위 디렉터리에만
 #     있을 때도) 이유를 말하며 실패하고, 있으면 통과한다. 러너의 기본 셸처럼 `bash -e` 로 돈다
+#   · security 잡의 npm audit 스텝을 npm 대역으로 돌리면 package-lock.json 을 둔 패키지와
+#     npm-shrinkwrap.json 만 둔 패키지를 다 audit 한다
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 fail=0
@@ -101,6 +103,47 @@ for job in $steps; do
   check "$job" "web/.nvmrc 에만 있음"   fail web
   check "$job" "루트 .nvmrc"            pass .
 done
+
+# ── npm audit ──────────────────────────────────────────────────────────
+# security 잡의 npm audit 스텝을 npm 대역으로 돌린다. npm ci · npm audit 는 package-lock.json 과
+# npm-shrinkwrap.json 둘 다 lockfile 로 읽으므로, shrinkwrap 만 둔 패키지도 audit 해야 한다.
+# 한때 package-lock.json 만 찾아 그 패키지를 조용히 건너뛰었다.
+awk '
+  function flush() { if (body != "" && hit) { printf "%s", body; done = 1 } body = ""; hit = 0; inrun = 0 }
+  /^jobs:$/ { injobs = 1; next }
+  !injobs || done { next }
+  /^  [a-z_-]+:$/ { flush(); inj = ($1 == "security:"); next }
+  /^      - / { flush() }
+  !inj { next }
+  inrun && /^          / { l = $0; sub(/^          /, "", l); body = body l "\n"; next }
+  inrun { inrun = 0 }
+  /name: npm audit/ { hit = 1 }
+  /^ +(- )?run: *\|$/ { inrun = 1 }
+  END { flush() }
+' "$Y" > "$T/audit.sh"
+if ! grep -q 'npm audit' "$T/audit.sh"; then
+  bad "security 잡에서 npm audit 스텝을 못 뽑았다 — gates.yml 이 바뀌었나"
+else
+  mkdir -p "$T/bin"
+  cat > "$T/bin/npm" <<'EOF'
+#!/usr/bin/env bash
+# npm 대역. audit 스텝이 부르는 `npm audit` 만 흉내 내고, 불린 디렉터리를 적는다.
+[ "$1" = audit ] || { echo "npm 대역: 모르는 호출: $*"; exit 2; }
+echo "${PWD##*/}" >> "$NPM_CALLS"
+EOF
+  chmod +x "$T/bin/npm"
+  rm -rf "$R/web" "$R/cli"; mkdir -p "$R/web" "$R/cli"
+  echo '{}' > "$R/web/package-lock.json"
+  echo '{}' > "$R/cli/npm-shrinkwrap.json"
+  : > "$T/npm-calls"
+  out=$(cd "$R" && PATH="$T/bin:$PATH" NPM_CALLS="$T/npm-calls" bash -e "$T/audit.sh" 2>&1); rc=$?
+  calls=$(sort "$T/npm-calls" | tr '\n' ' ')
+  if [ "$rc" -eq 0 ] && [ "$calls" = "cli web " ]; then
+    ok "security · npm audit 가 package-lock.json 의 web 과 npm-shrinkwrap.json 만 둔 cli 를 다 본다"
+  else
+    bad "security · npm audit 를 부른 디렉터리가 「${calls}」(rc=$rc), cli 와 web 둘이어야 한다:"; printf '%s\n' "$out" | cut -c1-120 | sed 's/^/      /'
+  fi
+fi
 
 rm -rf "$T"
 exit $fail

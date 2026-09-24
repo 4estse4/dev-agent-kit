@@ -449,11 +449,13 @@ jobs:
         name: npm audit (high+)
         run: |
           # 줄 단위로 읽는다 — 위 npm ci 단계와 같은 이유다.
+          # lockfile 은 둘 다 찾는다. npm 은 npm-shrinkwrap.json 도 lockfile 로 읽고, 한때
+          # package-lock.json 만 찾아 shrinkwrap 만 둔 패키지를 조용히 건너뛰었다.
           . .ai-kit/gate/lib.sh
           while IFS= read -r f; do
             echo "── $(dirname "$f") ──"
             (cd "$(dirname "$f")" && npm audit --audit-level=high)
-          done < <(find . \( $(gate_prune_expr) \) -prune -o -name package-lock.json -print)
+          done < <(find . \( $(gate_prune_expr) \) -prune -o \( -name package-lock.json -o -name npm-shrinkwrap.json \) -print)
 
   trace:
     runs-on: ubuntu-latest
