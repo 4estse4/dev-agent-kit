@@ -19,8 +19,9 @@
 # 적는다. directories 는 glob 과 `*` 를 받고 directory 는 받지 않는다. 값과 옵션의 근거는
 # https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference
 #
-# 이 파일은 버전 갱신만 다룬다. 알려진 취약점을 고치는 보안 갱신은 레포 설정의 Dependabot security
-# updates 가 따로 다루고, 이 파일의 항목과 상관없이 동작한다.
+# 보안 갱신은 레포 설정의 Dependabot security updates 로 켠다. 켜면 이 파일에 그 생태계의 항목이 없어도
+# 패치가 있는 알림마다 PR 을 연다. 항목이 있으면 그 옵션 일부가 보안 갱신 PR 에도 적용된다(위 문서의
+# 보안 갱신 아이콘이 붙은 옵션).
 version: 2
 updates:
   - package-ecosystem: github-actions
