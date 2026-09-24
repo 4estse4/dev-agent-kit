@@ -42,6 +42,25 @@ case "$file" in
     else _missing="${_missing:+$_missing, }goimports"; fi
     ;;
   *.ts|*.tsx|*.js|*.jsx|*.mjs|*.css|*.scss|*.json|*.md|*.html|*.yml|*.yaml)
+    # ruff 0.16 부터 게이트의 `ruff format --check .`(adapters/py.sh)가 .md 의 Python 코드 블록도
+    # 본다. 그 게이트가 도는 자리 — pyproject.toml 이 있는 가장 가까운 조상 — 에서 ruff 로도
+    # 포맷한다. --force-exclude 가 없으면 이름을 준 파일은 extend-exclude 로 뺀 .md 여도 포맷된다.
+    # 실패는 알리지 않는다. 0.15 는 .md 에 rc=2 를 내는데 그 게이트는 .md 를 안 본다.
+    # 이것이 없던 동안 훅은 .md 를 prettier 에만 넘겨서 pre-commit 게이트가 그제서야 막았다
+    # (PR #112 1라운드 콜드 리뷰).
+    case "$file" in
+      *.md)
+        d=$(dirname "$file")
+        while [ "$d" != "/" ] && [ "$d" != "." ]; do
+          if [ -f "$d/pyproject.toml" ]; then
+            command -v ruff >/dev/null 2>&1 && ( cd "$d" && ruff format --force-exclude "$file" >/dev/null 2>&1 )
+            break
+          fi
+          [ "$d" = "$root" ] && break
+          d=$(dirname "$d")
+        done
+        ;;
+    esac
     # package.json 이 있는 가장 가까운 조상에서 prettier 를 찾는다.
     d=$(dirname "$file")
     while [ "$d" != "/" ] && [ "$d" != "." ]; do
