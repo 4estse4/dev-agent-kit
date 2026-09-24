@@ -143,11 +143,16 @@ jobs:
         continue-on-error: true
         run: bash tests/merge-pr-cleanup.sh
 
+      - name: the installed dependabot.yml enables only github-actions
+        id: dependabot
+        continue-on-error: true
+        run: bash tests/dependabot.sh
+
       - name: fail if any check failed
         run: |
           bad=0
-          for r in "${{ steps.deletions.outcome }}" "${{ steps.injections.outcome }}" "${{ steps.docs.outcome }}" "${{ steps.quotepath.outcome }}" "${{ steps.targets.outcome }}" "${{ steps.markers.outcome }}" "${{ steps.discovery.outcome }}" "${{ steps.gomin.outcome }}" "${{ steps.goci.outcome }}" "${{ steps.nodeci.outcome }}" "${{ steps.gominpins.outcome }}" "${{ steps.checkgomin.outcome }}" "${{ steps.roundquotes.outcome }}" "${{ steps.postedit.outcome }}" "${{ steps.evidence.outcome }}" "${{ steps.sections.outcome }}" "${{ steps.terms.outcome }}" "${{ steps.filterlangs.outcome }}" "${{ steps.mergecleanup.outcome }}"; do
+          for r in "${{ steps.deletions.outcome }}" "${{ steps.injections.outcome }}" "${{ steps.docs.outcome }}" "${{ steps.quotepath.outcome }}" "${{ steps.targets.outcome }}" "${{ steps.markers.outcome }}" "${{ steps.discovery.outcome }}" "${{ steps.gomin.outcome }}" "${{ steps.goci.outcome }}" "${{ steps.nodeci.outcome }}" "${{ steps.gominpins.outcome }}" "${{ steps.checkgomin.outcome }}" "${{ steps.roundquotes.outcome }}" "${{ steps.postedit.outcome }}" "${{ steps.evidence.outcome }}" "${{ steps.sections.outcome }}" "${{ steps.terms.outcome }}" "${{ steps.filterlangs.outcome }}" "${{ steps.mergecleanup.outcome }}" "${{ steps.dependabot.outcome }}"; do
             [ "$r" = failure ] && bad=1
           done
-          echo "deletions=${{ steps.deletions.outcome }} · injections=${{ steps.injections.outcome }} · docs=${{ steps.docs.outcome }} · quotepath=${{ steps.quotepath.outcome }} · targets=${{ steps.targets.outcome }} · markers=${{ steps.markers.outcome }} · discovery=${{ steps.discovery.outcome }} · gomin=${{ steps.gomin.outcome }} · goci=${{ steps.goci.outcome }} · nodeci=${{ steps.nodeci.outcome }} · gominpins=${{ steps.gominpins.outcome }} · checkgomin=${{ steps.checkgomin.outcome }} · roundquotes=${{ steps.roundquotes.outcome }} · postedit=${{ steps.postedit.outcome }} · evidence=${{ steps.evidence.outcome }} · sections=${{ steps.sections.outcome }} · terms=${{ steps.terms.outcome }} · filterlangs=${{ steps.filterlangs.outcome }} · mergecleanup=${{ steps.mergecleanup.outcome }}"
+          echo "deletions=${{ steps.deletions.outcome }} · injections=${{ steps.injections.outcome }} · docs=${{ steps.docs.outcome }} · quotepath=${{ steps.quotepath.outcome }} · targets=${{ steps.targets.outcome }} · markers=${{ steps.markers.outcome }} · discovery=${{ steps.discovery.outcome }} · gomin=${{ steps.gomin.outcome }} · goci=${{ steps.goci.outcome }} · nodeci=${{ steps.nodeci.outcome }} · gominpins=${{ steps.gominpins.outcome }} · checkgomin=${{ steps.checkgomin.outcome }} · roundquotes=${{ steps.roundquotes.outcome }} · postedit=${{ steps.postedit.outcome }} · evidence=${{ steps.evidence.outcome }} · sections=${{ steps.sections.outcome }} · terms=${{ steps.terms.outcome }} · filterlangs=${{ steps.filterlangs.outcome }} · mergecleanup=${{ steps.mergecleanup.outcome }} · dependabot=${{ steps.dependabot.outcome }}"
           exit $bad
