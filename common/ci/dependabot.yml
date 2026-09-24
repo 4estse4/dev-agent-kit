@@ -7,14 +7,47 @@
 # 시작해 설치 직후 Dependabot PR 몇 개를 받는다(설치된 뒤에는 스스로 최신이 된다).
 # 킷 쪽은 대신 킷 레포의 주간 워크플로가 템플릿의 액션 버전을 보고 뒤처지면 이슈를 연다 —
 # "사람이 가끔 확인" 은 막는 것이 없는 규칙이라 안 지켜진다고 가정해야 한다.
+#
+# **언어별 생태계는 꺼 둔 채로 설치한다.** 매니페스트가 없는 생태계는 Dependabot 이 그
+# 업데이터를 매주 실패시킨다. 한때 gomod · npm 을 켜 두어, `--lang py,ts` 로 설치한 프로젝트에서
+# 설치 직후부터 go_modules · npm_and_yarn 이 실패했다(이슈 #39). 어느 매니저를 쓰는지와 매니페스트가
+# 어느 디렉터리에 있는지는 설치 시점에 킷이 알 수 없다. 그래서 매니페스트를 만든 사람이 아래 블록의
+# 주석을 풀어 켠다.
+#
+# 켜는 법: 블록 줄 앞의 `# ` 를 지우고 directory 를 매니페스트가 있는 디렉터리로 고친다. 생태계마다
+# 매니페스트가 한 디렉터리에 있으면(Go 는 `backend/`, Node 는 `frontend/`) 블록마다 directory 를 그
+# 디렉터리로 고친다. 같은 생태계의 매니페스트가 여러 디렉터리에 있으면(`services/` 아래 모듈마다 go.mod)
+# directory 대신 directories 에 목록으로 적는다. directories 는 glob 과 `*` 를 받고 directory 는 받지
+# 않는다. 값과 옵션의 근거는
+# https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference
+#
+# 보안 갱신은 레포 설정의 Dependabot security updates 로 켠다. 켜면 이 파일에 그 생태계의 항목이 없어도
+# 패치가 있는 알림마다 PR 을 연다. 항목이 있으면 그 옵션 일부가 보안 갱신 PR 에도 적용된다(위 문서의
+# 보안 갱신 아이콘이 붙은 옵션).
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: "/"
     schedule: { interval: weekly }
-  - package-ecosystem: gomod
-    directory: "/"
-    schedule: { interval: weekly }
-  - package-ecosystem: npm
-    directory: "/"
-    schedule: { interval: weekly }
+
+  # - package-ecosystem: gomod    # go: go.mod 가 있는 디렉터리
+  #   directory: "/"
+  #   schedule: { interval: weekly }
+
+  # - package-ecosystem: npm      # ts: package.json 이 있는 디렉터리. pnpm · yarn 도 이것이다
+  #   directory: "/"
+  #   schedule: { interval: weekly }
+
+  # - package-ecosystem: uv       # py: uv(uv.lock)를 쓰면 이것. 아래 pip 과 둘 중 하나만 켠다
+  #   directory: "/"
+  #   schedule: { interval: weekly }
+  # - package-ecosystem: pip      # py: requirements · poetry · pipenv · pip-compile 이면 이것
+  #   directory: "/"
+  #   schedule: { interval: weekly }
+
+  # - package-ecosystem: gradle   # jvm: Gradle 이면 이것. 아래 maven 과 둘 중 하나만 켠다
+  #   directory: "/"
+  #   schedule: { interval: weekly }
+  # - package-ecosystem: maven    # jvm: Maven 이면 이것
+  #   directory: "/"
+  #   schedule: { interval: weekly }
