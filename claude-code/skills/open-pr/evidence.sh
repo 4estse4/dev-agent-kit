@@ -40,7 +40,12 @@ fi
 # (변수 · 별칭)은 못 알아본다. 거부된 명령의 출력은 증거로 싣지 말고 무엇을 확인했는지 글로
 # 적는다 — 직접 돌려 손으로 옮기면 이 스크립트가 없애려는 경로로 돌아간다.
 root=$(git rev-parse --show-toplevel 2>/dev/null) || root=$PWD
-why=$(EVIDENCE_CMD="$cmd" python3 - "$root/.claude/settings.json" "$root/.claude/settings.local.json" 2>&1 <<'PY'
+# worktree 세션은 원래 체크아웃의 settings.local.json 을 쓴다(공식 문서 settings.md: "In a
+# worktree, it uses the file at the main checkout's root."). 그 파일은 worktree 에 없으므로
+# git 공통 디렉터리의 부모, 곧 원래 체크아웃의 것도 읽는다.
+main=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) && main=${main%/.git} || main=$root
+why=$(EVIDENCE_CMD="$cmd" python3 - "$root/.claude/settings.json" "$root/.claude/settings.local.json" \
+      "$main/.claude/settings.local.json" 2>&1 <<'PY'
 import json, os, re, sys
 cmd = os.environ['EVIDENCE_CMD']
 for path in sys.argv[1:]:
@@ -59,6 +64,11 @@ for path in sys.argv[1:]:
         pat = m.group(1).strip()
         if pat.endswith(':*'):
             pat = pat[:-2] + ' *'
+        # 끝이 공백 뒤 별표면 맨 명령도 맞는다("also matches the bare command"). 그 공백 자리는
+        # 공백 · 명령 끝 · 구분자 가운데 하나다.
+        bare = re.search(r'\s\*$', pat) is not None
+        if bare:
+            pat = re.sub(r'\s+\*$', '', pat)
         parts = pat.split('*')
         pieces = [r'\s+'.join(map(re.escape, re.split(r'\s+', p))) for p in parts if p]
         if not pieces:
@@ -66,6 +76,9 @@ for path in sys.argv[1:]:
         rx = '.*'.join(pieces)
         if parts[0]:
             rx = r'(?<![\w-])' + rx
+        if bare:
+            # 백틱 · 따옴표는 chr 로 넣는다. 명령 치환 안의 heredoc 이라 bash 3.2 가 그 글자를 센다
+            rx += r'(?![^\s;&|()' + chr(96) + chr(39) + chr(34) + '])'
         if re.search(rx, cmd, re.S):
             print('%s 의 %s 규칙 %s 의 글자가 보인다' % (os.path.basename(path), kind, rule))
             sys.exit(1)

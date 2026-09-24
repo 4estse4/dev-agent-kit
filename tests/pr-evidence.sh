@@ -101,7 +101,7 @@ cat > "$R/.claude/settings.json" <<'EOF'
   "deny": ["Bash(git push*--force*)"]}}
 EOF
 cat > "$R/.claude/settings.local.json" <<'EOF'
-{"permissions": {"deny": ["Bash(rm *)"]}}
+{"permissions": {"deny": ["Bash(rm *)", "Bash(npm run *--prod*)"]}}
 EOF
 # 거부된 명령은 **돌지 않아야** 한다. 명령 앞에 흔적 파일을 만드는 `touch` 를 붙여, 거부했다고
 # 말하면서 먼저 돌린 모양을 잡는다. 뒤의 글자는 규칙 글자를 품은 `echo` 라 가드가 빠져
@@ -121,6 +121,18 @@ refused "여러 줄 명령 둘째 줄의 글자" $'echo ok\necho gh pr merge 1'
 refused "끝에 :* 를 쓴 규칙" 'echo gh api repos/x/y'
 refused "settings.local.json 의 규칙" 'echo rm -rf build'
 refused "하위 디렉터리에서 불러도 레포 설정을 본다" 'echo gh pr merge 3' "$R/sub"
+# 끝이 ` *` 인 규칙은 맨 명령도 잡는다. 공식 문서: "A `*` at the end, with a space before it,
+# also matches the bare command." 구분자가 바로 붙은 모양도 같다.
+refused "끝 ' *' 규칙의 맨 명령" 'echo x; echo rm'
+refused "끝 ' *' 규칙 뒤에 ; 가 붙음" 'echo rm;echo x'
+refused "끝 ' *' 규칙 뒤에 ) 가 붙음" 'echo "$(echo rm)"'
+refused "끝 :* 규칙의 맨 명령" 'echo gh api'
+refused "가운데 ' *' 규칙" 'echo npm run build --prod'
+# worktree 세션은 원래 체크아웃의 settings.local.json 을 쓴다(공식 문서 settings.md: "In a
+# worktree, it uses the file at the main checkout's root."). 그 파일은 worktree 에 없다.
+git -C "$R" add .claude/settings.json && git -C "$R" -c user.email=t@example.com -c user.name=T commit -q -m init
+git -C "$R" worktree add -q "$R/.claude/worktrees/w1" 2>/dev/null
+refused "worktree 에서 원래 체크아웃의 settings.local.json 규칙" 'echo rm -rf build' "$R/.claude/worktrees/w1"
 # 규칙 글자가 낱말 속이나 다른 모양으로만 든 명령은 돈다. 공식 문서: "The space before a
 # trailing `*` is part of the rule. `Bash(ls *)` requires a space after `ls`, so `lsof` doesn't match."
 runs() {   # runs <이름> <명령>
@@ -134,6 +146,8 @@ runs "Bash(rm *) 가 normal · platform 을 막지 않는다" 'echo normal platf
 runs "Bash(rm *) 가 낱말 끝의 rm 을 막지 않는다" 'echo farm tools'
 runs "Bash(rm *) 가 rmdir 을 막지 않는다(* 앞 공백)" 'echo rmdir x'
 runs "Bash(gh api:*) 가 gh apix 를 막지 않는다(:* 는 공백 *)" 'echo gh apix'
+runs "Bash(rm *) 가 --rm 을 막지 않는다(앞 경계에 -)" 'echo docker compose run --rm app pytest'
+runs "가운데 ' *' 규칙이 공백 없는 자리를 막지 않는다" 'echo npm runx --prod'
 printf '{"permissions": ' > "$R/.claude/settings.json"
 refused "설정을 못 읽으면 막는다" 'echo hi'
 
@@ -144,6 +158,10 @@ for f in "$OPEN" "$MERGE"; do
     bad "$name 이 출력을 손으로 붙이라고 시킨다"
   else ok "$name 이 출력을 손으로 붙이라고 시키지 않는다"; fi
   grep -q 'open-pr/evidence\.sh' "$f" && ok "$name 이 evidence.sh 를 부른다" || bad "$name 이 evidence.sh 를 부른다"
+  # 거부된 뒤 갈 길을 스킬이 말한다. 없으면 세션은 직접 돌려 손으로 옮긴다
+  tr '\n' ' ' < "$f" | grep -qE '(글로 *적는다|글로 적는다)' && ok "$name 이 거부된 명령의 갈 길을 말한다" \
+    || bad "$name 이 거부된 명령의 갈 길을 말한다"
+  grep -q 'awk 1' "$f" && ok "$name 이 조각을 awk 1 로 잇는다" || bad "$name 이 조각을 awk 1 로 잇는다"
 done
 grep -qE 'gh pr create .*--body-file' "$OPEN" && ok "open-pr 이 본문을 --body-file 로 넘긴다" \
   || bad "open-pr 이 본문을 --body-file 로 넘긴다"
