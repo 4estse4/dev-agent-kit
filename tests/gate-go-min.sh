@@ -82,7 +82,10 @@ gomods() { # 인자=「경로:go 줄[:toolchain 줄]」. go 줄이 비면 그 �
 check() { # $1=잡  $2=설명  $3=기대(fail|pass)  $4=실패할 때 이름대야 할 파일  나머지=gomods 인자
   local job="$1" what="$2" want="$3" names="$4" out rc; shift 4
   gomods "$@"
-  out=$(cd "$R" && GATE_TOOL_VERSIONS="$TV" bash -e "$T/step.$job" 2>&1); rc=$?
+  # TV 가 비면 CI 스텝처럼 lib.sh 가 제 자리에서 tool-versions 를 찾게 둔다. 설치본 케이스가 그
+  # 기본 경로를 지난다 — 모든 케이스에 넘기면 그 경로가 깨져도 초록이었다(PR #108 3라운드 콜드 리뷰).
+  if [ -n "$TV" ]; then out=$(cd "$R" && GATE_TOOL_VERSIONS="$TV" bash -e "$T/step.$job" 2>&1); rc=$?
+  else out=$(cd "$R" && bash -e "$T/step.$job" 2>&1); rc=$?; fi
   if [ "$want" = fail ]; then
     if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -qF "::error file=$names::"; then
       echo "  ✓ $job · $what → 실패하고 $names 를 이름댄다"
@@ -101,7 +104,7 @@ check() { # $1=잡  $2=설명  $3=기대(fail|pass)  $4=실패할 때 이름대�
 steps=$(cd "$T" && ls step.* 2>/dev/null | sed 's/^step\.//')
 [ -n "$steps" ] || { echo "  ✗ gate_go_min_check 를 부르는 스텝이 하나도 안 뽑혔다"; fail=1; }
 for job in $steps; do
-  TV="$R/.ai-kit/gate/tool-versions"
+  TV=""
   check "$job" "go $below 모듈 하나"          fail backend/go.mod "backend:$below"
   check "$job" "go $below · go $lower"       fail backend/go.mod "backend:$below" "tools/x:$lower"
   check "$job" "go $short"                   fail backend/go.mod "backend:$short"
