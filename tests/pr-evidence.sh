@@ -101,7 +101,7 @@ cat > "$R/.claude/settings.json" <<'EOF'
   "deny": ["Bash(git push*--force*)"]}}
 EOF
 cat > "$R/.claude/settings.local.json" <<'EOF'
-{"permissions": {"deny": ["Bash(rm *)", "Bash(npm run *--prod*)"]}}
+{"permissions": {"deny": ["Bash(rm *)", "Bash(npm run *--prod*)", "Bash(* --help *)"]}}
 EOF
 # 거부된 명령은 **돌지 않아야** 한다. 명령 앞에 흔적 파일을 만드는 `touch` 를 붙여, 거부했다고
 # 말하면서 먼저 돌린 모양을 잡는다. 뒤의 글자는 규칙 글자를 품은 `echo` 라 가드가 빠져
@@ -128,6 +128,16 @@ refused "끝 ' *' 규칙 뒤에 ; 가 붙음" 'echo rm;echo x'
 refused "끝 ' *' 규칙 뒤에 ) 가 붙음" 'echo "$(echo rm)"'
 refused "끝 :* 규칙의 맨 명령" 'echo gh api'
 refused "가운데 ' *' 규칙" 'echo npm run build --prod'
+# 맨 명령 바로 뒤에 올 수 있는 글자마다 하나씩. 빠진 글자가 있으면 그 모양이 지나간다
+refused "끝 ' *' 규칙 뒤에 && 가 붙음" 'echo rm&&echo x'
+refused "끝 ' *' 규칙 뒤에 | 가 붙음" 'echo rm|cat'
+refused "끝 ' *' 규칙 뒤에 따옴표가 붙음(sh -c 'rm' 모양)" "echo 'rm'"
+refused "끝 ' *' 규칙 뒤에 백틱이 붙음" 'echo `echo rm`'
+refused "끝 ' *' 규칙 뒤에 리다이렉트가 붙음" 'echo rm>/dev/null'
+refused "끝 ' *' 규칙 뒤에 입력 리다이렉트가 붙음" 'echo rm</dev/null'
+# 맨 명령은 끝 `*` 가 규칙의 유일한 와일드카드일 때만 맞는다. 공식 문서: "`Bash(* --help *)`
+# matches `npm --help x` but not `npm --help`."
+refused "와일드카드가 둘인 규칙의 뒤 글자" 'echo npm --help x'
 # worktree 세션은 원래 체크아웃의 settings.local.json 을 쓴다(공식 문서 settings.md: "In a
 # worktree, it uses the file at the main checkout's root."). 그 파일은 worktree 에 없다.
 git -C "$R" add .claude/settings.json && git -C "$R" -c user.email=t@example.com -c user.name=T commit -q -m init
@@ -148,8 +158,18 @@ runs "Bash(rm *) 가 rmdir 을 막지 않는다(* 앞 공백)" 'echo rmdir x'
 runs "Bash(gh api:*) 가 gh apix 를 막지 않는다(:* 는 공백 *)" 'echo gh apix'
 runs "Bash(rm *) 가 --rm 을 막지 않는다(앞 경계에 -)" 'echo docker compose run --rm app pytest'
 runs "가운데 ' *' 규칙이 공백 없는 자리를 막지 않는다" 'echo npm runx --prod'
+runs "와일드카드가 둘인 규칙은 맨 명령을 막지 않는다" 'echo npm --help'
 printf '{"permissions": ' > "$R/.claude/settings.json"
 refused "설정을 못 읽으면 막는다" 'echo hi'
+
+# ── 파이썬 heredoc 이 명령 치환 안에 있지 않다 ──
+# macOS 기본 bash(3.2)는 명령 치환 안의 heredoc 에서 짝 없는 따옴표 · 백틱을 세어 스크립트 전체를
+# 구문 오류로 죽인다. CI 는 ubuntu(bash 5)라 그것을 못 보므로, 자리를 글자로 본다.
+# 줄넘김(`\`)으로 이어진 명령 치환도 보도록 줄을 이어 붙여서 찾는다.
+if tr '\n' ' ' < "$S" | grep -qE '\$\([^)]*<<'; then
+  bad "파이썬 heredoc 이 명령 치환 밖에 있다 — $(tr '\n' ' ' < "$S" | grep -oE '\$\([^)]*<<' | head -1 | cut -c1-80)"
+else ok "파이썬 heredoc 이 명령 치환 밖에 있다"; fi
+bash -n "$S" && ok "이 셸($BASH_VERSION)로 구문 검사를 통과한다" || bad "이 셸($BASH_VERSION)로 구문 검사를 통과한다"
 
 # ── 스킬이 손으로 붙이라고 시키지 않는다 ──
 for f in "$OPEN" "$MERGE"; do

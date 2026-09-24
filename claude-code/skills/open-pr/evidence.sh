@@ -36,6 +36,7 @@ fi
 # 규칙은 레포의 `.claude/settings.json` · `settings.local.json` 에서 읽고, 글자는 명령 어디에든
 # 보이면 걸린다. `*` 는 아무 글자, 공백은 공백 여럿이다. 공식 문서대로 `*` 앞의 공백도 규칙의
 # 일부라 `Bash(rm *)` 는 `rm ` 을 찾고 `--format` 의 `rm` 은 안 찾는다. 끝의 `:*` 는 ` *` 와 같다.
+# 끝의 ` *` 가 유일한 와일드카드면 맨 명령(`rm` · `rm;` · `rm>x` · `'rm'`)도 맞는다.
 # 첫 낱말 앞은 낱말 경계라 `farm ` 도 안 걸린다. 설정을 못 읽으면 막는다. 이름을 꾸민 명령
 # (변수 · 별칭)은 못 알아본다. 거부된 명령의 출력은 증거로 싣지 말고 무엇을 확인했는지 글로
 # 적는다 — 직접 돌려 손으로 옮기면 이 스크립트가 없애려는 경로로 돌아간다.
@@ -44,8 +45,9 @@ root=$(git rev-parse --show-toplevel 2>/dev/null) || root=$PWD
 # worktree, it uses the file at the main checkout's root."). 그 파일은 worktree 에 없으므로
 # git 공통 디렉터리의 부모, 곧 원래 체크아웃의 것도 읽는다.
 main=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) && main=${main%/.git} || main=$root
-why=$(EVIDENCE_CMD="$cmd" python3 - "$root/.claude/settings.json" "$root/.claude/settings.local.json" \
-      "$main/.claude/settings.local.json" 2>&1 <<'PY'
+# 파이썬은 명령 치환 밖의 heredoc 으로 담는다. 명령 치환 안의 heredoc 이면 macOS 기본 bash(3.2)가
+# 짝 없는 따옴표 · 백틱을 세어 스크립트 전체를 구문 오류로 죽인다. CI 의 bash 5 는 그것을 못 본다.
+IFS= read -r -d '' prog <<'PY' || true
 import json, os, re, sys
 cmd = os.environ['EVIDENCE_CMD']
 for path in sys.argv[1:]:
@@ -64,11 +66,13 @@ for path in sys.argv[1:]:
         pat = m.group(1).strip()
         if pat.endswith(':*'):
             pat = pat[:-2] + ' *'
-        # 끝이 공백 뒤 별표면 맨 명령도 맞는다("also matches the bare command"). 그 공백 자리는
-        # 공백 · 명령 끝 · 구분자 가운데 하나다.
-        bare = re.search(r'\s\*$', pat) is not None
+        # 끝이 공백 뒤 `*` 이고 그것이 유일한 와일드카드면 맨 명령도 맞는다("also matches the
+        # bare command" · "only when the trailing `*` is the rule's only wildcard"). 그 공백 자리는
+        # 공백 · 명령 끝 · 구분자 · 리다이렉트 · 따옴표 · 백틱 가운데 하나다.
+        stripped = re.sub(r'\s+\*$', '', pat)
+        bare = stripped != pat and '*' not in stripped
         if bare:
-            pat = re.sub(r'\s+\*$', '', pat)
+            pat = stripped
         parts = pat.split('*')
         pieces = [r'\s+'.join(map(re.escape, re.split(r'\s+', p))) for p in parts if p]
         if not pieces:
@@ -77,13 +81,13 @@ for path in sys.argv[1:]:
         if parts[0]:
             rx = r'(?<![\w-])' + rx
         if bare:
-            # 백틱 · 따옴표는 chr 로 넣는다. 명령 치환 안의 heredoc 이라 bash 3.2 가 그 글자를 센다
-            rx += r'(?![^\s;&|()' + chr(96) + chr(39) + chr(34) + '])'
+            rx += r'(?![^\s;&|()<>`\'"])'
         if re.search(rx, cmd, re.S):
             print('%s 의 %s 규칙 %s 의 글자가 보인다' % (os.path.basename(path), kind, rule))
             sys.exit(1)
 PY
-) || {
+why=$(EVIDENCE_CMD="$cmd" python3 -c "$prog" "$root/.claude/settings.json" \
+      "$root/.claude/settings.local.json" "$main/.claude/settings.local.json" 2>&1) || {
   echo "evidence.sh: 이 명령을 증거로 돌리지 않는다. $why" >&2
   echo "  그 출력은 증거로 싣지 말고 무엇을 확인했는지 글로 적는다. 손으로 옮기지 않는다." >&2
   exit 2
