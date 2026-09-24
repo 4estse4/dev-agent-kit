@@ -36,8 +36,9 @@ gate_prune_expr() { # 출력: -name a -o -name b ...  (호출부가 \( \) 로 �
   done
 }
 
-# go.mod 하나에서 setup-go 가 깔 Go 버전과 그 줄 이름을 낸다: 「<버전> toolchain」 또는
-# 「<버전> go」. 둘 다 없으면 아무것도 안 낸다.
+# go.mod 하나에서 setup-go 가 받을 Go 버전과 그 줄 이름을 낸다: 「<버전> toolchain」 또는
+# 「<버전> go」. 둘 다 없으면 아무것도 안 낸다. 버전에 패치가 없으면 setup-go 는 그 계열의 패치
+# 하나를 깐다(아래 gate_go_min_check).
 # setup-go 는 그 파일에 `toolchain go1.*` 줄이 있으면 그 버전을, 없으면 go 줄을 깐다(setup-go v7 의
 # parseGoVersionFile, 러너에서 봤다). go 줄을 올리는 go 명령이 toolchain 줄에 자기 버전을 같이
 # 쓰므로(go.dev/doc/toolchain), go 줄을 낮게 둔 채 새 Go 로 빌드하는 모듈이 흔하다.
@@ -68,22 +69,34 @@ gate_go_highest() {
 # 이상인지 본다. 아니면 그 파일과 이유를 GitHub 주석(::error)으로 내고 실패한다.
 # 보는 것은 그 하나다. 핀한 Go 도구의 설치를 가르는 것은 돌고 있는 go 이고, go 줄이 더 낮은
 # 보조 모듈도 그 go 로 빌드된다. 모든 go.mod 를 보면 전에 돌던 멀티모듈 레포가 멈춘다.
+# 견주는 법은 setup-go 가 그 버전을 받는 법을 따른다. go 1.26 처럼 패치가 없으면 버전 범위로
+# 받아 그 계열(1.26.x)에서 러너가 캐시에 가진 가장 높은 것을, 없으면 가장 새것을 깐다(setup-go v7
+# 의 getGo, 러너에서 봤다). 그래서 go_min 과 계열끼리 견준다. 이 통과는 캐시의 패치가 go_min 의
+# 패치 이상이라는 전제에 기댄다. 낮으면 이 검사를 지나고도 도구 설치가 「requires go >= …」로
+# 죽는다. go_min 에 0 이 아닌 패치를 적는 날 이 전제를 다시 본다. 패치가 있으면(go 1.26.0 ·
+# toolchain go1.26.1) 그 버전을 그대로 까므로 그대로 견준다. go_min 은 패치까지 적으므로(1.26.0)
+# 그대로만 견주면, Go 의 순서로 1.26 < 1.26.0 이라 1.26.x 를 까는 go 1.26 레포가 멈춘다.
+# sort -V 는 이 형태들을 Go 의 순서대로 놓는다(1.26 < 1.26.0 < 1.26.1, go.dev/doc/toolchain).
 # CI 에서 setup-go 를 쓰는 잡이 모두 그 앞에서 부른다. 잡은 저마다 Go 를 깔아서, 한 잡에만 두면
 # security 는 govulncheck 설치에서 「requires go >= …」로 다른 말을 하며 죽고(실측), 도구를
 # 깔지 않는 coverage 는 킷이 지원하지 않는 Go 로 초록을 낸다(실측).
 gate_go_min_check() {
-  local min f v line what raise
+  local min f v line want what raise
   min=$(gate_tool_version go_min)
   [ -n "$min" ] || { echo "::error::.ai-kit/gate/tool-versions 에 go_min 이 없습니다 — 킷을 갱신하세요"; return 1; }
   f=$(find . \( $(gate_prune_expr) \) -prune -o -name go.mod -print | gate_go_highest)
   read -r v line <<< "$(gate_go_setup_version "$f")"
-  [ -n "$v" ] && [ "$(printf '%s\n%s\n' "$min" "$v" | sort -V | head -1)" = "$min" ] && return 0
+  case "$v" in
+    *.*.*) want="$min" ;;
+    *)     want=$(printf '%s\n' "$min" | cut -d. -f1-2) ;;
+  esac
+  [ -n "$v" ] && [ "$(printf '%s\n%s\n' "$want" "$v" | sort -V | head -1)" = "$want" ] && return 0
   case "$line" in
     toolchain) what="toolchain 줄이 go$v 입니다"; raise="toolchain 줄을 go$min 이상으로" ;;
-    go)        what="go 줄이 $v 입니다";          raise="go 줄을 $min 이상으로" ;;
+    go)        what="go 줄이 $v 입니다";          raise="go 줄을 $want 이상으로" ;;
     *)         what="go 줄이 없습니다";           raise="go 줄을 $min 이상으로" ;;
   esac
-  echo "::error file=${f#./}::${f#./} 의 $what. CI 는 레포의 go.mod 가운데 깔 Go 가 가장 높은 이 파일로 Go 를 깝니다(toolchain 줄이 있으면 그 버전, 없으면 go 줄). 킷은 Go $min 이상만 지원합니다 — 핀한 Go 도구(goimports · golangci-lint · govulncheck)가 그보다 낮은 go 로는 설치되지 않습니다. ${raise} 올리세요."
+  echo "::error file=${f#./}::${f#./} 의 $what. CI 는 레포의 go.mod 가운데 깔 Go 가 가장 높은 이 파일로 Go 를 깝니다(toolchain 줄이 있으면 그 버전, 없으면 go 줄. go 줄이 1.26 처럼 패치가 없으면 그 계열의 패치 하나). 킷은 Go $min 이상만 지원합니다 — 핀한 Go 도구(goimports · golangci-lint · govulncheck)가 그보다 낮은 go 로는 설치되지 않습니다. ${raise} 올리세요."
   return 1
 }
 
