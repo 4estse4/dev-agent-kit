@@ -14,6 +14,9 @@
 #     깔 Go 는 toolchain 줄이 있으면 그 버전, 없으면 go 줄이다 — setup-go 가 그렇게 깐다. 파일을
 #     고를 때도 같은 버전으로 순위를 매긴다. 더 낮은 보조 모듈이 섞여 있어도 통과한다. 도구 설치를 가르는 것은 돌고 있는
 #     go 하나이고, 낮은 go 줄의 모듈도 그 go 로 빌드된다. 러너의 기본 셸처럼 `bash -e` 로 돈다
+#   · 그 버전이 go 1.26 처럼 패치가 없으면 go_min 과 계열끼리, 패치가 있으면(toolchain 줄 포함) 그
+#     버전 그대로 견준다 — setup-go 가 앞의 것은 그 계열의 패치 하나를, 뒤의 것은 그 버전을 깐다.
+#     go_min 에 0 이 아닌 패치가 있는 경우도 본다
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 fail=0
@@ -61,7 +64,7 @@ awk -v out="$T/step." '
 
 min=$(sed -n 's/^go_min=//p' "$R/.ai-kit/gate/tool-versions")
 [ -n "$min" ] || { echo "  ✗ 설치된 tool-versions 에 go_min 이 없다"; exit 1; }
-IFS=. read -r ma mi _ <<< "$min"; below="$ma.$((mi - 1))"; lower="$ma.$((mi - 2))"
+IFS=. read -r ma mi _ <<< "$min"; below="$ma.$((mi - 1))"; lower="$ma.$((mi - 2))"; series="$ma.$mi"
 # 버전으로는 낮고 문자열로는 높은 것(go_min 이 1.2x 면 1.3). 문자열로 견주면 이것이 통과한다.
 short="$ma.$((mi / 10 + 1))"
 
@@ -79,7 +82,10 @@ gomods() { # 인자=「경로:go 줄[:toolchain 줄]」. go 줄이 비면 그 �
 check() { # $1=잡  $2=설명  $3=기대(fail|pass)  $4=실패할 때 이름대야 할 파일  나머지=gomods 인자
   local job="$1" what="$2" want="$3" names="$4" out rc; shift 4
   gomods "$@"
-  out=$(cd "$R" && bash -e "$T/step.$job" 2>&1); rc=$?
+  # TV 가 비면 CI 스텝처럼 lib.sh 가 제 자리에서 tool-versions 를 찾게 둔다. 설치본 케이스가 그
+  # 기본 경로를 지난다 — 모든 케이스에 넘기면 그 경로가 깨져도 초록이었다(PR #108 3라운드 콜드 리뷰).
+  if [ -n "$TV" ]; then out=$(cd "$R" && GATE_TOOL_VERSIONS="$TV" bash -e "$T/step.$job" 2>&1); rc=$?
+  else out=$(cd "$R" && bash -e "$T/step.$job" 2>&1); rc=$?; fi
   if [ "$want" = fail ]; then
     if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -qF "::error file=$names::"; then
       echo "  ✓ $job · $what → 실패하고 $names 를 이름댄다"
@@ -98,6 +104,7 @@ check() { # $1=잡  $2=설명  $3=기대(fail|pass)  $4=실패할 때 이름대�
 steps=$(cd "$T" && ls step.* 2>/dev/null | sed 's/^step\.//')
 [ -n "$steps" ] || { echo "  ✗ gate_go_min_check 를 부르는 스텝이 하나도 안 뽑혔다"; fail=1; }
 for job in $steps; do
+  TV=""
   check "$job" "go $below 모듈 하나"          fail backend/go.mod "backend:$below"
   check "$job" "go $below · go $lower"       fail backend/go.mod "backend:$below" "tools/x:$lower"
   check "$job" "go $short"                   fail backend/go.mod "backend:$short"
@@ -105,14 +112,27 @@ for job in $steps; do
   check "$job" "go $min"                     pass ""             "backend:$min"
   check "$job" "go $below · go $min 섞임"     pass ""             "backend:$below" "tools/x:$min"
   check "$job" "go 줄 없음 · go $min"         pass ""             "backend:" "tools/x:$min"
-  check "$job" "go $min.3 · go $ma.$((mi + 1))"  pass ""         "backend:$min.3" "tools/x:$ma.$((mi + 1))"
+  check "$job" "go $series.3 · go $ma.$((mi + 1))"  pass ""      "backend:$series.3" "tools/x:$ma.$((mi + 1))"
+  # 패치가 없는 go 줄은 setup-go 가 버전 범위로 받아 그 계열의 패치 하나를 깐다. 계열끼리 견준다.
+  check "$job" "go $series(패치 없음)"         pass ""             "backend:$series"
   # setup-go 는 그 go.mod 에 toolchain 줄이 있으면 그 버전을 깐다. 검사도 그 줄을 먼저 본다.
-  check "$job" "go $below.0 + toolchain go$min.1"   pass ""             "backend:$below.0:go$min.1"
-  check "$job" "go $lower + toolchain go$below.9"   fail backend/go.mod "backend:$lower:go$below.9"
+  check "$job" "go $below.0 + toolchain go$series.1"   pass ""             "backend:$below.0:go$series.1"
+  check "$job" "go $lower + toolchain go$below.9"      fail backend/go.mod "backend:$lower:go$below.9"
   # 파일을 고를 때도 toolchain 줄로 순위를 매긴다. 루트에만 toolchain 줄이 있고 하위 모듈의
   # go 줄이 같거나 높으면, go 줄로만 고를 때 하위 모듈이 뽑혀 멈췄다(이슈 #99).
-  check "$job" "루트 go $below.0+toolchain go$min.2 · go $below.0" pass "" ".:$below.0:go$min.2" "tools/x:$below.0"
-  check "$job" "루트 go $lower.0+toolchain go$min.1 · go $below.0" pass "" ".:$lower.0:go$min.1" "tools/x:$below.0"
+  check "$job" "루트 go $below.0+toolchain go$series.2 · go $below.0" pass "" ".:$below.0:go$series.2" "tools/x:$below.0"
+  check "$job" "루트 go $lower.0+toolchain go$series.1 · go $below.0" pass "" ".:$lower.0:go$series.1" "tools/x:$below.0"
+
+  # go_min 에 0 이 아닌 패치가 있을 때. 지금 핀으로는 안 생기므로 go_min 을 바꾼 tool-versions 로 본다.
+  # 패치가 없는 go 줄은 계열끼리, 패치가 있는 go 줄과 toolchain 줄은 그 버전 그대로 견준다.
+  TV="$T/tool-versions.p3"
+  { grep -v '^go_min=' "$R/.ai-kit/gate/tool-versions"; echo "go_min=$series.3"; } > "$TV"
+  check "$job" "go_min $series.3 · go $series(패치 없음)"            pass ""             "backend:$series"
+  check "$job" "go_min $series.3 · go $below(패치 없음)"             fail backend/go.mod "backend:$below"
+  check "$job" "go_min $series.3 · go $series.2"                    fail backend/go.mod "backend:$series.2"
+  check "$job" "go_min $series.3 · go $series.3"                    pass ""             "backend:$series.3"
+  check "$job" "go_min $series.3 · toolchain go$series.2"           fail backend/go.mod "backend:$below.0:go$series.2"
+  check "$job" "go_min $series.3 · toolchain go$series.4"           pass ""             "backend:$below.0:go$series.4"
 done
 
 rm -rf "$T"
