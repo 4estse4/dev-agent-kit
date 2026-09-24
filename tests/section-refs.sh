@@ -2,8 +2,12 @@
 # `common/docs/verification-stages.md` 의 절을 번호로 가리키는가.
 #
 # **절 제목을 문장째 「」 로 인용해 가리키면 제목을 고칠 때마다 인용이 거짓이 된다.** 인용이
-# 사본이 되어 두 벌이 된다(이슈 #56). 그래서 절에 번호를 붙이고 참조는 번호로 한다. 넷을 본다.
-# - 그 문서의 `##` · `###` 제목이 모두 번호로 시작한다
+# 사본이 되어 두 벌이 된다(이슈 #56). 그래서 절에 번호를 붙이고 참조는 번호로 한다.
+#
+# **번호가 밀리면 참조는 초록인 채로 다른 절을 가리킨다.** 그래서 (번호, 제목) 을 아래
+# `SECTIONS` 에 고정한다. 사본은 여기 한 벌이다. 절을 더하거나 제목을 고치면 이 목록도 같이
+# 고친다. 번호는 바꾸지 않는다 — 새 절은 끝에 붙이거나 이어지는 번호를 쓴다. 보는 것:
+# - 그 문서의 `##` · `###` 제목이 `SECTIONS` 와 순서까지 같다. 번호가 밀리거나 겹치면 빨갛다
 # - 파일을 가리킨 바로 뒤에 「」 인용이 오지 않는다(`verification-stages.md` 의 「…」)
 # - 옛 문장 제목이 어디에도 「」 로 남아 있지 않다. 짧은 새 제목(「이월」 같은)은 용어로도
 #   쓰이므로 인용만으로는 참조와 가를 수 없어, 옛 제목만 본다
@@ -17,6 +21,14 @@ python3 - <<'PY'
 import re, subprocess, sys
 
 VS = 'common/docs/verification-stages.md'
+SECTIONS = [
+    ('1', 'L1 으로 내릴 것'), ('2', 'L2 가 볼 것'), ('3', '콜드 리뷰어'), ('3.1', '두 리뷰'),
+    ('3.2', '라운드'), ('3.3', '「누가 막나」의 어휘'), ('3.4', '라운드 사이에 넘어가는 것'),
+    ('3.5', '판정어와 바구니'), ('3.6', '발견'), ('3.7', '이월'), ('4', 'PR 본문'),
+    ('5', 'L3 에 남기는 것'), ('6', '에이전트 밖에 두는 강제'), ('6.1', '밖으로 옮긴 검사'),
+    ('6.2', '권한 규칙이 잡는 것'), ('6.3', '승인이 필요한 행동'), ('6.4', 'git hooks 의 한계'),
+    ('6.5', '검사를 둘 자리'), ('6.6', '충돌 마커'), ('6.7', '에이전트 `pre_push` 훅을 두지 않는 이유'),
+]
 OLD = [
     'L1로 내려야 하는데 L2에 남아있기 쉬운 것들', 'L2가 실제로 필요한 것 (기계가 못 잡음)',
     'L2를 두 번 돌리는 조건 — 콜드 리뷰어', '두 리뷰를 다 돌린다 — 서로 다른 것을 잡는다',
@@ -42,21 +54,17 @@ live = [f for f in ls if f
         and f != 'docs/dev-log.md' and not f.startswith('tests/fixtures/') and f != 'tests/section-refs.sh']
 text = {f: open(f, encoding='utf-8', errors='replace').read() for f in live}
 
-# 1. 제목이 모두 번호로 시작한다
-nums, unnumbered = set(), []
-for line in text[VS].split('\n'):
-    m = re.match(r'^(#{2,3}) (.*)$', line)
-    if not m:
-        continue
-    n = re.match(r'(\d+(?:\.\d+)?) ', m.group(2))
-    if n:
-        nums.add(n.group(1))
-    else:
-        unnumbered.append(m.group(2))
-if unnumbered:
-    bad('번호 없는 절 제목 %d개 — 예: %s' % (len(unnumbered), unnumbered[0]))
+# 1. 절 제목이 고정 목록과 순서까지 같다
+heads = [m.group(1) for m in re.finditer(r'(?m)^#{2,3} (.*)$', text[VS])]
+pinned = ['%s %s' % p for p in SECTIONS]
+nums = set(re.match(r'\d+(?:\.\d+)?', h).group(0) for h in heads if re.match(r'\d', h))
+if heads != pinned:
+    i = next(k for k in range(max(len(heads), len(pinned)))
+             if k >= len(heads) or k >= len(pinned) or heads[k] != pinned[k])
+    bad('절 제목이 SECTIONS 와 다르다 — %d번째: 문서 「%s」 · SECTIONS 「%s」'
+        % (i + 1, heads[i] if i < len(heads) else '없음', pinned[i] if i < len(pinned) else '없음'))
 else:
-    print('  ✓ 절 제목이 모두 번호로 시작한다(%d개)' % len(nums))
+    print('  ✓ 절 제목이 SECTIONS 와 순서까지 같다(%d개)' % len(heads))
 
 # 2. 파일을 가리킨 바로 뒤에 「」 인용이 오지 않는다
 quoted = []
