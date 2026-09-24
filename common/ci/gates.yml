@@ -118,7 +118,7 @@ jobs:
       # 루트의 go.mod 를 가리켜 그런 레포에서 세 잡이 모두 실패했다(실제로 확인함). setup-go 는
       # GOTOOLCHAIN=local 이라 더 높은 go 를 받아 오지 않으므로 가장 높은 것을 깐다.
       # 캐시 키는 레포 전체의 go.mod 와 go.sum 으로 만든다. `cache-dependency-path` 가 없으면 setup-go 는
-      # 레포 루트의 go.mod 하나만 찾고, 없으면 경고만 출력하고 캐시를 복원도 저장도 하지 않는다(실측,
+      # 레포 루트의 go.mod 하나만 찾고, 없으면 경고만 출력하고 캐시를 복원도 저장도 하지 않는다(실제로 확인함,
       # 이슈 #96). go.sum 은 의존성이 없는 모듈에는 없으므로 go.mod 도 같이 적는다 — Go 잡은 go.mod 가
       # 있을 때만 실행되므로 맞는 파일이 늘 있다. coverage · security 잡도 같다.
       - if: needs.detect.outputs.go == 'true'
