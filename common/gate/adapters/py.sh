@@ -3,7 +3,7 @@
 #
 # 도구는 **프로젝트가 선언한 것**을 먼저 쓴다. 린트 규칙을 정하는 것이 프로젝트이므로
 # 버전도 프로젝트가 정하는 것이 맞다. 아무것도 선언하지 않았으면 PATH 의 것으로
-# 폴백하고(CI 는 tool-versions 의 핀을 거기 깔아둔다), 그것도 없으면 건너뛴다
+# 폴백하고(CI 는 tool-versions 에 핀한 버전을 거기 설치해 둔다), 그것도 없으면 건너뛴다
 # — GATE_STRICT 면 실패로 승격되고 그 사실을 말한다.
 
 gate_have python3 || { gate_skip "python3(미설치)"; return 0 2>/dev/null || exit 0; }

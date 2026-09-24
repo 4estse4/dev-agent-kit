@@ -7,13 +7,13 @@
 #
 # 버전을 여기 적지 않는다 — tool-versions 가 단일 출처다.
 # 런타임(go·java·node·python3)은 설치하지 않는다. 그건 프로젝트가 요구하는 버전이 있고,
-# 킷이 남의 머신에 런타임을 까는 것은 선을 넘는다.
+# 킷이 남의 머신에 런타임을 설치하는 것은 선을 넘는다.
 set -uo pipefail
 SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=/dev/null
 . "$SELF_DIR/lib.sh"
 # 게이트와 같은 PATH 로 판정한다. 안 그러면 게이트는 "있다" 하고 설치기는 "없다" 해서,
-# 이미 있는 도구를 다시 깔고 dry-run 이 거짓말을 한다.
+# 이미 있는 도구를 다시 설치하고 dry-run 이 거짓말을 한다.
 gate_extend_path
 
 DRY=0 ALL=0
@@ -40,7 +40,7 @@ else
     && { add goimports; add golangci-lint; add govulncheck; }
   find . \( $(gate_prune_expr) \) -prune -o -name pyproject.toml -print -quit 2>/dev/null | grep -q . && add ruff
   # ktlint 는 Kotlin 린터다. 빌드 파일만 보고 넣으면 Java 전용 프로젝트에 쓸모없는
-  # 도구를 깔게 된다 — 실제 .kt 파일이 있을 때만 넣는다.
+  # 도구를 설치하게 된다 — 실제 .kt 파일이 있을 때만 넣는다.
   find . -name '*.kt' -not -path '*/build/*' -print -quit 2>/dev/null | grep -q . && add ktlint
 fi
 

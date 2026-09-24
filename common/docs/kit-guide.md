@@ -53,19 +53,19 @@ git config user.email      # 이 레포에서 쓸 이메일이 맞는지 먼저 
 `install.sh` 를 다시 돌린다.
 
 **Go 버전.** 킷이 핀한 Go 도구는 `.ai-kit/gate/tool-versions` 의 `go_min` 보다 낮은 go 로는
-설치되지 않는다. `go.mod` 는 레포 어디에 있어도 되고 여럿이어도 된다. CI 는 깔 Go(`toolchain`
-줄이 있으면 그 버전, 없으면 `go` 줄)가 가장 높은 것으로 Go 를 깔고, 그 버전이 `go_min` 보다
-낮으면 Go 를 까는 잡마다 그 이유를 말하며 멈춘다. `go` 줄이 `1.26` 처럼 패치가 없으면 setup-go 가
-그 계열의 패치 하나를 깔므로 `go_min` 과 계열끼리 견준다.
+설치되지 않는다. `go.mod` 는 레포 어디에 있어도 되고 여럿이어도 된다. CI 는 설치할 Go(`toolchain`
+줄이 있으면 그 버전, 없으면 `go` 줄)가 가장 높은 것으로 Go 를 설치하고, 그 버전이 `go_min` 보다
+낮으면 Go 를 설치하는 잡마다 그 이유를 말하며 멈춘다. `go` 줄이 `1.26` 처럼 패치가 없으면 setup-go 가
+그 계열의 패치 하나를 설치하므로 `go_min` 과 계열끼리 견준다.
 
-**Node · Python 버전.** CI 는 잡마다 런타임을 하나만 깔고, 그 버전을 레포 루트의 `.nvmrc` ·
+**Node · Python 버전.** CI 는 잡마다 런타임을 하나만 설치하고, 그 버전을 레포 루트의 `.nvmrc` ·
 `.python-version` 에서 읽는다. `package.json` · `pyproject.toml` 이 하위 디렉터리에 있어도 이 두 파일은
-루트에 둔다. 없으면 그 언어의 런타임을 까는 잡이 이유를 말하며 멈춘다.
+루트에 둔다. 없으면 그 언어의 런타임을 설치하는 잡이 이유를 말하며 멈춘다.
 
 ## 4. 킷이 안 하는 것 — 기대하지 마라
 
 - **Java** — `ktlint` 는 `.kt` 만 본다. Java 소스는 컴파일·테스트만 되고 **린트가 0**이다.
-- **런타임 설치** — Go·JDK·Node·Python 은 프로젝트가 요구하는 버전이 있다. 킷은 안 깐다.
+- **런타임 설치** — Go·JDK·Node·Python 은 프로젝트가 요구하는 버전이 있다. 킷은 설치하지 않는다.
 - **`pytest`·`mypy`** — 프로젝트 의존성이다. `uv.lock`·`poetry.lock`·`[dependency-groups]`·
   `[project.optional-dependencies]`·`requirements-dev.txt` 중 하나로 선언해야 CI 가 설치한다.
 - **빌드 래퍼** — Gradle·Maven 은 `./gradlew`·`./mvnw` 를 **커밋해야** 한다. 없으면 CI 가 막는다
