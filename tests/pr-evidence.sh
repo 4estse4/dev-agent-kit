@@ -59,6 +59,20 @@ run "$T/fence.part" "printf '%s\\n' 'a' '\`\`\`' 'b'"
 open=$(head -1 "$T/fence.part" 2>/dev/null); close=$(tail -1 "$T/fence.part" 2>/dev/null)
 [ "$open" = "$close" ] && [ "${#open}" -gt 3 ] && grep -qxF '```' "$T/fence.part" \
   && ok "출력의 \`\`\` 보다 긴 울타리" || bad "출력의 \`\`\` 보다 긴 울타리 — 여는 줄 '$open'"
+# 출력에만 든 경우와 명령에만 든 경우를 따로 본다. 둘 다 든 위 경우는 한쪽만 보는 울타리도
+# 통과시킨다.
+run "$T/fence-out.part" "printf '\\140\\140\\140\\n'"
+open=$(head -1 "$T/fence-out.part" 2>/dev/null); close=$(tail -1 "$T/fence-out.part" 2>/dev/null)
+[ "$open" = "$close" ] && [ "${#open}" -gt 3 ] && ok "출력에만 든 \`\`\`" \
+  || bad "출력에만 든 \`\`\` — 여는 줄 '$open'"
+run "$T/fence-cmd.part" "echo '\`\`\`' >/dev/null; echo x"
+open=$(head -1 "$T/fence-cmd.part" 2>/dev/null); close=$(tail -1 "$T/fence-cmd.part" 2>/dev/null)
+[ "$open" = "$close" ] && [ "${#open}" -gt 3 ] && ok "명령에만 든 \`\`\`" \
+  || bad "명령에만 든 \`\`\` — 여는 줄 '$open'"
+
+# ── 덧붙이기가 실패하면 성공으로 끝나지 않는다 ──
+( cd "$T" && printf '%s\n' 'echo hi' | bash "$S" "$T/no-such-dir/x.part" >/dev/null 2>&1 ); rc=$?
+[ "$rc" != 0 ] && ok "덧붙이지 못하면 0 이 아니다" || bad "덧붙이지 못하면 0 이 아니다 — rc=$rc"
 
 # ── 덧붙인다 ── 앞의 블록을 덮지 않는다
 run "$T/twice.part" 'echo first'
@@ -87,16 +101,18 @@ cat > "$R/.claude/settings.json" <<'EOF'
   "deny": ["Bash(git push*--force*)"]}}
 EOF
 cat > "$R/.claude/settings.local.json" <<'EOF'
-{"permissions": {"deny": ["Bash(rm -rf*)"]}}
+{"permissions": {"deny": ["Bash(rm *)"]}}
 EOF
-refused() {   # refused <이름> <명령> [cwd]
-  local f="$T/refuse-$RANDOM.part" rc err
-  err=$( cd "${3:-$R}" && printf '%s\n' "$2" | bash "$S" "$f" 2>&1 >/dev/null ); rc=$?
-  if [ "$rc" != 0 ] && [ ! -e "$f" ] && printf '%s' "$err" | grep -q '돌리지 않는다'; then ok "$1"
-  else bad "$1 — rc=$rc, 파일 $( [ -e "$f" ] && echo 있음 || echo 없음 ), $err"; fi
-}
-# 명령은 규칙 글자를 품은 `echo` 다. 글자로 막으므로 막히는 것은 같고, 가드가 빠져
+# 거부된 명령은 **돌지 않아야** 한다. 명령 앞에 흔적 파일을 만드는 `touch` 를 붙여, 거부했다고
+# 말하면서 먼저 돌린 모양을 잡는다. 뒤의 글자는 규칙 글자를 품은 `echo` 라 가드가 빠져
 # 돌아가도 아무것도 안 한다.
+refused() {   # refused <이름> <명령> [cwd]
+  local f="$T/refuse-$RANDOM.part" m="$T/ran-$RANDOM" rc err
+  err=$( cd "${3:-$R}" && printf 'touch %s; %s\n' "$m" "$2" | bash "$S" "$f" 2>&1 >/dev/null ); rc=$?
+  if [ "$rc" != 0 ] && [ ! -e "$f" ] && [ ! -e "$m" ] && printf '%s' "$err" | grep -q '돌리지 않는다' \
+     && printf '%s' "$err" | grep -q '글로 적는다'; then ok "$1"
+  else bad "$1 — rc=$rc, 조각 $( [ -e "$f" ] && echo 있음 || echo 없음 ), 돌았나 $( [ -e "$m" ] && echo 돌았다 || echo 안 돌았다 ), $err"; fi
+}
 refused "ask 규칙 글자(gh pr merge)" 'echo gh pr merge 12 --squash'
 refused "deny 규칙 글자(git push … --force)" 'echo git push origin main --force'
 refused "사이에 공백이 더 든 글자" 'echo git  push   --force'
@@ -105,22 +121,46 @@ refused "여러 줄 명령 둘째 줄의 글자" $'echo ok\necho gh pr merge 1'
 refused "끝에 :* 를 쓴 규칙" 'echo gh api repos/x/y'
 refused "settings.local.json 의 규칙" 'echo rm -rf build'
 refused "하위 디렉터리에서 불러도 레포 설정을 본다" 'echo gh pr merge 3' "$R/sub"
-f="$T/allowed.part"
-( cd "$R" && printf '%s\n' 'git log --oneline -1 2>&1; echo done' | bash "$S" "$f" >/dev/null 2>&1 )
-grep -qx 'done' "$f" 2>/dev/null && ok "규칙 글자가 없는 명령은 돈다" || bad "규칙 글자가 없는 명령은 돈다"
+# 규칙 글자가 낱말 속이나 다른 모양으로만 든 명령은 돈다. 공식 문서: "The space before a
+# trailing `*` is part of the rule. `Bash(ls *)` requires a space after `ls`, so `lsof` doesn't match."
+runs() {   # runs <이름> <명령>
+  local f="$T/runs-$RANDOM.part"
+  ( cd "$R" && printf '%s; echo done\n' "$2" | bash "$S" "$f" >/dev/null 2>&1 )
+  grep -qx 'done' "$f" 2>/dev/null && ok "$1" || bad "$1 — $(cat "$f" 2>/dev/null)"
+}
+runs "규칙 글자가 없는 명령은 돈다" 'git log --oneline -1 2>&1'
+runs "Bash(rm *) 가 --format 을 막지 않는다" "git log --format='%h %s' -1 2>&1"
+runs "Bash(rm *) 가 normal · platform 을 막지 않는다" 'echo normal platform'
+runs "Bash(rm *) 가 낱말 끝의 rm 을 막지 않는다" 'echo farm tools'
+runs "Bash(rm *) 가 rmdir 을 막지 않는다(* 앞 공백)" 'echo rmdir x'
+runs "Bash(gh api:*) 가 gh apix 를 막지 않는다(:* 는 공백 *)" 'echo gh apix'
 printf '{"permissions": ' > "$R/.claude/settings.json"
 refused "설정을 못 읽으면 막는다" 'echo hi'
 
 # ── 스킬이 손으로 붙이라고 시키지 않는다 ──
 for f in "$OPEN" "$MERGE"; do
   name=$(basename "$(dirname "$f")")
-  if tr '\n' ' ' < "$f" | grep -qE '출력을? *그대로 *붙인다|게이트 *출력을 *붙인다'; then
+  if tr '\n' ' ' < "$f" | grep -qE '출력을? *그대로 *붙인다|게이트 *출력을 *붙인다|출력은 *(\*\*)?그대로(\*\*)? *옮긴다'; then
     bad "$name 이 출력을 손으로 붙이라고 시킨다"
   else ok "$name 이 출력을 손으로 붙이라고 시키지 않는다"; fi
   grep -q 'open-pr/evidence\.sh' "$f" && ok "$name 이 evidence.sh 를 부른다" || bad "$name 이 evidence.sh 를 부른다"
 done
 grep -qE 'gh pr create .*--body-file' "$OPEN" && ok "open-pr 이 본문을 --body-file 로 넘긴다" \
   || bad "open-pr 이 본문을 --body-file 로 넘긴다"
+
+# ── 조각을 이을 때 끝 줄바꿈이 없어도 울타리가 앞 줄에 붙지 않는다 ──
+# `Write` 로 쓴 조각이 줄바꿈 없이 끝나면 `cat` 은 다음 조각의 여는 울타리를 그 줄에 붙인다.
+# 스킬이 적은 잇는 명령을 그대로 꺼내 돌린다.
+J="$T/join"; mkdir -p "$J"
+printf '## 검증' > "$J/10-head.part"
+( cd "$T" && printf '%s\n' 'echo hi' | bash "$S" "$J/20-ev.part" >/dev/null 2>&1 )
+join=$(grep -oE '(cat|awk 1) <디렉터리>/\*\.part > <디렉터리>/body\.md' "$OPEN" | head -1)
+if [ -z "$join" ]; then bad "open-pr 에서 조각 잇는 명령을 못 찾았다"
+else
+  ( cd "$J" && eval "${join//<디렉터리>/.}" )
+  sed -n 2p "$J/body.md" | grep -qx '```' && ok "잇기 — 줄바꿈 없는 조각 뒤 울타리가 제 줄에 있다" \
+    || bad "잇기 — 줄바꿈 없는 조각 뒤 울타리가 제 줄에 있다: $(head -2 "$J/body.md" | tr '\n' '|')"
+fi
 
 rm -rf "$T"
 [ "$fail" = 0 ] && echo "  ✓ PR 본문 · 결정 코멘트의 증거를 명령이 덧붙인다"
