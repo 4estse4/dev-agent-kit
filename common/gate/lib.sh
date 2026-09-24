@@ -13,12 +13,12 @@ gate_have() { command -v "$1" >/dev/null 2>&1; }
 # 마커를 찾을 때 건너뛸 디렉터리. **게이트와 설치기가 이 하나를 함께 쓴다** —
 # 두 곳에 적으면 조용히 드리프트한다(gate.sh 머리말의 원칙).
 #
-# 목록이 짧은 이유는 실측이다. "빌드 산출물이니 걸러야지" 싶은 이름들을 넣었다가
+# 목록이 짧은 이유는 실제로 겪은 일이다. "빌드 산출물이니 걸러야지" 싶은 이름들을 넣었다가
 # **리그레션을 만들었다** — vendor·build·out·dist·target·coverage 는 업무 도메인
 # 이름이기도 해서(`services/vendor` 같은), 이름으로 쳐내면 멀쩡한 모듈이 검사에서
 # 통째로 사라진다. 실제로 그렇게 됐고 콜드 리뷰가 잡았다.
 #
-# 실측(multimodal-asset-studio, Go+React 모노레포): 마커 파일을 품는 것은
+# 센 결과(multimodal-asset-studio, Go+React 모노레포): 마커 파일을 품는 것은
 # node_modules 뿐이다.
 #   frontend/node_modules            package.json 264개
 #   frontend/dist · 빈 node_modules  0개
@@ -54,7 +54,7 @@ gate_go_setup_version() { # $1=go.mod
 
 # go.mod 경로들(표준입력, 한 줄에 하나) 가운데 setup-go 가 깔 Go(위 gate_go_setup_version)가 가장
 # 높은 것을 낸다. CI 의 setup-go 가 이 파일로 Go 를 깐다. setup-go 는 GOTOOLCHAIN=local 을 설정해
-# 더 높은 go 를 받아 오지 않으므로(실측), 모듈이 여럿이면 가장 높은 것을 깔아야 모든 모듈이 돈다.
+# 더 높은 go 를 받아 오지 않으므로(실행해 확인함), 모듈이 여럿이면 가장 높은 것을 깔아야 모든 모듈이 돈다.
 # 같으면 경로 순으로 뒤의 것이다.
 gate_go_highest() {
   local f v
@@ -78,8 +78,8 @@ gate_go_highest() {
 # 그대로만 견주면, Go 의 순서로 1.26 < 1.26.0 이라 1.26.x 를 까는 go 1.26 레포가 멈춘다.
 # sort -V 는 이 형태들을 Go 의 순서대로 놓는다(1.26 < 1.26.0 < 1.26.1, go.dev/doc/toolchain).
 # CI 에서 setup-go 를 쓰는 잡이 모두 그 앞에서 부른다. 잡은 저마다 Go 를 깔아서, 한 잡에만 두면
-# security 는 govulncheck 설치에서 「requires go >= …」로 다른 말을 하며 죽고(실측), 도구를
-# 깔지 않는 coverage 는 킷이 지원하지 않는 Go 로 초록을 낸다(실측).
+# security 는 govulncheck 설치에서 「requires go >= …」로 다른 말을 하며 죽고(실행해 확인함), 도구를
+# 깔지 않는 coverage 는 킷이 지원하지 않는 Go 로 초록을 낸다(실행해 확인함).
 gate_go_min_check() {
   local min f v line want what raise
   min=$(gate_tool_version go_min)

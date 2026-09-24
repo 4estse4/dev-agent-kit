@@ -38,7 +38,7 @@ bash .ai-kit/gate/gate.sh --all                 # 전부 (CI 가 부르는 것)
 > 어휘와 각각의 우회는 `verification-stages.md` 3.3 에 있다.
 
 `docs/process/` 의 두 문서가 그 이유를 설명한다 — `artifact-rules.md`(R1~R7)와
-`verification-stages.md`(어느 검사를 어디에 둘지, 실측 수치 포함).
+`verification-stages.md`(어느 검사를 어디에 둘지, 측정한 시간 포함).
 
 ## 3. 설치 **전에** 확인했어야 하는 것
 
