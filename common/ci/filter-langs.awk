@@ -48,7 +48,9 @@ function flush_job() { if (job != "" && !jobdrop) printf "%s", job; job = ""; jo
   inenv = 0
 }
 
-injobs && /^  [a-z_-]+:$/ { flush_c(); flush_job() }
+# 떨어뜨리는 스텝을 건너뛰는 중에 모은 주석은 뒤에 스텝 머리가 와야 남는다(아래 2). 잡 머리 ·
+# 0~5칸 줄 · 파일 끝이 먼저 오면 그 주석이 설명할 스텝은 앞의 떨어진 스텝뿐이라 같이 버린다.
+injobs && /^  [a-z_-]+:$/ { if (skip) drop_c(); flush_c(); flush_job() }
 injobs && /^    if: needs\.detect\.outputs\.[a-z]+ ==/ { if (lang_of($0) in X) jobdrop = 1 }
 
 # 3) detect 의 outputs
@@ -89,7 +91,7 @@ infind {
   # 스텝 본문(7칸 이상)이 이어지면 모은 주석은 그 스텝 안의 것이다. 떨어뜨리는 스텝이면 같이 버리고
   # 건너뛰기를 이어 간다. 주석에서 건너뛰기를 끝내면 그 스텝의 나머지 줄이 남아 워크플로가 깨진다.
   else if (skip && $0 ~ /^       /) { drop_c(); next }
-  else if (skip && $0 ~ /^ {0,5}[^ ]/) { skip = 0 }
+  else if (skip && $0 ~ /^ {0,5}[^ ]/) { drop_c(); skip = 0 }
 
   if (skip) next
   # 모은 주석은 지금 줄 앞에 출력한다. 남는 스텝의 본문 한가운데 주석이 다음 스텝 머리까지
@@ -98,4 +100,4 @@ infind {
   emit($0)
 }
 
-END { flush_c(); flush_job() }
+END { if (skip) drop_c(); flush_c(); flush_job() }
