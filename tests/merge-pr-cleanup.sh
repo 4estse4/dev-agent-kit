@@ -17,7 +17,10 @@
 #     원격 브랜치 · 로컬 브랜치 · HEAD · 원래 체크아웃을 본다
 #   · worktree 에서 fetch 가 실패하면 base 복귀 줄이 실패하고, 받아 둔 옛 origin/<base> 에 detach 하지 않는다
 #   · 원래 체크아웃이 다른 브랜치에 있어도 worktree 는 base 브랜치로 옮기지 않고 detach 한다. worktree 가
-#     base 에 있으면 원래 체크아웃이 base 로 옮기지 못한다(이슈 #121)
+#     base 에 있으면 원래 체크아웃이 base 로 옮기지 못한다(이슈 #121). 그때 base 를 쓰는 체크아웃이 없으면
+#     로컬 base 는 머지된 커밋으로 갱신된다. 원래 체크아웃이 base 에 있어 갱신이 거부돼도 줄은 성공한다
+#   · 원래 체크아웃에서 다른 worktree 가 base 를 쓰면 detach 한다. 원래 체크아웃의 하위 디렉터리에서 실행해도
+#     원래 체크아웃으로 판정한다
 #
 # 스크래치 레포는 git 의 기본 브랜치 설정과 상관없이 main 으로 만든다. 한때 설정에 기대어, 설정이 있는
 # 기계에서만 통과하고 CI 에서는 다섯 경우가 모두 실패했다. setup 이 머지된 커밋을 origin 에 올리지 못하면
@@ -157,6 +160,11 @@ if setup wt-on-pr; then
   run4 wt-on-pr "$T/wt-on-pr/wt"
   check wt-on-pr "worktree 가 PR 브랜치에 있다: 두 브랜치가 지워지고 worktree 는 origin/main 에 detach, 원래 체크아웃은 그대로다" \
     "$T/wt-on-pr/wt" gone detached "$b"
+  # worktree 갈래는 로컬 main 도 갱신하려 하는데, 원래 체크아웃이 main 에 있으면 git 이 거부한다. 그 거부가
+  # base 복귀 줄을 실패시키면 세션이 거기서 멈추고 브랜치가 남는다.
+  r=$(awk -F'\t' '$2 ~ /^if .*git switch/ { print $1 }' "$T/wt-on-pr.rc")
+  if [ "$r" = 0 ]; then ok "worktree 가 PR 브랜치에 있다: 원래 체크아웃이 main 에 있어 로컬 main 을 갱신하지 못해도 base 복귀 줄은 성공한다"
+  else bad "worktree 가 PR 브랜치에 있다: base 복귀 줄의 rc=${r:-없음} — 로컬 main 갱신이 거부된 것이 줄의 실패로 섞였다"; fi
 fi
 
 # 3) worktree 가 detached 다 — gh 가 현재 브랜치를 못 읽던 경우(PR #88)
@@ -215,11 +223,41 @@ if setup other-work; then
   run4 other-work "$R/wt"
   check other-work "원래 체크아웃이 다른 브랜치에 있다: 두 브랜치가 지워지고 worktree 는 origin/main 에 detach 한다" \
     "$R/wt" gone detached ""
+  # 로컬 main 이 머지 전에 남으면 다음 브랜치의 `git log main..HEAD` 가 방금 머지한 커밋을 그 브랜치의 것으로
+  # 보여 준다(open-pr · dev-log · trace 의 주입). main 을 쓰는 체크아웃이 없으니 갱신돼야 한다.
+  if [ "$(git -C "$R/main" rev-parse refs/heads/main)" = "$(git -C "$R/other" rev-parse HEAD)" ]; then
+    ok "원래 체크아웃이 다른 브랜치에 있다: 로컬 main 이 머지된 커밋으로 갱신된다"
+  else
+    bad "원래 체크아웃이 다른 브랜치에 있다: 로컬 main 이 머지 전 커밋에 남았다"
+  fi
   if git -C "$R/main" switch -q main 2>"$T/other-work.switch"; then
     ok "원래 체크아웃이 다른 브랜치에 있다: 그 뒤 원래 체크아웃이 main 으로 옮길 수 있다"
   else
     bad "원래 체크아웃이 다른 브랜치에 있다: 원래 체크아웃이 main 으로 옮기지 못한다 — $(head -1 "$T/other-work.switch")"
   fi
+fi
+
+# 8) 원래 체크아웃이 PR 브랜치에 있고 다른 worktree 가 main 을 쓴다 — 원래 체크아웃의 `git switch main` 이
+#    실패하는 갈래다. 그때도 detach 해서 PR 브랜치에서 내려와야 두 브랜치를 지울 수 있다.
+if setup held; then
+  R="$T/held"
+  git -C "$R/main" switch -q feat
+  git -C "$R/main" worktree add -q "$R/wt" main 2>/dev/null
+  run4 held "$R/main"
+  check held "다른 worktree 가 main 을 쓴다: 원래 체크아웃이 origin/main 에 detach 하고 두 브랜치가 지워진다" \
+    "$R/main" gone detached ""
+fi
+
+# 9) 원래 체크아웃의 하위 디렉터리에서 실행한다 — 세션의 작업 디렉터리는 호출 사이에 유지된다. 하위
+#    디렉터리에서 `--git-common-dir` 는 상대 경로를 내므로, 절대 경로 형태로 견주지 않으면 원래 체크아웃을
+#    worktree 로 판정한다.
+if setup subdir; then
+  R="$T/subdir"
+  git -C "$R/main" switch -q feat
+  mkdir -p "$R/main/sub/dir"
+  run4 subdir "$R/main/sub/dir"
+  check subdir "원래 체크아웃의 하위 디렉터리에서 실행한다: 두 브랜치가 지워지고 main 으로 돌아와 fast-forward 된다" \
+    "$R/main" gone branch ""
 fi
 
 rm -rf "$T"
