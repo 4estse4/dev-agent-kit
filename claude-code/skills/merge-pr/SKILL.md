@@ -347,13 +347,27 @@ URL 이다:
 
 **base 로 돌아온다:**
 
-    if git switch <baseRefName>; then git pull --ff-only; else git fetch origin && git switch --detach origin/<baseRefName>; fi
+    if [ "$(git rev-parse --absolute-git-dir)" = "$(git rev-parse --path-format=absolute --git-common-dir)" ] && git switch <baseRefName>; then git pull --ff-only; else git fetch origin && git switch --detach origin/<baseRefName> && { git fetch -q origin <baseRefName>:<baseRefName> 2>/dev/null || true; }; fi
 
-`git switch` 가 되면 base 브랜치에서 fast-forward 한다. fast-forward 실패 시 중단:
-`Error: <baseRefName> 을 fast-forward 할 수 없습니다.`
-**git worktree 에서는 `git switch` 가 `fatal: '<baseRefName>' is already used by worktree at …` 로
-실패하는 것이 정상이다.** base 를 원래 체크아웃이 쓰고 있다. 그때는 fetch 한 뒤 `origin/<baseRefName>` 에
-detach 한다. PR 브랜치에서 내려와야 아래에서 그 브랜치를 지울 수 있다.
+원래 체크아웃에서(`--absolute-git-dir` 와 `--git-common-dir` 가 같다) `git switch` 가 되면 base 브랜치에서
+fast-forward 한다. fast-forward 실패 시 중단: `Error: <baseRefName> 을 fast-forward 할 수 없습니다.`
+**절대 경로 형태로 견준다.** 원래 체크아웃의 하위 디렉터리에서 `--git-dir` 는 절대 경로를, `--git-common-dir` 는
+`../../.git` 같은 상대 경로를 출력해서, 그대로 견주면 원래 체크아웃을 worktree 로 판정한다. 세션의 작업
+디렉터리는 호출 사이에 유지되므로 하위 디렉터리에서 실행되는 일이 흔하다.
+
+**git worktree 에서는 base 로 옮기지 않는다. fetch 한 뒤 `origin/<baseRefName>` 에 detach 한다.** worktree 가
+base 브랜치에 있으면 원래 체크아웃이 base 로 옮기지 못한다. 원래 체크아웃이 다른 브랜치에 있으면 worktree 의
+`git switch` 는 성공하므로, 되는지를 보지 않고 worktree 인지로 가른다(이슈 #121). 원래 체크아웃에서도 다른
+worktree 가 base 를 쓰면 `git switch` 가 `fatal: '<baseRefName>' is already used by worktree at …` 로 실패하고,
+그때도 detach 한다. PR 브랜치에서 내려와야 아래에서 그 브랜치를 지울 수 있다.
+
+**detach 한 뒤 로컬 base 브랜치도 fast-forward 한다(`git fetch origin <baseRefName>:<baseRefName>`).** 로컬 base 가
+머지 전에 남으면, 그 뒤 만든 브랜치에서 `open-pr` · `dev-log` · `trace` 가 주입하는 `git log main..HEAD` 가 방금
+머지한 커밋을 그 브랜치의 변경으로 보여 준다. base 를 쓰는 체크아웃이 있으면 git 이
+`refusing to fetch into branch … checked out at …` 로 거부하고, 그 체크아웃은 그곳의 사람이 직접 pull 한다.
+그래서 이 갱신의 실패는 줄의 종료 코드에 섞지 않는다(`|| true`). **이 거부는 git 2.35 부터다.** 그 전 git 은
+현재 worktree 의 브랜치만 보호해서, 원래 체크아웃이 쓰는 base 의 ref 만 옮기고 그 작업 트리는 머지 전으로
+둔다. 킷이 상정하는 macOS · ubuntu CI 의 git 은 그보다 새것이다.
 
 **이 줄의 종료 코드가 0 이 아니면 중단한다.** fetch 가 네트워크 때문에 실패하면 그 줄이 실패한다.
 fetch 를 따로 두면 fetch 가 실패해도 받아 둔 옛 `origin/<baseRefName>` 에 조용히 detach 해서, 머지 전
