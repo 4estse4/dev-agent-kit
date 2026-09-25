@@ -17,10 +17,11 @@
 #   · `go install` 로 도구를 설치하는 잡마다, 그 앞에서 actions/cache/restore 로 도구 디렉터리를 복원하고,
 #     복원이 안 됐을 때만 그 디렉터리에 설치한 뒤 곧바로 actions/cache/save 로 저장한다. 키에는 OS · arch ·
 #     setup-go 가 설치한 Go 버전 · 그 잡이 설치하는 도구의 핀이 모두 들어 있고, 잡마다 다르다. 도구를 쓰는
-#     스텝보다 앞에서, 복원 여부와 상관없이 그 디렉터리를 PATH 에 더한다. 세 잡의 setup-go 는 키가 같아
-#     먼저 끝난 잡의 캐시만 저장되므로 도구 빌드가 캐시되지 않았고, setup-go 와 actions/cache 의 저장은
+#     스텝보다 앞에서, 복원 여부와 상관없이 그 디렉터리를 PATH 에 더한다. setup-go 는 모듈 캐시와 빌드
+#     캐시만 캐시하므로 go install 이 만든 도구는 캐시되지 않았고, setup-go 와 actions/cache 의 저장은
 #     잡이 성공할 때만 실행된다(이슈 #115). 설치 스텝과 PATH 스텝은 go 대역으로 실행해 GOBIN 과 PATH 가
-#     복원하는 경로와 같은지 본다
+#     복원하는 경로와 같은지, 도구를 cgo 없이(CGO_ENABLED=0) 빌드하는지 본다. cgo 를 켜면 도구가 러너의
+#     glibc 에 링크되는데, 키에 러너 이미지가 없어 다른 이미지에서 빌드한 도구를 복원할 수 있다
 #   · coverage 스텝을 go 대역으로 돌리면 모듈마다 그 디렉터리에서 go test 를 부르고, 한 모듈이
 #     실패하면 이유를 말하며 실패하고, COVER_MIN 을 넘는지 판정한다. 숫자로 된 커버리지 줄이
 #     하나도 없을 때 말없이 실패하지 않는다
@@ -155,18 +156,18 @@ case "$wiring" in
 esac
 
 # ── Go 도구 캐시 ───────────────────────────────────────────────────────
-# setup-go 는 GOMODCACHE 와 GOCACHE 만 캐시하고, 키를 바꾸는 입력은 cache-dependency-path 하나다
-# (setup-go v7 의 src/package-managers.ts · src/cache-restore.ts). 세 잡이 같은 키를 쓰므로 go install 이
-# 만든 도구는 어느 캐시에도 남지 않는다. 그래서 도구 디렉터리를 actions/cache 로 따로 캐시한다.
+# setup-go 는 GOMODCACHE 와 GOCACHE 만 캐시하므로(setup-go v7 의 src/package-managers.ts) go install 이
+# 만든 도구는 setup-go 의 캐시에 남지 않는다. 잡마다 키를 나눠도 같다. 그래서 도구 디렉터리를
+# actions/cache 로 따로 캐시한다.
 # 저장을 설치 바로 뒤에 두는 이유: setup-go 와 actions/cache 의 post 는 `post-if: success()` 라서 뒤의
 # 게이트가 실패한 실행에서는 저장하지 않는다.
 python3 -c 'import yaml' 2>/dev/null || bad "python3 의 yaml 모듈이 없다 — Go 도구 캐시를 볼 수 없다"
 mkdir -p "$T/gobin"
 cat > "$T/gobin/go" <<'EOF'
 #!/usr/bin/env bash
-# go 대역. 설치 스텝의 `go install` 은 그때의 GOBIN 을 적고, `go env GOPATH` 에는 답한다.
+# go 대역. 설치 스텝의 `go install` 은 그때의 GOBIN 과 CGO_ENABLED 를 적고, `go env GOPATH` 에는 답한다.
 case "$1" in
-  install) printf '%s\t%s\n' "${GOBIN-}" "$*" >> "$GO_LOG" ;;
+  install) printf '%s\t%s\t%s\n' "${GOBIN-}" "${CGO_ENABLED-(없음)}" "$*" >> "$GO_LOG" ;;
   env) [ "${2-}" = GOPATH ] && echo "$HOME/go" ;;
   *) echo "go 대역: 모르는 호출: $*" >&2; exit 2 ;;
 esac
@@ -201,8 +202,10 @@ def run_step(step, name):
     body = re.sub(r"\$\{\{ steps\.tv\.outputs\.([a-z_]+) \}\}", lambda m: pins.get(m.group(1), "X"), step.get("run") or "")
     body = re.sub(r"\$\{\{[^}]*\}\}", "X", body)
     env = dict(os.environ, HOME=home, GITHUB_PATH=gp, GO_LOG=gl, PATH=os.path.join(T, "gobin") + ":" + os.environ["PATH"])
+    for k in ("GOBIN", "CGO_ENABLED"):     # 테스트를 실행하는 환경의 값이 스텝의 값처럼 보이지 않게 한다
+        env.pop(k, None)
     p = subprocess.run(["bash", "-e", "-c", body], env=env, cwd=T, capture_output=True, text=True)
-    return p.returncode, home, open(gp).read().splitlines(), [l.split("\t", 1) for l in open(gl).read().splitlines()], p.stderr
+    return p.returncode, home, open(gp).read().splitlines(), [l.split("\t", 2) for l in open(gl).read().splitlines()], p.stderr
 
 keys = {}
 for job, spec in (wf.get("jobs") or {}).items():
@@ -235,8 +238,9 @@ for job, spec in (wf.get("jobs") or {}).items():
         if rid and not miss_only(s, rid): msg.append(f"설치 스텝 {i + 1} 이 복원이 안 됐을 때만 실행되지 않는다.")
         rc, home, _, calls, err = run_step(s, f"{job}-{i}")
         if rc != 0: msg.append(f"설치 스텝 {i + 1} 이 go 대역으로 실패했다: {err.strip()[:120]}")
-        for gobin, args in calls:
+        for gobin, cgo, args in calls:
             if gobin != home_path(home): msg.append(f"`go {args}` 의 GOBIN 이 {gobin or '(없음)'}, 복원하는 {home_path(home)} 여야 한다.")
+            if cgo != "0": msg.append(f"`go {args}` 의 CGO_ENABLED 가 {cgo}, 0 이어야 한다 — 도구가 러너의 glibc 에 링크된다.")
     names = {pkg.rsplit("/", 1)[-1] for pkg, _ in tools}
     after = range(inst[-1] + 1, len(steps))
     use = next((i for i in after if "gate.sh" in (steps[i].get("run") or "") or any(n in (steps[i].get("run") or "") for n in names)), None)
@@ -260,7 +264,7 @@ for job, spec in (wf.get("jobs") or {}).items():
     if not added: msg.append("도구를 쓰는 스텝 앞에서, 복원 여부와 상관없이 도구 디렉터리를 PATH 에 더하는 스텝이 없다.")
     keys[job] = key
     if msg: bad(f"{job} 잡의 Go 도구 캐시: " + " ".join(msg))
-    else: ok(f"{job} 잡은 Go 도구({', '.join(sorted(names))})를 따로 캐시하고, 복원이 안 됐을 때만 설치해 곧바로 저장한다")
+    else: ok(f"{job} 잡은 Go 도구({', '.join(sorted(names))})를 따로 캐시하고, 복원이 안 됐을 때만 cgo 없이 빌드해 곧바로 저장한다")
 if not keys and not fails:
     bad("go install 로 도구를 설치하는 잡이 하나도 검색되지 않았다 — gates.yml 이 바뀌었나")
 if len(set(keys.values())) < len(keys):

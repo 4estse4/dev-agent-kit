@@ -13,8 +13,10 @@
 #     레포 루트일 때와 backend/ 일 때 모두 기본 패턴이 레포 루트에서 맞히는 파일을 다 맞힌다. 소스 파일은
 #     맞히지 않는다 — 맞히면 소스를 고칠 때마다 키가 바뀌어 캐시를 다시 받는다
 # setup-java 는 `cache-dependency-path` 를 주면 기본 패턴 대신 그것만 쓴다(setup-java v6 의 src/cache.ts 의
-# computeCacheKey). 패턴은 python 의 glob(recursive)으로 맞힌다. setup-java 가 쓰는 @actions/glob 과
-# `**` · `*` 의 뜻이 같다.
+# computeCacheKey). 패턴은 python 의 glob(recursive)으로 맞힌다. setup-java 가 쓰는 @actions/glob 과 다른
+# 점이 둘 있다. @actions/glob 은 점으로 시작하는 이름에도 맞고, 디렉터리에 맞으면 그 아래 파일도 해시한다.
+# python 의 glob 은 둘 다 하지 않는다. 이 테스트의 파일에는 점으로 시작하는 이름이 없고 gradle 패턴은 파일
+# 이름으로 맞히므로, 이 파일 구성에서는 두 쪽 결과가 같다.
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 fail=0
