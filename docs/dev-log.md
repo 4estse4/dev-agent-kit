@@ -1174,3 +1174,25 @@ dev-log 에만 있다. 템플릿과 스킬에는 넣지 않는다(ADR-0001).
   근거로 붙인 문장이 보안 알림에 대한 것이라 템플릿 주석의 「이 파일은 버전 갱신만 다룬다」가 틀렸다는 것을
   짚었다. 그래서 레포 설정으로 켜면 항목 없이도 PR 이 열리고, 항목이 있으면 그 옵션 일부가 적용된다고 고쳤다.
 - **이관**: 실제 GitHub 레포에 설치해 Dependabot 이 github-actions 업데이터만 실행하는지는 확인하지 않았다.
+
+## 2026-09-25 — merge-pr 4절이 worktree 를 base 로 옮기지 않고 detach 하며, 로컬 base 는 fast-forward 한다 (PR #125)
+
+- **작업**: 4절의 base 복귀 줄은 `git switch <base>` 가 되면 base 로 옮겼다. worktree 에서 머지할 때 원래
+  체크아웃이 다른 브랜치에 있으면 그것이 성공해 worktree 가 base 에 있게 되고, 원래 체크아웃은 base 로 옮기지
+  못했다(이슈 #121). PR #119 · #123 을 worktree 에서 머지할 때 두 번 다 그랬다. 이제 줄이 먼저 원래 체크아웃인지
+  본다(`--absolute-git-dir` 와 `--path-format=absolute --git-common-dir` 가 같다). 원래 체크아웃만 base 로 옮겨
+  pull 하고, worktree 는 fetch 뒤 `origin/<base>` 에 detach 한 다음 `git fetch origin <base>:<base>` 로 로컬 base 를
+  fast-forward 한다. base 를 쓰는 체크아웃이 있어 git 이 거부하면 줄의 실패에 섞지 않는다. `tests/merge-pr-cleanup.sh`
+  에 원래 체크아웃이 다른 브랜치 · 다른 worktree 가 main 을 씀 · 하위 디렉터리에서 실행하는 경우를 더했다.
+- **채택**: `[사용자]` 「(A) worktree 는 늘 detach」(계획). `[사용자]` "(A) 유지 + 로컬 base 갱신 (추천)" · "낮음만
+  나오면 고친 뒤 머지 (추천)"(1라운드 답)
+- **폐기**: `[AI]` (B) 지금처럼 옮긴 뒤 worktree 이면 끝에 detach 한다 → 줄이 하나 늘고, 빠뜨리면 worktree 가 base
+  에 남는다. 1라운드 콜드가 짚은 로컬 base 갱신은 (A)에 `git fetch origin <base>:<base>` 를 더해 얻었다.
+- **리뷰가 잡은 것**: 1라운드 콜드 — worktree 세션에서 머지하면 로컬 `main` 이 갱신되지 않아 다음 브랜치의
+  `git log main..HEAD` 주입이 방금 머지한 커밋을 그 브랜치의 것으로 보여 줌(계획의 (A)·(B) 비교에 빠졌던 차이,
+  결정 필요), 원래 체크아웃에서 다른 worktree 가 base 를 쓰는 갈래를 테스트가 실행하지 않음, 절대 경로 형태로
+  견주는 이유(하위 디렉터리에서 `--git-common-dir` 가 상대 경로를 낸다)가 글에도 테스트에도 없음. 2라운드 콜드 —
+  「git 이 거부한다」는 git 2.35 부터라 킷이 적어 둔 하한(2.31)과 어긋남, 테스트 머리 주석의 「다섯 경우」(라운드
+  없이 고쳤다).
+- **사람이 잡은 것**: 없음.
+- **이관**: 없음.
