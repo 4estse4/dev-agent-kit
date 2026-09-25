@@ -1,12 +1,15 @@
-# 킷 템플릿의 액션 핀이 뒤처졌는지 주기적으로 본다.
+# 킷 템플릿의 액션 핀과 게이트 도구 핀이 뒤처졌는지 주기적으로 본다.
 #
 # Dependabot 은 .github/workflows/ 와 루트 action.yml 만 훑는다(공식 문서). 킷의
 # 워크플로 원본은 common/ci/gates.yml 이라 그 범위 밖이고, 그대로 두면 새 프로젝트가
 # 낡은 채로 시작한다. 이 잡이 Dependabot 이 못 가는 자리를 대신 본다.
+# 게이트 도구 핀(common/gate/tool-versions)도 Dependabot 이 생태계로 알아보지 못해서
+# 같은 잡이 본다(check-tool-pins.sh, 이슈 #110). 최신은 킷이 바뀌지 않아도 바뀌므로 PR 마다
+# 보지 않고 주간으로 본다.
 #
 # 이것은 킷에 게이트를 거는 것이 아니다 — required check 도 브랜치 보호도 아니고,
 # 뒤처짐을 알리기만 한다. "킷이 자기 자신에게 게이트를 걸 것인가" 는 여전히 열린 결정이다.
-name: template action pins
+name: template action and tool pins
 
 on:
   schedule:
@@ -23,6 +26,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # 두 검사를 먼저 다 실행한다. 한쪽이 판정하지 못해 잡을 끝내면 다른 쪽의 결과를 못 본다.
+      # 액션 핀 검사는 Go 가 필요 없으므로 setup-go 보다 앞에 둔다.
       - name: Check pinned action versions in the template
         id: check
         env:
@@ -45,10 +50,35 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           exit 0
 
-      # 뒤처졌으면(rc=1) 이슈를 연다. 조회 실패(rc=2)는 잡을 실패로 남긴다 —
-      # 판정하지 못한 것을 "이상 없음" 으로 넘기지 않는다.
-      - name: Open an issue when pins are behind
-        if: steps.check.outputs.rc == '1'
+      # check-tool-pins.sh 가 Go 도구의 최신을 `go list -m <모듈>@latest` 로 읽는다. 러너 이미지에도
+      # Go 가 있지만 그 버전은 이미지의 toolset 이 정하는 기본값이라, 그것에 기대지 않고 stable 을
+      # 설치한다. 킷 레포에는 go.mod 가 없어 캐시를 끈다.
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache: false
+
+      - name: Check pinned gate tool versions
+        id: tools
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          out=$(bash common/ci/check-tool-pins.sh 2>&1); rc=$?
+          printf '%s\n' "$out"
+          {
+            echo "rc=$rc"
+            echo "out<<EOF_OUT"
+            printf '%s\n' "$out"
+            echo "EOF_OUT"
+          } >> "$GITHUB_OUTPUT"
+          exit 0
+
+      # 뒤처졌으면(rc=1) 이슈를 연다. 조회 실패(rc=2)는 맨 아래 스텝이 잡을 실패로 남긴다 —
+      # 판정하지 못한 것을 "이상 없음" 으로 넘기지 않는다. 아래 셋은 `!cancelled()` 라서 setup-go 가
+      # 실패해 잡이 이미 실패한 뒤에도 실행된다. 그래야 액션 핀 검사의 결과가 버려지지 않는다.
+      - name: Open an issue when action pins are behind
+        if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
         env:
           GH_TOKEN: ${{ github.token }}
           BODY: ${{ steps.check.outputs.out }}
@@ -61,8 +91,23 @@ jobs:
             gh issue create --title "$title" --body "$BODY"
           fi
 
-      - name: Fail when the check could not decide
-        if: steps.check.outputs.rc == '2'
+      - name: Open an issue when gate tool pins are behind
+        if: ${{ !cancelled() && steps.tools.outputs.rc == '1' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BODY: ${{ steps.tools.outputs.out }}
         run: |
-          echo "::error::액션 태그를 조회하지 못해 판정할 수 없습니다"
+          title="gate tool pins are behind"
+          existing=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$BODY"
+          else
+            gh issue create --title "$title" --body "$BODY"
+          fi
+
+      - name: Fail when a check could not decide
+        if: ${{ !cancelled() && (steps.check.outputs.rc == '2' || steps.tools.outputs.rc == '2') }}
+        run: |
+          [ "${{ steps.check.outputs.rc }}" = 2 ] && echo "::error::액션 태그를 조회하지 못해 판정할 수 없습니다"
+          [ "${{ steps.tools.outputs.rc }}" = 2 ] && echo "::error::도구의 최신 버전을 조회하지 못해 판정할 수 없습니다"
           exit 1

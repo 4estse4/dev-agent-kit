@@ -218,6 +218,15 @@ bash common/ci/check-action-pins.sh     # 뒤처진 핀이 있으면 종료코�
 주간 워크플로가 이것을 실행해 뒤처지면 이슈를 연다. 조회에 실패하면 "이상 없음" 으로
 넘기지 않고 잡을 실패시킨다. **설치된 프로젝트 쪽은 그 프로젝트의 Dependabot 이 맡는다.**
 
+게이트 도구 핀(`common/gate/tool-versions`)은 Dependabot 이 생태계로 알아보지 못한다. 같은 주간 워크플로가
+따로 최신과 견주고, 뒤처지면 이슈를 연다:
+
+```bash
+bash common/ci/check-tool-pins.sh       # 뒤처진 도구가 있으면 종료코드 1, 최신을 읽지 못하면 2
+```
+
+Go 도구는 `go list -m <모듈>@latest`, ruff 는 PyPI, ktlint 는 GitHub releases 에서 최신을 읽는다.
+
 ## 무엇이 공유되고 무엇이 프로젝트 소유인가
 
 | | 소유 | 이유 |

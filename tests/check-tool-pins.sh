@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# common/ci/check-tool-pins.sh 가 tool-versions 의 도구 핀을 최신과 견주고, 판정하지 못한 것을 최신으로 세지 않는다.
+#
+# 이 테스트가 있는 이유: tool-versions 의 핀이 최신보다 뒤처졌는지 보는 것이 킷에 없었다(이슈 #110). 이슈 #36 은
+# 그 검사가 생겼다는 전제에서 시작했지만 그 PR(#35)은 머지되지 않았다. Dependabot 은 그 파일을 생태계로 알아보지 못한다.
+#
+# 킷의 스크립트 · gates.yml · tool-versions 를 임시 트리에 두고 네트워크 없이 실행한다. PyPI 와 GitHub 의 응답은
+# file:// 로(AI_KIT_PYPI_URL · AI_KIT_GITHUB_API), go 는 모듈 경로마다 정해 둔 최신을 답하는 가짜로 둔다. 가짜 go 는
+# 모듈 경로가 아니면 진짜 go 처럼 `no matching versions` 로 실패한다. 보는 것:
+#   · 모든 핀이 최신이면 rc=0. go_min 은 도구가 아니라 견주지 않는다
+#   · Go 도구 하나 · ruff · ktlint 가 뒤처지면 rc=1 과 그 줄. 새 값은 tool-versions 의 모양(v 접두 유무)을 따른다
+#   · 핀이 최신보다 높으면 뒤처진 것이 아니다
+#   · Go 도구의 모듈 경로는 gates.yml 의 패키지 경로에서 뒤를 떼며 찾는다
+#   · 최신을 못 읽으면(PyPI · GitHub 응답 없음, go list 실패) · 출처가 없는 키가 있으면 · gates.yml 이 설치하는
+#     도구의 키가 tool-versions 에 없으면 rc=2. 뒤처진 도구가 함께 있어도 rc=2 다
+set -u
+KIT="$(cd "$(dirname "$0")/.." && pwd)"
+fail=0
+ok() { echo "  ✓ $1"; }
+bad() { echo "  ✗ $1"; fail=1; }
+
+[ -f "$KIT/common/ci/check-tool-pins.sh" ] || { bad "common/ci/check-tool-pins.sh 가 없다"; exit 1; }
+
+T=$(mktemp -d)
+mkdir -p "$T/kit/common/ci" "$T/kit/common/gate" "$T/bin"
+cp "$KIT/common/ci/check-tool-pins.sh" "$KIT/common/ci/gates.yml" "$T/kit/common/ci/"
+TV="$T/kit/common/gate/tool-versions"
+
+# 가짜 go. `go list -m -f {{.Version}} <모듈>@latest` 에 $GOFAKE/<모듈>/latest 의 값을 답한다. 부른 경로를 적는다.
+# 모듈이 아닌 경로에는 진짜 go 처럼 `no matching versions` 로 실패한다. $GOFAKE/<모듈>/error 가 있으면 그 글로
+# 실패한다(프록시의 5xx 나 연결 실패).
+cat > "$T/bin/go" <<'EOF'
+#!/usr/bin/env bash
+echo "$*" >> "$GOFAKE_LOG"
+[ "$1 $2" = "list -m" ] || { echo "go 대역: 모르는 호출: $*" >&2; exit 2; }
+q="${!#}"; m="${q%@latest}"
+[ "$q" != "$m" ] || { echo "go 대역: @latest 가 아닌 질의: $q" >&2; exit 2; }
+[ -f "$GOFAKE/$m/error" ] && { cat "$GOFAKE/$m/error" >&2; exit 1; }
+[ -f "$GOFAKE/$m/latest" ] || { echo "go: module $m: no matching versions for query \"latest\"" >&2; exit 1; }
+cat "$GOFAKE/$m/latest"
+EOF
+chmod +x "$T/bin/go"
+
+# 한 경우의 환경을 만든다. 인자=「키=최신」. 적지 않은 도구의 최신은 지금 핀과 같다.
+# 특수 값: 「ruff=-」 PyPI 응답 없음 · 「ktlint=-」 GitHub 응답 없음 · 「golangci_lint=-」 go list 실패.
+# 「+키=값」 은 tool-versions 에 줄을 더한다.
+setup() {
+  local a k v pin
+  rm -rf "$T/pypi" "$T/gh" "$T/goproxy"; : > "$T/golog"
+  cp "$KIT/common/gate/tool-versions" "$TV"
+  mkdir -p "$T/pypi/pypi/ruff" "$T/gh/repos/ktlint/ktlint/releases" "$T/goproxy"
+  pin() { sed -n "s/^$1=//p" "$TV" | head -1; }
+  printf '{"info": {"version": "%s"}}\n' "$(pin ruff)" > "$T/pypi/pypi/ruff/json"
+  printf '{"tag_name": "%s"}\n' "$(pin ktlint)" > "$T/gh/repos/ktlint/ktlint/releases/latest"
+  for k in golang.org/x/tools:goimports golang.org/x/vuln:govulncheck github.com/golangci/golangci-lint/v2:golangci_lint; do
+    mkdir -p "$T/goproxy/${k%%:*}"; pin "${k##*:}" > "$T/goproxy/${k%%:*}/latest"
+  done
+  for a in "$@"; do
+    case "$a" in +*) printf '%s\n' "${a#+}" >> "$TV"; continue ;; esac
+    k="${a%%=*}"; v="${a#*=}"; p=""
+    case "$k" in
+      goimports)     p=golang.org/x/tools ;;
+      govulncheck)   p=golang.org/x/vuln ;;
+      golangci_lint) p=github.com/golangci/golangci-lint/v2 ;;
+    esac
+    case "$k" in
+      ruff)   if [ "$v" = - ]; then rm "$T/pypi/pypi/ruff/json"; else printf '{"info": {"version": "%s"}}\n' "$v" > "$T/pypi/pypi/ruff/json"; fi ;;
+      ktlint) if [ "$v" = - ]; then rm "$T/gh/repos/ktlint/ktlint/releases/latest"; else printf '{"tag_name": "%s"}\n' "$v" > "$T/gh/repos/ktlint/ktlint/releases/latest"; fi ;;
+      goimports|govulncheck|golangci_lint) if [ "$v" = - ]; then rm -rf "$T/goproxy/$p"; else printf '%s\n' "$v" > "$T/goproxy/$p/latest"; fi ;;
+      tvdel) sed -i.bak "/^$v=/d" "$TV" && rm -f "$TV.bak" ;;
+      # golangci-lint 의 v2 모듈 조회만 서버 오류로 실패하고, /v2 를 뗀 v1 모듈은 실제처럼 있다.
+      v2down) printf 'go: github.com/golangci/golangci-lint/v2@latest: reading https://proxy.golang.org/github.com/golangci/golangci-lint/v2/@v/list: 503 Service Unavailable\n' > "$T/goproxy/github.com/golangci/golangci-lint/v2/error"
+              mkdir -p "$T/goproxy/github.com/golangci/golangci-lint"; echo v1.64.8 > "$T/goproxy/github.com/golangci/golangci-lint/latest" ;;
+    esac
+  done
+}
+run() {
+  out=$(PATH="$T/bin:$PATH" GOFAKE="$T/goproxy" GOFAKE_LOG="$T/golog" \
+        AI_KIT_PYPI_URL="file://$T/pypi" AI_KIT_GITHUB_API="file://$T/gh" GH_TOKEN= \
+        bash "$T/kit/common/ci/check-tool-pins.sh" 2>&1); rc=$?
+}
+# $1=설명  $2=기대 rc  $3=출력에 있어야 할 글자(비면 안 봄)  $4=출력에 없어야 할 글자(비면 안 봄)  나머지=setup 인자
+case_() {
+  local what="$1" want="$2" must="$3" mustnot="$4"; shift 4
+  setup "$@"; run
+  if [ "$rc" != "$want" ]; then bad "$what → rc=$rc, rc=$want 여야 한다:"; printf '%s\n' "$out" | tail -4 | sed 's/^/      /'
+  elif [ -n "$must" ] && ! printf '%s\n' "$out" | grep -qF -- "$must"; then bad "$what → rc=$rc 인데 「${must}」 이 출력에 없다:"; printf '%s\n' "$out" | tail -4 | sed 's/^/      /'
+  elif [ -n "$mustnot" ] && printf '%s\n' "$out" | grep -qF -- "$mustnot"; then bad "$what → 「${mustnot}」 이 출력에 있다:"; printf '%s\n' "$out" | tail -4 | sed 's/^/      /'
+  else ok "$what → rc=$rc"; fi
+}
+
+gl=$(sed -n 's/^golangci_lint=//p' "$KIT/common/gate/tool-versions")
+rf=$(sed -n 's/^ruff=//p' "$KIT/common/gate/tool-versions")
+kl=$(sed -n 's/^ktlint=//p' "$KIT/common/gate/tool-versions")
+case_ "모든 핀이 최신"                 0 "✓" "go_min"
+case_ "golangci_lint 가 뒤처짐(v 접두)" 1 "golangci_lint  $gl → v9.9.9" "" golangci_lint=v9.9.9
+case_ "ruff 가 뒤처짐(v 접두 없음)"     1 "ruff  $rf → 99.0.0" "" ruff=99.0.0
+case_ "ktlint 태그에 v 가 붙어 옴"      1 "ktlint  $kl → 99.1.0" "→ v99.1.0" ktlint=v99.1.0
+case_ "핀이 최신보다 높음"              0 "" "✗" ruff=0.0.1
+case_ "PyPI 응답 없음"                  2 "ruff" "" ruff=-
+case_ "GitHub 응답 없음"                2 "ktlint" "" ktlint=-
+case_ "go list 가 모든 경로에서 실패"   2 "golangci_lint" "" golangci_lint=-
+case_ "v2 조회만 서버 오류(v1 모듈은 있음)" 2 "503" "✓" v2down=1
+case_ "뒤처진 것과 못 읽은 것이 함께"   2 "golangci_lint" "" golangci_lint=v9.9.9 ruff=-
+case_ "출처가 없는 키"                  2 "foo" "" +foo=1.0.0
+case_ "gates.yml 이 설치하는 도구의 키가 tool-versions 에 없음" 2 "govulncheck" "" tvdel=govulncheck
+
+# 모듈 경로: 패키지 경로로 먼저 묻고, 실패하면 뒤를 떼어 모듈 경로에서 답을 받는다.
+setup; run
+if grep -q 'list -m .*golang.org/x/tools/cmd/goimports@latest' "$T/golog" && grep -q 'list -m .*golang.org/x/tools@latest' "$T/golog"; then
+  ok "모듈 경로는 패키지 경로(golang.org/x/tools/cmd/goimports)에서 뒤를 떼며 찾는다"
+else
+  bad "go 에 물은 경로가 패키지 경로에서 모듈 경로로 줄지 않았다:"; sed 's/^/      /' "$T/golog" | head -6
+fi
+
+rm -rf "$T"
+exit $fail
