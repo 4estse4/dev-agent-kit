@@ -207,7 +207,7 @@ jobs:
           # 마커가 있는 모든 디렉터리를 빌드 루트로 보면 표준 멀티모듈 레포(루트에만
           # gradlew, 서브모듈마다 build.gradle)가 여기서 죽는다. 어댑터는 그 서브모듈에
           # 들어가지도 않는데 CI 만 실패한다.
-          # 건너뛰는 디렉터리도 게이트와 같다. build/ · target/ 을 이름으로 거르지 않는다 —
+          # 건너뛰는 디렉터리도 게이트와 같다. build/ 를 이름으로 거르지 않는다 —
           # 업무 도메인 이름이기도 해서 멀쩡한 모듈이 빠진다(lib.sh 의 GATE_PRUNE_DIRS 주석).
           done < <(find . \( $(gate_prune_expr) \) -prune -o \
                           \( -name 'settings.gradle' -o -name 'settings.gradle.kts' \

@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# 킷의 JVM 은 Kotlin 과 Gradle 이다. `pom.xml` 만 있는 디렉터리는 JVM 빌드 루트가 아니고, 킷 파일에 Maven 의
-# 흔적이 없다. CI 의 setup-java 는 gradle 캐시 키를 빌드 루트가 어디에 있든 그 빌드 루트의 의존성 파일로 만든다.
+# 킷의 JVM 은 Kotlin 과 Gradle 이다. `pom.xml` 만 있는 디렉터리는 JVM 빌드 루트가 아니다. CI 의 setup-java 는
+# gradle 캐시 키를 빌드 루트가 어디에 있든 그 빌드 루트의 의존성 파일로 만든다.
 #
-# 이 테스트가 있는 이유 (1): 킷은 Maven 을 지원하는 코드와 문장을 두었지만 CI 는 늘 `cache: gradle` 이라,
-# `pom.xml` 만 있는 레포에서 setup-java 가 맞는 파일을 못 찾아 실패했다(이슈 #127, setup-java v6 의
-# src/cache.ts 의 computeCacheKey). 사람이 Maven 을 아예 배제하기로 정했고, 그래서 흔적까지 걷어냈다.
-# 다음을 본다. `pom.xml` 을 만들어 보는 검사라 흔적 검사는 이 파일을 뺀다:
-#   · 흔적: 추적 파일 전부에서 Maven 을 가리키는 글자가 0 건이다. `docs/dev-log.md` 는 그때의 기록이라 뺀다
+# 이 테스트가 있는 이유 (1): `pom.xml` 만 있는 레포에서 setup-java 가 맞는 파일을 못 찾아 실패했다(이슈 #127,
+# setup-java v6 의 src/cache.ts 의 computeCacheKey). 다음을 본다. 아래 넷이 `pom.xml` 을 만들어 보므로 흔적
+# 검사는 이 파일을 뺀다:
+#   · 흔적: 추적 파일 전부에서 Maven 을 가리키는 글자가 0 건이다. `pom.xml` 은 역슬래시가 낀 모양(정규식의
+#     `pom\\.xml`)도 찾는다. `docs/dev-log.md` 는 그때의 기록이라 뺀다. `git grep` 이 실패하면 흔적이 없는
+#     것으로 세지 않는다
 #   · detect 스텝을 실행하면 `pom.xml` 만 있는 레포(루트 · backend/)는 jvm=false, gradle 마커가 있으면 jvm=true
 #   · 래퍼 검사 스텝은 `pom.xml` 옆에 래퍼를 요구하지 않고, gradle 빌드 루트에 `gradlew` 가 없으면 실패한다
 #   · `pom.xml` 만 있는 레포에서 `gate.sh --all` 이 검사 대상 없음으로 끝난다
@@ -100,9 +101,15 @@ python3 "$T/java.py" "$Y" "$T" || fail=1
 if ! git -C "$KIT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   bad "킷이 git 체크아웃이 아니다 — 추적 파일에서 Maven 의 흔적을 찾을 수 없다"
 else
-  hits=$(git -C "$KIT" grep -n -i -e 'maven' -e 'mvn' -e 'pom\.xml' -e 'wrapper:wrapper' -- . ':!docs/dev-log.md' ':!tests/gate-jvm-ci.sh')
-  if [ -z "$hits" ]; then ok "킷 파일에 Maven 의 흔적이 없다(docs/dev-log.md 와 이 테스트는 빼고)"
-  else bad "킷 파일에 Maven 의 흔적이 있다:"; printf '%s\n' "$hits" | cut -c1-140 | sed 's/^/      /'; fi
+  # `pom\\*\.xml` 은 pom 과 .xml 사이에 역슬래시가 몇 개 끼어도 찾는다. 정규식에 파일 이름을 넣으며 점을
+  # 이스케이프한 줄(`pom\\.xml`)을 `pom\.xml` 로만 찾다가 놓쳤다(PR #130 1라운드 콜드 리뷰).
+  # git grep 은 찾으면 0, 못 찾으면 1 이다. 그 밖은 오류이고 출력이 비므로, 출력만 보면 흔적이 없다고 센다.
+  hits=$(git -C "$KIT" grep -n -i -e 'maven' -e 'mvn' -e 'pom\\*\.xml' -e 'wrapper:wrapper' -- . ':!docs/dev-log.md' ':!tests/gate-jvm-ci.sh'); rc=$?
+  case "$rc" in
+    1) ok "킷 파일에 Maven 의 흔적이 없다(docs/dev-log.md 와 이 테스트는 빼고)" ;;
+    0) bad "킷 파일에 Maven 의 흔적이 있다:"; printf '%s\n' "$hits" | cut -c1-140 | sed 's/^/      /' ;;
+    *) bad "git grep 이 rc=$rc 로 실패했다 — 흔적이 없는지 알 수 없다" ;;
+  esac
 fi
 
 # gates.yml 의 한 스텝의 run 을 낸다. $1=잡  $2=id 또는 name
