@@ -16,16 +16,22 @@
 #
 # 형식: <이름>=<버전>  (셸이 source 할 수 있게 공백 없이)
 
-# Go 의 최소 버전. 런타임은 위대로 go.mod 가 정하지만, 아래에 핀한 Go 도구가 이보다 낮은
-# go 로는 설치되지 않는다. 아래 Go 도구 셋이 각각 요구하는 go(그 모듈의 go 줄) 가운데 가장 높은
-# 것이 이 값이고, 패치까지 그대로 적는다 — Go 의 버전 순서로 1.26 < 1.26.0 < 1.26.1 이다
-# (go.dev/doc/toolchain). 한때 goimports 와 govulncheck 만 보고 정했다가, 더 높은 go 를 요구하는
-# golangci-lint 가 러너에서 「requires go >= …」 로 실패했다(실제로 확인함).
+# Go 의 최소 버전. 런타임은 위대로 go.mod 가 정하지만, 킷은 이보다 낮은 Go 를 지원하지 않는다.
+# 이 값은 아래 둘 가운데 가장 높은 것이고, 패치까지 그대로 적는다 — Go 의 버전 순서로
+# 1.27 < 1.27.0 < 1.27.1 이다(go.dev/doc/toolchain).
+#   · 아래 Go 도구 셋이 각각 요구하는 go(그 모듈의 go 줄). 그보다 낮은 go 로는 도구가 설치되지 않는다.
+#     한때 goimports 와 govulncheck 만 보고 정했다가, 더 높은 go 를 요구하는 golangci-lint 가 러너에서
+#     「requires go >= …」 로 실패했다(실제로 확인함).
+#   · golangci-lint 가 쓰는 gofumpt 의 기준 Go. gofumpt 는 자기 안에 둔 gofmt 로 포맷해서, 그보다 낮은
+#     Go 의 gofmt 와 서로 다른 모양을 요구하는 코드가 생기고 그 코드는 어느 모양으로도 게이트를
+#     통과하지 못한다. golangci-lint v2.14.0 의 gofumpt v0.12.0 이 Go 1.27 을 기준으로 해서 이 값이
+#     1.27.0 이다(go 줄 셋은 1.26.0).
 # CI 는 설치할 Go(toolchain 줄이 있으면 그 버전, 없으면 go 줄)가 가장 높은 go.mod 로 Go 를 설치하고, 그
-# 버전이 이보다 낮으면 그 이유를 말하며 멈춘다. go 줄이 1.26 처럼 패치가 없으면 setup-go 가 그
+# 버전이 이보다 낮으면 그 이유를 말하며 멈춘다. go 줄이 1.27 처럼 패치가 없으면 setup-go 가 그
 # 계열의 패치 하나를 설치하므로 계열끼리 견준다.
-# 도구 핀을 올리면 이 값도 본다. 각 도구 모듈의 go 줄은 proxy.golang.org 의 <모듈>/@v/<버전>.mod 에 있다.
-go_min=1.26.0
+# 도구 핀을 올리면 이 값도 본다. 각 도구 모듈의 go 줄은 proxy.golang.org 의 <모듈>/@v/<버전>.mod 에,
+# gofumpt 의 기준 Go 는 mvdan.cc/gofumpt/@v/<버전>.zip 의 internal/govendor/version.txt 에 있다.
+go_min=1.27.0
 
 # Go — go install 로 받는다. go.mod 의 tool 지시어를 쓰는 프로젝트는 그쪽이 우선한다.
 goimports=v0.50.0
