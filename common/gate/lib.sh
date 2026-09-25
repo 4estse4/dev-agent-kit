@@ -165,7 +165,7 @@ gate_install_hint() { # $1=도구 이름
         golangci-lint) echo "go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$v" ;;
         govulncheck)   echo "go install golang.org/x/vuln/cmd/govulncheck@$v" ;;
         ruff)          echo "uv tool install ruff==$v  (또는 pipx install ruff==$v)" ;;
-        ktlint)        echo "bash .ai-kit/gate/install-tools.sh  (수동: curl -fsSLo \"\$HOME/.local/bin/ktlint\" https://github.com/pinterest/ktlint/releases/download/$v/ktlint && chmod +x \"\$HOME/.local/bin/ktlint\")" ;;
+        ktlint)        echo "bash .ai-kit/gate/install-tools.sh  (수동: curl -fsSLo \"\$HOME/.local/bin/ktlint\" https://github.com/ktlint/ktlint/releases/download/$v/ktlint && chmod +x \"\$HOME/.local/bin/ktlint\")" ;;
       esac
       ;;
     mypy|pytest)          echo "프로젝트 의존성으로 설치한다(uv sync / pip install -e '.[dev]')" ;;

@@ -81,7 +81,7 @@ for t in "${need[@]}"; do
       dest="${AI_KIT_BIN_DIR:-$HOME/.local/bin}"
       mkdir -p "$dest" || { failed+=("$t ($dest 를 만들지 못했습니다)"); continue; }
       if curl -fsSL -o "$dest/ktlint" \
-           "https://github.com/pinterest/ktlint/releases/download/${v}/ktlint" \
+           "https://github.com/ktlint/ktlint/releases/download/${v}/ktlint" \
          && chmod +x "$dest/ktlint"; then
         installed+=("$t → $dest/ktlint")
         case ":$PATH:" in *":$dest:"*) ;; *) echo "  주의: $dest 가 PATH 에 없습니다." ;; esac
