@@ -80,10 +80,9 @@ while read -r pkg key; do
   [ -n "$need" ] || { echo "  ? $key ($pkg@$ver) — 모듈의 go.mod 에서 go 줄을 받지 못했습니다" >&2; failed=1; continue; }
   echo "  $key $ver ($m) go $need"
   needs+="$need	$key"$'\n'
-  # 그 모듈이 gofumpt 를 require 하면 gofumpt 의 기준 Go 도 본다(머리 주석). require 는 블록 안의 줄과
-  # 한 줄짜리 둘 다 읽는다.
-  fv=$(printf '%s\n' "$gomod" | awk '$1 == "mvdan.cc/gofumpt" { print $2; exit }
-                                    $1 == "require" && $2 == "mvdan.cc/gofumpt" { print $3; exit }')
+  # 그 모듈이 gofumpt 를 require 하면 gofumpt 의 기준 Go 도 본다(머리 주석). require 블록 안의 줄만
+  # 읽는다. golangci-lint v2 의 go.mod 는 gofumpt 를 늘 블록 안에 두었다(PR #137 2라운드 콜드 리뷰).
+  fv=$(printf '%s\n' "$gomod" | awk '$1 == "mvdan.cc/gofumpt" { print $2; exit }')
   [ -n "$fv" ] || continue
   fkey="$key 의 gofumpt $fv"
   if ! curl -fsS --max-time 60 -o "$work/gofumpt.zip" "$PROXY/mvdan.cc/gofumpt/@v/$fv.zip" 2>/dev/null; then
