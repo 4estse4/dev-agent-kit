@@ -2,9 +2,9 @@
 # PR 본문 · 결정 코멘트의 증거를 명령이 덧붙이는가(`claude-code/skills/open-pr/evidence.sh`).
 #
 # **손으로 옮긴 출력이 잘렸다.** 한 PR 본문에서 18줄 출력의 앞 넷이 세 번 빠졌고, 결정
-# 코멘트에는 돌린 것과 다른 명령이 옮겨졌다(`-q` 가 빠졌다). 규칙을 더 적는 것으로는 안
+# 코멘트에는 실행한 것과 다른 명령이 옮겨졌다(`-q` 가 빠졌다). 규칙을 더 적는 것으로는 안
 # 막혀서 옮기는 단계를 없앴다(이슈 #58). 그래서 둘을 본다.
-# - 스크립트: 명령을 한 번 받아, 보이는 명령과 도는 명령이 같고 출력이 한 줄도 안 빠진다
+# - 스크립트: 명령을 한 번 받아, 보이는 명령과 실행되는 명령이 같고 출력이 한 줄도 안 빠진다
 # - 스킬: `open-pr` · `merge-pr` 이 출력을 손으로 붙이라고 시키지 않고 이 스크립트를 부른다
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -33,7 +33,7 @@ grep -qx 'rc=0' "$T/long.part" 2>/dev/null && ok "종료 코드를 적는다" ||
 [ "$(head -1 "$T/long.part" 2>/dev/null)" = '```' ] && [ "$(tail -1 "$T/long.part" 2>/dev/null)" = '```' ] \
   && ok "코드 블록으로 감싼다" || bad "코드 블록으로 감싼다"
 
-# ── 따옴표가 든 명령 ── 보이는 글자와 도는 글자가 같다
+# ── 따옴표가 든 명령 ── 보이는 글자와 실행되는 글자가 같다
 c=$'printf \'%s\\n\' "a b" \'c "d"\''
 run "$T/quote.part" "$c"
 grep -qxF "\$ $c" "$T/quote.part" 2>/dev/null && grep -qxF 'a b' "$T/quote.part" \
@@ -84,14 +84,14 @@ grep -qx 'first' "$T/twice.part" 2>/dev/null && grep -qx 'second' "$T/twice.part
 ( printf '\n' | bash "$S" "$T/empty.part" >/dev/null 2>&1 ); rc=$?
 [ "$rc" != 0 ] && [ ! -e "$T/empty.part" ] && ok "빈 명령은 실패한다" || bad "빈 명령은 실패한다 — rc=$rc"
 
-# ── 부른 자리에서 돈다 ──
+# ── 부른 자리에서 실행된다 ──
 run "$T/pwd.part" 'pwd -P'
-grep -qxF "$(cd "$T" && pwd -P)" "$T/pwd.part" 2>/dev/null && ok "부른 자리에서 돈다" || bad "부른 자리에서 돈다"
+grep -qxF "$(cd "$T" && pwd -P)" "$T/pwd.part" 2>/dev/null && ok "부른 자리에서 실행된다" || bad "부른 자리에서 실행된다"
 
-# ── ask · deny 규칙 글자가 보이는 명령은 돌리지 않는다 ──
-# evidence.sh 는 받은 글을 `bash -c` 로 돌린다. 권한 규칙은 그 안을 못 본다(공식 문서:
+# ── ask · deny 규칙 글자가 보이는 명령은 실행하지 않는다 ──
+# evidence.sh 는 받은 글을 `bash -c` 로 실행한다. 권한 규칙은 그 안을 못 본다(공식 문서:
 # "isn't a security boundary"). 누가 evidence.sh 를 허용하면 그 안의 `gh pr merge` 가 프롬프트
-# 없이 돈다. 그래서 스크립트가 프로젝트 설정의 ask · deny 글자를 보고 거부한다.
+# 없이 실행된다. 그래서 스크립트가 프로젝트 설정의 ask · deny 글자를 보고 거부한다.
 R="$T/repo"
 mkdir -p "$R/.claude" "$R/sub"
 git -C "$R" init -q
@@ -103,15 +103,15 @@ EOF
 cat > "$R/.claude/settings.local.json" <<'EOF'
 {"permissions": {"deny": ["Bash(rm *)", "Bash(npm run *--prod*)", "Bash(* --help *)"]}}
 EOF
-# 거부된 명령은 **돌지 않아야** 한다. 명령 앞에 흔적 파일을 만드는 `touch` 를 붙여, 거부했다고
-# 말하면서 먼저 돌린 모양을 잡는다. 뒤의 글자는 규칙 글자를 품은 `echo` 라 가드가 빠져
-# 돌아가도 아무것도 안 한다.
+# 거부된 명령은 **실행되지 않아야** 한다. 명령 앞에 흔적 파일을 만드는 `touch` 를 붙여, 거부했다고
+# 말하면서 먼저 실행한 모양을 잡는다. 뒤의 글자는 규칙 글자를 품은 `echo` 라 가드가 빠져
+# 실행되어도 아무것도 안 한다.
 refused() {   # refused <이름> <명령> [cwd]
   local f="$T/refuse-$RANDOM.part" m="$T/ran-$RANDOM" rc err
   err=$( cd "${3:-$R}" && printf 'touch %s; %s\n' "$m" "$2" | bash "$S" "$f" 2>&1 >/dev/null ); rc=$?
-  if [ "$rc" != 0 ] && [ ! -e "$f" ] && [ ! -e "$m" ] && printf '%s' "$err" | grep -q '돌리지 않는다' \
+  if [ "$rc" != 0 ] && [ ! -e "$f" ] && [ ! -e "$m" ] && printf '%s' "$err" | grep -q '실행하지 않는다' \
      && printf '%s' "$err" | grep -q '글로 적는다'; then ok "$1"
-  else bad "$1 — rc=$rc, 조각 $( [ -e "$f" ] && echo 있음 || echo 없음 ), 돌았나 $( [ -e "$m" ] && echo 돌았다 || echo 안 돌았다 ), $err"; fi
+  else bad "$1 — rc=$rc, 조각 $( [ -e "$f" ] && echo 있음 || echo 없음 ), 실행됐나 $( [ -e "$m" ] && echo 실행됐다 || echo 실행되지 않았다 ), $err"; fi
 }
 refused "ask 규칙 글자(gh pr merge)" 'echo gh pr merge 12 --squash'
 refused "deny 규칙 글자(git push … --force)" 'echo git push origin main --force'
@@ -143,14 +143,14 @@ refused "와일드카드가 둘인 규칙의 뒤 글자" 'echo npm --help x'
 git -C "$R" add .claude/settings.json && git -C "$R" -c user.email=t@example.com -c user.name=T commit -q -m init
 git -C "$R" worktree add -q "$R/.claude/worktrees/w1" 2>/dev/null
 refused "worktree 에서 원래 체크아웃의 settings.local.json 규칙" 'echo rm -rf build' "$R/.claude/worktrees/w1"
-# 규칙 글자가 낱말 속이나 다른 모양으로만 든 명령은 돈다. 공식 문서: "The space before a
+# 규칙 글자가 낱말 속이나 다른 모양으로만 든 명령은 실행된다. 공식 문서: "The space before a
 # trailing `*` is part of the rule. `Bash(ls *)` requires a space after `ls`, so `lsof` doesn't match."
 runs() {   # runs <이름> <명령>
   local f="$T/runs-$RANDOM.part"
   ( cd "$R" && printf '%s; echo done\n' "$2" | bash "$S" "$f" >/dev/null 2>&1 )
   grep -qx 'done' "$f" 2>/dev/null && ok "$1" || bad "$1 — $(cat "$f" 2>/dev/null)"
 }
-runs "규칙 글자가 없는 명령은 돈다" 'git log --oneline -1 2>&1'
+runs "규칙 글자가 없는 명령은 실행된다" 'git log --oneline -1 2>&1'
 runs "Bash(rm *) 가 --format 을 막지 않는다" "git log --format='%h %s' -1 2>&1"
 runs "Bash(rm *) 가 normal · platform 을 막지 않는다" 'echo normal platform'
 runs "Bash(rm *) 가 낱말 끝의 rm 을 막지 않는다" 'echo farm tools'
@@ -178,7 +178,7 @@ for f in "$OPEN" "$MERGE"; do
     bad "$name 이 출력을 손으로 붙이라고 시킨다"
   else ok "$name 이 출력을 손으로 붙이라고 시키지 않는다"; fi
   grep -q 'open-pr/evidence\.sh' "$f" && ok "$name 이 evidence.sh 를 부른다" || bad "$name 이 evidence.sh 를 부른다"
-  # 거부된 뒤 갈 길을 스킬이 말한다. 없으면 세션은 직접 돌려 손으로 옮긴다
+  # 거부된 뒤 갈 길을 스킬이 말한다. 없으면 세션은 직접 실행해 손으로 옮긴다
   tr '\n' ' ' < "$f" | grep -qE '(글로 *적는다|글로 적는다)' && ok "$name 이 거부된 명령의 갈 길을 말한다" \
     || bad "$name 이 거부된 명령의 갈 길을 말한다"
   grep -q 'awk 1' "$f" && ok "$name 이 조각을 awk 1 로 잇는다" || bad "$name 이 조각을 awk 1 로 잇는다"
@@ -188,7 +188,7 @@ grep -qE 'gh pr create .*--body-file' "$OPEN" && ok "open-pr 이 본문을 --bod
 
 # ── 조각을 이을 때 끝 줄바꿈이 없어도 울타리가 앞 줄에 붙지 않는다 ──
 # `Write` 로 쓴 조각이 줄바꿈 없이 끝나면 `cat` 은 다음 조각의 여는 울타리를 그 줄에 붙인다.
-# 스킬이 적은 잇는 명령을 그대로 꺼내 돌린다.
+# 스킬이 적은 잇는 명령을 그대로 꺼내 실행한다.
 J="$T/join"; mkdir -p "$J"
 printf '## 검증' > "$J/10-head.part"
 ( cd "$T" && printf '%s\n' 'echo hi' | bash "$S" "$J/20-ev.part" >/dev/null 2>&1 )

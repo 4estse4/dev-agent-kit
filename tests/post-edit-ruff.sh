@@ -18,7 +18,7 @@
 #   · ruff 가 실패해도(0.15 는 `.md` 에 rc=2) 훅은 rc=0 이다. 0.15 의 게이트는 `.md` 를 안 본다
 #   · ruff 는 게이트처럼 그 조상의 `.venv` → `venv` → PATH 순으로 고른다. `.md` 도 `.py` 도.
 #     venv 는 그 조상의 것만 본다 — 레포 루트의 venv 는 하위 디렉터리의 pyproject 에 안 쓴다
-#   · `.py` 는 전처럼 훅이 도는 자리에서 부르되 `--force-exclude` 를 붙인다. 없으면 프로젝트가
+#   · `.py` 는 전처럼 훅이 실행되는 자리에서 부르되 `--force-exclude` 를 붙인다. 없으면 프로젝트가
 #     extend-exclude 로 뺀 `.py`(마이그레이션 등)도 포맷했다(PR #112 3라운드 콜드 리뷰)
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"

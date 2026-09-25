@@ -1,6 +1,6 @@
-# 킷 자신의 검사. PR 마다 돈다.
+# 킷 자신의 검사. PR 마다 실행된다.
 #
-# 왜 CI 인가: 이 검사들은 원래 세션 안에서만 돌던 것이었고, 그동안 킷의 하드룰은
+# 왜 CI 인가: 이 검사들은 원래 세션 안에서만 실행되던 것이었고, 그동안 킷의 하드룰은
 # "설치기를 고치면 깨끗한 데모 레포에 설치해 재현한다" 의 「누가 막나」를 `막는 것 없음` 으로 두고 있었다.
 # 사람에게 맡긴 그 자리로, 안 지운 pre-commit·pre-push 를 지웠다고 보고하는 회귀가
 # 한 라운드를 통과했다. 기억이 아니라 검사가 막아야 한다.
@@ -39,9 +39,9 @@ jobs:
       - name: settings.json parses
         run: python3 -c "import json; json.load(open('claude-code/settings.json'))"
 
-      # **한 검사가 빨개도 나머지를 다 돌린다.** 기본값(첫 실패에서 멈춤)이면 그 커밋에서
+      # **한 검사가 빨개도 나머지를 다 실행한다.** 기본값(첫 실패에서 멈춤)이면 그 커밋에서
       # 다른 검사가 무엇을 말했을지 영영 모르고, 고치고 다시 밀어야 다음 것이 보인다.
-      # 라운드가 열여섯 번 돈 이 PR 에서 그 왕복은 비용이 크다.
+      # 라운드가 열여섯 번 진행된 이 PR 에서 그 왕복은 비용이 크다.
       - name: install.sh says what it actually deletes
         id: deletions
         continue-on-error: true
@@ -62,7 +62,7 @@ jobs:
         continue-on-error: true
         run: bash tests/gate-quotepath.sh
 
-      # 이 둘은 게이트와 훅을 실제로 돌린다.
+      # 이 둘은 게이트와 훅을 실제로 실행한다.
       - name: the gate picks the changed module as a target
         id: targets
         continue-on-error: true
@@ -99,7 +99,7 @@ jobs:
         run: bash tests/gate-jvm-ci.sh
 
       # go_min 이 핀한 Go 도구가 요구하는 go 와 같은지. 진짜 모듈 proxy 에 묻는다 — 핀을 올리는 그
-      # PR 에서 잡히게 PR 마다 돈다. 아래 스텝이 같은 검사를 가짜 proxy 로 네트워크 없이 시험한다.
+      # PR 에서 잡히게 PR 마다 실행된다. 아래 스텝이 같은 검사를 가짜 proxy 로 네트워크 없이 시험한다.
       - name: go_min matches the Go the pinned tools need
         id: gominpins
         continue-on-error: true
@@ -117,14 +117,14 @@ jobs:
         continue-on-error: true
         run: bash tests/check-tool-pins.sh
 
-      # 에이전트 훅을 Claude Code 가 부르는 모양(표준입력 JSON)으로 돌린다. gh 는 가짜로 바꿔
-      # 떠 둔 코멘트를 읽힌다 — 네트워크도 토큰도 안 쓴다.
+      # 에이전트 훅을 Claude Code 가 부르는 모양(표준입력 JSON)으로 실행한다. gh 는 가짜로 바꿔
+      # 저장해 둔 코멘트를 읽힌다 — 네트워크도 토큰도 안 쓴다.
       - name: the round comment hook blocks quotes missing from the answers
         id: roundquotes
         continue-on-error: true
         run: bash tests/round-comment-quotes.sh
 
-      # 편집 직후 포맷 훅도 같은 모양으로 돌린다. ruff 는 부른 자리와 인자를 적는 가짜다.
+      # 편집 직후 포맷 훅도 같은 모양으로 실행한다. ruff 는 부른 자리와 인자를 적는 가짜다.
       - name: the edit hook runs the gate's ruff where the gate runs it
         id: postedit
         continue-on-error: true

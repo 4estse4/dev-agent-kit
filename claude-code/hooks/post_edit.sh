@@ -2,9 +2,9 @@
 # PostToolUse: 편집한 파일을 자동 포맷한다.
 # 포맷만 한다 — 진단은 LSP, 전체 게이트는 git 훅과 CI 가 맡는다. 필요: jq
 #
-# **이 훅은 차단할 수 없다** — PostToolUse 는 도구가 이미 실행된 뒤에 돈다(공식 문서).
+# **이 훅은 차단할 수 없다** — PostToolUse 는 도구가 이미 실행된 뒤에 호출된다(공식 문서).
 # 그래서 포매터가 없을 때 할 수 있는 최선은 exit 2 로 에이전트에게 알리는 것이다.
-# 실제로 막는 것은 pre-commit 의 게이트다(포맷 검사가 거기서 돈다).
+# 실제로 막는 것은 pre-commit 의 게이트다(포맷 검사가 거기서 실행된다).
 input=$(cat)
 file=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty')
 [ -z "$file" ] && exit 0
@@ -21,7 +21,7 @@ root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 # 실제로 이 킷을 쓰는 머신이 그 상태였다.
 #
 # lib.sh 를 source 하지 않는 이유: 그쪽은 게이트 상태 배열까지 들고 오고, 이 훅은
-# vendor 된 게이트가 없는 레포에서도 돌아야 한다. 필요한 만큼만 여기서 한다.
+# vendor 된 게이트가 없는 레포에서도 동작해야 한다. 필요한 만큼만 여기서 한다.
 for d in "$(command -v go >/dev/null 2>&1 && go env GOPATH 2>/dev/null)/bin" \
          "$HOME/go/bin" "$HOME/.local/bin" "/usr/local/bin" "/opt/homebrew/bin"; do
   case "$d" in ""|"/bin") continue ;; esac
@@ -30,7 +30,7 @@ for d in "$(command -v go >/dev/null 2>&1 && go env GOPATH 2>/dev/null)/bin" \
 done
 export PATH
 
-# 게이트가 ruff 를 도는 자리 — pyproject.toml 이 있는 가장 가까운 조상(레포 루트까지) — 를 낸다.
+# 게이트가 ruff 를 실행하는 자리 — pyproject.toml 이 있는 가장 가까운 조상(레포 루트까지) — 를 낸다.
 # 없으면 아무것도 안 내고 실패한다.
 _pyroot() { # $1=파일
   local d
@@ -69,7 +69,7 @@ case "$file" in
     ;;
   *.ts|*.tsx|*.js|*.jsx|*.mjs|*.css|*.scss|*.json|*.md|*.html|*.yml|*.yaml)
     # ruff 0.16 부터 게이트의 `ruff format --check .`(adapters/py.sh)가 .md 의 Python 코드 블록도
-    # 본다. 그 게이트가 도는 자리(_pyroot)에서 그 게이트의 ruff(_ruff)로도 포맷한다.
+    # 본다. 그 게이트가 실행되는 자리(_pyroot)에서 그 게이트의 ruff(_ruff)로도 포맷한다.
     # --force-exclude 가 없으면 이름을 준 파일은 extend-exclude 로 뺀 .md 여도 포맷된다.
     # 실패는 알리지 않는다. 0.15 는 .md 에 rc=2 를 내는데 그 게이트는 .md 를 안 본다.
     # 이것이 없던 동안 훅은 .md 를 prettier 에만 넘겨서 pre-commit 게이트가 그제서야 막았다

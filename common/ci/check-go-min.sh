@@ -26,7 +26,7 @@
 #   check-go-min.sh        AI_KIT_GOPROXY 로 proxy 주소를 바꾼다(기본 https://proxy.golang.org)
 #
 # 종료코드: 0 맞음 · 1 어긋남 · 2 판정 못 함(조회 실패 · 키 없음 · go install 줄 없음 · 못 읽은 go install).
-# 판정 못 한 것을 통과로 치지 않는다 — check-action-pins.sh 와 같다.
+# 판정 못 한 것을 통과로 처리하지 않는다 — check-action-pins.sh 와 같다.
 set -uo pipefail
 SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 TV="$SELF_DIR/../gate/tool-versions"

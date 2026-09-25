@@ -8,7 +8,7 @@ argument-hint: "[선택: 이번에 다룬 요구 ID]"
 !`bash .ai-kit/gate/trace.sh 2>&1 || true`
 
 SPEC:
-> `!! SPEC 이 …줄이라` 가 뜨면 **위 본문은 앞부분뿐이다.** 그 줄 아래의 ID 목록이
+> `!! SPEC 이 …줄이라` 가 출력되면 **위 본문은 앞부분뿐이다.** 그 줄 아래의 ID 목록이
 > 전체이고, **거기 있는 것을 「SPEC 에 없는 유령 행」으로 판정하지 마라.**
 
 !`cat docs/SPEC.md 2>/dev/null | head -200; _n=$( [ -f docs/SPEC.md ] && wc -l < docs/SPEC.md | tr -d " " || echo 0 ); if [ "$_n" -gt 200 ]; then echo; echo "!! SPEC 이 ${_n}줄이라 위는 앞 200줄뿐이다. 아래가 전체 요구 ID 이고, 여기 있는 것을 유령으로 판정하지 마라:"; grep -ohE "R-[A-Z]+-[0-9]+" docs/SPEC.md | sort -u | tr "\n" " "; echo; fi`
@@ -36,8 +36,8 @@ $ARGUMENTS
    구현·테스트 칸에 **실재하는 경로**를 적는다.
 3. **상태를 낮추는 것도 한다** — 코드를 지웠거나 요구를 다시 열었으면 낮춘다.
 
-> 위 두 목록을 **둘 다** 본다. `/trace` 는 보통 커밋 전에 돌리므로 커밋된 diff 는
-> 비어 있기 쉽고, **새로 만든 테스트 파일은 untracked 라 `git diff` 에 아예 안 뜬다** —
+> 위 두 목록을 **둘 다** 본다. `/trace` 는 보통 커밋 전에 실행하므로 커밋된 diff 는
+> 비어 있기 쉽고, **새로 만든 테스트 파일은 untracked 라 `git diff` 에 아예 나오지 않는다** —
 > 추적표의 테스트 칸을 채우는 것이 이 스킬의 일인데 그게 안 보이면 일을 못 한다.
 
 ## 규칙
@@ -50,5 +50,5 @@ $ARGUMENTS
 
 ## 끝
 
-갱신 후 `bash .ai-kit/gate/trace.sh` 를 다시 돌려 통과를 확인하고,
+갱신 후 `bash .ai-kit/gate/trace.sh` 를 다시 실행해 통과를 확인하고,
 상태가 바뀐 요구만 한 줄로 보고한다. **바뀐 것이 없으면 "변경 없음" 한 줄.**

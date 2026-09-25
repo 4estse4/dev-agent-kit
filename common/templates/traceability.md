@@ -1,7 +1,7 @@
 # 추적 매트릭스
 
 `docs/SPEC.md` 의 모든 요구가 구현·테스트에 도달했는지 추적한다.
-**`bash .ai-kit/gate/trace.sh` 가 이 표를 기계로 검사한다** — CI 에서도 돈다.
+**`bash .ai-kit/gate/trace.sh` 가 이 표를 기계로 검사한다** — CI 에서도 실행된다.
 
 ## 규칙
 

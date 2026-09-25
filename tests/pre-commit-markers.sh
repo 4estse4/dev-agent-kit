@@ -6,7 +6,7 @@
 # 파이프라인의 결과로 삼아 "마커 없음" 이 됐다. 마커가 앞쪽에 있고 뒤가 파이프 버퍼보다 긴
 # 파일 — 병합 충돌이 가장 흔한 package-lock.json 이 그 모양이다 — 이 rc=0 으로 커밋됐다.
 #
-# 훅을 실제로 돌린다. 설치된 레포의 .ai-kit/ 대신 킷의 common/ 을 AI_KIT_DIR 로 준다.
+# 훅을 실제로 실행한다. 설치된 레포의 .ai-kit/ 대신 킷의 common/ 을 AI_KIT_DIR 로 준다.
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 fail=0
