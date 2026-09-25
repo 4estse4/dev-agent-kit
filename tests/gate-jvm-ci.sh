@@ -1,7 +1,19 @@
 #!/usr/bin/env bash
-# CI 의 setup-java 가 gradle 캐시 키를 빌드 루트가 어디에 있든 그 빌드 루트의 의존성 파일로 만든다.
+# 킷의 JVM 은 Kotlin 과 Gradle 이다. `pom.xml` 만 있는 디렉터리는 JVM 빌드 루트가 아니다. CI 의 setup-java 는
+# gradle 캐시 키를 빌드 루트가 어디에 있든 그 빌드 루트의 의존성 파일로 만든다.
 #
-# 이 테스트가 있는 이유: setup-java 는 `cache: gradle` 만 주면 기본 패턴으로 키를 만드는데, 그 가운데
+# 이 테스트가 있는 이유 (1): `pom.xml` 만 있는 레포에서 setup-java 가 맞는 파일을 못 찾아 실패했다(이슈 #127,
+# setup-java v6 의 src/cache.ts 의 computeCacheKey). 다음을 본다. 아래 넷이 `pom.xml` 을 만들어 보므로 흔적
+# 검사는 이 파일을 뺀다:
+#   · 흔적: 추적 파일 전부에서 Maven 을 가리키는 글자가 0 건이다. `pom.xml` 은 역슬래시가 낀 모양(정규식의
+#     `pom\\.xml`)도 찾는다. `docs/dev-log.md` 는 그때의 기록이라 뺀다. `git grep` 이 실패하면 흔적이 없는
+#     것으로 세지 않는다
+#   · detect 스텝을 실행하면 `pom.xml` 만 있는 레포(루트 · backend/)는 jvm=false, gradle 마커가 있으면 jvm=true
+#   · 래퍼 검사 스텝은 `pom.xml` 옆에 래퍼를 요구하지 않고, gradle 빌드 루트에 `gradlew` 가 없으면 실패한다
+#   · `pom.xml` 만 있는 레포에서 `gate.sh --all` 이 검사 대상 없음으로 끝난다
+#   · `install.sh` 가 `pom.xml` 옆에 `.editorconfig` 를 놓지 않는다
+#
+# 이 테스트가 있는 이유 (2): setup-java 는 `cache: gradle` 만 주면 기본 패턴으로 키를 만드는데, 그 가운데
 # `gradle/*.versions.toml` · `buildSrc/**/Versions.kt` · `buildSrc/**/Dependencies.kt` 는 레포 루트에 묶여
 # 있다. 킷은 하위 디렉터리의 빌드 루트를 지원하므로(gates.yml 의 빌드 루트별 래퍼 검사) 빌드 루트가
 # backend/ 이면 버전 카탈로그가 키에 들어가지 않고, 카탈로그에서만 버전을 올려도 전의 캐시를 복원하고
@@ -83,6 +95,83 @@ if not n:
 sys.exit(1 if fails else 0)
 PY
 python3 "$T/java.py" "$Y" "$T" || fail=1
+
+# ── Maven 을 지원하지 않는다 ───────────────────────────────────────────
+# 흔적: 추적 파일 전부. 이 파일은 아래에서 `pom.xml` 을 만들어 보므로 뺀다.
+if ! git -C "$KIT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  bad "킷이 git 체크아웃이 아니다 — 추적 파일에서 Maven 의 흔적을 찾을 수 없다"
+else
+  # `pom\\*\.xml` 은 pom 과 .xml 사이에 역슬래시가 몇 개 끼어도 찾는다. 정규식에 파일 이름을 넣으며 점을
+  # 이스케이프한 줄(`pom\\.xml`)을 `pom\.xml` 로만 찾다가 놓쳤다(PR #130 1라운드 콜드 리뷰).
+  # git grep 은 찾으면 0, 못 찾으면 1 이다. 그 밖은 오류이고 출력이 비므로, 출력만 보면 흔적이 없다고 센다.
+  hits=$(git -C "$KIT" grep -n -i -e 'maven' -e 'mvn' -e 'pom\\*\.xml' -e 'wrapper:wrapper' -- . ':!docs/dev-log.md' ':!tests/gate-jvm-ci.sh'); rc=$?
+  case "$rc" in
+    1) ok "킷 파일에 Maven 의 흔적이 없다(docs/dev-log.md 와 이 테스트는 빼고)" ;;
+    0) bad "킷 파일에 Maven 의 흔적이 있다:"; printf '%s\n' "$hits" | cut -c1-140 | sed 's/^/      /' ;;
+    *) bad "git grep 이 rc=$rc 로 실패했다 — 흔적이 없는지 알 수 없다" ;;
+  esac
+fi
+
+# gates.yml 의 한 스텝의 run 을 낸다. $1=잡  $2=id 또는 name
+step_body() {
+  python3 - "$Y" "$1" "$2" <<'PY'
+import sys, yaml
+y, job, want = sys.argv[1:4]
+for s in yaml.safe_load(open(y, encoding="utf-8"))["jobs"][job]["steps"]:
+    if want in (s.get("id"), s.get("name")):
+        print(s.get("run") or ""); break
+PY
+}
+step_body detect d > "$T/detect.sh"
+step_body gate 'require an executable wrapper at every build root' > "$T/wrapper.sh"
+grep -q 'jvm=' "$T/detect.sh" || bad "detect 잡에서 id: d 스텝을 못 뽑았다 — gates.yml 이 바뀌었나"
+grep -q 'gradlew' "$T/wrapper.sh" || bad "gate 잡에서 래퍼 검사 스텝을 못 뽑았다 — gates.yml 이 바뀌었나"
+
+# $R 의 빌드 파일을 지우고 인자대로 놓는다. 인자=「경로」(gradlew 는 실행권한을 준다)
+layout() {
+  local p
+  rm -rf "$R/pom.xml" "$R/backend" "$R/kt"
+  for p in "$@"; do
+    mkdir -p "$(dirname "$R/$p")"; : > "$R/$p"
+    case "$p" in */gradlew|gradlew) chmod +x "$R/$p" ;; esac
+  done
+}
+detect() { # $1=설명  $2=기대하는 jvm 값  나머지=layout 인자
+  local what="$1" want="$2" got; shift 2
+  layout "$@"; mkdir -p "$T/rt"; : > "$T/out"
+  (cd "$R" && RUNNER_TEMP="$T/rt" GITHUB_OUTPUT="$T/out" bash -e "$T/detect.sh") > "$T/detect.log" 2>&1 \
+    || { bad "detect · $what → 스텝이 실패했다:"; sed 's/^/      /' "$T/detect.log"; return; }
+  got=$(sed -n 's/^jvm=//p' "$T/out")
+  [ "$got" = "$want" ] && ok "detect · $what → jvm=$got" || bad "detect · $what → jvm=$got, jvm=$want 여야 한다"
+}
+detect "루트에 pom.xml 만"           false pom.xml
+detect "backend/ 에 pom.xml 만"      false backend/pom.xml
+detect "kt/ 에 settings.gradle.kts"  true  kt/settings.gradle.kts kt/gradlew
+
+wrapper() { # $1=설명  $2=기대(pass|fail)  나머지=layout 인자
+  local what="$1" want="$2" rc; shift 2
+  layout "$@"
+  (cd "$R" && bash -e "$T/wrapper.sh") > "$T/wrapper.log" 2>&1; rc=$?
+  if { [ "$want" = pass ] && [ "$rc" -eq 0 ]; } || { [ "$want" = fail ] && [ "$rc" -ne 0 ]; }; then ok "래퍼 검사 · $what → rc=$rc"
+  else bad "래퍼 검사 · $what → rc=$rc, $want 여야 한다:"; sed 's/^/      /' "$T/wrapper.log" | head -5; fi
+}
+wrapper "backend/pom.xml(래퍼 없음) · kt/(gradlew 있음)" pass backend/pom.xml kt/settings.gradle.kts kt/gradlew
+wrapper "kt/ 에 gradlew 없음"                            fail kt/settings.gradle.kts
+
+# 게이트: pom.xml 만 있으면 검사할 모듈이 없다.
+layout pom.xml
+out=$(cd "$R" && bash .ai-kit/gate/gate.sh --all 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q '검사 대상 없음'; then ok "gate.sh --all · 루트에 pom.xml 만 → 검사 대상 없음"
+else bad "gate.sh --all · 루트에 pom.xml 만 → rc=$rc, 검사 대상 없음이어야 한다:"; printf '%s\n' "$out" | tail -3 | sed 's/^/      /'; fi
+
+# 설치: pom.xml 옆에 .editorconfig 를 놓지 않는다.
+R2="$T/repo2"; mkdir -p "$R2/backend"
+git init -q -b main "$R2"
+git -C "$R2" config user.email t@example.com; git -C "$R2" config user.name T
+: > "$R2/backend/pom.xml"; git -C "$R2" add -A; git -C "$R2" commit -q -m init
+if ! bash "$KIT/install.sh" "$R2" > "$T/install2.log" 2>&1; then bad "backend/pom.xml 만 있는 레포에 설치가 실패했다:"; tail -3 "$T/install2.log" | sed 's/^/      /'
+elif [ -e "$R2/backend/.editorconfig" ]; then bad "install.sh 가 backend/pom.xml 옆에 .editorconfig 를 놓았다"
+else ok "install.sh 는 backend/pom.xml 옆에 .editorconfig 를 놓지 않는다"; fi
 
 rm -rf "$T"
 exit $fail

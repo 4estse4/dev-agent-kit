@@ -37,7 +37,7 @@ logical() {
   done <<< "$files"
 }
 
-MARKER="-name[[:space:]]+(['\"]?(go\\.mod|package(-lock)?\\.json|pyproject\\.toml|settings\\.gradle(\\.kts)?|build\\.gradle(\\.kts)?|pom\\.xml)|\"?\\$)"
+MARKER="-name[[:space:]]+(['\"]?(go\\.mod|package(-lock)?\\.json|pyproject\\.toml|settings\\.gradle(\\.kts)?|build\\.gradle(\\.kts)?)|\"?\\$)"
 finds=$(logical | grep -E "find[[:space:]].*$MARKER")
 [ -n "$finds" ] || { echo "  ✗ 마커를 찾는 find 가 하나도 안 걸렸다 — 정규식이 틀렸나"; exit 1; }
 

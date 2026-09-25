@@ -93,7 +93,7 @@ jobs:
         continue-on-error: true
         run: bash tests/gate-node-ci.sh
 
-      - name: the gradle cache key covers the dependency files of a build root in a subdirectory
+      - name: JVM is Kotlin and Gradle only, and the gradle cache key covers a build root in a subdirectory
         id: jvmci
         continue-on-error: true
         run: bash tests/gate-jvm-ci.sh

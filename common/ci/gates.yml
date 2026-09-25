@@ -52,7 +52,7 @@ jobs:
             && echo "node=true" >> "$GITHUB_OUTPUT" || echo "node=false" >> "$GITHUB_OUTPUT"
           find . \( $(gate_prune_expr) \) -prune -o \
                  \( -name 'settings.gradle' -o -name 'settings.gradle.kts' \
-                    -o -name 'build.gradle' -o -name 'build.gradle.kts' -o -name 'pom.xml' \) \
+                    -o -name 'build.gradle' -o -name 'build.gradle.kts' \) \
                  -print -quit | grep -q . \
             && echo "jvm=true" >> "$GITHUB_OUTPUT" || echo "jvm=false" >> "$GITHUB_OUTPUT"
           find . \( $(gate_prune_expr) \) -prune -o -name pyproject.toml -print -quit | grep -q . \
@@ -194,10 +194,7 @@ jobs:
           fail=0
           while IFS= read -r m; do
             d=$(dirname "$m")
-            case "$(basename "$m")" in
-              pom.xml) w="$d/mvnw" ;;
-              *)       w="$d/gradlew" ;;
-            esac
+            w="$d/gradlew"
             if [ ! -f "$w" ]; then
               echo "::error::$d 에 빌드 래퍼($(basename "$w"))가 없습니다."
               fail=1
@@ -210,12 +207,11 @@ jobs:
           # 마커가 있는 모든 디렉터리를 빌드 루트로 보면 표준 멀티모듈 레포(루트에만
           # gradlew, 서브모듈마다 build.gradle)가 여기서 죽는다. 어댑터는 그 서브모듈에
           # 들어가지도 않는데 CI 만 실패한다.
-          # 건너뛰는 디렉터리도 게이트와 같다. build/ · target/ 을 이름으로 거르지 않는다 —
+          # 건너뛰는 디렉터리도 게이트와 같다. build/ 를 이름으로 거르지 않는다 —
           # 업무 도메인 이름이기도 해서 멀쩡한 모듈이 빠진다(lib.sh 의 GATE_PRUNE_DIRS 주석).
           done < <(find . \( $(gate_prune_expr) \) -prune -o \
                           \( -name 'settings.gradle' -o -name 'settings.gradle.kts' \
-                             -o -name 'build.gradle' -o -name 'build.gradle.kts' \
-                             -o -name pom.xml \) -print \
+                             -o -name 'build.gradle' -o -name 'build.gradle.kts' \) -print \
                    | while IFS= read -r m; do printf '%s|%s\n' "$(dirname "$m")" "$m"; done \
                    | sort -u -t'|' -k1,1 \
                    | awk -F'|' '{
@@ -226,7 +222,7 @@ jobs:
           if [ "$fail" = 1 ]; then
             echo "래퍼가 없으면 빌드 도구 버전이 러너 이미지에 묶여 고정되지 않고,"
             echo "래퍼를 쓰지 않는 개발자 머신과 CI 가 서로 다른 버전으로 검사합니다."
-            echo "  gradle wrapper   (또는 mvn -N wrapper:wrapper) 후 커밋하세요."
+            echo "  gradle wrapper 후 커밋하세요."
             exit 1
           fi
           echo "모든 빌드 루트에 실행 가능한 래퍼가 있습니다."
