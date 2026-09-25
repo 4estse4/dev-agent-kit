@@ -21,7 +21,7 @@
 #     캐시만 캐시하므로 go install 이 만든 도구는 캐시되지 않았고, setup-go 와 actions/cache 의 저장은
 #     잡이 성공할 때만 실행된다(이슈 #115). 설치 스텝과 PATH 스텝은 go 대역으로 실행해 GOBIN 과 PATH 가
 #     복원하는 경로와 같은지, 도구를 cgo 없이(CGO_ENABLED=0) 빌드하는지 본다. cgo 를 켜면 도구가 러너의
-#     glibc 에 링크되는데, 키에 러너 이미지가 없어 다른 이미지에서 빌드한 도구를 복원할 수 있다
+#     glibc 에 동적으로 링크될 수 있는데, 키에 러너 이미지가 없어 다른 이미지에서 빌드한 도구를 복원할 수 있다
 #   · coverage 스텝을 go 대역으로 돌리면 모듈마다 그 디렉터리에서 go test 를 부르고, 한 모듈이
 #     실패하면 이유를 말하며 실패하고, COVER_MIN 을 넘는지 판정한다. 숫자로 된 커버리지 줄이
 #     하나도 없을 때 말없이 실패하지 않는다
@@ -240,7 +240,7 @@ for job, spec in (wf.get("jobs") or {}).items():
         if rc != 0: msg.append(f"설치 스텝 {i + 1} 이 go 대역으로 실패했다: {err.strip()[:120]}")
         for gobin, cgo, args in calls:
             if gobin != home_path(home): msg.append(f"`go {args}` 의 GOBIN 이 {gobin or '(없음)'}, 복원하는 {home_path(home)} 여야 한다.")
-            if cgo != "0": msg.append(f"`go {args}` 의 CGO_ENABLED 가 {cgo}, 0 이어야 한다 — 도구가 러너의 glibc 에 링크된다.")
+            if cgo != "0": msg.append(f"`go {args}` 의 CGO_ENABLED 가 {cgo}, 0 이어야 한다 — 도구가 러너의 glibc 에 동적으로 링크될 수 있다.")
     names = {pkg.rsplit("/", 1)[-1] for pkg, _ in tools}
     after = range(inst[-1] + 1, len(steps))
     use = next((i for i in after if "gate.sh" in (steps[i].get("run") or "") or any(n in (steps[i].get("run") or "") for n in names)), None)

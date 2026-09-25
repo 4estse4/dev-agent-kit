@@ -142,8 +142,9 @@ jobs:
       # 저장은 설치 바로 뒤에 한다. actions/cache 와 setup-go 의 저장은 post 단계이고 `post-if: success()` 라서,
       # 게이트가 실패한 실행에서는 저장하지 않는다.
       # 도구는 cgo 없이(CGO_ENABLED=0) 빌드한다. 키에 러너 이미지가 없으므로 ubuntu-latest 가 다른 이미지로
-      # 옮겨 가는 기간에는 다른 이미지에서 빌드한 도구를 복원한다. cgo 를 켜면 도구가 그 이미지의 glibc 에
-      # 링크된다. golangci-lint 의 배포판도 CGO_ENABLED=0 으로 빌드한다(그 레포의 .goreleaser.yml).
+      # 옮겨 가는 기간에는 다른 이미지에서 빌드한 도구를 복원한다. cgo 를 켜면(러너의 기본값이다) 도구가 그
+      # 이미지의 glibc 에 동적으로 링크될 수 있다. ubuntu24 러너에서 golangci-lint 와 govulncheck 가 그랬다(실제로
+      # 확인함). golangci-lint 의 배포판도 CGO_ENABLED=0 으로 빌드한다(그 레포의 .goreleaser.yml).
       - if: needs.detect.outputs.go == 'true'
         id: gotools
         uses: actions/cache/restore@v6
