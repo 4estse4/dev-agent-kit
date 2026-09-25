@@ -15,7 +15,7 @@ else
 fi
 gate_run       "go vet"       go vet ./...
 gate_have golangci-lint && gate_run "golangci-lint" golangci-lint run || gate_skip "golangci-lint"
-# --lint 모드에서는 테스트를 돌지 않는다. 커밋마다 테스트를 돌리면 커밋이 비싸지고,
+# --lint 모드에서는 테스트를 실행하지 않는다. 커밋마다 테스트를 실행하면 커밋이 비싸지고,
 # 비싼 훅은 --no-verify 습관을 만든다 — 끄는 게이트는 없는 게이트다.
 if [ "${GATE_LINT_ONLY:-0}" != 1 ]; then
 # 프로젝트가 추가 플래그를 요구할 수 있다(예: 공유 DB 를 쓰는 통합 테스트에

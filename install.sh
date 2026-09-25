@@ -33,7 +33,7 @@ while [ $# -gt 0 ]; do
     --ci) DO_CI=1; shift ;;
     --agent) DO_AGENT=1; shift ;;
     # 값을 받는 플래그는 값이 실제로 있는지 먼저 본다. 안 보면 `shift 2` 가 인자
-    # 하나를 못 넘겨 실패하는데, 실패해도 루프는 계속 돌아 **같은 인자를 영원히
+    # 하나를 못 넘겨 실패하는데, 실패해도 루프는 계속 반복되어 **같은 인자를 영원히
     # 다시 읽는다** — 출력 한 줄 없이 멈춘 것처럼 보인다(실제로 확인함).
     --lang)
       [ $# -ge 2 ] || { echo "install: --lang 에 값이 필요합니다 (예: --lang py,ts)" >&2; exit 2; }
@@ -114,7 +114,7 @@ done
 # mkdir 도 쓰기다 — 조건 앞에 두면 dry-run 이 빈 디렉터리를 남긴다.
 place() { # $1=src $2=dst(대상 레포 상대)
   local src="$1" dst="$TARGET/$2"
-  # dry-run 은 대상에 쓰지 않고 STAGE 에 놓는다. 판정(아래)은 그대로 돈다.
+  # dry-run 은 대상에 쓰지 않고 STAGE 에 놓는다. 판정(아래)은 그대로 실행된다.
   if [ "$DRY_RUN" = 1 ]; then mkdir -p "$STAGE/$(dirname "$2")"; cp "$src" "$STAGE/$2"; fi
   if [ -e "$dst" ]; then
     if cmp -s "$src" "$dst"; then SKIPPED+=("$2 (동일)"); return; fi
@@ -130,7 +130,7 @@ place() { # $1=src $2=dst(대상 레포 상대)
 # 왜 스킬·에이전트·훅이 킷 소유인가: 안 덮으면 갱신이 무의미하다. 그것들은 킷이 계속
 # 고치는 물건이고, 프로젝트가 손댈 이유가 없다(손댈 것은 settings.json 과 CLAUDE.md 다).
 # 실제로 안 덮은 결과가 이렇다 — 한 프로젝트가 여덟 달 전 판으로 리뷰를 일곱 라운드
-# 돌았고, 그 옛 판은 지금 킷이 없애려는 바로 그 동작을 시키고 있었다.
+# 진행했고, 그 옛 판은 지금 킷이 없애려는 바로 그 동작을 시키고 있었다.
 #
 # **프로젝트가 만든 파일은 손대지 않는다.** 이 함수는 킷이 배포하는 파일만 순회하므로
 # 그 목록에 없는 것은 애초에 닿지 않는다. 지우지도 않는다.
@@ -147,7 +147,7 @@ replace() { # $1=src $2=dst(대상 레포 상대)
 
 # ── 게이트 vendor: 대상 레포에 .ai-kit/ 로 복사한다 ──
 # 홈 디렉터리 경로를 훅·CI 에 박으면 다른 머신과 CI 에서 깨진다.
-# vendor 해서 레포에 커밋하면 어디서 clone 해도 같은 게이트가 돈다.
+# vendor 해서 레포에 커밋하면 어디서 clone 해도 같은 게이트가 실행된다.
 if [ "$DO_HOOKS" = 1 ]; then
   vendor="$TARGET/.ai-kit"
   # .ai-kit/gate 와 git-hooks 는 킷 소유라 통째로 교체한다. identity 는 그 아래
@@ -322,8 +322,8 @@ fi
 if [ "$DO_LINT" = 1 ]; then
   # 게이트와 **같은 방식·같은 목록**으로 찾는다. 예전에는 여기서 backend/·frontend/ 라는
   # 디렉터리 이름을 가정했는데, 게이트는 마커 파일로 찾으므로 둘이 어긋났다 —
-  # services/api/pyproject.toml 같은 구조에서 게이트는 ruff 를 돌리는데 킷 설정이
-  # 그 자리에 없어 도구 기본값으로 돌았다. 찾은 자리마다 설정을 놓으면 이름을 몰라도 된다.
+  # services/api/pyproject.toml 같은 구조에서 게이트는 ruff 를 실행하는데 킷 설정이
+  # 그 자리에 없어 도구 기본값으로 실행됐다. 찾은 자리마다 설정을 놓으면 이름을 몰라도 된다.
   #
   # 프룬 목록을 여기 복붙하지 않는다 — 두 벌이 되면 AI_KIT_PRUNE_DIRS 를 바꿨을 때
   # 게이트는 찾고 설치기는 못 찾는 상태가 된다. lib.sh 의 정의 하나를 함께 쓴다.
@@ -354,7 +354,7 @@ if [ "$DO_LINT" = 1 ]; then
   place_beside pyproject.toml "$KIT_ROOT/common/lint/py/ruff.toml"        "ruff.toml" \
     '^\[tool\.ruff'
   # JVM: 빌드 루트마다 .editorconfig.
-  # 같은 목적지를 두 번 치지 않도록 place_beside 의 PLACED_DESTS 가 막는다.
+  # 같은 목적지에 두 번 놓지 않도록 place_beside 의 PLACED_DESTS 가 막는다.
   # settings.gradle + build.gradle 은 Gradle 의 표준 배치라 한 디렉터리에 마커가
   # 둘인 것이 정상이고, 그때 .editorconfig 를 두 번 놓으면 두 번째가 충돌로 잡힌다.
   for m in settings.gradle settings.gradle.kts build.gradle build.gradle.kts; do
@@ -438,7 +438,7 @@ def commands(d):
 
     matcher 를 빼면 안 된다 — 그것도 등록의 일부다. 킷과 같은 명령을 등록하되
     matcher 만 "Edit|Write" 에서 "Write" 로 좁힌 레포는, 명령만 비교하면 "같다" 로
-    나온다. 그 레포의 자동 포맷은 Edit 에서 영영 안 도는데 설치기는 이상 없다고 말한다.
+    나온다. 그 레포의 자동 포맷은 Edit 에서 영영 실행되지 않는데 설치기는 이상 없다고 말한다.
     """
     got = set()
     for ev, groups in (d.get("hooks") or {}).items():
@@ -502,7 +502,7 @@ PYEOF
       while IFS= read -r _m; do
         [ -n "$_m" ] && WARNINGS+=("    $_m")
       done <<< "$_missing"
-      WARNINGS+=("  훅은 등록이 없으면 .claude/hooks/ 에 파일만 놓인 채 돌지 않고, permissions 는 그 절이 없으면 그냥 없는 것입니다.")
+      WARNINGS+=("  훅은 등록이 없으면 .claude/hooks/ 에 파일만 놓인 채 실행되지 않고, permissions 는 그 절이 없으면 그냥 없는 것입니다.")
       if [ "$DRY_RUN" = 1 ]; then
         WARNINGS+=("  실제로 설치하면 .claude/settings.json.ai-kit-new 가 옆에 놓입니다. 그것과 비교하세요.")
       else
@@ -519,7 +519,7 @@ if [ "$DO_PROTECT" = 1 ]; then
     echo "install: --dry-run 이므로 브랜치 보호는 건드리지 않습니다 (원격 변경입니다)"
   else
     # **사람에게 묻는다.** 이것은 원격 설정을 바꾸는 유일한 자리인데 `permissions.ask`
-    # 가 못 잡는다 — 규칙은 에이전트가 친 명령 **문자열**만 보므로 `bash install.sh
+    # 가 못 잡는다 — 규칙은 에이전트가 입력한 명령 **문자열**만 보므로 `bash install.sh
     # --protect` 안의 `gh api -X PUT` 은 안 보인다. 킷이 `Bash(gh api*)` 를 ask 에
     # 넣어놓고 그것을 비켜가는 실행 파일을 같이 배포하면 그 규칙이 거짓이 된다.
     # 그래서 스크립트가 직접 묻는다. 대답할 사람이 없으면(파이프·CI) 하지 않는다.
@@ -534,7 +534,7 @@ if [ "$DO_PROTECT" = 1 ]; then
       read -r _ans
       case "$_ans" in
         [yY]|[yY][eE][sS])
-          # 대상 레포 안에서 돌린다. protect-branch.sh 는 gh repo view 로 레포를 찾는데
+          # 대상 레포 안에서 실행한다. protect-branch.sh 는 gh repo view 로 레포를 찾는데
           # 그것은 CWD 를 본다 — 여기서 cd 하지 않으면 install.sh 를 실행한 자리의
           # 레포에 보호가 걸린다. 대상을 인자로 받는 명령에서 그건 사고다.
           ( cd "$TARGET" && bash "$KIT_ROOT/common/ci/protect-branch.sh" ) \
@@ -666,7 +666,7 @@ if [ "$DO_HOOKS" = 1 ] && [ "$DRY_RUN" = 0 ]; then
 ── 이제 할 일 ──
   1. .ai-kit/ 을 커밋하세요. 커밋하지 않으면 CI 도, 이 레포를 clone 한 사람도
      게이트를 갖지 못합니다.
-  2. docs/process/kit-guide.md 를 읽으세요. 무엇이 자동으로 돌고, CLAUDE.md 에서
+  2. docs/process/kit-guide.md 를 읽으세요. 무엇이 자동으로 실행되고, CLAUDE.md 에서
      무엇을 채워야 하고, 킷이 무엇을 안 하는지 적혀 있습니다.
 
 ── 참고 ──

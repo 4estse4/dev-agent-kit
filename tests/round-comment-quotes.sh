@@ -7,9 +7,9 @@
 # 초록으로 지나간다.
 #
 # **네트워크를 안 쓴다.** 훅은 `gh pr view` 로 PR 코멘트를 읽는다. 여기서는 PATH 앞에 둔 가짜
-# `gh` 가 `tests/fixtures/round-comment-quotes/` 에 떠 둔 3.5 코멘트를 JSON 목록으로 돌려주고,
-# 받은 인자를 적어 둔다. 3.5 코멘트(`answer*.md`)는 올라간 것을 그대로 뜬 것이다. 라운드
-# 코멘트(`round*.md`)는 접히지 않은 부분만 떴고, `pr64/round7.md` 는 거기서 줄을 더 발췌했다.
+# `gh` 가 `tests/fixtures/round-comment-quotes/` 에 저장해 둔 3.5 코멘트를 JSON 목록으로 돌려주고,
+# 받은 인자를 적어 둔다. 3.5 코멘트(`answer*.md`)는 올라간 것을 그대로 복사한 것이다. 라운드
+# 코멘트(`round*.md`)는 접히지 않은 부분만 복사했고, `pr64/round7.md` 는 거기서 줄을 더 발췌했다.
 # 3.5 코멘트의 제목 줄만 지금 제목(`### N라운드 코멘트를 읽고 사람이 정한 것`)으로 바꿨다(이슈 #84).
 # 올라갈 때는 옛 제목이었다. 대조하는 인용은 올라간 그대로다.
 #
@@ -154,7 +154,7 @@ check "서로 다른 인용의 조각을 … 로 이음" deny "$(post stitched.m
 mk reordered.md "$r4
 - (사람) \"그대로 둔다 … 홈 주소를 명령 인자로 쓰는 모양은\""
 check "한 인용의 조각 순서를 바꿈" deny "$(post reordered.md)"
-check "\\ 줄넘김으로 친 가짜 인용" deny "gh pr comment 89 \\
+check "\\ 줄넘김으로 입력한 가짜 인용" deny "gh pr comment 89 \\
   --body-file $T/onechar.md" "" "약속을 빼먹었다"
 
 # ── 막아야 하는 것: 인용이 아닌 (사람) ──

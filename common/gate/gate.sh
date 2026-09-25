@@ -16,7 +16,7 @@ REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "gate: git 레�
 cd "$REPO_ROOT" || exit 1
 
 BASE=""; ALL=0
-# --lint: 린트·정적분석만 돌린다(테스트·빌드 제외). pre-commit 이 쓴다.
+# --lint: 린트·정적분석만 실행한다(테스트·빌드 제외). pre-commit 이 쓴다.
 # 게이트 정의를 훅에 복붙하지 않기 위한 모드다 — 검사 목록이 두 벌이 되면 어긋난다.
 GATE_LINT_ONLY=0
 # --staged: 검사 범위를 "커밋하려는 것" 으로 잡는다.
@@ -28,7 +28,7 @@ STAGED=0
 while [ $# -gt 0 ]; do
   case "$1" in
     # 값을 받는 플래그는 값이 실제로 있는지 먼저 본다. 안 보면 `shift 2` 가 인자
-    # 하나를 못 넘겨 실패하는데, 실패해도 루프는 계속 돌아 **같은 인자를 영원히
+    # 하나를 못 넘겨 실패하는데, 실패해도 루프는 계속 반복되어 **같은 인자를 영원히
     # 다시 읽는다** — 출력 한 줄 없이 멈춘 것처럼 보인다(실제로 확인함).
     --base)
       [ $# -ge 2 ] || { echo "gate: --base 에 값이 필요합니다 (예: --base origin/main)" >&2; exit 2; }
@@ -60,7 +60,7 @@ export GATE_STRICT
 
 source "$SELF_DIR/lib.sh"
 
-# 도구를 찾기 전에 PATH 를 넓힌다 — 어느 환경에서든 같은 검사가 돌아야 한다.
+# 도구를 찾기 전에 PATH 를 넓힌다 — 어느 환경에서든 같은 검사가 실행되어야 한다.
 gate_extend_path
 
 # ── 변경 영역 판정 (판정 불가면 전체 검사로 폴백 — 조용히 통과시키지 않는다) ──
@@ -117,20 +117,20 @@ discover go.mod       go
 discover package.json ts
 # JVM: 빌드 루트 마커를 먼저 본다. 멀티모듈이 기본이라 build.gradle 만 찾으면
 # 루트와 서브모듈이 모두 잡히는데, 서브모듈에서 빌드를 부르면 래퍼도 settings 도
-# 없어 깨진다. 루트에서 한 번 도는 것이 모든 모듈을 덮는다.
+# 없어 깨진다. 루트에서 한 번 실행하는 것이 모든 모듈을 덮는다.
 discover settings.gradle     jvm
 discover settings.gradle.kts jvm
 discover build.gradle        jvm
 discover build.gradle.kts    jvm
 discover pyproject.toml      py
 
-# 조상 디렉터리에서 이미 도는 자손을 뺀다 — **JVM 에만 적용한다.**
+# 조상 디렉터리의 실행이 이미 덮는 자손을 뺀다 — **JVM 에만 적용한다.**
 #
 # Gradle 은 루트에서 한 번 부르면 서브모듈을 다 덮으므로 자손을 또 부르면
 # 낭비이고, 서브모듈엔 래퍼도 settings 도 없어 깨진다.
 #
 # Go·TS·Python 은 다르다. 중첩된 go.mod 는 **독립 모듈**이라 조상에서 `go vet ./...`
-# 을 돌려도 자손에 닿지 않는다. 여기에 같은 규칙을 적용했다가 중첩 모듈이 통째로
+# 을 실행해도 자손에 닿지 않는다. 여기에 같은 규칙을 적용했다가 중첩 모듈이 통째로
 # 검사에서 빠졌고(콜드 리뷰가 잡음), 그건 깊이 제한을 없앤 이유와 정확히 같은 실패다.
 # 같은 디렉터리에 마커가 둘인 경우(build.gradle + settings.gradle)는 어댑터와
 # 무관하게 한 번만 남긴다.

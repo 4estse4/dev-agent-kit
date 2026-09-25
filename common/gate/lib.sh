@@ -15,7 +15,7 @@ gate_have() { command -v "$1" >/dev/null 2>&1; }
 #
 # 목록이 짧은 이유는 실제로 확인한 결과다. "빌드 산출물이니 걸러야지" 싶은 이름들을 넣었다가
 # **리그레션을 만들었다** — vendor·build·out·dist·target·coverage 는 업무 도메인
-# 이름이기도 해서(`services/vendor` 같은), 이름으로 쳐내면 멀쩡한 모듈이 검사에서
+# 이름이기도 해서(`services/vendor` 같은), 이름으로 제외하면 멀쩡한 모듈이 검사에서
 # 통째로 사라진다. 실제로 그렇게 됐고 콜드 리뷰가 잡았다.
 #
 # 센 결과(multimodal-asset-studio, Go+React 모노레포): 마커 파일을 품는 것은
@@ -67,8 +67,8 @@ gate_go_highest() {
 
 # CI 가 Go 를 설치하는 go.mod(위 gate_go_highest)에서 setup-go 가 설치할 버전이 tool-versions 의 go_min
 # 이상인지 본다. 아니면 그 파일과 이유를 GitHub 주석(::error)으로 내고 실패한다.
-# 보는 것은 그 하나다. 핀한 Go 도구의 설치를 가르는 것은 돌고 있는 go 이고, go 줄이 더 낮은
-# 보조 모듈도 그 go 로 빌드된다. 모든 go.mod 를 보면 전에 돌던 멀티모듈 레포가 멈춘다.
+# 보는 것은 그 하나다. 핀한 Go 도구의 설치를 가르는 것은 실행 중인 go 이고, go 줄이 더 낮은
+# 보조 모듈도 그 go 로 빌드된다. 모든 go.mod 를 보면 전에 동작하던 멀티모듈 레포가 멈춘다.
 # 견주는 법은 setup-go 가 그 버전을 받는 법을 따른다. go 1.26 처럼 패치가 없으면 버전 범위로
 # 받아 그 계열(1.26.x)에서 러너가 캐시에 가진 가장 높은 것을, 없으면 가장 새것을 설치한다(setup-go v7
 # 의 getGo, 러너에서 봤다). 그래서 go_min 과 계열끼리 견준다. 이 통과는 캐시의 패치가 go_min 의
@@ -238,18 +238,18 @@ gate_absent() { GATE_ABSENT+=("$1"); }
 
 # 도구가 없어 검사를 건너뛴 것을 기록한다.
 # GATE_STRICT=1 이면 건너뜀을 실패로 본다 — CI 에서 도구 부재는 "통과"가 아니라
-# "검사가 돌지 않았음"이고, 그것을 green 으로 보고하면 게이트가 거짓말을 한다.
+# "검사가 실행되지 않았음"이고, 그것을 green 으로 보고하면 게이트가 거짓말을 한다.
 gate_skip() {
   # 이름에서 도구를 뽑는다. "golangci-lint" · "ruff" · "gradle(미설치·래퍼없음)" 등.
   local tool="${1%%(*}"; tool="${tool%% *}"
   local hint; hint=$(gate_install_hint "$tool")
   if [ "${GATE_STRICT:-0}" = "1" ]; then
     GATE_FAILED+=("$1(건너뜀)")
-    GATE_FAILOUT+=$'\n'"──── $1 ────"$'\n'"이 검사를 돌릴 도구가 없어 **검사되지 않았습니다.**"$'\n'
+    GATE_FAILOUT+=$'\n'"──── $1 ────"$'\n'"이 검사를 실행할 도구가 없어 **검사되지 않았습니다.**"$'\n'
     if [ -n "$hint" ]; then
       GATE_FAILOUT+=$'\n'"  설치:  $hint"$'\n'
     fi
-    GATE_FAILOUT+=$'\n'"  전부 설치:  bash .ai-kit/gate/install-tools.sh"$'\n'"  버전은 .ai-kit/gate/tool-versions 가 단일 출처입니다."$'\n'$'\n'"  불가피하게 건너뛰려면(그 검사는 돌지 않은 채 통과합니다):"$'\n'"    AI_KIT_ALLOW_MISSING_TOOLS=1 <명령>"$'\n'
+    GATE_FAILOUT+=$'\n'"  전부 설치:  bash .ai-kit/gate/install-tools.sh"$'\n'"  버전은 .ai-kit/gate/tool-versions 가 단일 출처입니다."$'\n'$'\n'"  불가피하게 건너뛰려면(그 검사는 실행되지 않은 채 통과합니다):"$'\n'"    AI_KIT_ALLOW_MISSING_TOOLS=1 <명령>"$'\n'
   else
     GATE_SKIPPED+=("$1")
   fi

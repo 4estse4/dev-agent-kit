@@ -8,13 +8,13 @@
 #
 # 깨끗한 레포에 킷을 설치하고 그 gates.yml 을 읽는다. 보는 것:
 #   · actions/setup-node 를 쓰는 스텝마다 continue-on-error 가 없고, 같은 잡에서 그보다 앞선
-#     스텝이 gate_nvmrc_check 를 부르고, cache 가 npm 이면(따옴표를 쳐도) cache-dependency-path 가
+#     스텝이 gate_nvmrc_check 를 부르고, cache 가 npm 이면(따옴표로 감싸도) cache-dependency-path 가
 #     레포 전체의 package-lock.json 과 npm-shrinkwrap.json 을 둘 다 잡는다. 그 값을 주면
 #     setup-node 는 기본 패턴 대신 그것만 보고, 하나도 안 맞으면 「Some specified paths were not
 #     resolved」로 멈춘다. 값이 없으면 레포 루트에서만 lockfile 을 찾는다
-#   · 그 확인 스텝의 run 을 설치한 레포에서 돌리면, 루트에 .nvmrc 가 없을 때(하위 디렉터리에만
-#     있을 때도) 이유를 말하며 실패하고, 있으면 통과한다. 러너의 기본 셸처럼 `bash -e` 로 돈다
-#   · security 잡의 npm audit 스텝을 npm 대역으로 돌리면 package-lock.json 을 둔 패키지와
+#   · 그 확인 스텝의 run 을 설치한 레포에서 실행하면, 루트에 .nvmrc 가 없을 때(하위 디렉터리에만
+#     있을 때도) 이유를 말하며 실패하고, 있으면 통과한다. 러너의 기본 셸처럼 `bash -e` 로 실행된다
+#   · security 잡의 npm audit 스텝을 npm 대역으로 실행하면 package-lock.json 을 둔 패키지와
 #     npm-shrinkwrap.json 만 둔 패키지를 다 audit 한다
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -120,7 +120,7 @@ for job in $steps; do
 done
 
 # ── npm audit ──────────────────────────────────────────────────────────
-# security 잡의 npm audit 스텝을 npm 대역으로 돌린다. npm ci · npm audit 는 package-lock.json 과
+# security 잡의 npm audit 스텝을 npm 대역으로 실행한다. npm ci · npm audit 는 package-lock.json 과
 # npm-shrinkwrap.json 둘 다 lockfile 로 읽으므로, shrinkwrap 만 둔 패키지도 audit 해야 한다.
 # 한때 package-lock.json 만 찾아 그 패키지를 조용히 건너뛰었다.
 awk '

@@ -4,11 +4,11 @@
 # 이 테스트가 있는 이유: gates.yml 이 go.mod 가 레포 루트에 있다고 가정했다(이슈 #93).
 # go.mod 가 backend/ 에만 있는 레포에서 setup-go 를 쓰는 세 잡이 모두
 # 「The specified go version file at: go.mod does not exist」로 죽었고, coverage 잡은
-# `go test | tee` 에 pipefail 이 없어 테스트가 실패해도 초록이었다. 둘 다 러너에서 돌려 봐야
+# `go test | tee` 에 pipefail 이 없어 테스트가 실패해도 초록이었다. 둘 다 러너에서 실행해 봐야
 # 드러났고, 이 레포의 검사는 그 자리를 하나도 보지 않았다.
 #
 # 깨끗한 레포에 킷을 설치하고 그 gates.yml 을 읽는다. 보는 것:
-#   · detect 스텝을 돌리면 setup-go 가 설치할 Go(toolchain 줄이 있으면 그 버전, 없으면 go 줄)가 가장
+#   · detect 스텝을 실행하면 setup-go 가 설치할 Go(toolchain 줄이 있으면 그 버전, 없으면 go 줄)가 가장
 #     높은 go.mod 를 gomod 로 낸다. 루트에 없어도, 문자열로는 더 높아 보이는 것(1.3)이 있어도
 #     그렇다. go.mod 가 없으면 go=false 다
 #   · detect 잡이 gomod 를 내보내고, setup-go 를 쓰는 잡마다 go-version-file 로 그것을 받는다.
@@ -22,11 +22,11 @@
 #     잡이 성공할 때만 실행된다(이슈 #115). 설치 스텝과 PATH 스텝은 go 대역으로 실행해 GOBIN 과 PATH 가
 #     복원하는 경로와 같은지, 도구를 cgo 없이(CGO_ENABLED=0) 빌드하는지 본다. cgo 를 켜면 도구가 러너의
 #     glibc 에 동적으로 링크될 수 있는데, 키에 러너 이미지가 없어 다른 이미지에서 빌드한 도구를 복원할 수 있다
-#   · coverage 스텝을 go 대역으로 돌리면 모듈마다 그 디렉터리에서 go test 를 부르고, 한 모듈이
+#   · coverage 스텝을 go 대역으로 실행하면 모듈마다 그 디렉터리에서 go test 를 부르고, 한 모듈이
 #     실패하면 이유를 말하며 실패하고, COVER_MIN 을 넘는지 판정한다. 숫자로 된 커버리지 줄이
 #     하나도 없을 때 말없이 실패하지 않는다
-# 스텝은 러너의 기본 셸처럼 `bash -e` 로 돈다. coverage 스텝이 쓰는 /tmp/cov.txt 는 테스트
-# 디렉터리로 바꿔 돌린다.
+# 스텝은 러너의 기본 셸처럼 `bash -e` 로 실행된다. coverage 스텝이 쓰는 /tmp/cov.txt 는 테스트
+# 디렉터리로 바꿔 실행한다.
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 fail=0
@@ -111,7 +111,7 @@ grep -qE '^      gomod: \$\{\{ steps\.d\.outputs\.gomod \}\}$' "$Y" \
 # 패턴은 `cache-dependency-path: |` 블록의 줄로만 읽는다. 스텝 글 어디에 있든 받으면 키 이름이
 # 틀리거나(setup-go 는 입력이 없는 것으로 읽는다) 공백으로 이은 한 줄이어도(hashFiles 가 아무것도
 # 맞히지 못한다) 통과했다(PR #114 1라운드 콜드 리뷰). 블록 안의 빈 줄은 블록의 끝이 아니다.
-# cache 값은 따옴표를 쳐도, 뒤에 주석이 있어도 같다(PR #114 2라운드 콜드 리뷰).
+# cache 값은 따옴표로 감싸도, 뒤에 주석이 있어도 같다(PR #114 2라운드 콜드 리뷰).
 wiring=$(awk -v q="'" '
   function blockpaths(s,   n, i, lines, ind, inb, l, t) {
     delete deps; n = split(s, lines, "\n"); inb = 0

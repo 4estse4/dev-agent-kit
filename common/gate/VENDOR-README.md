@@ -21,7 +21,7 @@ git config core.hooksPath .ai-kit/git-hooks
 
 ## 로컬 훅은 강제가 아니다
 
-`git commit --no-verify` 로 넘어가고, 위 설정을 안 한 clone 에서는 아예 돌지 않는다.
+`git commit --no-verify` 로 넘어가고, 위 설정을 안 한 clone 에서는 아예 실행되지 않는다.
 **우회 불가능한 강제는 CI + 브랜치 보호뿐이다.** 로컬 훅은 CI 를 기다리지 않고
 빨리 알려주는 용도다.
 
