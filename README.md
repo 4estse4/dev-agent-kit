@@ -213,6 +213,7 @@ Dependabot 이 이걸 못 막는다. `github-actions` 생태계는 `.github/work
 
 ```bash
 bash common/ci/check-action-pins.sh     # 뒤처진 핀이 있으면 종료코드 1
+bash common/ci/check-tool-pins.sh       # 게이트 도구 핀(tool-versions)이 뒤처졌으면 종료코드 1
 ```
 
 주간 워크플로가 이것을 돌려 뒤처지면 이슈를 연다. 조회에 실패하면 "이상 없음" 으로
