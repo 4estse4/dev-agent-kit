@@ -11,6 +11,9 @@
 # - 블록 안에서 앞 줄이 비지 않았는데 이 줄이 새 블록 원소로 시작하지 않으면 줄바꿈 하나로 이어진
 #   줄이다. 새 블록 원소는 목록 · 헤딩 · 표 · 인용 · 펜스 · `---` · 들여쓴 `→` · HTML 태그다.
 #   `→` 줄은 목록 항목의 판단을 둘째 줄에 두는 자리라 일부러 바꾸는 줄이다
+# - 문단 줄 바로 아래의 `---` 도 낸다. 수평선이 아니라 앞 줄을 제목으로 만드는 밑줄이 된다
+#   (`open-pr` 의 「위에 빈 줄을 둬야 앞 줄이 제목으로 안 바뀐다」). 목록 · `→` 줄 아래의 `---` 는
+#   수평선이고, `---` 다음 줄은 새 문단이다
 # - 줄 전체가 `<…>` 인 자리표시는 글로 보지 않는다. 실제 글에서는 지우거나 다른 것(명령 출력의
 #   코드 블록 · 목록)으로 바뀐다. 한 줄 안에 든 자리표시(`리뷰한 head: <…>`)는 글이다
 #
@@ -28,7 +31,8 @@ CLOSE = re.compile(r'^```\s*$')
 # 새 블록 원소로 시작하는 줄. 이 줄은 앞 줄에 이어지지 않는다
 NEW = re.compile(r'^\s*(?:[-*+]\s|\d+\.\s|#|\||>|→|```|---\s*$|</?[A-Za-z])')
 # 이 줄 다음 줄은 새 문단이다
-ENDS = re.compile(r'^\s*(?:#|\||```|</?[A-Za-z])')
+ENDS = re.compile(r'^\s*(?:#|\||```|---\s*$|</?[A-Za-z])')
+RULE = re.compile(r'^\s*---\s*$')
 PLACEHOLDER = re.compile(r'^\s*<[^<>]*>\s*$')
 
 MUST_FIND = [
@@ -37,6 +41,9 @@ MUST_FIND = [
     '```markdown\n- (콜드) 항목 하나\n  이어지는 설명\n```',
     '```markdown\n<`evidence.sh` 가 덧붙인 출력>\n새 테스트: 없음\n자동화가 닿지 않은 것: 없음\n```',
     '```markdown\n리뷰한 head: <40자>\n다음 줄\n```',
+    # 문단 바로 아래 `---` 는 수평선이 아니라 앞 줄을 제목으로 만든다
+    '```markdown\n**다음 라운드를 제안합니다.** 근거 문장\n---\n```',
+    '```markdown\n문단\n---\n```',
 ]
 MUST_PASS = [
     '```markdown\n- (사람) "문장"\n  → 판단\n```',
@@ -45,7 +52,9 @@ MUST_PASS = [
     '```markdown\n**지난 코멘트 정정**\n<거짓이 있었으면 여기 적는다.>\n- 1라운드 "문장"\n  → 판단\n```',
     '```markdown\n## 제목\n본문 한 줄\n```',
     '```markdown\n<details>\n<summary>셀프 리뷰 전문</summary>\n```',
-    '```markdown\n문단\n---\n```',
+    # 목록 아래 `---` 는 수평선이고, 수평선 다음 줄은 새 문단이다
+    '```markdown\n- (사람) "문장"\n  → 판단\n---\n```',
+    '```markdown\n문단\n\n---\n다음 문단\n```',
     # ```markdown 블록 밖은 보지 않는다
     '```\n명령이\n여러 줄이다\n```',
     '레포 문서는\n줄을 바꿔 쓴다',
@@ -67,7 +76,10 @@ def joined(text):
             prev = ''
             continue
         if line.strip() and prev.strip() and not NEW.match(line) and not ENDS.match(prev):
-            hits.append((n, line.strip()))
+            hits.append((n, '앞 줄에 이어진다: ' + line.strip()[:60]))
+        # 문단 줄 바로 아래 `---` 는 그 줄을 제목으로 만든다. 목록 · `→` 줄 아래면 수평선이다
+        elif RULE.match(line) and prev.strip() and not NEW.match(prev) and not ENDS.match(prev):
+            hits.append((n, '문단 바로 아래 `---` 라 앞 줄이 제목이 된다. 사이에 빈 줄을 둔다'))
         prev = line
     return hits, blocks
 
@@ -95,7 +107,7 @@ if total == 0:
     print('  ✗ ```markdown 블록을 하나도 못 찾았다 — 템플릿의 펜스 표시가 바뀌었으면 이 검사도 고친다')
     sys.exit(1)
 for f, n, t in found:
-    print('  ✗ %s:%d — 앞 줄에 이어진다: %s' % (f, n, t[:60]))
+    print('  ✗ %s:%d — %s' % (f, n, t))
 if found:
     print('    %d자리. GitHub 은 이 줄바꿈을 그대로 보여 준다. 문단과 목록 항목을 한 줄로 쓴다' % len(found))
     sys.exit(1)
