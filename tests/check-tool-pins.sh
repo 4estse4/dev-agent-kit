@@ -16,9 +16,11 @@
 #
 # ktlint 레포가 pinterest/ktlint 에서 옮겨진 뒤에도 킷은 옛 경로에서 받고 있었고, 조회는 리다이렉트를 따라가서 옮겨진
 # 것이 드러나지 않았다(이슈 #131). 그래서 둘을 더 본다:
-#   · GitHub API 가 301 을 주면 rc=2 이고, 출력이 레포가 옮겨졌다고 말한다. 301 은 file:// 로 줄 수 없어 로컬
-#     HTTP 서버를 둔다. 그 Location 에는 정상 응답이 있어서, 따라가면 rc=0 이 된다. 서버에 닿지 못하거나 요청
-#     경로가 서버의 경로와 달라도 rc=2 이므로, 301 을 받았는지는 그 글로 확인한다(PR #134 1라운드 리뷰)
+#   · GitHub API 가 301 · 308 을 주면 rc=2 이고, 출력이 레포가 옮겨졌다고 말하며 새 주소를 낸다. 301 은 file://
+#     로 줄 수 없어 로컬 HTTP 서버를 둔다. 그 Location 에는 정상 응답이 있어서, 따라가면 rc=2 가 아니게 된다.
+#     서버에 닿지 못하거나 요청 경로가 서버의 경로와 달라도 rc=2 이므로, 301 을 받았는지는 그 글로 확인한다
+#     (PR #134 1라운드 리뷰). 같은 서버가 200 도 준다 — file:// 의 상태는 000 이라, 진짜 API 에서만 쓰이는
+#     200 의 경로를 이것 말고는 실행하는 경우가 없다(PR #134 2라운드 리뷰)
 #   · 킷이 ktlint 를 받는 URL(추적 파일, docs/dev-log.md 는 뺀다)이 모두 이 스크립트가 최신을 읽는 레포를 가리킨다.
 #     gates.yml · install-tools.sh · lib.sh 에 각각 하나 이상 있어야 한다 — 식이 못 찾아 0 건이면 대조할 것이 없어
 #     통과하므로. git grep 이 실패하면 통과로 세지 않는다
@@ -123,22 +125,27 @@ else
   bad "go 에 물은 경로가 패키지 경로에서 모듈 경로로 줄지 않았다:"; sed 's/^/      /' "$T/golog" | head -6
 fi
 
-# 레포가 옮겨짐: API 가 releases/latest 에 301 을 주고, Location 에서는 지금 핀을 최신으로 답한다.
+# 로컬 GitHub API. 주소의 앞머리로 답을 고른다: /ok 는 200, /moved 는 301, /perm 은 308. 301 · 308 의 Location
+# 에서는 200 으로 답한다. 200 의 tag_name 은 지금 핀보다 높아서, 읽으면 ktlint 가 뒤처진 것으로 나온다.
 cat > "$T/moved.py" <<'PY'
 import http.server, json, os, sys
 port_file, tag = sys.argv[1:3]
+LATEST = "/repos/ktlint/ktlint/releases/latest"
+MOVED_TO = "/repositories/1/releases/latest"
 class H(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path == "/repos/ktlint/ktlint/releases/latest":
-            code, body = 301, {"message": "Moved Permanently", "url": "/repositories/1/releases/latest"}
-        elif self.path == "/repositories/1/releases/latest":
+        if self.path in ("/ok" + LATEST, MOVED_TO):
             code, body = 200, {"tag_name": tag}
+        elif self.path == "/moved" + LATEST:
+            code, body = 301, {"message": "Moved Permanently", "url": MOVED_TO}
+        elif self.path == "/perm" + LATEST:
+            code, body = 308, {"message": "Permanent Redirect", "url": MOVED_TO}
         else:
             code, body = 404, {"message": "Not Found"}
         data = json.dumps(body).encode()
         self.send_response(code)
-        if code == 301:
-            self.send_header("Location", "/repositories/1/releases/latest")
+        if code in (301, 308):
+            self.send_header("Location", MOVED_TO)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
@@ -150,13 +157,16 @@ open(port_file + ".tmp", "w").write(str(s.server_address[1]))
 os.rename(port_file + ".tmp", port_file)
 s.serve_forever()
 PY
-python3 "$T/moved.py" "$T/port" "$kl" >/dev/null 2>&1 & spid=$!
+python3 "$T/moved.py" "$T/port" 99.2.0 >/dev/null 2>&1 & spid=$!
 trap 'kill "$spid" 2>/dev/null' EXIT
 for _ in $(seq 50); do [ -s "$T/port" ] && break; sleep 0.1; done
 if [ -s "$T/port" ]; then
-  GHAPI_T="http://127.0.0.1:$(cat "$T/port")" case_ "GitHub API 가 301(레포가 옮겨짐)" 2 "레포가 옮겨졌습니다(HTTP 301" ""
+  h="http://127.0.0.1:$(cat "$T/port")"
+  GHAPI_T="$h/ok"    case_ "GitHub API 가 200(HTTP 로 읽음)"   1 "ktlint  $kl → 99.2.0" ""
+  GHAPI_T="$h/moved" case_ "GitHub API 가 301(레포가 옮겨짐)" 2 "레포가 옮겨졌습니다(HTTP 301 → $h/repositories/1/releases/latest)" ""
+  GHAPI_T="$h/perm"  case_ "GitHub API 가 308(레포가 옮겨짐)" 2 "레포가 옮겨졌습니다(HTTP 308 → $h/repositories/1/releases/latest)" ""
 else
-  bad "301 을 주는 로컬 서버가 시작되지 않았다"
+  bad "로컬 GitHub API 서버가 시작되지 않았다"
 fi
 
 # ktlint 를 받는 곳: URL 의 레포가 출처 표의 레포와 같다.
