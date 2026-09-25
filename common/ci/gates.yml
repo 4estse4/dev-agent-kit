@@ -121,7 +121,12 @@ jobs:
       # 레포 루트의 go.mod 하나만 찾고, 없으면 경고만 출력하고 캐시를 복원도 저장도 하지 않는다(실제로 확인함,
       # 이슈 #96). go.sum 은 의존성이 없는 모듈에는 없으므로 go.mod 도 같이 적는다 — Go 잡은 go.mod 가
       # 있을 때만 실행되므로 맞는 파일이 늘 있다. coverage · security 잡도 같다.
+      # 키는 설치한 Go 버전과 cache-dependency-path 에 맞은 파일의 해시로 만든다(setup-go v7 의
+      # src/cache-restore.ts). 세 잡이 같은 Go 와 같은 패턴을 적으므로 키가 같고, 먼저 끝난 잡의 모듈 캐시와
+      # 빌드 캐시가 저장되며 나머지 잡은 저장하지 못한다. 잡마다 다른 파일을 적으면 키가 달라지지만, 그래도
+      # go install 이 만든 도구는 캐시되지 않는다(아래). 도구는 아래에서 따로 캐시한다.
       - if: needs.detect.outputs.go == 'true'
+        id: go
         uses: actions/setup-go@v7
         with:
           go-version-file: '${{ needs.detect.outputs.gomod }}'
@@ -129,20 +134,43 @@ jobs:
           cache-dependency-path: |
             **/go.mod
             **/go.sum
+      # go install 이 만든 도구는 setup-go 의 캐시에 남지 않는다. setup-go 는 GOMODCACHE 와 GOCACHE 만 캐시하고
+      # (src/package-managers.ts), 그 캐시도 위처럼 먼저 끝난 잡의 것이다. 그래서 실행마다 도구를 다시 빌드했다
+      # (이슈 #115). 도구만 담는 디렉터리를 잡마다 다른 키로 캐시하고, 복원이 안 됐을 때만 설치한다.
+      # 키에는 Go 버전과 핀을 넣는다. golangci-lint 는 자기를 빌드한 Go 보다 높은 go.mod 를 검사하지 못하고,
+      # 핀이 바뀌면 다시 빌드해야 한다. restore-keys 를 두지 않는 것도 같은 이유다.
+      # 저장은 설치 바로 뒤에 한다. actions/cache 와 setup-go 의 저장은 post 단계이고 `post-if: success()` 라서,
+      # 게이트가 실패한 실행에서는 저장하지 않는다.
+      # 도구는 cgo 없이(CGO_ENABLED=0) 빌드한다. 키에 러너 이미지가 없으므로 ubuntu-latest 가 다른 이미지로
+      # 옮겨 가는 기간에는 다른 이미지에서 빌드한 도구를 복원한다. cgo 를 켜면(러너의 기본값이다) 도구가 그
+      # 이미지의 glibc 에 동적으로 링크될 수 있다. ubuntu24 러너에서 golangci-lint 와 govulncheck 가 그랬다(실제로
+      # 확인함). golangci-lint 의 배포판도 CGO_ENABLED=0 으로 빌드한다(그 레포의 .goreleaser.yml).
       - if: needs.detect.outputs.go == 'true'
+        id: gotools
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.cache/ai-kit/go-tools
+          key: ai-kit-go-tools-gate-${{ runner.os }}-${{ runner.arch }}-go${{ steps.go.outputs.go-version }}-goimports-${{ steps.tv.outputs.goimports }}-golangci-lint-${{ steps.tv.outputs.golangci_lint }}
+      - if: needs.detect.outputs.go == 'true' && steps.gotools.outputs.cache-hit != 'true'
         run: |
           # 버전을 핀한다. @latest 는 코드 변경 없이 포맷 규칙이 바뀌어
           # cold cache 에서 게이트가 빨개지는 재현성 구멍이다.
-          go install golang.org/x/tools/cmd/goimports@${{ steps.tv.outputs.goimports }}
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          CGO_ENABLED=0 GOBIN="$HOME/.cache/ai-kit/go-tools" go install golang.org/x/tools/cmd/goimports@${{ steps.tv.outputs.goimports }}
       # golangci-lint-action 은 스스로 lint 를 실행한다 — 게이트 단일 정의와
       # 충돌하므로 쓰지 않는다. 바이너리만 버전 핀해 설치하고 실행은 gate.sh 가 한다.
       # curl | sh 대신 go install 을 쓴다(공급망 표면을 모듈 프록시로 한정).
-      - if: needs.detect.outputs.go == 'true'
+      - if: needs.detect.outputs.go == 'true' && steps.gotools.outputs.cache-hit != 'true'
         name: install golangci-lint
         run: |
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${{ steps.tv.outputs.golangci_lint }}
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          CGO_ENABLED=0 GOBIN="$HOME/.cache/ai-kit/go-tools" go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${{ steps.tv.outputs.golangci_lint }}
+      - if: needs.detect.outputs.go == 'true' && steps.gotools.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.cache/ai-kit/go-tools
+          key: ${{ steps.gotools.outputs.cache-primary-key }}
+      # 복원했든 설치했든 도구는 이 디렉터리에 있다.
+      - if: needs.detect.outputs.go == 'true'
+        run: echo "$HOME/.cache/ai-kit/go-tools" >> "$GITHUB_PATH"
 
       # JVM: 빌드는 래퍼가 맡으므로 JDK 만 있으면 된다.
       #
@@ -203,12 +231,25 @@ jobs:
           fi
           echo "모든 빌드 루트에 실행 가능한 래퍼가 있습니다."
 
+      # gradle 캐시 키는 빌드 루트가 어디에 있든 그 빌드 루트의 의존성 파일로 만든다. setup-java 는
+      # cache-dependency-path 를 주면 기본 패턴 대신 그것만 보고(setup-java v6 의 src/cache.ts), 기본 패턴 가운데
+      # buildSrc 둘과 gradle/*.versions.toml 은 레포 루트에 묶여 있다. 그래서 빌드 루트가 backend/ 같은 하위
+      # 디렉터리면 버전 카탈로그가 키에 들지 않았고, 카탈로그에서만 버전을 올리면 키가 그대로라 전의 캐시를
+      # 복원하고 저장하지 않았다(이슈 #116). 기본 패턴을 그대로 적되 그 셋에 **/ 를 붙인다.
       - if: needs.detect.outputs.jvm == 'true'
         uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: ${{ env.AI_KIT_JAVA_VERSION }}
           cache: gradle
+          cache-dependency-path: |
+            **/*.gradle*
+            **/gradle.properties
+            **/gradle-wrapper.properties
+            **/buildSrc/**/Versions.kt
+            **/buildSrc/**/Dependencies.kt
+            **/gradle/*.versions.toml
+            **/versions.properties
       - if: needs.detect.outputs.jvm == 'true'
         name: install ktlint
         # 린트는 빌드 도구를 거치지 않고 직접 돈다 — golangci-lint 와 같은 모양이다.
@@ -356,7 +397,7 @@ jobs:
         run: |
           . .ai-kit/gate/lib.sh
           gate_go_min_check
-      # 캐시 키는 gate 잡과 같다(레포 전체의 go.mod 와 go.sum).
+      # 캐시 키는 gate 잡과 같다(레포 전체의 go.mod 와 go.sum). 세 잡 가운데 먼저 끝난 잡의 캐시가 저장된다.
       - uses: actions/setup-go@v7
         with:
           go-version-file: '${{ needs.detect.outputs.gomod }}'
@@ -432,8 +473,9 @@ jobs:
         run: |
           . .ai-kit/gate/lib.sh
           gate_go_min_check
-      # 캐시 키는 gate 잡과 같다(레포 전체의 go.mod 와 go.sum).
+      # 캐시 키는 gate 잡과 같다(레포 전체의 go.mod 와 go.sum). 세 잡 가운데 먼저 끝난 잡의 캐시가 저장된다.
       - if: needs.detect.outputs.go == 'true'
+        id: go
         uses: actions/setup-go@v7
         with:
           go-version-file: '${{ needs.detect.outputs.gomod }}'
@@ -441,14 +483,30 @@ jobs:
           cache-dependency-path: |
             **/go.mod
             **/go.sum
+      # govulncheck 도 gate 잡의 Go 도구처럼 따로 캐시한다(그 잡의 주석). 키는 잡 이름으로 gate 잡과 나눈다.
+      - if: needs.detect.outputs.go == 'true'
+        id: gotools
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.cache/ai-kit/go-tools
+          key: ai-kit-go-tools-security-${{ runner.os }}-${{ runner.arch }}-go${{ steps.go.outputs.go-version }}-govulncheck-${{ steps.tv.outputs.govulncheck }}
+      - if: needs.detect.outputs.go == 'true' && steps.gotools.outputs.cache-hit != 'true'
+        name: install govulncheck
+        run: |
+          # govulncheck 도 핀한다 — 취약점 DB 는 항상 최신을 받지만
+          # 도구 동작 자체가 조용히 바뀌는 것은 막는다.
+          CGO_ENABLED=0 GOBIN="$HOME/.cache/ai-kit/go-tools" go install golang.org/x/vuln/cmd/govulncheck@${{ steps.tv.outputs.govulncheck }}
+      - if: needs.detect.outputs.go == 'true' && steps.gotools.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.cache/ai-kit/go-tools
+          key: ${{ steps.gotools.outputs.cache-primary-key }}
+      - if: needs.detect.outputs.go == 'true'
+        run: echo "$HOME/.cache/ai-kit/go-tools" >> "$GITHUB_PATH"
       - if: needs.detect.outputs.go == 'true'
         name: govulncheck
         # go.mod 가 루트에 없을 수 있다(모노레포). 모듈마다 실행한다.
         run: |
-          # govulncheck 도 핀한다 — 취약점 DB 는 항상 최신을 받지만
-          # 도구 동작 자체가 조용히 바뀌는 것은 막는다.
-          go install golang.org/x/vuln/cmd/govulncheck@${{ steps.tv.outputs.govulncheck }}
-          export PATH="$(go env GOPATH)/bin:$PATH"
           . .ai-kit/gate/lib.sh
           fail=0
           while IFS= read -r mod; do

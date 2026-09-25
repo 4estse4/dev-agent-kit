@@ -22,9 +22,11 @@ declare -a SEEN=()
 for f in "${FILES[@]}"; do
   [ -f "$f" ] || { echo "check-action-pins: 파일 없음 — $f" >&2; exit 2; }
   while IFS= read -r pin; do
-    case " ${SEEN[*]:-} " in *" $pin "*) continue ;; esac
-    SEEN+=("$pin")
-    repo=${pin%@*}; cur=${pin#*@}
+    # 하위 경로의 액션(actions/cache/restore@v6)은 그 레포의 태그를 따른다. 레포는 앞 두 마디다.
+    # `owner/repo@` 만 읽으면 하위 경로의 액션을 말없이 건너뛴다.
+    repo=$(printf '%s\n' "${pin%@*}" | cut -d/ -f1-2); cur=${pin#*@}
+    case " ${SEEN[*]:-} " in *" $repo@$cur "*) continue ;; esac
+    SEEN+=("$repo@$cur")
     case "$cur" in v[0-9]*) ;; *) continue ;; esac   # SHA 핀 등은 대상 아님
     latest=$(gh api "repos/$repo/tags" --paginate --jq '.[].name' 2>/dev/null \
              | grep -E '^v[0-9]+$' | sort -V | tail -1)
@@ -35,7 +37,7 @@ for f in "${FILES[@]}"; do
     if [ "${cur%%.*}" != "$latest" ]; then
       echo "  ✗ $repo  $cur → $latest"; behind=1
     fi
-  done < <(grep -ohE 'uses: +[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[A-Za-z0-9_.-]+' "$f" \
+  done < <(grep -ohE 'uses: +[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*@[A-Za-z0-9_.-]+' "$f" \
            | sed 's/uses: *//' | sort -u)
 done
 
