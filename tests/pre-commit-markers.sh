@@ -2,7 +2,7 @@
 # pre-commit 이 스테이지된 파일의 충돌 마커를 막는가 — 파일이 클 때.
 #
 # 이 테스트가 있는 이유: 훅은 `git show ":$f" | grep -q` 로 마커를 찾았고 set -o pipefail 이다.
-# grep 이 첫 매치에서 끝나면 남은 내용을 쓰던 git show 가 SIGPIPE 로 죽고, pipefail 이 그것을
+# grep 이 첫 매치에서 끝나면 남은 내용을 쓰던 git show 가 SIGPIPE 로 종료되고, pipefail 이 그것을
 # 파이프라인의 결과로 삼아 "마커 없음" 이 됐다. 마커가 앞쪽에 있고 뒤가 파이프 버퍼보다 긴
 # 파일 — 병합 충돌이 가장 흔한 package-lock.json 이 그 모양이다 — 이 rc=0 으로 커밋됐다.
 #

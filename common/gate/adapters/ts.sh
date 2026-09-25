@@ -9,13 +9,13 @@
 has_script() { node -e "process.exit(require('./package.json').scripts?.['$1']?0:1)" 2>/dev/null; }
 
 has_script format:check && gate_run "prettier" npm run --silent format:check || gate_absent "format:check"
-# 라벨을 `eslint` 로 박지 않는다 — 이 단계는 `lint` 스크립트가 무엇이든 그것을 실행한다.
+# 라벨을 `eslint` 로 고정하지 않는다 — 이 단계는 `lint` 스크립트가 무엇이든 그것을 실행한다.
 # oxlint·biome 를 쓰는 프로젝트에서 출력이 "eslint 통과" 라고 말하면 그건 거짓이다.
 has_script lint         && gate_run "lint"     npm run --silent lint          || gate_absent "lint"
 has_script typecheck    && gate_run "tsc"      npm run --silent typecheck     || gate_absent "typecheck"
 if [ "${GATE_LINT_ONLY:-0}" != 1 ]; then
 has_script test         && gate_run "vitest"   npm test --silent             || gate_absent "test"
-# 프로덕션 빌드까지 실행한다. tsc --noEmit 가 통과해도 번들러는 죽을 수 있다
+# 프로덕션 빌드까지 실행한다. tsc --noEmit 가 통과해도 번들러는 실패할 수 있다
 # (미해결 런타임 import·에셋 경로·플러그인 설정). 배포 산출물을 만드는 경로를
 # 게이트가 한 번도 실행하지 않으면 "기동된다"는 주장을 지탱할 수 없다.
 has_script build        && gate_run "build"    npm run --silent build        || gate_absent "build"

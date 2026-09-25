@@ -41,7 +41,7 @@ while [ $# -gt 0 ]; do
     --lang=*) LANGS="${1#--lang=}"; shift ;;
     --protect) DO_PROTECT=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
-    # 줄 번호를 박지 않는다 — 헤더가 길어지거나 짧아지면 그 숫자가 조용히 틀린다.
+    # 줄 번호를 코드에 적지 않는다 — 헤더가 길어지거나 짧아지면 그 숫자가 조용히 틀린다.
     # 실제로 그랬다: 갱신 절을 지우자 '2,16p' 가 코드까지 출력했다.
     -h|--help) awk 'NR==1{next} /^#/{print; next} {exit}' "$0"; exit 0 ;;
     -*) echo "install: 알 수 없는 인자 $1" >&2; exit 2 ;;
@@ -54,7 +54,7 @@ done
 # 대상 경로는 **필수**다. CWD 로 폴백하지 않는다.
 #
 # 이 명령은 레포에 파일 30개 가까이를 쓰고 git config 를 바꾼다. 되돌리기 번거로운
-# 쓰기 작업에서 "아마 여기겠지" 를 추측하면 안 된다 — 실제로 두 번 물렸다(킷 레포에
+# 쓰기 작업에서 "아마 여기겠지" 를 추측하면 안 된다 — 실제로 두 번 사고가 났다(킷 레포에
 # 자기 자신을 설치, 엉뚱한 레포에 git add). 대상을 출력하는 것으로는 부족하다.
 # 출력하고 곧바로 설치하므로 사람이 읽었을 때는 이미 끝나 있다.
 #
@@ -110,7 +110,7 @@ done
 # 기존 파일을 보존하며 복사한다.
 #
 # 판정은 dry-run 이든 아니든 **똑같이** 한다. 다르게 하면 dry-run 이 예고한 것과
-# 실제 설치가 갈리고, 그러면 예고를 읽을 이유가 없어진다. 다른 것은 쓰기뿐이다.
+# 실제 설치가 어긋나고, 그러면 예고를 읽을 이유가 없어진다. 다른 것은 쓰기뿐이다.
 # mkdir 도 쓰기다 — 조건 앞에 두면 dry-run 이 빈 디렉터리를 남긴다.
 place() { # $1=src $2=dst(대상 레포 상대)
   local src="$1" dst="$TARGET/$2"
@@ -125,10 +125,10 @@ place() { # $1=src $2=dst(대상 레포 상대)
   INSTALLED+=("$2")
 }
 
-# 킷 소유 자리는 **덮는다.** place() 와 갈리는 지점이 여기다.
+# 킷 소유 자리는 **덮는다.** place() 와 달라지는 지점이 여기다.
 #
 # 왜 스킬·에이전트·훅이 킷 소유인가: 안 덮으면 갱신이 무의미하다. 그것들은 킷이 계속
-# 고치는 물건이고, 프로젝트가 손댈 이유가 없다(손댈 것은 settings.json 과 CLAUDE.md 다).
+# 고치는 파일이고, 프로젝트가 손댈 이유가 없다(손댈 것은 settings.json 과 CLAUDE.md 다).
 # 실제로 안 덮은 결과가 이렇다 — 한 프로젝트가 여덟 달 전 판으로 리뷰를 일곱 라운드
 # 진행했고, 그 옛 판은 지금 킷이 없애려는 바로 그 동작을 시키고 있었다.
 #
@@ -146,15 +146,15 @@ replace() { # $1=src $2=dst(대상 레포 상대)
 }
 
 # ── 게이트 vendor: 대상 레포에 .ai-kit/ 로 복사한다 ──
-# 홈 디렉터리 경로를 훅·CI 에 박으면 다른 머신과 CI 에서 깨진다.
+# 홈 디렉터리 경로를 훅·CI 에 적어 두면 다른 머신과 CI 에서 깨진다.
 # vendor 해서 레포에 커밋하면 어디서 clone 해도 같은 게이트가 실행된다.
 if [ "$DO_HOOKS" = 1 ]; then
   vendor="$TARGET/.ai-kit"
   # .ai-kit/gate 와 git-hooks 는 킷 소유라 통째로 교체한다. identity 는 그 아래
-  # 살지만 킷 소유가 아니므로 남긴다.
+  # 있지만 킷 소유가 아니므로 남긴다.
   kit_rev=$( cd "$KIT_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo unknown )
   # 설치와 dry-run 이 **같은 함수**를 쓴다. 두 벌로 두면 dry-run 이 예고하는 내용과
-  # 설치가 놓는 내용이 갈리고, 갈렸을 때 알아챌 방법이 없다.
+  # 설치가 놓는 내용이 어긋나고, 어긋났을 때 알아챌 방법이 없다.
   vendor_into() { # $1=목적지 .ai-kit 디렉터리
     local v="$1"
     # .ai-kit 은 identity 를 빼면 전부 킷 소유다. 소유한 자리는 **통째로 비우고 놓는다** —
@@ -173,7 +173,7 @@ if [ "$DO_HOOKS" = 1 ]; then
     for _l in $(echo "$DROP" | tr ',' ' '); do rm -f "$v/gate/adapters/$_l.sh"; done
     chmod +x "$v"/gate/*.sh "$v"/git-hooks/* 2>/dev/null
     # identity 는 킷 소유가 아니다. 실제 설치는 위 rm 이 건너뛰어 그대로 두고, dry-run 은
-    # 대상의 것을 가져온다. **두 모드가 같은 최종 트리를 만들어야** 삭제 집계가 갈리지
+    # 대상의 것을 가져온다. **두 모드가 같은 최종 트리를 만들어야** 삭제 집계가 어긋나지
     # 않는다 — 이 복사가 집계보다 뒤에 있었을 때 dry-run 이 identity 를 삭제로 셌다.
     [ "$v" = "$TARGET/.ai-kit" ] || [ ! -f "$TARGET/.ai-kit/identity" ] \
       || cp "$TARGET/.ai-kit/identity" "$v/identity"
@@ -185,7 +185,7 @@ if [ "$DO_HOOKS" = 1 ]; then
     printf 'kit_rev=%s\nlangs=%s\n' "$kit_rev" "$LANGS" > "$v/install-manifest"
   }
   # 요약 집계 — vendor 는 cp -R 로 한 번에 옮기므로 place()/replace() 를 안 지난다.
-  # 한 줄로 "설치 1건" 이라고만 세면 요약이 실제와 갈린다: 6개를 교체하고도 "교체 0건"
+  # 한 줄로 "설치 1건" 이라고만 세면 요약이 실제와 어긋난다: 6개를 교체하고도 "교체 0건"
   # 이라고 말한 적이 있다(실제로 확인함). dry-run 은 파일마다 세므로 예고와 실제가 어긋난다.
   # **옮기기 전에** 대상의 현재 상태로 센다.
   while IFS= read -r _s; do
@@ -219,9 +219,9 @@ if [ "$DO_HOOKS" = 1 ]; then
   # 존재 검사에는 정렬 기준이 없다.
   #
   # **경로 규칙도 다시 적지 않는다.** 한 번은 `common/` 아래 존재 여부로 판정하게 적었다가
-  # dry-run 과 갈렸다 — `common/` 에는 vendor 가 안 가져오는 ci·docs·templates 도 있어서
+  # dry-run 과 어긋났다 — `common/` 에는 vendor 가 안 가져오는 ci·docs·templates 도 있어서
   # `.ai-kit/ci/*` 가 "킷이 놓는 것" 으로 오판돼 무보고 삭제됐다(실제로 확인함: `삭제 0건` 인데
-  # 셋이 사라졌다). 근거가 하나면 갈릴 수 없다.
+  # 셋이 사라졌다). 근거가 하나면 어긋날 수 없다.
   _before=$( cd "$TARGET" 2>/dev/null && find .ai-kit -type f 2>/dev/null )
 
   if [ "$DRY_RUN" = 1 ]; then vendor_into "$STAGE/.ai-kit"; _final="$STAGE"
@@ -231,18 +231,18 @@ if [ "$DO_HOOKS" = 1 ]; then
   done <<< "$_before"
   # dryrun_report() 가 이 배열을 그대로 「재설치가 지울 것」으로 쓴다. 거기서 다시 세면
   # 두 벌이 되고, 두 벌은 반드시 서로 달라진다 — 위 주석에 적은 실제 사례 둘이 그것이다.
-  # 보고는 dry-run 에서도 한다 — 안 그러면 예고한 건수와 실제 건수가 갈린다.
+  # 보고는 dry-run 에서도 한다 — 안 그러면 예고한 건수와 실제 건수가 어긋난다.
 
   # 훅은 .git/hooks 에 두지 않는다 — 그 디렉터리는 clone 되지 않으므로
   # 레포를 새로 받은 사람에게는 강제가 통째로 사라진다.
   # 대신 커밋되는 .ai-kit/git-hooks/ 를 core.hooksPath 로 가리킨다.
   [ "$DRY_RUN" = 1 ] || git -C "$TARGET" config core.hooksPath .ai-kit/git-hooks
   # core.hooksPath 는 파일이 아니라 설정이다. 파일 건수에 섞으면 dry-run(파일을 센다)과
-  # 실제 실행의 숫자가 갈린다. 아래 "설치기가 한 일" 에서 따로 보고한다.
+  # 실제 실행의 숫자가 어긋난다. 아래 "설치기가 한 일" 에서 따로 보고한다.
 
   # 킷 클론의 경로를 이 레포의 로컬 git config 에 적는다 — 커밋되지 않는다.
   # SessionStart 훅이 이것으로 "설치된 킷이 낡았나" 를 판정한다. 커밋되는 파일에
-  # 넣지 않는 이유: 머신마다 경로가 다르고, 남의 절대경로가 레포에 박히면
+  # 넣지 않는 이유: 머신마다 경로가 다르고, 남의 절대경로가 레포에 커밋되면
   # 그 사람 환경을 알려주는 것 말고는 아무 값도 없다.
   [ "$DRY_RUN" = 1 ] || git -C "$TARGET" config ai-kit.path "$KIT_ROOT" 2>/dev/null
 
@@ -273,7 +273,7 @@ if [ "$DO_HOOKS" = 1 ]; then
   fi
 
   # ── git 신원 확인 ──
-  # 기존 커밋의 author 와 실효 설정이 다르면 기여 이력이 갈라진다.
+  # 기존 커밋의 author 와 실효 설정이 다르면 기여 이력이 둘로 나뉜다.
   # 기존 커밋의 저자와 현재 설정이 다르면 알린다. 다만 **다른 것이 정상인 경우가 많다**
   # — 남이 만든 레포에 초대받으면 첫 커밋은 당연히 남의 것이다. 그래서 "고쳐라" 가
   # 아니라 "이 값이 맞는지 확인하라" 로 묻고, 맞으면 할 일이 없다고 먼저 말한다.
@@ -330,7 +330,7 @@ if [ "$DO_LINT" = 1 ]; then
   # shellcheck source=/dev/null
   . "$KIT_ROOT/common/gate/lib.sh"
 
-  # $4 는 선택 인자다 — set -u 하에서는 ${4:-} 로 받아야 미설정일 때 안 터진다.
+  # $4 는 선택 인자다 — set -u 하에서는 ${4:-} 로 받아야 미설정일 때 오류가 나지 않는다.
   place_beside() { # $1=마커 $2=킷 설정 파일 $3=놓을 이름 $4=마커에 이 문자열이 있으면 건너뜀(선택)
     local marker dir rel skip="${4:-}"
     while IFS= read -r marker; do
@@ -405,7 +405,7 @@ if [ "$DO_AGENT" = 1 ]; then
   # 그 모양이었다 — 두 절이 다 있는 채로 그 **안에** 게시 전에 멈추게 하는 규칙이 없었다.
   #
   # 판정은 dry-run 이든 아니든 같아야 하므로(위 place() 의 불변식) `.ai-kit-new` 파일
-  # 존재로 가르지 않는다. 그 파일은 dry-run 에서 안 생긴다. 대신 이 파일이 **충돌로
+  # 존재로 구분하지 않는다. 그 파일은 dry-run 에서 안 생긴다. 대신 이 파일이 **충돌로
   # 분류됐는지**를 본다 — 있고 다르다는 뜻이고, 그것이 이 경고의 조건 그대로다.
   _settings_conflict=0
   if [ ${#CONFLICTS[@]} -gt 0 ]; then
@@ -418,7 +418,7 @@ if [ "$DO_AGENT" = 1 ]; then
 import json, sys
 
 # 판정 불가를 침묵으로 두지 않는다. 못 읽었으면 못 읽었다고 말한다 — 아래 python3
-# 부재 가지와 같은 이유다. 조용히 지나가면 그 검사가 죽은 것을 아무도 모른다.
+# 부재 가지와 같은 이유다. 조용히 지나가면 그 검사가 작동하지 않는 것을 아무도 모른다.
 def fail(why):
     print("!" + why)
     sys.exit(0)
@@ -451,7 +451,7 @@ def commands(d):
 out = []
 try:
   kit_hooks, cur_hooks = commands(new), commands(cur)
-  # 명령이 아예 없는 것과 matcher 만 다른 것은 사람이 할 일이 다르다. 갈라서 말한다.
+  # 명령이 아예 없는 것과 matcher 만 다른 것은 사람이 할 일이 다르다. 나눠서 말한다.
   cur_cmds = {(ev, c) for ev, _m, c in cur_hooks}
   # 스크립트 이름으로도 한 번 본다. 같은 스크립트를 **다른 경로 표기로** 부르는 레포에
   # "부르지 않습니다" 라고 말하면 그건 거짓이다(예: $CLAUDE_PROJECT_DIR 대신 절대경로).
@@ -468,7 +468,7 @@ try:
     else:
         out.append("hooks.%s 가 %s 를 부르지 않습니다" % (ev, name))
 
-  # deny·ask 만 본다. allow 가 빠진 것은 프롬프트가 늘 뿐 막는 규칙이 죽지 않는다.
+  # deny·ask 만 본다. allow 가 빠진 것은 프롬프트가 늘 뿐 막는 규칙이 사라지지 않는다.
   np, cp = new.get("permissions") or {}, cur.get("permissions") or {}
   cur_allow = set(cp.get("allow") or [])
   for sec in ("deny", "ask"):
@@ -578,7 +578,7 @@ dryrun_report() {
     # 프로젝트 소유는 place() 가 원본을 남기고 .ai-kit-new 를 옆에 쓴다.
     # 둘을 한 목록에 담으면 "킷이 놓을 것" 이 절반은 거짓이 된다.
     #
-    # **여기의 소유 판정은 위 설치 경로와 같아야 한다.** 갈리면 dry-run 이 예고한 것과
+    # **여기의 소유 판정은 위 설치 경로와 같아야 한다.** 다르면 dry-run 이 예고한 것과
     # 실제 설치가 어긋나고, 그러면 예고를 읽을 이유가 없어진다. 킷 소유는 .ai-kit 전체와
     # .claude 의 스킬·에이전트·훅이고, .claude/settings.json 만 프로젝트 소유다.
     elif case "$rel" in
@@ -595,7 +595,7 @@ dryrun_report() {
   done < <(find "$STAGE" -type f | LC_ALL=C sort)
 
   # "사라질 것" 은 **다시 세지 않는다.** 설치 경로가 이미 DELETED 에 담아뒀고, 그것이
-  # 실제 실행의 `삭제` 칸과 같은 배열이다. 여기서 또 세면 두 벌이 되고, 두 벌은 갈렸다 —
+  # 실제 실행의 `삭제` 칸과 같은 배열이다. 여기서 또 세면 두 벌이 되고, 두 벌은 어긋났다 —
   # 한 번은 예고 3 / 실제 0, 한 번은 예고 1 / 실제 3(그중 둘은 지우지도 않았다).
   #
   # .ai-kit 에서만 나는 일인 것도 그 배열이 이미 반영한다. 킷 소유는 그 밖에도 있지만
@@ -629,8 +629,8 @@ dryrun_report() {
       cut=$(printf '%s\n' "$body" | wc -l | tr -d " ")
       printf '%s\n' "$body" | head -n "$DIFF_MAX_LINES" | sed 's/^/  /'
       [ "$cut" -gt "$DIFF_MAX_LINES" ] && echo "  … 이 파일에서 $((cut - DIFF_MAX_LINES))줄 더 있습니다"
-      # 상한은 **찍은 줄**로 센다. diff 전체 길이로 세면 잘려서 안 보인 줄까지 한도를
-      # 먹어, "400줄에 이르렀다" 고 말하면서 실제로는 그보다 훨씬 적게 보여준다.
+      # 상한은 **출력한 줄**로 센다. diff 전체 길이로 세면 잘려서 안 보인 줄까지 한도를
+      # 차지해, "400줄에 이르렀다" 고 말하면서 실제로는 그보다 훨씬 적게 보여준다.
       if [ "$cut" -gt "$DIFF_MAX_LINES" ]; then shown=$((shown + DIFF_MAX_LINES)); else shown=$((shown + cut)); fi
     done <<< "$list_all"
   fi

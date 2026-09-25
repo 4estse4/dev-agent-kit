@@ -40,7 +40,7 @@ jobs:
         run: python3 -c "import json; json.load(open('claude-code/settings.json'))"
 
       # **한 검사가 빨개도 나머지를 다 실행한다.** 기본값(첫 실패에서 멈춤)이면 그 커밋에서
-      # 다른 검사가 무엇을 말했을지 영영 모르고, 고치고 다시 밀어야 다음 것이 보인다.
+      # 다른 검사가 무엇을 말했을지 영영 모르고, 고치고 다시 푸시해야 다음 것이 보인다.
       # 라운드가 열여섯 번 진행된 이 PR 에서 그 왕복은 비용이 크다.
       - name: install.sh says what it actually deletes
         id: deletions

@@ -51,7 +51,7 @@ s4=$(awk '/^## 4\./{s=1} /^## 5\./{s=0} s' "$SK")
 case "$v" in
   *isCrossRepository*)
     case "$s4" in
-      *isCrossRepository*) ok "2절이 isCrossRepository 를 받고 4절이 그것으로 fork PR 의 원격 삭제를 가른다" ;;
+      *isCrossRepository*) ok "2절이 isCrossRepository 를 받고 4절이 그것으로 fork PR 의 원격 삭제 여부를 정한다" ;;
       *) bad "2절은 isCrossRepository 를 받지만 4절이 그것을 쓰지 않는다" ;;
     esac ;;
   *) bad "2절의 gh pr view 가 isCrossRepository 를 받지 않는다 — fork PR 이면 base 레포의 같은 이름 브랜치를 지운다" ;;
@@ -160,7 +160,7 @@ if setup wt-on-pr; then
   run4 wt-on-pr "$T/wt-on-pr/wt"
   check wt-on-pr "worktree 가 PR 브랜치에 있다: 두 브랜치가 지워지고 worktree 는 origin/main 에 detach, 원래 체크아웃은 그대로다" \
     "$T/wt-on-pr/wt" gone detached "$b"
-  # worktree 갈래는 로컬 main 도 갱신하려 하는데, 원래 체크아웃이 main 에 있으면 git 이 거부한다. 그 거부가
+  # worktree 분기는 로컬 main 도 갱신하려 하는데, 원래 체크아웃이 main 에 있으면 git 이 거부한다. 그 거부가
   # base 복귀 줄을 실패시키면 세션이 거기서 멈추고 브랜치가 남는다.
   r=$(awk -F'\t' '$2 ~ /^if .*git switch/ { print $1 }' "$T/wt-on-pr.rc")
   if [ "$r" = 0 ]; then ok "worktree 가 PR 브랜치에 있다: 원래 체크아웃이 main 에 있어 로컬 main 을 갱신하지 못해도 base 복귀 줄은 성공한다"
@@ -238,7 +238,7 @@ if setup other-work; then
 fi
 
 # 8) 원래 체크아웃이 PR 브랜치에 있고 다른 worktree 가 main 을 쓴다 — 원래 체크아웃의 `git switch main` 이
-#    실패하는 갈래다. 그때도 detach 해서 PR 브랜치에서 내려와야 두 브랜치를 지울 수 있다.
+#    실패하는 분기다. 그때도 detach 해서 PR 브랜치에서 내려와야 두 브랜치를 지울 수 있다.
 if setup held; then
   R="$T/held"
   git -C "$R/main" switch -q feat

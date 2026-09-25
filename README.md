@@ -28,7 +28,7 @@ AI 코딩 에이전트와 함께 개발할 때 쓰는 **절차·검증 체계 �
 common/                에이전트 없이도 작동하는 것 — 킷의 본체
   docs/                산출물 규칙(R1~R7) · 검증 단계 (설계 근거)
   templates/           CLAUDE.md · SPEC · 추적 매트릭스 · ADR · dev-log · plan · PR
-  git-hooks/           pre-commit · pre-push  ← 진짜 강제가 사는 곳
+  git-hooks/           pre-commit · pre-push  ← 실제로 강제하는 곳
   gate/                게이트 본체 · 언어별 어댑터 · 도구 설치기
     tool-versions      게이트 도구의 고정 버전 — **단일 출처**(CI·로컬·안내가 함께 읽음)
     install-tools.sh   그 버전대로 설치
@@ -46,7 +46,7 @@ claude-code/           Claude Code 가 있어야 의미 있는 것
 둘뿐이고 나머지가 전부 `common/` 이라는 게 드러나는데, 그것이 **설계 원칙 1의 시각적 증거**다.
 
 **테마·터미널 표시 모드·모델·effort 같은 개인 취향은 킷이 다루지 않는다.**
-`/config` 나 `~/.claude/settings.json` 에서 각자 정한다 — 킷이 박으면 개발자의
+`/config` 나 `~/.claude/settings.json` 에서 각자 정한다 — 킷이 정해 두면 개발자의
 `/model` 선택을 무력화한다.
 
 ### 규칙의 단일 출처는 `CLAUDE.md`
@@ -114,7 +114,7 @@ bash .ai-kit/gate/install-tools.sh --dry-run    # 무엇을 설치할지만
 ```
 
 버전은 **`.ai-kit/gate/tool-versions` 가 단일 출처**다. 로컬 설치 안내·설치 도우미·CI 가
-모두 그 파일을 읽는다 — 어딘가에 숫자를 박으면 로컬과 CI 가 갈라진다.
+모두 그 파일을 읽는다 — 어딘가에 숫자를 적어 두면 로컬과 CI 의 버전이 달라진다.
 
 불가피하게 도구를 못 쓰는 상황에서만 관대 모드로 내린다. **조용히 내려가지 않는다** —
 무엇이 검사되지 않는지 출력한다:
@@ -203,7 +203,7 @@ deploy key 를 프로젝트 secrets 에 넣어야 하고, 그러면 킷을 읽�
 ## 킷 템플릿이 낡는 것은 자동으로 찾아낸다
 
 `install.sh` 는 킷에 있는 파일을 **그대로** 복사한다 — 설치 시점에 최신을 받아오지
-않는다. 그래서 킷의 워크플로 템플릿에 박힌 액션 버전이 낡으면 **새 프로젝트가 낡은 채로
+않는다. 그래서 킷의 워크플로 템플릿에 적힌 액션 버전이 낡으면 **새 프로젝트가 낡은 채로
 시작**한다(설치 직후 Dependabot PR 몇 개를 받게 된다).
 
 Dependabot 이 이걸 못 막는다. `github-actions` 생태계는 `.github/workflows/` 와 루트

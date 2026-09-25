@@ -9,7 +9,7 @@
 # 거짓 알림을 냈다(PR #112 2라운드 콜드 리뷰).
 #
 # 훅을 Claude Code 가 부르는 모양(표준입력 JSON)으로 부른다. ruff 는 가짜로, 부른 자리와 받은
-# 인자를 적는다. PATH 의 것과 venv 의 것은 기록의 머리(`venv|`)로 가른다. 진짜 ruff 가
+# 인자를 적는다. PATH 의 것과 venv 의 것은 기록의 머리(`venv|`)로 구분한다. 진짜 ruff 가
 # `--force-exclude` 로 `extend-exclude` 를 지키는지는 PR #112 의 2라운드 코멘트에 실제로 확인한 결과로 있다.
 # 보는 것:
 #   · `.md` 면 pyproject.toml 이 있는 가장 가까운 조상에서 `ruff format --force-exclude <파일>` 을
