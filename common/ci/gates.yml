@@ -105,8 +105,10 @@ jobs:
           done < "$f"
 
       # 킷이 지원하는 Go 는 tool-versions 의 go_min 이상이다. setup-go 가 설치하는 Go 가 그보다 낮으면
-      # 아래 설치 스텝이 「requires go >= …」로 실패한다(실제로 확인함). 그 전에 어느 go.mod 가 몇인지 말하며
-      # 멈춘다. setup-go 를 쓰는 잡마다 그 앞에서 부른다(lib.sh 의 gate_go_min_check).
+      # 아래 설치 스텝이 「requires go >= …」로 실패하거나(실제로 확인함), 설치는 되어도 golangci-lint 의
+      # gofumpt 와 gofmt 가 서로 다른 모양을 요구해 게이트를 통과하지 못하는 코드가 생긴다(tool-versions 의
+      # go_min 주석). 그 전에 어느 go.mod 가 몇인지 말하며 멈춘다. setup-go 를 쓰는 잡마다 그 앞에서
+      # 부른다(lib.sh 의 gate_go_min_check).
       - if: needs.detect.outputs.go == 'true'
         name: require the kit's minimum Go
         run: |

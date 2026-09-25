@@ -52,11 +52,19 @@ git config user.email      # 이 레포에서 쓸 이메일이 맞는지 먼저 
 다르면 `git config user.email '<쓸 이메일>'` 로 고치고 `.ai-kit/identity` 를 지운 뒤
 `install.sh` 를 다시 실행한다.
 
-**Go 버전.** 킷이 핀한 Go 도구는 `.ai-kit/gate/tool-versions` 의 `go_min` 보다 낮은 go 로는
-설치되지 않는다. `go.mod` 는 레포 어디에 있어도 되고 여럿이어도 된다. CI 는 설치할 Go(`toolchain`
-줄이 있으면 그 버전, 없으면 `go` 줄)가 가장 높은 것으로 Go 를 설치하고, 그 버전이 `go_min` 보다
-낮으면 Go 를 설치하는 잡마다 그 이유를 말하며 멈춘다. `go` 줄이 `1.26` 처럼 패치가 없으면 setup-go 가
-그 계열의 패치 하나를 설치하므로 `go_min` 과 계열끼리 견준다.
+**Go 버전.** 킷은 `.ai-kit/gate/tool-versions` 의 `go_min` 보다 낮은 Go 를 지원하지 않는다. 그보다
+낮은 go 로는 킷이 핀한 Go 도구가 설치되지 않거나, golangci-lint 의 gofumpt 가 기준으로 삼는 Go 의
+gofmt 와 포맷이 어긋나 게이트를 통과하지 못하는 코드가 생긴다. `go.mod` 는 레포 어디에 있어도 되고
+여럿이어도 된다. CI 는 설치할 Go(`toolchain` 줄이 있으면 그 버전, 없으면 `go` 줄)가 가장 높은 것으로
+Go 를 설치하고, 그 버전이 `go_min` 보다 낮으면 Go 를 설치하는 잡마다 그 이유를 말하며 멈춘다. `go`
+줄이 `1.27` 처럼 패치가 없으면 setup-go 가 그 계열의 패치 하나를 설치하므로 `go_min` 과 계열끼리 견준다.
+
+로컬에 설치한 Go 도 `go_min` 이상이어야 한다. 그보다 낮은 Go 에서 `install-tools.sh` 를 실행하면
+Go 도구가 그 Go 로 빌드되고, 그 golangci-lint 는 go 줄이 `go_min` 인 모듈에서 「the Go language
+version … used to build golangci-lint is lower than the targeted Go version」으로 멈춘다. 레포 안에서
+`go version` 은 go.mod 를 따라 전환된 Go 를 보여 주므로 설치한 Go 가 낮은 것이 잘 드러나지 않는다.
+`install-tools.sh` 는 이미 있는 도구를 다시 설치하지 않으므로, Go 를 올린 뒤에는 그 Go 로 빌드한
+도구(`goimports` · `golangci-lint` · `govulncheck`)를 지우고 다시 실행한다.
 
 **Node · Python 버전.** CI 는 잡마다 런타임을 하나만 설치하고, 그 버전을 레포 루트의 `.nvmrc` ·
 `.python-version` 에서 읽는다. `package.json` · `pyproject.toml` 이 하위 디렉터리에 있어도 이 두 파일은

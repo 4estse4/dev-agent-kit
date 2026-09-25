@@ -69,14 +69,14 @@ gate_go_highest() {
 # 이상인지 본다. 아니면 그 파일과 이유를 GitHub 주석(::error)으로 내고 실패한다.
 # 보는 것은 그 하나다. 핀한 Go 도구의 설치를 가르는 것은 실행 중인 go 이고, go 줄이 더 낮은
 # 보조 모듈도 그 go 로 빌드된다. 모든 go.mod 를 보면 전에 동작하던 멀티모듈 레포가 멈춘다.
-# 견주는 법은 setup-go 가 그 버전을 받는 법을 따른다. go 1.26 처럼 패치가 없으면 버전 범위로
-# 받아 그 계열(1.26.x)에서 러너가 캐시에 가진 가장 높은 것을, 없으면 가장 새것을 설치한다(setup-go v7
+# 견주는 법은 setup-go 가 그 버전을 받는 법을 따른다. go 1.27 처럼 패치가 없으면 버전 범위로
+# 받아 그 계열(1.27.x)에서 러너가 캐시에 가진 가장 높은 것을, 없으면 가장 새것을 설치한다(setup-go v7
 # 의 getGo, 러너에서 봤다). 그래서 go_min 과 계열끼리 견준다. 이 통과는 캐시의 패치가 go_min 의
 # 패치 이상이라는 전제에 기댄다. 낮으면 이 검사를 지나고도 도구 설치가 「requires go >= …」로
-# 죽는다. go_min 에 0 이 아닌 패치를 적는 날 이 전제를 다시 본다. 패치가 있으면(go 1.26.0 ·
-# toolchain go1.26.1) 그 버전을 그대로 설치하므로 그대로 견준다. go_min 은 패치까지 적으므로(1.26.0)
-# 그대로만 견주면, Go 의 순서로 1.26 < 1.26.0 이라 1.26.x 를 설치하는 go 1.26 레포가 멈춘다.
-# sort -V 는 이 형태들을 Go 의 순서대로 놓는다(1.26 < 1.26.0 < 1.26.1, go.dev/doc/toolchain).
+# 실패한다. go_min 에 0 이 아닌 패치를 적는 날 이 전제를 다시 본다. 패치가 있으면(go 1.27.0 ·
+# toolchain go1.27.1) 그 버전을 그대로 설치하므로 그대로 견준다. go_min 은 패치까지 적으므로(1.27.0)
+# 그대로만 견주면, Go 의 순서로 1.27 < 1.27.0 이라 1.27.x 를 설치하는 go 1.27 레포가 멈춘다.
+# sort -V 는 이 형태들을 Go 의 순서대로 놓는다(1.27 < 1.27.0 < 1.27.1, go.dev/doc/toolchain).
 # CI 에서 setup-go 를 쓰는 잡이 모두 그 앞에서 부른다. 잡은 저마다 Go 를 설치해서, 한 잡에만 두면
 # security 는 govulncheck 설치에서 「requires go >= …」로 다른 말을 하며 실패하고(실제로 확인함), 도구를
 # 설치하지 않는 coverage 는 킷이 지원하지 않는 Go 로 초록을 낸다(실제로 확인함).
@@ -96,7 +96,7 @@ gate_go_min_check() {
     go)        what="go 줄이 $v 입니다";          raise="go 줄을 $want 이상으로" ;;
     *)         what="go 줄이 없습니다";           raise="go 줄을 $min 이상으로" ;;
   esac
-  echo "::error file=${f#./}::${f#./} 의 $what. CI 는 레포의 go.mod 가운데 설치할 Go 가 가장 높은 이 파일로 Go 를 설치합니다(toolchain 줄이 있으면 그 버전, 없으면 go 줄. go 줄이 1.26 처럼 패치가 없으면 그 계열의 패치 하나). 킷은 Go $min 이상만 지원합니다 — 핀한 Go 도구(goimports · golangci-lint · govulncheck)가 그보다 낮은 go 로는 설치되지 않습니다. ${raise} 올리세요."
+  echo "::error file=${f#./}::${f#./} 의 $what. CI 는 레포의 go.mod 가운데 설치할 Go 가 가장 높은 이 파일로 Go 를 설치합니다(toolchain 줄이 있으면 그 버전, 없으면 go 줄. go 줄이 1.27 처럼 패치가 없으면 그 계열의 패치 하나). 킷은 Go $min 이상만 지원합니다 — 그보다 낮은 go 로는 핀한 Go 도구(goimports · golangci-lint · govulncheck)가 설치되지 않거나, golangci-lint 의 gofumpt 가 기준으로 삼는 Go 의 gofmt 와 포맷이 어긋나 게이트를 통과하지 못하는 코드가 생깁니다(.ai-kit/gate/tool-versions 의 go_min 주석). ${raise} 올리세요."
   return 1
 }
 

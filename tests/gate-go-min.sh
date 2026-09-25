@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # CI 에서 Go 를 설치하는 잡은 모두 그 앞에서 킷의 Go 최소 버전을 본다.
 #
-# 이 테스트가 있는 이유: 핀한 Go 도구(goimports · golangci-lint · govulncheck)는 tool-versions 의 go_min 보다
-# 낮은 go 로는 설치되지 않는다. gates.yml 의 잡은 저마다 setup-go 로 Go 를 설치하는데, go 1.24 로
+# 이 테스트가 있는 이유: 킷은 tool-versions 의 go_min 보다 낮은 Go 를 지원하지 않는다(그 이유는
+# tool-versions 의 go_min 주석). gates.yml 의 잡은 저마다 setup-go 로 Go 를 설치하는데, go 1.24 로
 # Go 를 설치한 security 잡은 govulncheck 설치에서 「requires go >= 1.25.0」으로 죽었다(이슈 #93).
 # 검사가 한 잡에만 있으면 security 는 그렇게 다른 말을 하며 죽고, 도구를 설치하지 않는 coverage 는
 # 킷이 지원하지 않는 Go 로 초록을 낸다(같은 실행에서 coverage 가 go 1.24.13 으로 실행됐다).
