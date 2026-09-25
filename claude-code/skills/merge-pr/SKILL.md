@@ -133,7 +133,7 @@ $ARGUMENTS
         --jq '[.comments[].body] as $b
               | ([$b|to_entries[]|select(.value|test("^\\s*## 리뷰 "))|.key]|last) as $i
               | if $i == null then [] else $b[$i+1:] end
-              | map(select(test("^\\s*### .*라운드에 사람이 준 답")))
+              | map(select(test("^\\s*### .*라운드 코멘트를 읽고 사람이 정한 것")))
               | join("\n\n———\n\n")'
 
   **위치만으로 고르지 않는다.** 그 창에는 **이 스킬이 올린 코멘트도 들어간다** — 아래
