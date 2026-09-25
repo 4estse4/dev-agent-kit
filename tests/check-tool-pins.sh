@@ -26,13 +26,16 @@ mkdir -p "$T/kit/common/ci" "$T/kit/common/gate" "$T/bin"
 cp "$KIT/common/ci/check-tool-pins.sh" "$KIT/common/ci/gates.yml" "$T/kit/common/ci/"
 TV="$T/kit/common/gate/tool-versions"
 
-# 가짜 go. `go list -m -f {{.Version}} <모듈>@latest` 에 $GOFAKE/<모듈> 의 값을 답한다. 부른 경로를 적는다.
+# 가짜 go. `go list -m -f {{.Version}} <모듈>@latest` 에 $GOFAKE/<모듈>/latest 의 값을 답한다. 부른 경로를 적는다.
+# 모듈이 아닌 경로에는 진짜 go 처럼 `no matching versions` 로 실패한다. $GOFAKE/<모듈>/error 가 있으면 그 글로
+# 실패한다(프록시의 5xx 나 연결 실패).
 cat > "$T/bin/go" <<'EOF'
 #!/usr/bin/env bash
 echo "$*" >> "$GOFAKE_LOG"
 [ "$1 $2" = "list -m" ] || { echo "go 대역: 모르는 호출: $*" >&2; exit 2; }
 q="${!#}"; m="${q%@latest}"
 [ "$q" != "$m" ] || { echo "go 대역: @latest 가 아닌 질의: $q" >&2; exit 2; }
+[ -f "$GOFAKE/$m/error" ] && { cat "$GOFAKE/$m/error" >&2; exit 1; }
 [ -f "$GOFAKE/$m/latest" ] || { echo "go: module $m: no matching versions for query \"latest\"" >&2; exit 1; }
 cat "$GOFAKE/$m/latest"
 EOF
@@ -65,6 +68,9 @@ setup() {
       ktlint) if [ "$v" = - ]; then rm "$T/gh/repos/ktlint/ktlint/releases/latest"; else printf '{"tag_name": "%s"}\n' "$v" > "$T/gh/repos/ktlint/ktlint/releases/latest"; fi ;;
       goimports|govulncheck|golangci_lint) if [ "$v" = - ]; then rm -rf "$T/goproxy/$p"; else printf '%s\n' "$v" > "$T/goproxy/$p/latest"; fi ;;
       tvdel) sed -i.bak "/^$v=/d" "$TV" && rm -f "$TV.bak" ;;
+      # golangci-lint 의 v2 모듈 조회만 서버 오류로 실패하고, /v2 를 뗀 v1 모듈은 실제처럼 있다.
+      v2down) printf 'go: github.com/golangci/golangci-lint/v2@latest: reading https://proxy.golang.org/github.com/golangci/golangci-lint/v2/@v/list: 503 Service Unavailable\n' > "$T/goproxy/github.com/golangci/golangci-lint/v2/error"
+              mkdir -p "$T/goproxy/github.com/golangci/golangci-lint"; echo v1.64.8 > "$T/goproxy/github.com/golangci/golangci-lint/latest" ;;
     esac
   done
 }
@@ -94,6 +100,7 @@ case_ "핀이 최신보다 높음"              0 "" "✗" ruff=0.0.1
 case_ "PyPI 응답 없음"                  2 "ruff" "" ruff=-
 case_ "GitHub 응답 없음"                2 "ktlint" "" ktlint=-
 case_ "go list 가 모든 경로에서 실패"   2 "golangci_lint" "" golangci_lint=-
+case_ "v2 조회만 서버 오류(v1 모듈은 있음)" 2 "503" "✓" v2down=1
 case_ "뒤처진 것과 못 읽은 것이 함께"   2 "golangci_lint" "" golangci_lint=v9.9.9 ruff=-
 case_ "출처가 없는 키"                  2 "foo" "" +foo=1.0.0
 case_ "gates.yml 이 설치하는 도구의 키가 tool-versions 에 없음" 2 "govulncheck" "" tvdel=govulncheck

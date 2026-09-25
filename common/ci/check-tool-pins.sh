@@ -8,7 +8,8 @@
 #   Go 도구  gates.yml 의 `go install [플래그…] <패키지>@${{ steps.tv.outputs.<키> }}` 줄에서 도구와 키를 읽고
 #            (check-go-min.sh 와 같은 식), `go list -m <모듈>@latest` 에 묻는다. go 명령은 retract 된 버전을 빼고
 #            고르므로(go.dev/ref/mod 의 모듈 프록시 절) 프록시 목록의 가장 높은 버전과 다를 수 있다. 모듈 경로는
-#            패키지 경로의 뒤를 하나씩 떼며 처음 답하는 것이다
+#            패키지 경로의 뒤를 하나씩 떼며 처음 답하는 것이다. 떼는 것은 go 가 「그 경로는 모듈이 아니다」라고
+#            답할 때뿐이고, 다른 실패는 판정 못 함이다
 #   ruff     PyPI 의 JSON API(`/pypi/ruff/json` 의 info.version)
 #   ktlint   GitHub 의 releases/latest(tag_name). gates.yml 도 그 릴리스에서 받는다. 레포는 pinterest/ktlint 에서
 #            ktlint/ktlint 로 옮겨졌고 옛 경로는 301 로만 이어지므로, 지금 경로를 쓰고 리다이렉트를 따라간다(-L)
@@ -18,7 +19,7 @@
 #                          GOPROXY(go 의 것)로 조회 주소를 바꾼다. GH_TOKEN 이 있으면 GitHub 조회에 쓴다
 #
 # 종료코드: 0 최신 · 1 뒤처짐 · 2 판정 못 함(조회 실패 · 출처가 없는 키 · gates.yml 이 설치하는데 tool-versions 에
-# 없는 키). 판정하지 못한 것을 최신으로 치지 않는다 — check-action-pins.sh 와 같다.
+# 없는 키). 판정하지 못한 것을 최신으로 처리하지 않는다 — check-action-pins.sh 와 같다.
 set -uo pipefail
 SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 TV="$SELF_DIR/../gate/tool-versions"
@@ -55,13 +56,19 @@ for key in $keys; do
   other=$(printf '%s\n' "$OTHER" | awk -v k="$key" '$1 == k { print $2, $3; exit }')
   latest=""
   if [ -n "$pkg" ]; then
-    m="$pkg"
+    # 경로의 뒤를 떼는 것은 「그 경로는 모듈이 아니다」일 때만이다. go 는 모듈이 아닌 경로에 프록시로 묻든
+    # direct 로 묻든 `no matching versions` 로 답한다. 그 밖의 실패(프록시의 5xx · 연결 실패)에서 떼면
+    # golangci-lint 는 /v2 를 뗀 v1 모듈의 최신을 받아 최신이라고 판정했다(PR #132 1라운드 콜드 리뷰).
+    m="$pkg"; why=""
     while :; do
-      latest=$(cd "$work" && go list -m -f '{{.Version}}' "$m@latest" 2>/dev/null) && [ -n "$latest" ] && break
+      if latest=$(cd "$work" && go list -m -f '{{.Version}}' "$m@latest" 2>"$work/err") && [ -n "$latest" ]; then
+        break
+      fi
       latest=""
+      grep -q 'no matching versions' "$work/err" || { why=$(head -1 "$work/err"); break; }
       case "$m" in */*) m="${m%/*}" ;; *) break ;; esac
     done
-    src="go list -m $m@latest"
+    src="go list -m $m@latest${why:+: $why}"
   elif [ -n "$other" ]; then
     kind=${other%% *}; name=${other#* }
     case "$kind" in
