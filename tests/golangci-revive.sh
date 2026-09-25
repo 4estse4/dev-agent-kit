@@ -7,7 +7,9 @@
 # 하나도 실행하지 않았고, 그것을 알리는 검사가 없었다(이슈 #138). 실제 golangci-lint 로 기본 규칙 위반을
 # 찾아내는지는 이 테스트를 더한 PR 에 붙였다. 여기서는 그 설정 규칙대로 설정을 읽는다. 보는 것:
 #   · revive 가 linters.enable 에 있다
-#   · 기본 규칙이 실행된다 — rules 가 비었거나 enable-default-rules · enable-all-rules 가 true 다
+#   · 기본 규칙이 실행된다 — settings.revive 블록이 없거나 비었거나, enable-default-rules · enable-all-rules 가
+#     true 다. rules 가 없어도 그 블록에 다른 키(severity · confidence 등)가 있으면 golangci-lint 는 기본 규칙을
+#     쓰지 않는다(PR #139 1라운드 콜드 리뷰, golangci-lint 의 revive 설정을 읽는 코드)
 #   · 끄는 규칙은 exported 하나다
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -26,7 +28,7 @@ lin = c.get("linters") or {}
 enabled = "revive" in (lin.get("enable") or [])
 s = (lin.get("settings") or {}).get("revive") or {}
 rules = s.get("rules") or []
-defaults = (not rules) or s.get("enable-default-rules") is True or s.get("enable-all-rules") is True
+defaults = (not s) or s.get("enable-default-rules") is True or s.get("enable-all-rules") is True
 off = sorted(str(r.get("name")) for r in rules if r.get("disabled") is True)
 print("yes" if enabled else "no", "yes" if defaults else "no", ",".join(off) or "-")
 PY
@@ -35,7 +37,7 @@ read -r enabled defaults off <<< "$out"
 
 [ "$enabled" = yes ] && ok "revive 가 linters.enable 에 있다" || bad "revive 가 linters.enable 에 없다"
 if [ "$defaults" = yes ]; then ok "revive 의 기본 규칙이 실행된다"
-else bad "revive 의 rules 에 규칙이 있는데 enable-default-rules 가 true 가 아니어서 기본 규칙이 실행되지 않는다(꺼진 규칙: $off)"; fi
+else bad "settings.revive 가 있는데 enable-default-rules 가 true 가 아니어서 기본 규칙이 실행되지 않는다(꺼진 규칙: $off)"; fi
 [ "$off" = exported ] && ok "끄는 규칙은 exported 하나다" || bad "끄는 규칙이 exported 하나가 아니다: $off"
 
 exit $fail

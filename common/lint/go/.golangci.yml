@@ -63,8 +63,8 @@ linters:
     #     - p: '^fmt\.Print.*$'
     #       msg: "구조화 로깅(log/slog)을 쓴다"
     revive:
-      # rules 에 규칙을 하나라도 적으면 golangci-lint 는 revive 의 기본 규칙을 쓰지 않는다. 이 줄이 있어야
-      # 기본 규칙을 유지한 채 아래 규칙만 끈다. 없던 동안 revive 는 규칙을 하나도 실행하지 않았다.
+      # 이 블록에 무엇이든 적으면(아래 rules 처럼) golangci-lint 는 revive 의 기본 규칙을 쓰지 않는다. 이 줄이
+      # 있어야 기본 규칙을 유지한 채 아래 규칙만 끈다. 없던 동안 revive 는 규칙을 하나도 실행하지 않았다.
       enable-default-rules: true
       rules:
         - name: exported
