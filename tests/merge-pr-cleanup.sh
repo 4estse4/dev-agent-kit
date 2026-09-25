@@ -13,8 +13,8 @@
 #     맞는다. 원격 삭제가 gh pr merge 의 ask 밖으로 나오므로 따로 사람을 거쳐야 한다
 #   · fork 에서 온 PR 이면 원격 삭제를 하지 않는다. 조건이 글에 있어 실행으로는 못 보므로, 2절이
 #     isCrossRepository 를 받고 4절이 그것을 쓰는지 글자로 본다
-#   · 4절의 명령을 bare origin 이 있는 스크래치 레포에서 다섯 경우로 실행하면 끝 상태가 맞다.
-#     원격 브랜치 · 로컬 브랜치 · HEAD · 원래 체크아웃을 본다
+#   · 4절의 명령을 bare origin 이 있는 스크래치 레포에서 원래 체크아웃과 worktree 의 여러 상태로 실행하면
+#     끝 상태가 맞다. 원격 브랜치 · 로컬 브랜치 · HEAD · 원래 체크아웃을 본다
 #   · worktree 에서 fetch 가 실패하면 base 복귀 줄이 실패하고, 받아 둔 옛 origin/<base> 에 detach 하지 않는다
 #   · 원래 체크아웃이 다른 브랜치에 있어도 worktree 는 base 브랜치로 옮기지 않고 detach 한다. worktree 가
 #     base 에 있으면 원래 체크아웃이 base 로 옮기지 못한다(이슈 #121). 그때 base 를 쓰는 체크아웃이 없으면

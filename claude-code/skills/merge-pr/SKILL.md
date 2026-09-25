@@ -365,7 +365,9 @@ worktree 가 base 를 쓰면 `git switch` 가 `fatal: '<baseRefName>' is already
 머지 전에 남으면, 그 뒤 만든 브랜치에서 `open-pr` · `dev-log` · `trace` 가 주입하는 `git log main..HEAD` 가 방금
 머지한 커밋을 그 브랜치의 변경으로 보여 준다. base 를 쓰는 체크아웃이 있으면 git 이
 `refusing to fetch into branch … checked out at …` 로 거부하고, 그 체크아웃은 그곳의 사람이 직접 pull 한다.
-그래서 이 갱신의 실패는 줄의 종료 코드에 섞지 않는다(`|| true`).
+그래서 이 갱신의 실패는 줄의 종료 코드에 섞지 않는다(`|| true`). **이 거부는 git 2.35 부터다.** 그 전 git 은
+현재 worktree 의 브랜치만 보호해서, 원래 체크아웃이 쓰는 base 의 ref 만 옮기고 그 작업 트리는 머지 전으로
+둔다. 킷이 상정하는 macOS · ubuntu CI 의 git 은 그보다 새것이다.
 
 **이 줄의 종료 코드가 0 이 아니면 중단한다.** fetch 가 네트워크 때문에 실패하면 그 줄이 실패한다.
 fetch 를 따로 두면 fetch 가 실패해도 받아 둔 옛 `origin/<baseRefName>` 에 조용히 detach 해서, 머지 전
