@@ -252,7 +252,7 @@ jobs:
         # 버전을 핀한다. @latest 는 코드 변경 없이 규칙이 바뀌어 게이트가 빨개진다.
         run: |
           curl -fsSL -o /tmp/ktlint \
-            https://github.com/pinterest/ktlint/releases/download/${{ steps.tv.outputs.ktlint }}/ktlint
+            https://github.com/ktlint/ktlint/releases/download/${{ steps.tv.outputs.ktlint }}/ktlint
           chmod +x /tmp/ktlint && sudo mv /tmp/ktlint /usr/local/bin/ktlint
           ktlint --version
 

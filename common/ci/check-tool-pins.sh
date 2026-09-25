@@ -11,8 +11,10 @@
 #            패키지 경로의 뒤를 하나씩 떼며 처음 답하는 것이다. 떼는 것은 go 가 「그 경로는 모듈이 아니다」라고
 #            답할 때뿐이고, 다른 실패는 판정 못 함이다
 #   ruff     PyPI 의 JSON API(`/pypi/ruff/json` 의 info.version)
-#   ktlint   GitHub 의 releases/latest(tag_name). gates.yml 도 그 릴리스에서 받는다. 레포는 pinterest/ktlint 에서
-#            ktlint/ktlint 로 옮겨졌고 옛 경로는 301 로만 이어지므로, 지금 경로를 쓰고 리다이렉트를 따라간다(-L)
+#   ktlint   GitHub 의 releases/latest(tag_name). gates.yml · install-tools.sh · lib.sh 도 이 레포의 릴리스에서
+#            받는다(tests/check-tool-pins.sh 가 대조한다). 리다이렉트를 따라가지 않는다 — 레포가 옮겨지면 API 가
+#            301 을 주고, 그것이 판정 못 함이 되어 주간 워크플로가 실패한다. 킷은 레포가 pinterest/ktlint 에서
+#            옮겨진 뒤에도 옛 경로에서 받고 있었고, 따라가는 동안에는 그것이 드러나지 않았다(이슈 #131)
 # go_min 은 도구가 아니다 — check-go-min.sh 가 PR 마다 본다.
 #
 #   check-tool-pins.sh     AI_KIT_PYPI_URL(기본 https://pypi.org) · AI_KIT_GITHUB_API(기본 https://api.github.com) ·
@@ -74,7 +76,7 @@ for key in $keys; do
     case "$kind" in
       pypi)   latest=$(curl -fsSL --max-time 30 "$PYPI/pypi/$name/json" 2>/dev/null \
                        | python3 -c 'import json,sys; print(json.load(sys.stdin)["info"]["version"])' 2>/dev/null) ;;
-      github) latest=$(curl -fsSL --max-time 30 ${auth[@]+"${auth[@]}"} "$GHAPI/repos/$name/releases/latest" 2>/dev/null \
+      github) latest=$(curl -fsS --max-time 30 ${auth[@]+"${auth[@]}"} "$GHAPI/repos/$name/releases/latest" 2>/dev/null \
                        | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"])' 2>/dev/null) ;;
     esac
     src="$kind $name"

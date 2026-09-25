@@ -13,6 +13,14 @@
 #   · Go 도구의 모듈 경로는 gates.yml 의 패키지 경로에서 뒤를 떼며 찾는다
 #   · 최신을 못 읽으면(PyPI · GitHub 응답 없음, go list 실패) · 출처가 없는 키가 있으면 · gates.yml 이 설치하는
 #     도구의 키가 tool-versions 에 없으면 rc=2. 뒤처진 도구가 함께 있어도 rc=2 다
+#
+# ktlint 레포가 pinterest/ktlint 에서 옮겨진 뒤에도 킷은 옛 경로에서 받고 있었고, 조회는 리다이렉트를 따라가서 옮겨진
+# 것이 드러나지 않았다(이슈 #131). 그래서 둘을 더 본다:
+#   · GitHub API 가 301 을 주면 rc=2. 301 은 file:// 로 줄 수 없어 로컬 HTTP 서버를 둔다. 그 Location 에는 정상
+#     응답이 있어서, 따라가면 rc=0 이 된다
+#   · 킷이 ktlint 를 받는 URL(추적 파일, docs/dev-log.md 는 뺀다)이 모두 이 스크립트가 최신을 읽는 레포를 가리킨다.
+#     gates.yml · install-tools.sh · lib.sh 에 각각 하나 이상 있어야 한다 — 식이 못 찾아 0 건이면 대조할 것이 없어
+#     통과하므로. git grep 이 실패하면 통과로 세지 않는다
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 fail=0
@@ -74,9 +82,10 @@ setup() {
     esac
   done
 }
+# GHAPI_T 가 있으면 GitHub 조회를 그 주소로 보낸다(아래 301 경우).
 run() {
   out=$(PATH="$T/bin:$PATH" GOFAKE="$T/goproxy" GOFAKE_LOG="$T/golog" \
-        AI_KIT_PYPI_URL="file://$T/pypi" AI_KIT_GITHUB_API="file://$T/gh" GH_TOKEN= \
+        AI_KIT_PYPI_URL="file://$T/pypi" AI_KIT_GITHUB_API="${GHAPI_T:-file://$T/gh}" GH_TOKEN= \
         bash "$T/kit/common/ci/check-tool-pins.sh" 2>&1); rc=$?
 }
 # $1=설명  $2=기대 rc  $3=출력에 있어야 할 글자(비면 안 봄)  $4=출력에 없어야 할 글자(비면 안 봄)  나머지=setup 인자
@@ -111,6 +120,68 @@ if grep -q 'list -m .*golang.org/x/tools/cmd/goimports@latest' "$T/golog" && gre
   ok "모듈 경로는 패키지 경로(golang.org/x/tools/cmd/goimports)에서 뒤를 떼며 찾는다"
 else
   bad "go 에 물은 경로가 패키지 경로에서 모듈 경로로 줄지 않았다:"; sed 's/^/      /' "$T/golog" | head -6
+fi
+
+# 레포가 옮겨짐: API 가 releases/latest 에 301 을 주고, Location 에서는 지금 핀을 최신으로 답한다.
+cat > "$T/moved.py" <<'PY'
+import http.server, json, os, sys
+port_file, tag = sys.argv[1:3]
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/repos/ktlint/ktlint/releases/latest":
+            code, body = 301, {"message": "Moved Permanently", "url": "/repositories/1/releases/latest"}
+        elif self.path == "/repositories/1/releases/latest":
+            code, body = 200, {"tag_name": tag}
+        else:
+            code, body = 404, {"message": "Not Found"}
+        data = json.dumps(body).encode()
+        self.send_response(code)
+        if code == 301:
+            self.send_header("Location", "/repositories/1/releases/latest")
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+    def log_message(self, *a):
+        pass
+s = http.server.HTTPServer(("127.0.0.1", 0), H)
+open(port_file + ".tmp", "w").write(str(s.server_address[1]))
+os.rename(port_file + ".tmp", port_file)
+s.serve_forever()
+PY
+python3 "$T/moved.py" "$T/port" "$kl" >/dev/null 2>&1 & spid=$!
+trap 'kill "$spid" 2>/dev/null' EXIT
+for _ in $(seq 50); do [ -s "$T/port" ] && break; sleep 0.1; done
+if [ -s "$T/port" ]; then
+  GHAPI_T="http://127.0.0.1:$(cat "$T/port")" case_ "GitHub API 가 301(레포가 옮겨짐)" 2 "ktlint" ""
+else
+  bad "301 을 주는 로컬 서버가 시작되지 않았다"
+fi
+
+# ktlint 를 받는 곳: URL 의 레포가 출처 표의 레포와 같다.
+repo=$(sed -n 's/^ktlint github \([^"]*\)"*$/\1/p' "$KIT/common/ci/check-tool-pins.sh")
+if [ -z "$repo" ]; then
+  bad "check-tool-pins.sh 의 출처 표에서 ktlint 의 레포를 읽지 못했다"
+elif ! git -C "$KIT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  bad "킷이 git 체크아웃이 아니다 — 추적 파일에서 ktlint 를 받는 곳을 찾을 수 없다"
+else
+  # git grep 은 찾으면 0, 못 찾으면 1 이다. 그 밖은 오류이고 출력이 비므로, 출력만 보면 받는 곳이 없다고 센다.
+  hits=$(git -C "$KIT" grep -n -o -E 'github\.com/[^/[:space:]]+/[^/[:space:]]+/releases/download/[^/]*/ktlint' -- . ':!docs/dev-log.md'); grc=$?
+  case "$grc" in
+    0|1)
+      miss=""
+      for f in common/ci/gates.yml common/gate/install-tools.sh common/gate/lib.sh; do
+        printf '%s\n' "$hits" | grep -q "^$f:" || miss="$miss $f"
+      done
+      other=$(printf '%s\n' "$hits" | grep . | while IFS= read -r h; do
+        r=$(printf '%s\n' "$h" | sed 's#^.*github\.com/\([^/]*/[^/]*\)/releases/download/.*$#\1#')
+        [ "$r" = "$repo" ] || printf '%s\n' "$h"
+      done)
+      if [ -n "$miss" ]; then bad "ktlint 를 받는 URL 을 찾지 못한 파일이 있다:$miss"
+      elif [ -n "$other" ]; then bad "ktlint 를 $repo 가 아닌 곳에서 받는다:"; printf '%s\n' "$other" | cut -c1-140 | sed 's/^/      /'
+      else ok "ktlint 를 받는 URL 이 모두 최신을 읽는 레포($repo)를 가리킨다"; fi ;;
+    *) bad "git grep 이 rc=$grc 로 실패했다 — ktlint 를 받는 곳을 알 수 없다" ;;
+  esac
 fi
 
 rm -rf "$T"
