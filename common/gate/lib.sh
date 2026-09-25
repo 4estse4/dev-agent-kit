@@ -16,7 +16,7 @@ gate_have() { command -v "$1" >/dev/null 2>&1; }
 # 목록이 짧은 이유는 실제로 확인한 결과다. "빌드 산출물이니 걸러야지" 싶은 이름들을 넣었다가
 # **리그레션을 만들었다** — vendor·build·out·dist·target·coverage 는 업무 도메인
 # 이름이기도 해서(`services/vendor` 같은), 이름으로 제외하면 멀쩡한 모듈이 검사에서
-# 통째로 사라진다. 실제로 그렇게 됐고 콜드 리뷰가 잡았다.
+# 통째로 사라진다. 실제로 그렇게 됐고 콜드 리뷰가 찾아냈다.
 #
 # 센 결과(multimodal-asset-studio, Go+React 모노레포): 마커 파일을 품는 것은
 # node_modules 뿐이다.
@@ -27,7 +27,7 @@ gate_have() { command -v "$1" >/dev/null 2>&1; }
 # 나머지는 걸러도 얻는 것이 없고 잃을 것만 있다.
 GATE_PRUNE_DIRS="${AI_KIT_PRUNE_DIRS:-.git node_modules .venv .tox __pycache__}"
 
-# find 에 넘길 prune 표현식을 조립한다. 게이트와 설치기가 같은 함수를 쓴다.
+# find 에 전달할 prune 표현식을 조립한다. 게이트와 설치기가 같은 함수를 쓴다.
 gate_prune_expr() { # 출력: -name a -o -name b ...  (호출부가 \( \) 로 감싼다)
   local d first=1
   for d in $GATE_PRUNE_DIRS; do
@@ -132,7 +132,7 @@ gate_go_tool() { # $1=도구 이름 (예: goimports)
 # 고정 버전을 읽는다. 버전은 tool-versions 한 곳에만 적는다 — 여기나 CI 에
 # 숫자를 박으면 반드시 갈라진다.
 # 경로는 gate.sh 가 이미 계산한 SELF_DIR 을 쓰고, 없으면 BASH_SOURCE 로 되짚는다.
-# (BASH_SOURCE 는 셸에 따라 다르게 잡히므로 여기에만 의존하지 않는다.)
+# (BASH_SOURCE 는 셸에 따라 다르게 정해지므로 여기에만 의존하지 않는다.)
 GATE_TOOL_VERSIONS="${GATE_TOOL_VERSIONS:-${SELF_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]:-.}")" 2>/dev/null && pwd)}/tool-versions}"
 gate_tool_version() { # $1=키(goimports·golangci_lint·ruff·ktlint·govulncheck)
   [ -f "$GATE_TOOL_VERSIONS" ] || return 1

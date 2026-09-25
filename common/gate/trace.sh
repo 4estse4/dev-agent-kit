@@ -96,7 +96,7 @@ while IFS= read -r line; do
   esac
   if [ "$status" = "구현됨" ] || [ "$status" = "부분" ]; then
     # 구현 칸과 테스트 칸 모두 실재를 확인한다. 테스트 칸을 검사하지 않으면
-    # 같은 PR 이 삭제한 파일을 근거로 걸어두고도 게이트가 통과한다.
+    # 같은 PR 이 삭제한 파일을 근거로 적어 두고도 게이트가 통과한다.
     for p in $impl $tests; do
       p=${p%%:*}                      # path:symbol 형태 허용
       case "$p" in ""|"—"|"-") continue ;; esac

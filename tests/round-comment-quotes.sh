@@ -57,7 +57,7 @@ check() {
   echo "  ✓ ${name} (${got})"
 }
 
-# 가짜 gh 가 받은 인자에 그 글자가 있나. 훅이 PR 번호나 레포를 잘못 넘기면
+# 가짜 gh 가 받은 인자에 그 글자가 있나. 훅이 PR 번호나 레포를 잘못 전달하면
 # 다른 PR 로 대조한다.
 args_has() {
   if grep -qF -- "$2" "$T/gh-args"; then echo "  ✓ $1"
@@ -71,9 +71,9 @@ post() { printf 'gh pr comment %s --body-file %s' "${2:-89}" "$T/$1"; }
 
 # ── 통과해야 하는 것 ──
 check "올라간 2라운드 코멘트 그대로" pass "gh pr comment 89 --body-file $FX/pr89/round2.md"
-args_has "gh 에 PR 번호를 넘긴다" "pr view 89 "
+args_has "gh 에 PR 번호를 전달한다" "pr view 89 "
 check "레포를 밝힌 호출" pass "gh pr comment 89 -R 4estse4/ai-native-kit --body-file $FX/pr89/round2.md"
-args_has "gh 에 레포를 넘긴다" "-R 4estse4/ai-native-kit"
+args_has "gh 에 레포를 전달한다" "-R 4estse4/ai-native-kit"
 check "올라간 4라운드 코멘트 그대로" pass "gh pr comment 89 --body-file $FX/pr89/round4.md"
 check "\\ 줄넘김은 한 줄로 잇는다" pass "gh pr comment 89 \\
   --body-file $FX/pr89/round2.md"
@@ -85,7 +85,7 @@ check "제목에 comment 가 든 gh pr create" pass \
   "gh pr create --title \"feat(review): round comment quote hook\" --body-file $T/body.md"
 check "gh 를 뺀 글자로 찾는 명령" pass "grep -n 'pr comment' claude-code/skills/merge-pr/SKILL.md"
 check "레포를 붙인 -R=" pass "gh pr comment 89 -R=4estse4/ai-native-kit --body-file $FX/pr89/round2.md"
-args_has "붙인 -R= 의 값을 gh 에 넘긴다" "-R 4estse4/ai-native-kit"
+args_has "붙인 -R= 의 값을 gh 에 전달한다" "-R 4estse4/ai-native-kit"
 mk inner.md "$r4
 - (사람) \"고치고 한 라운드 더. … 홈 주소를 명령 인자로 쓰는 모양은 비추천 그대로 둔다.\""
 check "따옴표 안을 … 로 줄인 진짜 인용" pass "$(post inner.md)"
@@ -144,7 +144,7 @@ check "(사람, N라운드부터) 표기" deny "$(post since.md)" "" "이월된 
 mk wrapped.md "$r4
 - (사람) \"경로는 파일이 있나로 가리지만,
   번호는 가짜로 바꾼 말이다.\""
-check "두 줄로 넘어간 인용" deny "$(post wrapped.md)" "" "번호는 가짜로 바꾼 말이다"
+check "두 줄로 나뉜 인용" deny "$(post wrapped.md)" "" "번호는 가짜로 바꾼 말이다"
 mk elided.md "$r4
 - (사람) \"레포 이름을 막는다 … 사람이 한 적 없는 말\""
 check "… 로 줄인 인용의 뒤 조각" deny "$(post elided.md)" "" "사람이 한 적 없는 말"
@@ -275,7 +275,7 @@ check "따옴표 안의 게시 명령 글자" deny "echo 'gh pr comment 89 --bod
 check "sed 로 스킬의 게시 줄을 찾는 명령" deny \
   "sed -n '/^머지/,/^    gh pr comment <N> --body-file <파일>/p' claude-code/skills/merge-pr/SKILL.md" "" \
   "\`pr comment\` 로 찾고"
-check "커밋 메시지를 \$(cat <<EOF) 로 넘김" deny "git commit -m \"\$(cat <<'EOF'
+check "커밋 메시지를 \$(cat <<EOF) 로 전달함" deny "git commit -m \"\$(cat <<'EOF'
 fix(hooks): block gh pr comment 89 --body-file with fake quotes
 EOF
 )\"" "" "정규형"

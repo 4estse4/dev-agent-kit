@@ -17,7 +17,7 @@ check() { # $1=설명  $2=마커 뒤에 붙일 줄 수
   git init -q -b main "$R"
   git -C "$R" config user.email t@example.com; git -C "$R" config user.name T
   echo x > "$R/README"; git -C "$R" add -A; git -C "$R" commit -qm init
-  git -C "$R" switch -qc feature      # 보호 브랜치 규칙에 먼저 걸리지 않게
+  git -C "$R" switch -qc feature      # 보호 브랜치 규칙에 먼저 막히지 않게
   { printf '<<<<<<< HEAD\n  "a": 1,\n=======\n  "a": 2,\n>>>>>>> other\n'
     [ "$lines" -gt 0 ] && seq -f '  "pkg-%g": "1.0.0",' 1 "$lines"
   } > "$R/package-lock.json"
@@ -34,7 +34,7 @@ check() { # $1=설명  $2=마커 뒤에 붙일 줄 수
 }
 
 check "작은 파일의 충돌 마커" 0
-# 8,000줄이면 180KB 쯤이다. 파이프 버퍼(64KB)를 넉넉히 넘기는 크기다.
+# 8,000줄이면 180KB 쯤이다. 파이프 버퍼(64KB)를 넉넉히 넘는 크기다.
 check "큰 파일 앞쪽의 충돌 마커" 8000
 
 exit $fail

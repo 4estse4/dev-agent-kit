@@ -12,7 +12,7 @@
 # 그 정도에 자격증명을 퍼뜨리는 건 수지가 안 맞는다. 킷을 public 으로 바꾸면
 # 토큰 없이 읽히므로 그때 CI 에서 검사하면 된다.
 #
-# 절대 차단하지 않는다. 알 수 없으면 조용히 넘어간다.
+# 절대 차단하지 않는다. 알 수 없으면 조용히 건너뛴다.
 set -uo pipefail
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
 STAMP=.ai-kit/install-manifest

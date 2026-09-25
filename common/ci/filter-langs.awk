@@ -66,7 +66,7 @@ injobs && /^      [a-z]+: \$\{\{ steps\.d\.outputs\.[a-z]+ \}\}$/ {
 infind {
   fbuf[++nf] = $0
   if ($0 ~ /echo "[a-z]+=true"/) {
-    # 한 줄에 =true 와 =false 가 같이 있다. 탐욕 매칭을 쓰면 뒤쪽(=false)을 잡는다.
+    # 한 줄에 =true 와 =false 가 같이 있다. 탐욕 매칭을 쓰면 뒤쪽(=false)과 일치한다.
     match($0, /echo "[a-z]+=true"/)
     l = substr($0, RSTART + 6, RLENGTH - 12)
     if (!(l in X)) for (i = 1; i <= nf; i++) emit(fbuf[i])
