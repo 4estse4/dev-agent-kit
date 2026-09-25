@@ -13,7 +13,8 @@
 #   ruff     PyPI 의 JSON API(`/pypi/ruff/json` 의 info.version)
 #   ktlint   GitHub 의 releases/latest(tag_name). gates.yml · install-tools.sh · lib.sh 도 이 레포의 릴리스에서
 #            받는다(tests/check-tool-pins.sh 가 대조한다). 리다이렉트를 따라가지 않는다 — 레포가 옮겨지면 API 가
-#            301 을 주고, 그것이 판정 못 함이 되어 주간 워크플로가 실패한다. 킷은 레포가 pinterest/ktlint 에서
+#            301 을 주고, 출력이 「레포가 옮겨졌습니다」와 새 주소를 말하며 판정 못 함이 되어 주간 워크플로가
+#            실패한다. 일시 리다이렉트(302 · 307)도 따라가지 않는다. 킷은 레포가 pinterest/ktlint 에서
 #            옮겨진 뒤에도 옛 경로에서 받고 있었고, 따라가는 동안에는 그것이 드러나지 않았다(이슈 #131)
 # go_min 은 도구가 아니다 — check-go-min.sh 가 PR 마다 본다.
 #
@@ -72,14 +73,27 @@ for key in $keys; do
     done
     src="go list -m $m@latest${why:+: $why}"
   elif [ -n "$other" ]; then
-    kind=${other%% *}; name=${other#* }
+    kind=${other%% *}; name=${other#* }; why=""
     case "$kind" in
       pypi)   latest=$(curl -fsSL --max-time 30 "$PYPI/pypi/$name/json" 2>/dev/null \
                        | python3 -c 'import json,sys; print(json.load(sys.stdin)["info"]["version"])' 2>/dev/null) ;;
-      github) latest=$(curl -fsS --max-time 30 ${auth[@]+"${auth[@]}"} "$GHAPI/repos/$name/releases/latest" 2>/dev/null \
-                       | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"])' 2>/dev/null) ;;
+      github)
+        # 리다이렉트를 따라가지 않고 상태를 받는다. 301 · 308 이면 레포가 옮겨졌다고 말한다 — 안 그러면 API 가
+        # 응답하지 않은 것과 같은 글이 되어, 받는 사람이 직접 조회해 봐야 안다(PR #134 1라운드 콜드 리뷰).
+        # 끝 줄은 「상태 Location」 한 줄이다. 둘을 줄로 나누면 Location 이 빌 때 $( ) 가 그 빈 줄을 떼어
+        # 상태 줄이 밀린다. file:// 은 상태가 000 이다(테스트의 가짜 응답).
+        resp=$(curl -sS --max-time 30 ${auth[@]+"${auth[@]}"} -w '\n%{http_code} %{redirect_url}' \
+                 "$GHAPI/repos/$name/releases/latest" 2>"$work/err"); crc=$?
+        last=$(printf '%s\n' "$resp" | tail -1); code=${last%% *}
+        case "$crc:$code" in
+          0:200|0:000) latest=$(printf '%s\n' "$resp" | sed '$d' \
+                                | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"])' 2>/dev/null) ;;
+          0:301|0:308) why="레포가 옮겨졌습니다(HTTP $code → ${last#* })" ;;
+          0:*)         why="HTTP $code" ;;
+          *)           why=$(head -1 "$work/err") ;;
+        esac ;;
     esac
-    src="$kind $name"
+    src="$kind $name${why:+: $why}"
   else
     echo "  ? $key — 최신을 읽을 출처가 없습니다(gates.yml 의 go install 줄에도, 이 스크립트의 표에도 없다)" >&2
     failed=1; continue
