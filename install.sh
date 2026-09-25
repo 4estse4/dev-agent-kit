@@ -389,7 +389,7 @@ if [ "$DO_AGENT" = 1 ]; then
     rel=${f#"$cc"/}
     [ "$rel" = "README.md" ] && continue
     # settings.json 만 프로젝트 소유다 — 그 안에 프로젝트의 permissions 와 훅 등록이
-    # 산다. 스킬·에이전트·훅 스크립트는 킷 소유라 덮는다.
+    # 있다. 스킬·에이전트·훅 스크립트는 킷 소유라 덮는다.
     if [ "$rel" = "settings.json" ]; then place "$f" ".claude/$rel"
     else                                  replace "$f" ".claude/$rel"; fi
   done < <(find "$cc" -type f)
