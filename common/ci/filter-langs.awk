@@ -26,7 +26,9 @@ BEGIN {
   OUTOF["gomod"] = "go"
 }
 
-function lang_of(l) { sub(/.*outputs\./, "", l); sub(/[^a-z].*/, "", l); return l }
+# 언어는 조건의 첫 `needs.detect.outputs.<언어>` 에서 읽는다. 마지막 `outputs.` 뒤를 읽으면 조건 뒤에 붙은
+# 다른 스텝의 출력(`steps.gotools.outputs.cache-hit`)을 언어로 읽어, 떨어뜨려야 할 스텝을 남긴다.
+function lang_of(l) { match(l, /needs\.detect\.outputs\.[a-z]+/); return substr(l, RSTART + 21, RLENGTH - 21) }
 function emit(l)    { if (injobs) job = job l "\n"; else print l }
 function flush_c(   i) { for (i = 1; i <= nc; i++) emit(cbuf[i]); nc = 0 }
 function drop_c()   { nc = 0 }

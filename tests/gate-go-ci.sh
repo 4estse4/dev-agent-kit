@@ -14,6 +14,13 @@
 #   · detect 잡이 gomod 를 내보내고, setup-go 를 쓰는 잡마다 go-version-file 로 그것을 받는다.
 #     캐시를 켜고, 그 키를 레포 전체의 go.mod 와 go.sum 으로 만든다(`cache-dependency-path`).
 #     루트에 go.mod 가 없는 레포에서 캐시가 복원도 저장도 되지 않았다(이슈 #96)
+#   · `go install` 로 도구를 설치하는 잡마다, 그 앞에서 actions/cache/restore 로 도구 디렉터리를 복원하고,
+#     복원이 안 됐을 때만 그 디렉터리에 설치한 뒤 곧바로 actions/cache/save 로 저장한다. 키에는 OS · arch ·
+#     setup-go 가 설치한 Go 버전 · 그 잡이 설치하는 도구의 핀이 모두 들어 있고, 잡마다 다르다. 도구를 쓰는
+#     스텝보다 앞에서, 복원 여부와 상관없이 그 디렉터리를 PATH 에 더한다. 세 잡의 setup-go 는 키가 같아
+#     먼저 끝난 잡의 캐시만 저장되므로 도구 빌드가 캐시되지 않았고, setup-go 와 actions/cache 의 저장은
+#     잡이 성공할 때만 실행된다(이슈 #115). 설치 스텝과 PATH 스텝은 go 대역으로 실행해 GOBIN 과 PATH 가
+#     복원하는 경로와 같은지 본다
 #   · coverage 스텝을 go 대역으로 돌리면 모듈마다 그 디렉터리에서 go test 를 부르고, 한 모듈이
 #     실패하면 이유를 말하며 실패하고, COVER_MIN 을 넘는지 판정한다. 숫자로 된 커버리지 줄이
 #     하나도 없을 때 말없이 실패하지 않는다
@@ -146,6 +153,123 @@ case "$wiring" in
     done <<< "$wiring"
     ;;
 esac
+
+# ── Go 도구 캐시 ───────────────────────────────────────────────────────
+# setup-go 는 GOMODCACHE 와 GOCACHE 만 캐시하고, 키를 바꾸는 입력은 cache-dependency-path 하나다
+# (setup-go v7 의 src/package-managers.ts · src/cache-restore.ts). 세 잡이 같은 키를 쓰므로 go install 이
+# 만든 도구는 어느 캐시에도 남지 않는다. 그래서 도구 디렉터리를 actions/cache 로 따로 캐시한다.
+# 저장을 설치 바로 뒤에 두는 이유: setup-go 와 actions/cache 의 post 는 `post-if: success()` 라서 뒤의
+# 게이트가 실패한 실행에서는 저장하지 않는다.
+python3 -c 'import yaml' 2>/dev/null || bad "python3 의 yaml 모듈이 없다 — Go 도구 캐시를 볼 수 없다"
+mkdir -p "$T/gobin"
+cat > "$T/gobin/go" <<'EOF'
+#!/usr/bin/env bash
+# go 대역. 설치 스텝의 `go install` 은 그때의 GOBIN 을 적고, `go env GOPATH` 에는 답한다.
+case "$1" in
+  install) printf '%s\t%s\n' "${GOBIN-}" "$*" >> "$GO_LOG" ;;
+  env) [ "${2-}" = GOPATH ] && echo "$HOME/go" ;;
+  *) echo "go 대역: 모르는 호출: $*" >&2; exit 2 ;;
+esac
+EOF
+chmod +x "$T/gobin/go"
+cat > "$T/gotools.py" <<'PY'
+import os, re, subprocess, sys, yaml
+
+Y, T, TV = sys.argv[1:4]
+wf = yaml.safe_load(open(Y, encoding="utf-8"))
+pins = {}
+for l in open(TV, encoding="utf-8").read().splitlines():
+    if l and not l.startswith("#") and "=" in l:
+        k, v = l.split("=", 1); pins[k] = v
+GI = re.compile(r"go install (?:-\S+ )*(\S+?)@\$\{\{ steps\.tv\.outputs\.([a-z_]+) \}\}")
+fails = 0
+def ok(m): print("  ✓ " + m)
+def bad(m):
+    global fails; fails += 1; print("  ✗ " + m)
+def has(text, name):
+    return re.search(r"\$\{\{\s*" + re.escape(name) + r"\s*\}\}", str(text or "")) is not None
+def miss_only(step, rid):
+    return re.search(r"steps\." + re.escape(rid) + r"\.outputs\.cache-hit\s*!=\s*'true'", str(step.get("if") or "")) is not None
+def uses(step, action):
+    return str(step.get("uses") or "").startswith(action + "@")
+
+# 스텝의 run 을 러너처럼 `bash -e` 로 실행한다. 핀은 tool-versions 의 값으로, 다른 식은 X 로 바꾼다.
+def run_step(step, name):
+    home = os.path.join(T, "home-" + name); os.makedirs(home, exist_ok=True)
+    gp, gl = os.path.join(T, "ghpath-" + name), os.path.join(T, "golog-" + name)
+    for f in (gp, gl): open(f, "w").close()
+    body = re.sub(r"\$\{\{ steps\.tv\.outputs\.([a-z_]+) \}\}", lambda m: pins.get(m.group(1), "X"), step.get("run") or "")
+    body = re.sub(r"\$\{\{[^}]*\}\}", "X", body)
+    env = dict(os.environ, HOME=home, GITHUB_PATH=gp, GO_LOG=gl, PATH=os.path.join(T, "gobin") + ":" + os.environ["PATH"])
+    p = subprocess.run(["bash", "-e", "-c", body], env=env, cwd=T, capture_output=True, text=True)
+    return p.returncode, home, open(gp).read().splitlines(), [l.split("\t", 1) for l in open(gl).read().splitlines()], p.stderr
+
+keys = {}
+for job, spec in (wf.get("jobs") or {}).items():
+    steps = spec.get("steps") or []
+    inst = [i for i, s in enumerate(steps) if "go install" in (s.get("run") or "")]
+    if not inst:
+        continue
+    tools = [m for i in inst for m in GI.findall(steps[i]["run"])]
+    rest = [i for i in range(inst[0]) if uses(steps[i], "actions/cache/restore")]
+    if not rest:
+        bad(f"{job} 잡: go install 앞에 actions/cache/restore 가 없다 — 도구를 실행마다 다시 빌드한다")
+        continue
+    ri = rest[-1]; r = steps[ri]; rid = r.get("id"); w = r.get("with") or {}
+    path, key = str(w.get("path") or "").strip(), str(w.get("key") or "")
+    msg = []
+    if not rid: msg.append("restore 스텝에 id 가 없다.")
+    if not path or "\n" in path: msg.append(f"restore 의 path 가 디렉터리 하나가 아니다({path!r}).")
+    if "restore-keys" in w: msg.append("restore-keys 가 있다 — 다른 버전으로 빌드한 도구를 복원할 수 있다.")
+    gos = [s for s in steps[:ri] if uses(s, "actions/setup-go")]
+    if not gos or not gos[-1].get("id"): msg.append("restore 앞의 setup-go 에 id 가 없다 — 키가 Go 버전을 읽을 수 없다.")
+    elif not has(key, f"steps.{gos[-1]['id']}.outputs.go-version"): msg.append("키에 setup-go 가 설치한 Go 버전이 없다.")
+    for ctx in ("runner.os", "runner.arch"):
+        if not has(key, ctx): msg.append(f"키에 {ctx} 가 없다.")
+    for pkg, k in tools:
+        if not has(key, f"steps.tv.outputs.{k}"): msg.append(f"키에 {k} 의 핀이 없다.")
+    if not tools: msg.append("go install 줄에서 도구와 핀을 읽지 못했다.")
+    home_path = lambda home: re.sub(r"^(~|\$HOME|\$\{HOME\})(?=/|$)", home, path)
+    for i in inst:
+        s = steps[i]
+        if rid and not miss_only(s, rid): msg.append(f"설치 스텝 {i + 1} 이 복원이 안 됐을 때만 실행되지 않는다.")
+        rc, home, _, calls, err = run_step(s, f"{job}-{i}")
+        if rc != 0: msg.append(f"설치 스텝 {i + 1} 이 go 대역으로 실패했다: {err.strip()[:120]}")
+        for gobin, args in calls:
+            if gobin != home_path(home): msg.append(f"`go {args}` 의 GOBIN 이 {gobin or '(없음)'}, 복원하는 {home_path(home)} 여야 한다.")
+    names = {pkg.rsplit("/", 1)[-1] for pkg, _ in tools}
+    after = range(inst[-1] + 1, len(steps))
+    use = next((i for i in after if "gate.sh" in (steps[i].get("run") or "") or any(n in (steps[i].get("run") or "") for n in names)), None)
+    if use is None: msg.append("설치한 도구를 쓰는 스텝(gate.sh 나 도구 이름)이 없다.")
+    saves = [i for i in after if uses(steps[i], "actions/cache/save")]
+    if not saves: msg.append("설치 뒤에 actions/cache/save 가 없다.")
+    else:
+        si = saves[0]; s = steps[si]; sw = s.get("with") or {}
+        if use is not None and si > use: msg.append("save 가 도구를 쓰는 스텝보다 뒤에 있다 — 게이트가 실패하면 저장되지 않는다.")
+        if rid and not miss_only(s, rid): msg.append("save 가 복원이 안 됐을 때만 실행되지 않는다.")
+        if str(sw.get("path") or "").strip() != path: msg.append("save 의 path 가 restore 와 다르다.")
+        if rid and not has(sw.get("key"), f"steps.{rid}.outputs.cache-primary-key"): msg.append("save 의 key 가 restore 의 cache-primary-key 가 아니다.")
+    added = False
+    for i in range(ri + 1, use if use is not None else len(steps)):
+        s = steps[i]
+        if "GITHUB_PATH" not in (s.get("run") or "") or "cache-hit" in str(s.get("if") or ""):
+            continue
+        rc, home, lines, _, _ = run_step(s, f"{job}-path-{i}")
+        if rc == 0 and home_path(home) in lines:
+            added = True
+    if not added: msg.append("도구를 쓰는 스텝 앞에서, 복원 여부와 상관없이 도구 디렉터리를 PATH 에 더하는 스텝이 없다.")
+    keys[job] = key
+    if msg: bad(f"{job} 잡의 Go 도구 캐시: " + " ".join(msg))
+    else: ok(f"{job} 잡은 Go 도구({', '.join(sorted(names))})를 따로 캐시하고, 복원이 안 됐을 때만 설치해 곧바로 저장한다")
+if not keys and not fails:
+    bad("go install 로 도구를 설치하는 잡이 하나도 검색되지 않았다 — gates.yml 이 바뀌었나")
+if len(set(keys.values())) < len(keys):
+    bad("두 잡 이상이 같은 도구 캐시 키를 쓴다 — 먼저 끝난 잡의 도구만 저장된다")
+elif len(keys) > 1:
+    ok("도구 캐시 키가 잡마다 다르다")
+sys.exit(1 if fails else 0)
+PY
+python3 "$T/gotools.py" "$Y" "$T" "$R/.ai-kit/gate/tool-versions" || fail=1
 
 # ── coverage ───────────────────────────────────────────────────────────
 step_run coverage '패키지별 커버리지' | sed "s#/tmp/cov.txt#$T/cov.txt#g" > "$T/coverage.sh"
