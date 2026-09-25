@@ -32,7 +32,7 @@ else
   gate_skip "ruff"
 fi
 
-# mypy 는 설정이 있을 때만 실행된다. 설정 없는 프로젝트에 걸면 서드파티 스텁 부재로
+# mypy 는 설정이 있을 때만 실행된다. 설정 없는 프로젝트에 적용하면 서드파티 스텁 부재로
 # 사실상 전부 실패하고, 그러면 게이트를 끄게 된다 — 끄는 게이트는 없는 게이트다.
 _py_typed=""
 grep -q '^\[tool\.mypy\]' pyproject.toml 2>/dev/null && _py_typed=1

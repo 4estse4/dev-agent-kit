@@ -2,7 +2,7 @@
 # 편집 직후 포맷 훅(`claude-code/hooks/post_edit.sh`)이 게이트와 같은 자리에서 같은 ruff 를 부르는가.
 #
 # 이 테스트가 있는 이유: ruff 0.16 부터 게이트의 `ruff format --check .`(adapters/py.sh)가 `.md` 의
-# Python 코드 블록도 본다. 훅은 `.md` 를 prettier 에만 넘겨서, 에이전트가 README 의 Python 블록을
+# Python 코드 블록도 본다. 훅은 `.md` 를 prettier 에만 전달해서, 에이전트가 README 의 Python 블록을
 # 고쳐도 훅은 아무것도 안 하고 pre-commit 게이트가 그제서야 막았다(PR #112 1라운드 콜드 리뷰).
 # 그것을 고친 뒤에도 훅은 PATH 의 ruff 만 봤다. 게이트는 그 자리의 `.venv` · `venv` 의 ruff 를 먼저
 # 쓰므로, 프로젝트가 ruff 를 venv 에 둔 레포에서는 같은 일이 났고 `.py` 는 「포매터가 없어」로
@@ -28,7 +28,7 @@ fail=0
 ok() { echo "  ✓ $1"; }
 bad() { echo "  ✗ $1"; fail=1; }
 
-# 실경로로 잡는다. 훅은 git 이 내는 실경로(루트)와 파일 경로의 조상을 글자로 견준다.
+# 실경로로 정한다. 훅은 git 이 내는 실경로(루트)와 파일 경로의 조상을 글자로 견준다.
 T=$(cd "$(mktemp -d)" && pwd -P)
 R="$T/repo"; mkdir -p "$T/bin" "$R"
 git init -q "$R"

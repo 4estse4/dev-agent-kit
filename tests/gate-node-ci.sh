@@ -9,7 +9,7 @@
 # 깨끗한 레포에 킷을 설치하고 그 gates.yml 을 읽는다. 보는 것:
 #   · actions/setup-node 를 쓰는 스텝마다 continue-on-error 가 없고, 같은 잡에서 그보다 앞선
 #     스텝이 gate_nvmrc_check 를 부르고, cache 가 npm 이면(따옴표로 감싸도) cache-dependency-path 가
-#     레포 전체의 package-lock.json 과 npm-shrinkwrap.json 을 둘 다 잡는다. 그 값을 주면
+#     레포 전체의 package-lock.json 과 npm-shrinkwrap.json 을 둘 다 키에 넣는다. 그 값을 주면
 #     setup-node 는 기본 패턴 대신 그것만 보고, 하나도 안 맞으면 「Some specified paths were not
 #     resolved」로 멈춘다. 값이 없으면 레포 루트에서만 lockfile 을 찾는다
 #   · 그 확인 스텝의 run 을 설치한 레포에서 실행하면, 루트에 .nvmrc 가 없을 때(하위 디렉터리에만
@@ -69,7 +69,7 @@ report=$(awk -v q="'" '
   END { endstep(); if (!n) print "none" }
 ' "$Y")
 case "$report" in
-  none) bad "setup-node 를 쓰는 스텝이 하나도 안 걸렸다 — gates.yml 이 바뀌었나" ;;
+  none) bad "setup-node 를 쓰는 스텝을 하나도 찾지 못했다 — gates.yml 이 바뀌었나" ;;
   *)
     while IFS=$'\t' read -r st job msg; do
       if [ "$st" = ok ]; then ok "$job 잡의 setup-node 는 앞에서 루트 .nvmrc 를 보고, 실패를 덮지 않고, lockfile 을 루트에서만 찾지 않는다"

@@ -30,11 +30,11 @@
 # 원본이라, 세션이 승인 없이 올리면 원본을 스스로 만드는 셈이다. `ask` 규칙이 없는
 # 레포에서도 사람이 한 번 누르게 한다.
 #
-# **무엇을 못 막나.** 이 에이전트가 Bash 로 실행할 때만 걸린다. 사람이 손으로 올리거나, 다른
-# 명령(`gh api` · `gh issue comment <PR 번호>`)이나 웹으로 올리면 안 걸린다. 명령 이름을
+# **무엇을 못 막나.** 이 에이전트가 Bash 로 실행할 때만 작동한다. 사람이 손으로 올리거나, 다른
+# 명령(`gh api` · `gh issue comment <PR 번호>`)이나 웹으로 올리면 작동하지 않는다. 명령 이름을
 # 꾸며도(변수 `$GH` · 별칭 · 함수 · 낱말 안의 따옴표나 `\` 인 `comm""ent` · `co\mment`) 못
 # 알아보고, 게시 명령을 스크립트 파일에 두고 실행하거나 인라인 인터프리터에 인자 목록으로
-# 넘겨도(`python3 -c` · `node -e` 의 `['gh', 'pr', 'comment', …]`) 못 본다 — 이 훅은 형식대로 입력한
+# 전달해도(`python3 -c` · `node -e` 의 `['gh', 'pr', 'comment', …]`) 못 본다 — 이 훅은 형식대로 입력한
 # 게시 명령의 실수를 겨누고, 작정한 우회는 겨누지 않는다. 대조의 원본인 3.5 코멘트의 인용이 진짜
 # 사람 말인지는 이 훅이 모른다. 3.5 코멘트는 사람이 승인하고 올린다.
 #
@@ -44,13 +44,13 @@
 #
 # **판정 못 하면 막는다.** 본문 파일을 못 읽거나(없음 · UTF-8 아님) `gh` 가 실패하거나 없으면
 # 라운드 코멘트인지 인용이 맞는지 모른다. 판정 못 한 것을 통과로 처리하지 않는다.
-# **이 스크립트가 실행되지 못하면 막지 못한다.** `python3` 가 없거나, 시간을 넘기거나, 파일이 없으면
+# **이 스크립트가 실행되지 못하면 막지 못한다.** `python3` 가 없거나, 시간을 초과하거나, 파일이 없으면
 # 훅이 오류로 끝나고 문서대로 호출은 그대로 진행된다. `ask` 에 `gh pr comment` 가 없는
 # 레포에서는 그 라운드 코멘트가 대조 없이 나간다. 판정 못 해 막는 위의 경우와 다르다.
 #
 # **제목 앵커는 스킬과 같은 글자다.** 라운드 코멘트는 첫 줄 `## 리뷰 `, 3.5 코멘트는 제목
 # `### N라운드 코멘트를 읽고 사람이 정한 것` 으로 고른다. 제목을 바꾸면 이 파일도 같이 바꾼다 — 그 제목을
-# 쓰는 스킬들과 같은 `git grep` 에 걸린다.
+# 쓰는 스킬들과 같은 `git grep` 결과에 나온다.
 input=$(cat)
 
 # 모든 Bash 호출마다 실행되므로, `comment` 가 없는 호출은 파이썬을 띄우지 않고 나간다.
@@ -243,7 +243,7 @@ while j < len(args):
 if bools & {'-h', '--help'}:
     sys.exit(0)
 if 'body' in got or bools & {'-e', '--editor', '-w', '--web'}:
-    deny("gh pr comment 의 본문은 절대 경로 파일 하나로만 넘긴다: " + CANON
+    deny("gh pr comment 의 본문은 절대 경로 파일 하나로만 전달한다: " + CANON
          + ". 인라인 본문 · 편집기 · 웹은 이 훅이 판정할 수 없다.")
 if 'file' not in got:
     sys.exit(0)                 # 본문 없이는 새 글을 안 올린다(`--delete-last` 등)
@@ -251,14 +251,14 @@ if len(pr) != 1 or not re.match(r'^\d+$', pr[0]):
     canon_deny("PR 은 번호 하나로 적는다(URL · 브랜치 이름은 받지 않는다).")
 pr, repo, path = pr[0], got.get('repo'), got['file']
 if not os.path.isabs(path):
-    deny("gh pr comment 의 --body-file 에 상대 경로를 넘겼다. 이 훅은 명령 안의 cd 를 못 "
+    deny("gh pr comment 의 --body-file 에 상대 경로를 전달했다. 이 훅은 명령 안의 cd 를 못 "
          "따라가므로 절대 경로만 받는다: " + CANON)
 try:
     with open(path, encoding='utf-8') as fh:
         body = fh.read()
 except (OSError, UnicodeDecodeError):
     deny("gh pr comment 의 본문 파일을 읽지 못해 판정할 수 없다(없거나 UTF-8 이 아니다). "
-         "UTF-8 파일을 --body-file 에 넘겨라.")
+         "UTF-8 파일을 --body-file 에 전달해라.")
 
 if ANSWER.match(body):
     out("ask", "3.5 코멘트(「### N라운드 코멘트를 읽고 사람이 정한 것」)는 사람의 승인을 받고 올리는 "

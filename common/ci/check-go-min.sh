@@ -43,7 +43,7 @@ body=$(grep -v '^[[:space:]]*#' "$G")
 # 줄이 아니라 나온 것마다 읽는다. 한 줄에 `&&` 로 둘을 이으면 줄 단위로는 하나만 뽑혔다.
 rows=$(printf '%s\n' "$body" | grep -o "$pat" | sed "s/^$pat\$/\2 \3/")
 [ -n "$rows" ] || { echo "check-go-min: gates.yml 에서 go install 줄을 찾지 못했습니다" >&2; exit 2; }
-# 읽은 것을 지우고도 go install 이 남는 줄. 한 줄에 둘이 있고 하나만 읽힌 줄도 여기 걸린다.
+# 읽은 것을 지우고도 go install 이 남는 줄. 한 줄에 둘이 있고 하나만 읽힌 줄도 여기 해당한다.
 unread=$(printf '%s\n' "$body" | while IFS= read -r l; do
   case "$l" in (*'go install '*) ;; (*) continue ;; esac
   case "$(printf '%s\n' "$l" | sed "s/$pat//g")" in (*'go install '*) printf '%s\n' "$l" ;; esac

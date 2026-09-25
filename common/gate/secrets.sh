@@ -57,7 +57,7 @@ while IFS= read -r f; do
 done <<< "$FILES"
 
 # ── 2. 내용으로 금지 ────────────────────────────────────────────
-# 패턴을 변수로 조립해 이 스크립트 자신이 스캔에 걸리지 않게 한다.
+# 패턴을 변수로 조립해 이 스크립트 자신이 스캔 결과에 나오지 않게 한다.
 P_PRIVKEY='-----BEGIN [A-Z ]*PRIVATE KEY-----'
 P_JSONKEY='"'"private_key"'"[[:space:]]*:[[:space:]]*"'
 P_AWS='AKIA[0-9A-Z]{16}'

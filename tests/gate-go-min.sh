@@ -39,7 +39,7 @@ report=$(awk '
   END { if (!n) print "none" }
 ' "$Y")
 case "$report" in
-  none) echo "  ✗ setup-go 를 쓰는 잡이 하나도 안 걸렸다 — gates.yml 이 바뀌었나"; fail=1 ;;
+  none) echo "  ✗ setup-go 를 쓰는 잡을 하나도 찾지 못했다 — gates.yml 이 바뀌었나"; fail=1 ;;
   *)
     while read -r st job; do
       if [ "$st" = ok ]; then echo "  ✓ $job 잡은 setup-go 앞에서 go_min 을 본다"
@@ -83,7 +83,7 @@ check() { # $1=잡  $2=설명  $3=기대(fail|pass)  $4=실패할 때 이름대�
   local job="$1" what="$2" want="$3" names="$4" out rc; shift 4
   gomods "$@"
   # TV 가 비면 CI 스텝처럼 lib.sh 가 제 자리에서 tool-versions 를 찾게 둔다. 설치본 케이스가 그
-  # 기본 경로를 지난다 — 모든 케이스에 넘기면 그 경로가 깨져도 초록이었다(PR #108 3라운드 콜드 리뷰).
+  # 기본 경로를 지난다 — 모든 케이스에 전달하면 그 경로가 깨져도 초록이었다(PR #108 3라운드 콜드 리뷰).
   if [ -n "$TV" ]; then out=$(cd "$R" && GATE_TOOL_VERSIONS="$TV" bash -e "$T/step.$job" 2>&1); rc=$?
   else out=$(cd "$R" && bash -e "$T/step.$job" 2>&1); rc=$?; fi
   if [ "$want" = fail ]; then

@@ -5,7 +5,7 @@
 # node_modules 같은 것만 건너뛰는데, gates.yml 과 install-tools.sh 는 `-maxdepth 3` 과 제각각의
 # `-not -path` 를 썼다. gate.sh 에서 깊이 제한을 뺄 때 나머지를 두고 가서, 네 단계 아래의 모듈을
 # 로컬 게이트는 보고 CI 의 언어 감지와 도구 설치는 못 봤다(이슈 #37). 같은 기준을 두 곳에 적으면
-# 한쪽만 고쳐진다. 새로 쓰는 자리를 잡는 것은 이 검사뿐이다.
+# 한쪽만 고쳐진다. 새로 쓰는 자리를 찾아내는 것은 이 검사뿐이다.
 #
 # 보는 것: `.md` 가 아닌 설치되는 파일(common/ · claude-code/)과 install.sh 에서 주석이 아닌 줄.
 #   · 마커를 찾는 find 는 gate_prune_expr 를 쓰고, -maxdepth 를 쓰지 않고, -not -path ·
@@ -39,7 +39,7 @@ logical() {
 
 MARKER="-name[[:space:]]+(['\"]?(go\\.mod|package(-lock)?\\.json|pyproject\\.toml|settings\\.gradle(\\.kts)?|build\\.gradle(\\.kts)?)|\"?\\$)"
 finds=$(logical | grep -E "find[[:space:]].*$MARKER")
-[ -n "$finds" ] || { echo "  ✗ 마커를 찾는 find 가 하나도 안 걸렸다 — 정규식이 틀렸나"; exit 1; }
+[ -n "$finds" ] || { echo "  ✗ 마커를 찾는 find 를 하나도 찾지 못했다 — 정규식이 틀렸나"; exit 1; }
 
 fail=0
 bad=$(printf '%s\n' "$finds" | grep -v 'gate_prune_expr')
