@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# common/ci/check-go-min.sh 가 go_min 과 핀한 Go 도구의 go 줄이 어긋난 것을 잡는가.
+# common/ci/check-go-min.sh 가 go_min 과 핀한 Go 도구의 go 줄이 어긋난 것을 찾아내는가.
 #
 # 이 테스트가 있는 이유: tool-versions 의 go_min 은 gates.yml 이 go install 로 설치하는 도구들이 요구하는
 # go(그 모듈의 go 줄) 가운데 가장 높은 것과 같아야 한다. 낮으면 도구가 설치되지 않고, 높으면

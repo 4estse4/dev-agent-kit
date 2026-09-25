@@ -16,7 +16,7 @@ fail=0
 ok() { echo "  ✓ $1"; }
 bad() { echo "  ✗ $1"; fail=1; }
 
-# run <조각 파일> <명령> — 스킬이 쓰는 모양 그대로 따옴표 heredoc 으로 넘긴다
+# run <조각 파일> <명령> — 스킬이 쓰는 모양 그대로 따옴표 heredoc 으로 전달한다
 run() {
   local f=$1 c=$2
   ( cd "$T" && printf '%s\n' "$c" | bash "$S" "$f" >/dev/null 2>&1 )
@@ -27,8 +27,8 @@ c='for i in $(seq 1 20); do echo "line $i"; done'
 run "$T/long.part" "$c"
 n=$(grep -c '^line ' "$T/long.part" 2>/dev/null)
 [ "${n:-0}" = 20 ] && ok "20줄 출력이 다 들어간다" || bad "20줄 출력이 다 들어간다 — ${n:-0}줄"
-grep -qxF "\$ $c" "$T/long.part" 2>/dev/null && ok "보이는 명령이 넘긴 글자 그대로다" \
-  || bad "보이는 명령이 넘긴 글자 그대로다"
+grep -qxF "\$ $c" "$T/long.part" 2>/dev/null && ok "보이는 명령이 전달한 글자 그대로다" \
+  || bad "보이는 명령이 전달한 글자 그대로다"
 grep -qx 'rc=0' "$T/long.part" 2>/dev/null && ok "종료 코드를 적는다" || bad "종료 코드를 적는다"
 [ "$(head -1 "$T/long.part" 2>/dev/null)" = '```' ] && [ "$(tail -1 "$T/long.part" 2>/dev/null)" = '```' ] \
   && ok "코드 블록으로 감싼다" || bad "코드 블록으로 감싼다"
@@ -104,7 +104,7 @@ cat > "$R/.claude/settings.local.json" <<'EOF'
 {"permissions": {"deny": ["Bash(rm *)", "Bash(npm run *--prod*)", "Bash(* --help *)"]}}
 EOF
 # 거부된 명령은 **실행되지 않아야** 한다. 명령 앞에 흔적 파일을 만드는 `touch` 를 붙여, 거부했다고
-# 말하면서 먼저 실행한 모양을 잡는다. 뒤의 글자는 규칙 글자를 품은 `echo` 라 가드가 빠져
+# 말하면서 먼저 실행한 모양을 찾아낸다. 뒤의 글자는 규칙 글자를 품은 `echo` 라 가드가 빠져
 # 실행되어도 아무것도 안 한다.
 refused() {   # refused <이름> <명령> [cwd]
   local f="$T/refuse-$RANDOM.part" m="$T/ran-$RANDOM" rc err
@@ -121,7 +121,7 @@ refused "여러 줄 명령 둘째 줄의 글자" $'echo ok\necho gh pr merge 1'
 refused "끝에 :* 를 쓴 규칙" 'echo gh api repos/x/y'
 refused "settings.local.json 의 규칙" 'echo rm -rf build'
 refused "하위 디렉터리에서 불러도 레포 설정을 본다" 'echo gh pr merge 3' "$R/sub"
-# 끝이 ` *` 인 규칙은 맨 명령도 잡는다. 공식 문서: "A `*` at the end, with a space before it,
+# 끝이 ` *` 인 규칙은 맨 명령에도 적용된다. 공식 문서: "A `*` at the end, with a space before it,
 # also matches the bare command." 구분자가 바로 붙은 모양도 같다.
 refused "끝 ' *' 규칙의 맨 명령" 'echo x; echo rm'
 refused "끝 ' *' 규칙 뒤에 ; 가 붙음" 'echo rm;echo x'
@@ -183,8 +183,8 @@ for f in "$OPEN" "$MERGE"; do
     || bad "$name 이 거부된 명령의 갈 길을 말한다"
   grep -q 'awk 1' "$f" && ok "$name 이 조각을 awk 1 로 잇는다" || bad "$name 이 조각을 awk 1 로 잇는다"
 done
-grep -qE 'gh pr create .*--body-file' "$OPEN" && ok "open-pr 이 본문을 --body-file 로 넘긴다" \
-  || bad "open-pr 이 본문을 --body-file 로 넘긴다"
+grep -qE 'gh pr create .*--body-file' "$OPEN" && ok "open-pr 이 본문을 --body-file 로 전달한다" \
+  || bad "open-pr 이 본문을 --body-file 로 전달한다"
 
 # ── 조각을 이을 때 끝 줄바꿈이 없어도 울타리가 앞 줄에 붙지 않는다 ──
 # `Write` 로 쓴 조각이 줄바꿈 없이 끝나면 `cat` 은 다음 조각의 여는 울타리를 그 줄에 붙인다.

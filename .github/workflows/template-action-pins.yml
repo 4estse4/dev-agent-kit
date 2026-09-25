@@ -7,8 +7,8 @@
 # 같은 잡이 본다(check-tool-pins.sh, 이슈 #110). 최신은 킷이 바뀌지 않아도 바뀌므로 PR 마다
 # 보지 않고 주간으로 본다.
 #
-# 이것은 킷에 게이트를 거는 것이 아니다 — required check 도 브랜치 보호도 아니고,
-# 뒤처짐을 알리기만 한다. "킷이 자기 자신에게 게이트를 걸 것인가" 는 여전히 열린 결정이다.
+# 이것은 킷에 게이트를 적용하는 것이 아니다 — required check 도 브랜치 보호도 아니고,
+# 뒤처짐을 알리기만 한다. "킷이 자기 자신에게 게이트를 적용할 것인가" 는 여전히 열린 결정이다.
 name: template action and tool pins
 
 on:
@@ -36,7 +36,7 @@ jobs:
           set +e
           # 자기 자신도 검사 대상에 넣는다. 이 워크플로의 핀은 .github/workflows/ 에
           # 있어 Dependabot 이 볼 수 있지만, 킷에 dependabot 설정을 따로 두는 것보다
-          # 이미 있는 검사기에 파일 하나 더 넘기는 쪽이 부품이 적다.
+          # 이미 있는 검사기에 파일 하나를 더 전달하는 쪽이 부품이 적다.
           out=$(bash common/ci/check-action-pins.sh \
                   common/ci/gates.yml \
                   .github/workflows/template-action-pins.yml \
@@ -75,7 +75,7 @@ jobs:
           exit 0
 
       # 뒤처졌으면(rc=1) 이슈를 연다. 조회 실패(rc=2)는 맨 아래 스텝이 잡을 실패로 남긴다 —
-      # 판정하지 못한 것을 "이상 없음" 으로 넘기지 않는다. 아래 셋은 `!cancelled()` 라서 setup-go 가
+      # 판정하지 못한 것을 "이상 없음" 으로 처리하지 않는다. 아래 셋은 `!cancelled()` 라서 setup-go 가
       # 실패해 잡이 이미 실패한 뒤에도 실행된다. 그래야 액션 핀 검사의 결과가 버려지지 않는다.
       - name: Open an issue when action pins are behind
         if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}

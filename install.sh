@@ -32,8 +32,8 @@ while [ $# -gt 0 ]; do
     --lint) DO_LINT=1; shift ;;
     --ci) DO_CI=1; shift ;;
     --agent) DO_AGENT=1; shift ;;
-    # 값을 받는 플래그는 값이 실제로 있는지 먼저 본다. 안 보면 `shift 2` 가 인자
-    # 하나를 못 넘겨 실패하는데, 실패해도 루프는 계속 반복되어 **같은 인자를 영원히
+    # 값을 받는 플래그는 값이 실제로 있는지 먼저 본다. 안 보면 `shift 2` 가 인자가
+    # 하나뿐이라 실패하는데, 실패해도 루프는 계속 반복되어 **같은 인자를 영원히
     # 다시 읽는다** — 출력 한 줄 없이 멈춘 것처럼 보인다(실제로 확인함).
     --lang)
       [ $# -ge 2 ] || { echo "install: --lang 에 값이 필요합니다 (예: --lang py,ts)" >&2; exit 2; }
@@ -79,7 +79,7 @@ STAGE=""
 # TMPDIR 은 끝에 / 가 붙어 온다(macOS). 값에서 떼지 않으면 출력 경로에 // 가 남는다 —
 # 따옴표 자리를 옮기는 것으로는 안 없어진다.
 _tmpdir=${TMPDIR:-/tmp}; _tmpdir=${_tmpdir%/}
-# 실패를 그냥 넘기면 STAGE 가 빈 문자열이 되고, 그 뒤 모든 경로가 "/..." 가 된다 —
+# 실패를 그냥 지나치면 STAGE 가 빈 문자열이 되고, 그 뒤 모든 경로가 "/..." 가 된다 —
 # 아무것도 안 바꾸겠다고 약속한 모드가 **파일시스템 루트에 쓰려고 든다.** 실제로 확인했다:
 # 루트가 읽기 전용이라 막혔을 뿐이고, 쓸 수 있는 환경이면 그대로 썼다.
 if [ "$DRY_RUN" = 1 ]; then
@@ -356,7 +356,7 @@ if [ "$DO_LINT" = 1 ]; then
   # JVM: 빌드 루트마다 .editorconfig.
   # 같은 목적지에 두 번 놓지 않도록 place_beside 의 PLACED_DESTS 가 막는다.
   # settings.gradle + build.gradle 은 Gradle 의 표준 배치라 한 디렉터리에 마커가
-  # 둘인 것이 정상이고, 그때 .editorconfig 를 두 번 놓으면 두 번째가 충돌로 잡힌다.
+  # 둘인 것이 정상이고, 그때 .editorconfig 를 두 번 놓으면 두 번째가 충돌로 판정된다.
   for m in settings.gradle settings.gradle.kts build.gradle build.gradle.kts; do
     place_beside "$m" "$KIT_ROOT/common/lint/jvm/.editorconfig" ".editorconfig"
   done
@@ -519,7 +519,7 @@ if [ "$DO_PROTECT" = 1 ]; then
     echo "install: --dry-run 이므로 브랜치 보호는 건드리지 않습니다 (원격 변경입니다)"
   else
     # **사람에게 묻는다.** 이것은 원격 설정을 바꾸는 유일한 자리인데 `permissions.ask`
-    # 가 못 잡는다 — 규칙은 에이전트가 입력한 명령 **문자열**만 보므로 `bash install.sh
+    # 가 찾아내지 못한다 — 규칙은 에이전트가 입력한 명령 **문자열**만 보므로 `bash install.sh
     # --protect` 안의 `gh api -X PUT` 은 안 보인다. 킷이 `Bash(gh api*)` 를 ask 에
     # 넣어놓고 그것을 비켜가는 실행 파일을 같이 배포하면 그 규칙이 거짓이 된다.
     # 그래서 스크립트가 직접 묻는다. 대답할 사람이 없으면(파이프·CI) 하지 않는다.
@@ -536,7 +536,7 @@ if [ "$DO_PROTECT" = 1 ]; then
         [yY]|[yY][eE][sS])
           # 대상 레포 안에서 실행한다. protect-branch.sh 는 gh repo view 로 레포를 찾는데
           # 그것은 CWD 를 본다 — 여기서 cd 하지 않으면 install.sh 를 실행한 자리의
-          # 레포에 보호가 걸린다. 대상을 인자로 받는 명령에서 그건 사고다.
+          # 레포에 보호가 적용된다. 대상을 인자로 받는 명령에서 그건 사고다.
           ( cd "$TARGET" && bash "$KIT_ROOT/common/ci/protect-branch.sh" ) \
             || echo "install: 브랜치 보호 설정 실패" >&2 ;;
         *) echo "install: 브랜치 보호를 건드리지 않았습니다." ;;
@@ -621,7 +621,7 @@ dryrun_report() {
     while IFS= read -r rel; do
       rel=${rel#  ~ }
       [ -n "$rel" ] || continue
-      [ "$shown" -ge "$DIFF_MAX_TOTAL" ] && { echo ""; echo "  … 전체 상한 ${DIFF_MAX_TOTAL}줄에 걸려 나머지는 생략했습니다. 병합용 트리에서 직접 보세요."; break; }
+      [ "$shown" -ge "$DIFF_MAX_TOTAL" ] && { echo ""; echo "  … 전체 상한 ${DIFF_MAX_TOTAL}줄에 이르러 나머지는 생략했습니다. 병합용 트리에서 직접 보세요."; break; }
       echo ""
       echo "──── $rel"
       body=$(diff -u "$TARGET/$rel" "$STAGE/$rel" 2>/dev/null | tail -n +3)
@@ -630,7 +630,7 @@ dryrun_report() {
       printf '%s\n' "$body" | head -n "$DIFF_MAX_LINES" | sed 's/^/  /'
       [ "$cut" -gt "$DIFF_MAX_LINES" ] && echo "  … 이 파일에서 $((cut - DIFF_MAX_LINES))줄 더 있습니다"
       # 상한은 **찍은 줄**로 센다. diff 전체 길이로 세면 잘려서 안 보인 줄까지 한도를
-      # 먹어, "400줄에 걸렸다" 고 말하면서 실제로는 그보다 훨씬 적게 보여준다.
+      # 먹어, "400줄에 이르렀다" 고 말하면서 실제로는 그보다 훨씬 적게 보여준다.
       if [ "$cut" -gt "$DIFF_MAX_LINES" ]; then shown=$((shown + DIFF_MAX_LINES)); else shown=$((shown + cut)); fi
     done <<< "$list_all"
   fi

@@ -9,7 +9,7 @@
 **킷의 다른 설계와 정면으로 부딪힌다.** `.ai-kit/README.md` 는 게이트에 문제가 있으면
 그 레포에서 고치라고 말하는데, 체크섬은 그것을 CI 실패로 만든다.
 
-설치된 데모 레포에서 실제 결함(`secrets.sh` 가 AWS secret access key 를 못 잡는 것)을
+설치된 데모 레포에서 실제 결함(`secrets.sh` 가 AWS secret access key 를 찾아내지 못하는 것)을
 고치는 시나리오로 한 번 실행해 봤다:
 
 ```
