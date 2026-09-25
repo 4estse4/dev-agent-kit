@@ -357,7 +357,7 @@ if [ "$DO_LINT" = 1 ]; then
   # 같은 목적지를 두 번 치지 않도록 place_beside 의 PLACED_DESTS 가 막는다.
   # settings.gradle + build.gradle 은 Gradle 의 표준 배치라 한 디렉터리에 마커가
   # 둘인 것이 정상이고, 그때 .editorconfig 를 두 번 놓으면 두 번째가 충돌로 잡힌다.
-  for m in settings.gradle settings.gradle.kts build.gradle build.gradle.kts pom.xml; do
+  for m in settings.gradle settings.gradle.kts build.gradle build.gradle.kts; do
     place_beside "$m" "$KIT_ROOT/common/lint/jvm/.editorconfig" ".editorconfig"
   done
 fi

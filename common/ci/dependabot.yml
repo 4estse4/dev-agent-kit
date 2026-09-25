@@ -45,9 +45,6 @@ updates:
   #   directory: "/"
   #   schedule: { interval: weekly }
 
-  # - package-ecosystem: gradle   # jvm: Gradle 이면 이것. 아래 maven 과 둘 중 하나만 켠다
-  #   directory: "/"
-  #   schedule: { interval: weekly }
-  # - package-ecosystem: maven    # jvm: Maven 이면 이것
+  # - package-ecosystem: gradle   # jvm: settings.gradle(.kts) 나 build.gradle(.kts) 가 있는 디렉터리
   #   directory: "/"
   #   schedule: { interval: weekly }

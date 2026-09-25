@@ -63,7 +63,7 @@ try:
 except Exception as x:
     print("주석을 푼 파일이 Dependabot 설정으로 읽히지 않는다: " + str(x).splitlines()[0])
     sys.exit(1)
-want = {"go": ["gomod"], "ts": ["npm"], "py": ["uv", "pip"], "jvm": ["gradle", "maven"]}
+want = {"go": ["gomod"], "ts": ["npm"], "py": ["uv", "pip"], "jvm": ["gradle"]}
 bad = 0
 # 어댑터 언어는 install.sh 의 ALL_LANGS 에서 받는다. 언어를 더하면서 이 파일을 잊으면 여기서 실패한다.
 for lang in sys.argv[3].split():
@@ -75,6 +75,11 @@ for lang, names in want.items():
     if missing:
         print(f"{lang}: 주석 블록이 없다 — {', '.join(missing)}")
         bad = 1
+# 킷이 다루지 않는 빌드 도구의 블록을 두지 않는다. 블록은 어댑터 언어의 생태계(위 want)뿐이다.
+extra = [n for n in e if n != "github-actions" and n not in {x for v in want.values() for x in v}]
+if extra:
+    print(f"어댑터 언어의 생태계가 아닌 주석 블록이 있다 — {', '.join(extra)}")
+    bad = 1
 # 2칸 들여쓴 주석을 모두 풀어도 읽혀야 한다. 에디터로 블록을 고를 때 블록에 붙은 설명 줄까지 함께 풀리기
 # 쉽다. 그 줄이 따로 서 있으면 updates 안에 YAML 이 아닌 줄이 남아 파일 전체가 읽히지 않는다.
 try:

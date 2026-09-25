@@ -122,12 +122,11 @@ discover settings.gradle     jvm
 discover settings.gradle.kts jvm
 discover build.gradle        jvm
 discover build.gradle.kts    jvm
-discover pom.xml             jvm
 discover pyproject.toml      py
 
 # 조상 디렉터리에서 이미 도는 자손을 뺀다 — **JVM 에만 적용한다.**
 #
-# Gradle·Maven 은 루트에서 한 번 부르면 서브모듈을 다 덮으므로 자손을 또 부르면
+# Gradle 은 루트에서 한 번 부르면 서브모듈을 다 덮으므로 자손을 또 부르면
 # 낭비이고, 서브모듈엔 래퍼도 settings 도 없어 깨진다.
 #
 # Go·TS·Python 은 다르다. 중첩된 go.mod 는 **독립 모듈**이라 조상에서 `go vet ./...`
