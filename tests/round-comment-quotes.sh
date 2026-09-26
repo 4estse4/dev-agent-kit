@@ -21,7 +21,7 @@ cd "$KIT" || exit 1                      # 상대 경로 경우가 레포 뿌리
 HOOK="$KIT/claude-code/hooks/round_comment_quotes.sh"
 FX="$KIT/tests/fixtures/round-comment-quotes"
 T=$(mktemp -d)
-mkdir -p "$T/bin" "$T/empty" "$T/odd"
+mkdir -p "$T/bin" "$T/empty" "$T/odd" "$T/inner"
 cat > "$T/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$STUB_GH_ARGS"
@@ -117,6 +117,24 @@ cat > "$T/oddround.md" <<'EOF'
   → 고쳤다
 EOF
 check "사람의 답에 백틱 안의 \" 가 홀수 개" pass "$(post oddround.md)" "$T/odd"
+# 사람의 문장 안에 큰따옴표가 든 인용. 훅은 인용을 큰따옴표 짝으로 나눠 대조하고, 짝이 안 맞는
+# `(사람)` 항목을 막는다. `open-pr` 형식 절이 이 동작에 기대어 「짝이 안 맞으면 3.5 코멘트에서부터
+# 그 앞에서 잘라 쓴다」고 적는다
+cat > "$T/inner/answer1.md" <<'EOF'
+### 1라운드 코멘트를 읽고 사람이 정한 것
+
+- (사람) "그건 "머지로" 해도 된다"
+  → 고친다
+- (사람) "그건 "머지로 해도 된다"
+  → 고친다
+EOF
+inner_round() { printf '## 리뷰 2라운드 — 셀프 ***`Comment`*** · 콜드 ***`Comment`***\n\n- **해결** (사람) %s\n  → 고쳤다\n' "$1"; }
+mk inner-pair.md "$(inner_round '"그건 "머지로" 해도 된다"')"
+check "사람의 문장 안 큰따옴표가 짝" pass "$(post inner-pair.md)" "$T/inner"
+mk inner-cut.md "$(inner_round '"그건 "')"
+check "짝이 안 맞는 큰따옴표 앞에서 잘라 쓴 인용" pass "$(post inner-cut.md)" "$T/inner"
+mk inner-odd.md "$(inner_round '"그건 "머지로 해도 된다"')"
+check "사람의 문장 안 큰따옴표가 홀수" deny "$(post inner-odd.md)" "$T/inner" "따옴표로 인용하지 않은"
 check "--help" pass "gh pr comment --help"
 check "--delete-last(본문 없음)" pass "gh pr comment 89 --delete-last --yes"
 
