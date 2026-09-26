@@ -21,7 +21,7 @@ cd "$KIT" || exit 1                      # 상대 경로 경우가 레포 뿌리
 HOOK="$KIT/claude-code/hooks/round_comment_quotes.sh"
 FX="$KIT/tests/fixtures/round-comment-quotes"
 T=$(mktemp -d)
-mkdir -p "$T/bin" "$T/empty" "$T/odd" "$T/inner"
+mkdir -p "$T/bin" "$T/empty" "$T/odd"
 cat > "$T/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$STUB_GH_ARGS"
@@ -117,24 +117,31 @@ cat > "$T/oddround.md" <<'EOF'
   → 고쳤다
 EOF
 check "사람의 답에 백틱 안의 \" 가 홀수 개" pass "$(post oddround.md)" "$T/odd"
-# 사람의 문장 안에 큰따옴표가 든 인용. 훅은 인용을 큰따옴표 짝으로 나눠 대조하고, 짝이 안 맞는
-# `(사람)` 항목을 막는다. `open-pr` 형식 절이 이 동작에 기대어 「짝이 안 맞으면 3.5 코멘트에서부터
-# 그 앞에서 잘라 쓴다」고 적는다
-cat > "$T/inner/answer1.md" <<'EOF'
-### 1라운드 코멘트를 읽고 사람이 정한 것
-
-- (사람) "그건 "머지로" 해도 된다"
-  → 고친다
-- (사람) "그건 "머지로 해도 된다"
-  → 고친다
-EOF
-inner_round() { printf '## 리뷰 2라운드 — 셀프 ***`Comment`*** · 콜드 ***`Comment`***\n\n- **해결** (사람) %s\n  → 고쳤다\n' "$1"; }
-mk inner-pair.md "$(inner_round '"그건 "머지로" 해도 된다"')"
-check "사람의 문장 안 큰따옴표가 짝" pass "$(post inner-pair.md)" "$T/inner"
-mk inner-cut.md "$(inner_round '"그건 "')"
-check "짝이 안 맞는 큰따옴표 앞에서 잘라 쓴 인용" pass "$(post inner-cut.md)" "$T/inner"
-mk inner-odd.md "$(inner_round '"그건 "머지로 해도 된다"')"
-check "사람의 문장 안 큰따옴표가 홀수" deny "$(post inner-odd.md)" "$T/inner" "따옴표로 인용하지 않은"
+# 사람의 문장 안에 큰따옴표나 `(사람)` 라벨과 같은 글자가 든 인용. `open-pr` 형식 절이 아래 동작에
+# 기대어 「그 자리에서 인용을 나눈다」고 적는다. 훅은 인용을 큰따옴표 짝으로 나눠 조각마다 대조하고
+# 짝과 짝 사이는 대조하지 않는다. 짝이 안 맞는 큰따옴표나 따옴표가 뒤따르지 않는 라벨 글자가 든
+# 항목은 막는다. 경우마다 3.5 코멘트를 따로 둔다 — 한 코멘트에 항목을 여럿 두면 다른 항목의 조각과
+# 맞아 이름이 말하는 경로를 고정하지 못한다.
+# inner <이름> <기대> <3.5 코멘트의 인용> <라운드 코멘트의 인용> [사유에 들어 있어야 할 글자]
+n_inner=0
+inner() {
+  local d="$T/inner$((++n_inner))"
+  mkdir -p "$d"
+  printf '### 1라운드 코멘트를 읽고 사람이 정한 것\n\n- (사람) %s\n  → 고친다\n' "$3" > "$d/answer1.md"
+  mk "inner$n_inner.md" "$(printf '## 리뷰 2라운드 — 셀프 ***`Comment`*** · 콜드 ***`Comment`***\n\n- **해결** (사람) %s\n  → 고쳤다\n' "$4")"
+  check "$1" "$2" "$(post "inner$n_inner.md")" "$d" "${5:-}"
+}
+inner "큰따옴표 자리에서 나눈 인용" pass '"그건" … "머지로" … "해도 된다"' '"그건" … "머지로" … "해도 된다"'
+inner "나눈 인용의 가운데 조각을 바꿈" deny '"그건" … "머지로" … "해도 된다"' \
+  '"그건" … "닫기로" … "해도 된다"' "없는 조각: \\\"닫기로"
+# 아래 셋은 형식 절이 나누는 이유로 적은 동작이다. 훅이 짝 사이를 대조하거나 라벨 글자를 건너뛰게
+# 되면 여기가 빨개지고, 그때 형식 절의 이유 문장도 고친다
+inner "나누지 않으면 짝 사이의 낱말은 대조하지 않는다" pass '"그건 "머지로" 해도 된다"' \
+  '"그건 "닫기로" 해도 된다"'
+inner "나누지 않은 홀수 큰따옴표" deny '"그건 "머지로 해도 된다"' '"그건 "머지로 해도 된다"' \
+  "따옴표로 인용하지 않은"
+inner "나누지 않은 (사람) 글자" deny '"그 줄의 (사람) 라벨을 떼라"' '"그 줄의 (사람) 라벨을 떼라"' \
+  "따옴표로 인용하지 않은"
 check "--help" pass "gh pr comment --help"
 check "--delete-last(본문 없음)" pass "gh pr comment 89 --delete-last --yes"
 
