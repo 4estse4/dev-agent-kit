@@ -46,7 +46,7 @@ root=$(git rev-parse --show-toplevel 2>/dev/null) || root=$PWD
 # git 공통 디렉터리의 부모, 곧 원래 체크아웃의 것도 읽는다.
 main=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) && main=${main%/.git} || main=$root
 # 파이썬은 명령 치환 밖의 heredoc 으로 담는다. 명령 치환 안의 heredoc 이면 macOS 기본 bash(3.2)가
-# 짝 없는 따옴표 · 백틱을 세어 스크립트 전체를 구문 오류로 죽인다. CI 의 bash 5 는 그것을 못 본다.
+# 짝 없는 따옴표 · 백틱을 세어 스크립트 전체를 구문 오류로 실패하게 한다. CI 의 bash 5 는 그것을 못 본다.
 IFS= read -r -d '' prog <<'PY' || true
 import json, os, re, sys
 cmd = os.environ['EVIDENCE_CMD']

@@ -10,7 +10,7 @@
 # - 그 문서의 `##` · `###` 제목이 `SECTIONS` 와 순서까지 같다. 번호가 밀리거나 겹치면 빨갛다
 # - 파일을 가리킨 바로 뒤에 「」 인용이 오지 않는다(`verification-stages.md` 의 「…」)
 # - 옛 문장 제목이 어디에도 「」 로 남아 있지 않다. 짧은 새 제목(「이월」 같은)은 용어로도
-#   쓰이므로 인용만으로는 참조와 가를 수 없어, 옛 제목만 본다
+#   쓰이므로 인용만으로는 참조와 구분할 수 없어, 옛 제목만 본다
 # - 그 문서를 가리킨 뒤 오는 번호와, 그 문서 안의 「아래 · 위」 뒤 번호가 실제 절 번호다
 #
 # `docs/dev-log.md` 와 `tests/fixtures/` 는 그때의 기록이라 보지 않는다.
@@ -63,7 +63,7 @@ if heads != pinned:
              if k >= len(heads) or k >= len(pinned) or heads[k] != pinned[k])
     bad('절 제목이 SECTIONS 와 다르다 — %d번째: 문서 「%s」 · SECTIONS 「%s」'
         % (i + 1, heads[i] if i < len(heads) else '없음', pinned[i] if i < len(pinned) else '없음'))
-    # 끼워 넣어 밀린 것과 끝에 붙인 것을 가른다. 앞의 것을 보고 SECTIONS 를 문서에 맞추면
+    # 끼워 넣어 밀린 것과 끝에 붙인 것을 구분한다. 앞의 것을 보고 SECTIONS 를 문서에 맞추면
     # 번호가 밀린 채 초록이 되고, 참조는 다른 절을 가리킨다
     at = {}
     for h in heads:

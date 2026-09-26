@@ -3,7 +3,7 @@
 #
 # 이 테스트가 있는 이유: gates.yml 이 go.mod 가 레포 루트에 있다고 가정했다(이슈 #93).
 # go.mod 가 backend/ 에만 있는 레포에서 setup-go 를 쓰는 세 잡이 모두
-# 「The specified go version file at: go.mod does not exist」로 죽었고, coverage 잡은
+# 「The specified go version file at: go.mod does not exist」로 실패했고, coverage 잡은
 # `go test | tee` 에 pipefail 이 없어 테스트가 실패해도 초록이었다. 둘 다 러너에서 실행해 봐야
 # 드러났고, 이 레포의 검사는 그 자리를 하나도 보지 않았다.
 #

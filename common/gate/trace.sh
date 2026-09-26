@@ -8,7 +8,7 @@ set -uo pipefail
 SPEC="docs/SPEC.md"; MATRIX="docs/traceability.md"
 while [ $# -gt 0 ]; do
   case "$1" in
-    # 값이 없으면 `set -u` 가 "$2: unbound variable" 로 죽는다 — 무엇을 빠뜨렸는지
+    # 값이 없으면 `set -u` 가 "$2: unbound variable" 로 종료된다 — 무엇을 빠뜨렸는지
     # 읽는 사람이 알 수 없다. 먼저 보고 무엇이 필요한지 말한다.
     --spec)
       [ $# -ge 2 ] || { echo "trace: --spec 에 경로가 필요합니다" >&2; exit 2; }
@@ -32,7 +32,7 @@ ID_RE='R-[A-Z][A-Z0-9]*-[0-9]+'
 # 킷을 갓 설치한 레포가 CI 에서 바로 실패했다.
 #
 # 여러 줄 주석을 처리해야 한다. sed 로 한 줄씩 거르는 방식은 `<!--` 로 시작하는 줄만
-# 지워서 둘째 줄부터 살아남고, 정작 이 킷의 SPEC 템플릿이 여러 줄 주석을 쓴다.
+# 지워서 둘째 줄부터 남고, 정작 이 킷의 SPEC 템플릿이 여러 줄 주석을 쓴다.
 _strip_comments() { # stdin -> stdout. 닫히지 않은 주석이 있으면 exit 3.
   awk '
     { line = $0; out = ""

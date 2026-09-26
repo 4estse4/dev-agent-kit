@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 킷 템플릿에 박힌 GitHub Action 버전이 뒤처졌는지 검사한다.
+# 킷 템플릿에 적힌 GitHub Action 버전이 뒤처졌는지 검사한다.
 #
 # 왜 이게 필요한가 — Dependabot 의 github-actions 생태계는 `.github/workflows/` 와
 # 루트 `action.yml` 만 훑는다(공식 문서). 킷의 워크플로 원본은 `common/ci/gates.yml`

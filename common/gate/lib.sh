@@ -67,7 +67,7 @@ gate_go_highest() {
 
 # CI 가 Go 를 설치하는 go.mod(위 gate_go_highest)에서 setup-go 가 설치할 버전이 tool-versions 의 go_min
 # 이상인지 본다. 아니면 그 파일과 이유를 GitHub 주석(::error)으로 내고 실패한다.
-# 보는 것은 그 하나다. 핀한 Go 도구의 설치를 가르는 것은 실행 중인 go 이고, go 줄이 더 낮은
+# 보는 것은 그 하나다. 핀한 Go 도구를 설치할 수 있는지 정하는 것은 실행 중인 go 이고, go 줄이 더 낮은
 # 보조 모듈도 그 go 로 빌드된다. 모든 go.mod 를 보면 전에 동작하던 멀티모듈 레포가 멈춘다.
 # 견주는 법은 setup-go 가 그 버전을 받는 법을 따른다. go 1.27 처럼 패치가 없으면 버전 범위로
 # 받아 그 계열(1.27.x)에서 러너가 캐시에 가진 가장 높은 것을, 없으면 가장 새것을 설치한다(setup-go v7
@@ -130,7 +130,7 @@ gate_go_tool() { # $1=도구 이름 (예: goimports)
 }
 
 # 고정 버전을 읽는다. 버전은 tool-versions 한 곳에만 적는다 — 여기나 CI 에
-# 숫자를 박으면 반드시 갈라진다.
+# 숫자를 적어 두면 반드시 어긋난다.
 # 경로는 gate.sh 가 이미 계산한 SELF_DIR 을 쓰고, 없으면 BASH_SOURCE 로 되짚는다.
 # (BASH_SOURCE 는 셸에 따라 다르게 정해지므로 여기에만 의존하지 않는다.)
 GATE_TOOL_VERSIONS="${GATE_TOOL_VERSIONS:-${SELF_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]:-.}")" 2>/dev/null && pwd)}/tool-versions}"
@@ -139,7 +139,7 @@ gate_tool_version() { # $1=키(goimports·golangci_lint·ruff·ktlint·govulnche
   sed -n "s/^$1=//p" "$GATE_TOOL_VERSIONS" | head -1
 }
 
-# 도구별 설치 명령. 안내가 없으면 사람은 검색부터 해야 하고, 그러면 버전이 갈라진다.
+# 도구별 설치 명령. 안내가 없으면 사람은 검색부터 해야 하고, 그러면 사람마다 버전이 달라진다.
 #
 # **버전 폴백을 두지 않는다.** ${v:-1.8.0} 이나 ${v:-latest} 같은 기본값을 넣으면
 # tool-versions 를 못 읽었을 때 조용히 다른 버전을 안내하게 되고, 그 순간 단일 출처가
@@ -211,7 +211,7 @@ gate_run() {
 # gate_run_empty <표시이름> <명령...>
 # 출력이 비어야 통과인 검사용 (gofmt -l, goimports -l 등).
 #
-# 종료코드도 함께 본다. 출력만 보면 "명령이 실패했는데 아무것도 못 찍은" 경우가
+# 종료코드도 함께 본다. 출력만 보면 "명령이 실패했는데 아무것도 출력하지 못한" 경우가
 # 통과로 집계된다 — 검사가 고장 났을 때 조용히 green 을 보고하는 것은 검증
 # 시스템에서 가장 위험한 결함이다.
 gate_run_empty() {
@@ -258,7 +258,7 @@ gate_skip() {
 # gate_report → 실패가 있으면 1
 gate_report() {
   local joined
-  # 빈 배열 전개는 set -u에서 터지므로 길이를 먼저 확인한다.
+  # 빈 배열 전개는 set -u 아래에서 오류가 나므로 길이를 먼저 확인한다.
   if [ ${#GATE_PASSED[@]} -gt 0 ]; then
     joined=$(printf '%s · ' "${GATE_PASSED[@]}"); echo "gate ✓ ${joined% · }"
   fi

@@ -164,7 +164,7 @@ refused "설정을 못 읽으면 막는다" 'echo hi'
 
 # ── 파이썬 heredoc 이 명령 치환 안에 있지 않다 ──
 # macOS 기본 bash(3.2)는 명령 치환 안의 heredoc 에서 짝 없는 따옴표 · 백틱을 세어 스크립트 전체를
-# 구문 오류로 죽인다. CI 는 ubuntu(bash 5)라 그것을 못 보므로, 자리를 글자로 본다.
+# 구문 오류로 실패하게 한다. CI 는 ubuntu(bash 5)라 그것을 못 보므로, 자리를 글자로 본다.
 # 줄넘김(`\`)으로 이어진 명령 치환도 보도록 줄을 이어 붙여서 찾는다.
 if tr '\n' ' ' < "$S" | grep -qE '\$\([^)]*<<'; then
   bad "파이썬 heredoc 이 명령 치환 밖에 있다 — $(tr '\n' ' ' < "$S" | grep -oE '\$\([^)]*<<' | head -1 | cut -c1-80)"
@@ -178,9 +178,9 @@ for f in "$OPEN" "$MERGE"; do
     bad "$name 이 출력을 손으로 붙이라고 시킨다"
   else ok "$name 이 출력을 손으로 붙이라고 시키지 않는다"; fi
   grep -q 'open-pr/evidence\.sh' "$f" && ok "$name 이 evidence.sh 를 부른다" || bad "$name 이 evidence.sh 를 부른다"
-  # 거부된 뒤 갈 길을 스킬이 말한다. 없으면 세션은 직접 실행해 손으로 옮긴다
-  tr '\n' ' ' < "$f" | grep -qE '(글로 *적는다|글로 적는다)' && ok "$name 이 거부된 명령의 갈 길을 말한다" \
-    || bad "$name 이 거부된 명령의 갈 길을 말한다"
+  # 거부된 뒤 할 일을 스킬이 말한다. 없으면 세션은 직접 실행해 손으로 옮긴다
+  tr '\n' ' ' < "$f" | grep -qE '(글로 *적는다|글로 적는다)' && ok "$name 이 거부된 명령 뒤에 할 일을 말한다" \
+    || bad "$name 이 거부된 명령 뒤에 할 일을 말한다"
   grep -q 'awk 1' "$f" && ok "$name 이 조각을 awk 1 로 잇는다" || bad "$name 이 조각을 awk 1 로 잇는다"
 done
 grep -qE 'gh pr create .*--body-file' "$OPEN" && ok "open-pr 이 본문을 --body-file 로 전달한다" \

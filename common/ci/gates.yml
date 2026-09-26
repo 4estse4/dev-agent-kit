@@ -79,7 +79,7 @@ jobs:
           for f in .ai-kit/git-hooks/pre-commit .ai-kit/git-hooks/pre-push; do
             [ -x "$f" ] || { echo "::error::$f 에 실행권한이 없습니다 — 훅이 조용히 건너뛰어집니다. git update-index --chmod=+x $f 로 고치고 커밋하세요"; exit 1; }
           done
-          # 어느 킷에서 왔는지만 찍는다. **내용이 킷과 같은지는 검사하지 않는다** —
+          # 어느 킷에서 왔는지만 출력한다. **내용이 킷과 같은지는 검사하지 않는다** —
           # 이 레포에서 게이트를 고치는 것이 정상 작업이기 때문이다(.ai-kit/README.md).
           # 무엇이 달라졌는지 보려면 킷에서 install.sh <경로> --dry-run 을 실행한다.
           cat .ai-kit/install-manifest 2>/dev/null || echo "install-manifest 없음"
@@ -92,8 +92,8 @@ jobs:
       - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
 
-      # 도구 버전은 .ai-kit/gate/tool-versions 가 단일 출처다. 여기 숫자를 박으면
-      # 로컬과 CI 가 반드시 갈라진다 — 실제로 그래서 로컬만 낡은 린터를 쓰고 있었다.
+      # 도구 버전은 .ai-kit/gate/tool-versions 가 단일 출처다. 여기 숫자를 적어 두면
+      # 로컬과 CI 의 버전이 반드시 달라진다 — 실제로 그래서 로컬만 낡은 린터를 쓰고 있었다.
       - id: tv
         name: read pinned tool versions
         run: |
@@ -207,7 +207,7 @@ jobs:
             fi
           # 빌드 루트는 **조상 하나**다 — gate.sh 의 판정과 같아야 한다.
           # 마커가 있는 모든 디렉터리를 빌드 루트로 보면 표준 멀티모듈 레포(루트에만
-          # gradlew, 서브모듈마다 build.gradle)가 여기서 죽는다. 어댑터는 그 서브모듈에
+          # gradlew, 서브모듈마다 build.gradle)가 여기서 실패한다. 어댑터는 그 서브모듈에
           # 들어가지도 않는데 CI 만 실패한다.
           # 건너뛰는 디렉터리도 게이트와 같다. build/ 를 이름으로 거르지 않는다 —
           # 업무 도메인 이름이기도 해서 멀쩡한 모듈이 빠진다(lib.sh 의 GATE_PRUNE_DIRS 주석).
@@ -270,11 +270,11 @@ jobs:
       # `pyproject.toml` 의 `requires-python` 은 쓰지 않는다. 범위(`>=3.12`)라 핀이
       # 아니어서 CI 가 어느 날 다른 인터프리터로 실행된다. 위치도 문제다 — 게이트는 마커를
       # 어느 깊이에서든 찾으므로 `py/pyproject.toml` 같은 배치에서 "지정한 파일이 없다"
-      # 로 잡이 죽는다(실제로 러너에서 그랬다). `.python-version` 은 잡 하나에
+      # 로 잡이 실패한다(실제로 러너에서 그랬다). `.python-version` 은 잡 하나에
       # 인터프리터 하나이므로 레포 루트에 둔다.
       - if: needs.detect.outputs.py == 'true'
         name: check .python-version
-        # 없으면 setup-python 이 알아보기 어려운 오류로 죽는다. 여기서 먼저 말한다.
+        # 없으면 setup-python 이 알아보기 어려운 오류를 내며 실패한다. 여기서 먼저 말한다.
         run: |
           [ -f .python-version ] && exit 0
           echo "::error::.python-version 이 없습니다 — 레포 루트에서 'uv python pin 3.12' 로 만들고 커밋하세요(또는 그 파일에 버전 한 줄)"
@@ -318,7 +318,7 @@ jobs:
                 # in-project venv 로 강제해 어댑터가 .venv/bin 에서 찾게 한다.
                 poetry config virtualenvs.in-project true --local
                 # 그룹 이름을 추측하지 않는다 — `--with dev` 는 dev 그룹이 없으면
-                # exit 1 이라 set -e 아래에서 잡이 죽는다. 있을 때만 붙인다.
+                # exit 1 이라 set -e 아래에서 잡이 실패한다. 있을 때만 붙인다.
                 # --no-root 도 쓰지 않는다: 형제 분기(pip -e . · uv sync)는 루트를
                 # 설치하므로, 여기만 빼면 테스트가 자기 패키지를 import 하지 못한다.
                 if poetry check --quiet 2>/dev/null && \
@@ -371,7 +371,7 @@ jobs:
             **/npm-shrinkwrap.json
       - if: needs.detect.outputs.node == 'true'
         run: |
-          # 줄 단위로 읽는다. `for d in $(…)` 는 공백 든 경로에서 낱말이 갈려 cd 가 죽었다.
+          # 줄 단위로 읽는다. `for d in $(…)` 는 공백 든 경로에서 낱말이 나뉘어 cd 가 실패했다.
           . .ai-kit/gate/lib.sh
           while IFS= read -r f; do
             echo "── $(dirname "$f") ──"
@@ -445,7 +445,7 @@ jobs:
         with: { fetch-depth: 0 }
 
       # 이 잡은 별도 체크아웃이라 gate 잡의 출력을 못 쓴다 — 같은 파일을 다시 읽는다.
-      # 숫자를 여기 박으면 그 순간부터 단일 출처가 아니게 된다.
+      # 숫자를 여기 적어 두면 그 순간부터 단일 출처가 아니게 된다.
       - id: tv
         name: read pinned tool versions
         run: |
