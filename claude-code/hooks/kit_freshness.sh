@@ -38,7 +38,7 @@ _when() {
 }
 
 # 기록된 커밋이 킷에 실재하는지 확인한다. 없으면(재작성·다른 킷) 커밋 수를
-# 세지 않는다 — 틀린 숫자를 말하느니 숫자를 빼는 편이 낫다.
+# 세지 않는다 — 틀린 숫자를 말하지 않고 숫자를 뺀다.
 if git -C "$kit" cat-file -e "${recorded}^{commit}" 2>/dev/null; then
   behind=$(git -C "$kit" rev-list --count "${recorded}..HEAD" 2>/dev/null || echo "")
   [ -n "$behind" ] && [ "$behind" != "0" ] \

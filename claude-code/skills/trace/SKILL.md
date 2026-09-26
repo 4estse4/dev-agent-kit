@@ -1,6 +1,6 @@
 ---
 name: trace
-description: SPEC 요구와 추적 매트릭스를 대조해 갱신한다. 요구가 조용히 증발하는 것을 막는다.
+description: SPEC 요구와 추적 매트릭스를 대조해 갱신한다. 요구가 아무도 모르게 빠지는 것을 막는다.
 argument-hint: "[선택: 이번에 다룬 요구 ID]"
 ---
 
@@ -9,9 +9,9 @@ argument-hint: "[선택: 이번에 다룬 요구 ID]"
 
 SPEC:
 > `!! SPEC 이 …줄이라` 가 출력되면 **위 본문은 앞부분뿐이다.** 그 줄 아래의 ID 목록이
-> 전체이고, **거기 있는 것을 「SPEC 에 없는 유령 행」으로 판정하지 마라.**
+> 전체이고, **거기 있는 것을 「SPEC 에 없는 행」으로 판정하지 마라.**
 
-!`cat docs/SPEC.md 2>/dev/null | head -200; _n=$( [ -f docs/SPEC.md ] && wc -l < docs/SPEC.md | tr -d " " || echo 0 ); if [ "$_n" -gt 200 ]; then echo; echo "!! SPEC 이 ${_n}줄이라 위는 앞 200줄뿐이다. 아래가 전체 요구 ID 이고, 여기 있는 것을 유령으로 판정하지 마라:"; grep -ohE "R-[A-Z]+-[0-9]+" docs/SPEC.md | sort -u | tr "\n" " "; echo; fi`
+!`cat docs/SPEC.md 2>/dev/null | head -200; _n=$( [ -f docs/SPEC.md ] && wc -l < docs/SPEC.md | tr -d " " || echo 0 ); if [ "$_n" -gt 200 ]; then echo; echo "!! SPEC 이 ${_n}줄이라 위는 앞 200줄뿐이다. 아래가 전체 요구 ID 이고, 여기 있는 것을 SPEC 에 없는 행으로 판정하지 마라:"; grep -ohE "R-[A-Z]+-[0-9]+" docs/SPEC.md | sort -u | tr "\n" " "; echo; fi`
 
 추적 매트릭스:
 !`cat docs/traceability.md 2>/dev/null`
@@ -31,8 +31,8 @@ $ARGUMENTS
 ## 하는 일
 
 1. **검사 결과의 불일치를 해소한다** — 추적표에 없는 요구를 행으로 추가하고,
-   SPEC 에 없는 유령 행은 지우고, 없는 경로를 고친다.
-2. **이번 변경이 도달시킨 요구의 상태를 올린다** — `미구현` → `부분` → `구현됨`.
+   SPEC 에 없는 행은 지우고, 없는 경로를 고친다.
+2. **이번 변경으로 구현된 요구의 상태를 올린다** — `미구현` → `부분` → `구현됨`.
    구현·테스트 칸에 **실재하는 경로**를 적는다.
 3. **상태를 낮추는 것도 한다** — 코드를 지웠거나 요구를 다시 열었으면 낮춘다.
 
