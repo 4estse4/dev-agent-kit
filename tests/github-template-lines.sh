@@ -36,7 +36,7 @@ RULE = re.compile(r'^\s*---\s*$')
 PLACEHOLDER = re.compile(r'^\s*<[^<>]*>\s*$')
 
 MUST_FIND = [
-    '```markdown\n다음 라운드가 이것을 「사람의 답이 가는\n자리」대로 옮긴다.\n```',
+    '```markdown\n다음 라운드가 이것을 「사람의 답을 적는\n자리」대로 옮긴다.\n```',
     '```markdown\n**위 필수를 고치는 것을 제안합니다.** 그중 셋은\n이월된 것이다.\n```',
     '```markdown\n- (콜드) 항목 하나\n  이어지는 설명\n```',
     '```markdown\n<`evidence.sh` 가 덧붙인 출력>\n새 테스트: 없음\n자동 검증이 확인하지 않은 것: 없음\n```',

@@ -35,12 +35,12 @@ fi
 # around the program"). 누가 이 스크립트를 allow 에 넣거나 「다시 묻지 않음」을 누르면 그 안의
 # `gh pr merge` · `git push --force` 가 프롬프트 없이 실행된다. 증거는 읽기만 하는 명령이다.
 # 규칙은 레포의 `.claude/settings.json` · `settings.local.json` 에서 읽고, 글자는 명령 어디에든
-# 보이면 맞는다. `*` 는 아무 글자, 공백은 공백 여럿이다. 공식 문서대로 `*` 앞의 공백도 규칙의
+# 보이면 맞는다. `*` 는 아무 글자이고, 규칙의 공백 하나는 명령의 공백 하나 이상에 맞는다. 공식 문서대로 `*` 앞의 공백도 규칙의
 # 일부라 `Bash(rm *)` 는 `rm ` 을 찾고 `--format` 의 `rm` 은 안 찾는다. 끝의 `:*` 는 ` *` 와 같다.
-# 끝의 ` *` 가 유일한 와일드카드면 맨 명령(`rm` · `rm;` · `rm>x` · `'rm'`)도 맞는다.
+# 끝의 ` *` 가 유일한 와일드카드면 인자 없이 쓴 명령(`rm` · `rm;` · `rm>x` · `'rm'`)도 맞는다.
 # 첫 낱말 앞은 낱말 경계라 `farm ` 도 맞지 않는다. 설정을 못 읽으면 막는다. 이름을 꾸민 명령
 # (변수 · 별칭)은 못 알아본다. 거부된 명령의 출력은 증거로 싣지 말고 무엇을 확인했는지 글로
-# 적는다 — 직접 실행해 손으로 옮기면 이 스크립트가 없애려는 경로로 돌아간다.
+# 적는다 — 직접 실행해 출력을 손으로 옮기면 이 스크립트가 없애려는 일이 다시 생긴다.
 root=$(git rev-parse --show-toplevel 2>/dev/null) || root=$PWD
 # worktree 세션은 원래 체크아웃의 settings.local.json 을 쓴다(공식 문서 settings.md: "In a
 # worktree, it uses the file at the main checkout's root."). 그 파일은 worktree 에 없으므로
@@ -67,7 +67,7 @@ for path in sys.argv[1:]:
         pat = m.group(1).strip()
         if pat.endswith(':*'):
             pat = pat[:-2] + ' *'
-        # 끝이 공백 뒤 `*` 이고 그것이 유일한 와일드카드면 맨 명령도 맞는다("also matches the
+        # 끝이 공백 뒤 `*` 이고 그것이 유일한 와일드카드면 인자 없이 쓴 명령도 맞는다("also matches the
         # bare command" · "only when the trailing `*` is the rule's only wildcard"). 그 공백 자리는
         # 공백 · 명령 끝 · 구분자 · 리다이렉트 · 따옴표 · 백틱 가운데 하나다.
         stripped = re.sub(r'\s+\*$', '', pat)
