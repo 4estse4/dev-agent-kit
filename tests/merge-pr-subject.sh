@@ -43,7 +43,10 @@ if qs:
              ('fix: handle `nil` and $HOME "x" \\ end $(echo hi)', 7),
              # `\` 가 셸이 해석하는 글자 앞에 오면 `\` 도 막아야 한다. 뒤가 공백인 `\` 는 큰따옴표 안에서도
              # 그대로라, 그것만으로는 `\` 를 빠뜨린 식이 통과했다
-             ('fix: keep \\$PATH, \\" and \\\\ as typed', 8)]
+             ('fix: keep \\$PATH, \\" and \\\\ as typed', 8),
+             # ASCII 구두점을 모두 든 제목. 셸이 해석하지 않는 글자(`!` 같은 것)를 집합에 더하면 그 앞에 `\` 가
+             # 남는다. 시험 제목에 없는 글자는 집합에 더해도 통과했다
+             ('chore: every mark !"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~ ends here', 9)]
     for title, n in cases:
         want = f'{title} (#{n})'
         r = subprocess.run(['jq', '-r', qs[0]], input=json.dumps({'title': title, 'number': n}),
