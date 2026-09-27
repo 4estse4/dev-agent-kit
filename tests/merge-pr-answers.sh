@@ -54,8 +54,12 @@ def run(comments):
     return r.stdout
 
 
-# 봇 설정이 없으면 모든 코멘트가 사람 계정 하나의 것이다
-out = run([(b, 'me', 'OWNER') for b in bodies])
+# 봇 설정이 없으면 세션과 사람이 한 계정(me)이다. 동료(mate)의 제목 없는 코멘트는 결정이 아니다
+out = run([(b, 'me', 'OWNER') for b in bodies] + [('#66 도 닫자', 'mate', 'COLLABORATOR')])
+if '#66' in out:
+    bad('봇 설정이 없으면 동료의 제목 없는 코멘트는 읽지 않는다(#66)')
+else:
+    ok('봇 설정이 없으면 동료의 제목 없는 코멘트는 읽지 않는다(#66)')
 for name, cond in [('앞 라운드의 3.5 코멘트도 읽는다(#77)', '#77' in out),
                    ('마지막 라운드 뒤의 3.5 코멘트도 읽는다', '"머지"' in out),
                    ('라운드 코멘트는 읽지 않는다', '## 리뷰 ' not in out),

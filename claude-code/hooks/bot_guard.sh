@@ -11,9 +11,12 @@
 #   봇 설치 토큰을 거의 다 출력한다. 사람의 설정이나 토큰으로 바꾸면 세션의 글이 사람의 글로 올라가
 #   사람의 결정처럼 읽힌다. 토큰은 모델의 맥락에 들어간다. 환경을 비우는 `env -i`(`--ignore-environment` ·
 #   `-`)도 막는다 — 그 뒤의 gh 와 git 은 봇 계정 연결을 잃는다
-# - 토큰을 출력하는 명령. `git credential …` · `git credential-<도우미>` 와 봇 디렉터리의 `hosts.yml` 을
-#   가리키는 명령이다. 연결된 세션의 git 은 github.com 자격 증명을 봇(gh)에게서 받으므로
-#   `git credential fill` 이 봇 토큰 전체를 출력한다. 연결되지 않은 세션에서는 사람의 토큰을 출력한다
+# - 토큰을 출력하는 명령. `git credential …` · `git credential-<도우미>` 와 봇 디렉터리를 가리키는
+#   명령이다(`BOTDIR_READ`). 봇 디렉터리에서는 토큰이 없는 `expires` · `session-env` · `wired` 만 가리킬 수
+#   있다 — 파일 이름으로 막던 동안 `cat <봇 디렉터리>/*` · `grep -r` 이 지나갔다. Read 도구는 이 훅을 거치지
+#   않으므로 설치되는 `settings.json` 의 `deny` 가 막는다. 연결된 세션의 git 은 github.com 자격 증명을
+#   봇(gh)에게서 받으므로 `git credential fill` 이 봇 토큰 전체를 출력한다. 연결되지 않은 세션에서는 사람의
+#   토큰을 출력한다
 # - 연결되지 않은 세션의 쓰기. 세션 시작 훅(`bot_session.sh`)이 이 세션을 봇 계정에 연결하지
 #   못했으면 그 세션의 gh 와 git 은 사람 계정이다. gh 의 읽기 명령이 아닌 것과 `git push` 를 막는다.
 #   읽기로 보는 것은 아래 `READ_GROUPS` · `READ_SUBS` 와, 메서드 · 필드로 판정해 쓰지 않는 `gh api` 다.
@@ -28,7 +31,7 @@
 # **사람 계정으로 올리는 명령에는 묻는다.** 사람의 결정은 사람 계정 코멘트로 남는다. 세션이 받은
 # 답을 올리는 길은 `human_comment.sh` 하나이고, 그 명령에 권한 프롬프트(`ask`)를 내며 사유에 올릴 글
 # 전문을 넣는다(`human_comment`). 한 줄 정규형이 아니거나, 스크립트가 이 훅과 같은 디렉터리의 것이
-# 아니거나, 명령의 sha256 이 파일과 다르면 막는다.
+# 아니거나, 명령의 sha256 이 파일과 다르거나, 셸의 `-c` 인자 안에 두었으면(`wraps`) 막는다.
 #
 # **명령 치환 안도 본다.** `$(…)` · 백틱 안의 명령을 꺼내 같은 판정을 한다. `url=$(gh pr create …)` ·
 # `-H "Authorization: token $(gh auth token)"` 은 흔한 셸 관용구다. heredoc 의 본문은 명령에 전달하는
@@ -115,6 +118,8 @@ PUSH_VALUED = ('repo', 'receive-pack', 'exec', 'push-option', 'recurse-submodule
 # 명령 자리 앞에 올 수 있는 낱말(래퍼 · 셸 예약어). 그 뒤 첫 낱말이 명령이다.
 WRAPPERS = {'env', 'command', 'exec', 'time', 'nice', 'nohup', 'sudo', 'xargs', 'timeout', 'then',
             'do', 'else', 'if', 'while', 'until', '!', '{', '('}
+# 봇 디렉터리를 가리키는 글자. 토큰이 없는 파일(`expires` · `session-env` · `wired/`)만 뺀다.
+BOTDIR_READ = re.compile(r'ai-kit-bot(?!/(?:expires|session-env|wired)\b)')
 HEREDOC = re.compile(r'<<-?[ \t]*([\'"]?)([A-Za-z_][A-Za-z0-9_]*)\1[^\n]*\n(.*?)^[ \t]*\2[ \t]*$',
                      re.S | re.M)
 
@@ -288,6 +293,21 @@ def runs(seg, name):
     return os.path.basename(script) == name and '-n' not in rest[:rest.index(script)]
 
 
+def wraps(seg, name):
+    """조각이 셸의 `-c` 인자 안에서 스크립트 `name` 을 부르는가. 그 인자는 조각으로 나누지 않으므로
+    `runs` 가 보지 못한다(`bash -c '… human_comment.sh …'`)."""
+    at = head(seg)
+    if at >= len(seg) or os.path.basename(seg[at]) not in SHELLS:
+        return False
+    rest = seg[at + 1:]
+    for k, t in enumerate(rest):
+        if re.match(r'^-[A-Za-z]*c[A-Za-z]*$', t):
+            return k + 1 < len(rest) and name in rest[k + 1]
+        if not t.startswith('-'):
+            return False
+    return False
+
+
 HUMAN = re.compile(r'bash[ \t]+(\S+)[ \t]+(\d+)[ \t]+(\S+)[ \t]+(\S+)(?:[ \t]+-R[ \t]+(\S+))?')
 HUMAN_CANON = ("`bash .claude/hooks/human_comment.sh <PR 번호> <본문 파일의 절대 경로> <sha256> "
                "[-R <owner/repo>]`")
@@ -342,15 +362,18 @@ if any(words(a, 1) == ['auth'] for a in gh_calls):
          "사람 계정으로 쓰고, gh auth status 도 봇 설치 토큰을 거의 다 출력해 토큰이 모델의 맥락에 들어간다. "
          "이 세션의 gh 계정은 세션 시작 때 출력된 줄에 있다. 그 낱말이 검색어나 글이면 파일로 옮겨 전달한다.")
 if any(s == 'credential' or s.startswith('credential-') for s in git_subs) or re.search(
-        r'ai-kit-bot\b.*\bhosts', cmd, re.S):
+        BOTDIR_READ, cmd):
     deny("이 레포에는 봇 설정(.claude/bot.json)이 있어, 토큰을 출력하는 명령은 막는다 — git credential 과 "
-         "봇 디렉터리의 hosts.yml 을 읽는 명령이다. 연결된 세션의 git 은 자격 증명을 봇에게서 받으므로 "
-         "git credential fill 이 봇 토큰 전체를 출력하고, 토큰은 모델의 맥락에 들어간다. "
-         "그 낱말이 검색어나 글이면 파일로 옮겨 전달한다.")
+         "봇 디렉터리(ai-kit-bot)를 가리키는 명령이다. 토큰이 없는 expires · session-env · wired 는 읽을 수 "
+         "있다. 연결된 세션의 git 은 자격 증명을 봇에게서 받으므로 git credential fill 이 봇 토큰 전체를 "
+         "출력하고, 토큰은 모델의 맥락에 들어간다. 그 낱말이 검색어나 글이면 파일로 옮겨 전달한다.")
 if any(clears_env(s) for s in segs):
     deny("이 레포에는 봇 설정(.claude/bot.json)이 있어, 환경을 비우는 env -i(--ignore-environment · -)는 "
          "막는다. 그 뒤의 gh 와 git 은 봇 계정 연결을 잃고 사람 계정으로 쓴다. 사람 계정으로 올릴 결정은 "
          "human_comment.sh 로 올린다.")
+if any(wraps(s, 'human_comment.sh') for s in segs):
+    deny("사람 계정으로 올리는 명령을 셸의 -c 인자 안에 두면 이 훅이 권한 프롬프트를 내지 못해 막는다. 한 줄 "
+         "정규형으로 따로 입력한다: " + HUMAN_CANON)
 if any(runs(s, 'human_comment.sh') for s in segs):
     human_comment()
 

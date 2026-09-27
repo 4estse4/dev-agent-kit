@@ -232,47 +232,50 @@ guard "연결 뒤 heredoc 커밋 메시지 안의 gh auth" pass "git commit -m \
 fix: block gh auth status in the guard
 EOF
 )\""
+# 사람 설정이 없으면 URL 로 준 푸시도 https 로 나간다. 막는 사유는 「주소를 풀지 못해」와 「SSH 주소라서」로
+# 다르다 — 아래 SSH 푸시 테스트는 뒤의 것을 본다.
+guard "사람 설정 없는 URL 푸시" pass "git push https://github.com/o/r.git HEAD"
 # 사람의 git 설정이 github.com 의 https 를 SSH 로 바꾸면 세션의 푸시가 SSH 키로, 곧 사람 계정으로 나간다
 printf '[url "git@github.com:"]\n\tinsteadOf = https://github.com/\n' > "$T/home/.gitconfig"
-guard "사람 설정이 https 를 SSH 로 바꾼 푸시(insteadOf)" deny "git push -u origin HEAD" "$R" "SSH"
+guard "사람 설정이 https 를 SSH 로 바꾼 푸시(insteadOf)" deny "git push -u origin HEAD" "$R" "SSH 주소라서"
 printf '[url "git@github.com:"]\n\tpushInsteadOf = https://github.com/\n' > "$T/home/.gitconfig"
-guard "사람 설정이 https 를 SSH 로 바꾼 푸시(pushInsteadOf)" deny "git push" "$R" "SSH"
+guard "사람 설정이 https 를 SSH 로 바꾼 푸시(pushInsteadOf)" deny "git push" "$R" "SSH 주소라서"
 # 원격 자리를 리다이렉션이나 플래그의 값으로 읽으면 주소를 못 풀어 지나간다
-guard "리다이렉션이 붙은 푸시(2>&1)" deny "git push 2>&1" "$R" "SSH"
-guard "리다이렉션이 붙은 푸시(>파일)" deny "git push >/tmp/push.log" "$R" "SSH"
-guard "리다이렉션 뒤 원격 이름" deny "git push 2>/dev/null origin HEAD" "$R" "SSH"
-guard "값을 받는 플래그 뒤의 원격(-o)" deny "git push -o ci.skip origin HEAD" "$R" "SSH"
-guard "값을 받는 플래그 뒤의 원격(--push-option)" deny "git push --push-option ci.skip origin HEAD" "$R" "SSH"
-guard "값을 붙여 쓴 플래그 뒤의 원격(-oci.skip)" deny "git push -oci.skip origin HEAD" "$R" "SSH"
-guard "원격을 URL 로 준 푸시" deny "git push https://github.com/o/r.git HEAD" "$R" "SSH"
+guard "리다이렉션이 붙은 푸시(2>&1)" deny "git push 2>&1" "$R" "SSH 주소라서"
+guard "리다이렉션이 붙은 푸시(>파일)" deny "git push >/tmp/push.log" "$R" "SSH 주소라서"
+guard "리다이렉션 뒤 원격 이름" deny "git push 2>/dev/null origin HEAD" "$R" "SSH 주소라서"
+guard "값을 받는 플래그 뒤의 원격(-o)" deny "git push -o ci.skip origin HEAD" "$R" "SSH 주소라서"
+guard "값을 받는 플래그 뒤의 원격(--push-option)" deny "git push --push-option ci.skip origin HEAD" "$R" "SSH 주소라서"
+guard "값을 붙여 쓴 플래그 뒤의 원격(-oci.skip)" deny "git push -oci.skip origin HEAD" "$R" "SSH 주소라서"
+guard "원격을 URL 로 준 푸시" deny "git push https://github.com/o/r.git HEAD" "$R" "SSH 주소라서"
 # kit-guide 6절이 적은 대로 이 레포에만 소유자까지 적은 더 긴 규칙을 두면, 가장 긴 규칙이 이겨 https 로 나간다
 git -C "$R" config url."https://github.com/o/".pushInsteadOf "https://github.com/o/"
 guard "이 레포에서 SSH 바꾸기를 끈 푸시(더 긴 규칙)" pass "git push origin HEAD"
 git -C "$R" config --unset url."https://github.com/o/".pushInsteadOf
 printf '[url "git@github.com:"]\n\tinsteadOf = https://github.com/\n' > "$T/home/.gitconfig"
-guard "원격을 URL 로 준 푸시(insteadOf)" deny "git push https://github.com/o/r.git HEAD" "$R" "SSH"
+guard "원격을 URL 로 준 푸시(insteadOf)" deny "git push https://github.com/o/r.git HEAD" "$R" "SSH 주소라서"
 # 사람 계정 레포(p/)만 SSH 로 바꾸는 설정. origin(o/r)은 https 그대로다.
 printf '[url "git@github.com:p/"]\n\tpushInsteadOf = https://github.com/p/\n' > "$T/home/.gitconfig"
 git -C "$R" remote add mine https://github.com/p/r.git
-guard "origin 이 아닌 원격의 푸시" deny "git push mine HEAD" "$R" "SSH"
+guard "origin 이 아닌 원격의 푸시" deny "git push mine HEAD" "$R" "SSH 주소라서"
 guard "https 그대로인 origin 의 푸시" pass "git push origin HEAD"
-guard "원격을 URL 로 준 푸시(p/)" deny "git push https://github.com/p/r.git HEAD" "$R" "SSH"
-guard "원격을 --repo= 로 준 푸시" deny "git push --repo=https://github.com/p/r.git" "$R" "SSH"
-guard "원격을 --repo 로 준 푸시(값을 띄어 씀)" deny "git push --repo mine" "$R" "SSH"
+guard "원격을 URL 로 준 푸시(p/)" deny "git push https://github.com/p/r.git HEAD" "$R" "SSH 주소라서"
+guard "원격을 --repo= 로 준 푸시" deny "git push --repo=https://github.com/p/r.git" "$R" "SSH 주소라서"
+guard "원격을 --repo 로 준 푸시(값을 띄어 씀)" deny "git push --repo mine" "$R" "SSH 주소라서"
 git -C "$R" config remote.pushDefault mine
-guard "remote.pushDefault 로 고른 원격의 푸시" deny "git push" "$R" "SSH"
+guard "remote.pushDefault 로 고른 원격의 푸시" deny "git push" "$R" "SSH 주소라서"
 git -C "$R" config --unset remote.pushDefault
 git -C "$R" symbolic-ref HEAD refs/heads/work
 git -C "$R" config branch.work.pushRemote mine
-guard "branch.<이름>.pushRemote 로 고른 원격의 푸시" deny "git push" "$R" "SSH"
+guard "branch.<이름>.pushRemote 로 고른 원격의 푸시" deny "git push" "$R" "SSH 주소라서"
 git -C "$R" config --unset branch.work.pushRemote
 git -C "$R" config branch.work.remote mine
-guard "branch.<이름>.remote 로 고른 원격의 푸시" deny "git push" "$R" "SSH"
+guard "branch.<이름>.remote 로 고른 원격의 푸시" deny "git push" "$R" "SSH 주소라서"
 git -C "$R" config --unset branch.work.remote
-guard "git -c 로 SSH 로 바꾼 푸시" deny "git -c url.git@github.com:.pushInsteadOf=https://github.com/ push origin HEAD" "$R" "SSH"
+guard "git -c 로 SSH 로 바꾼 푸시" deny "git -c url.git@github.com:.pushInsteadOf=https://github.com/ push origin HEAD" "$R" "SSH 주소라서"
 repo "$T/o2" "https://github.com/p/r.git" no
-guard "git -C 로 다른 레포에서 한 푸시" deny "git -C $T/o2 push" "$R" "SSH"
-guard "git -C 로 다른 레포에서 한 푸시(cd 없이 원격 이름)" deny "git -C $T/o2 push origin HEAD" "$R" "SSH"
+guard "git -C 로 다른 레포에서 한 푸시" deny "git -C $T/o2 push" "$R" "SSH 주소라서"
+guard "git -C 로 다른 레포에서 한 푸시(cd 없이 원격 이름)" deny "git -C $T/o2 push origin HEAD" "$R" "SSH 주소라서"
 guard "주소를 풀지 못한 푸시" deny "git -C $T/nope push" "$R" "풀지 못"
 git -C "$R" remote remove mine
 rm -f "$T/home/.gitconfig"
@@ -300,6 +303,10 @@ guard "상대 경로 본문의 사람 계정 게시" deny "bash $P 155 decision.
 guard "없는 파일의 사람 계정 게시" deny "bash $P 155 $T/nofile.md $SUM"
 guard "bash 없이 부른 사람 계정 게시" deny "$P 155 $T/decision.md $SUM"
 guard "명령 치환 안의 사람 계정 게시" deny "x=\$(bash $P 155 $T/decision.md $SUM)"
+# 셸의 -c 인자 안은 조각으로 나누지 않는다. 그 안의 사람 계정 게시는 권한 프롬프트 없이 실행된다.
+guard "bash -c 안의 사람 계정 게시" deny "bash -c 'bash $P 155 $T/decision.md $SUM'" "$R" "human_comment.sh"
+guard "sh -c 안의 사람 계정 게시" deny "sh -c \"bash $P 155 $T/decision.md $SUM\""
+guard "bash -lc 안의 사람 계정 게시" deny "bash -lc 'bash $P 155 $T/decision.md $SUM'"
 mkdir -p "$T/elsewhere"; cp "$P" "$T/elsewhere/human_comment.sh"
 guard "훅 디렉터리 밖의 같은 이름 스크립트" deny "bash $T/elsewhere/human_comment.sh 155 $T/decision.md $SUM"
 guard "환경을 비우고 부른 gh(env -i)" deny "env -i PATH=/usr/bin gh pr comment 1 --body-file /tmp/x.md" "$R" "env -i"
@@ -337,6 +344,19 @@ guard "봇 디렉터리로 옮겨 hosts.yml 을 읽음" deny "cd .git/ai-kit-bot
 # git 디렉터리를 작업 트리 밖에 둔 레포(`--separate-git-dir`)에서는 봇 디렉터리의 경로에 git 이 없다
 guard "git 이 없는 경로의 hosts.yml 을 읽음" deny "cat /srv/repo-meta/ai-kit-bot/hosts.yml"
 guard "봇 디렉터리의 만료 시각을 읽음" pass "cat .git/ai-kit-bot/expires"
+guard "봇 디렉터리의 세션 환경을 읽음" pass "cat .git/ai-kit-bot/session-env"
+# 토큰 파일 이름을 적지 않아도 디렉터리째 읽으면 토큰이 출력된다
+guard "봇 디렉터리를 통째로 읽음(*)" deny "cat .git/ai-kit-bot/*" "$R" "토큰"
+guard "봇 디렉터리를 통째로 검색" deny "grep -r token .git/ai-kit-bot"
+guard "봇 디렉터리의 h* 를 읽음" deny "head -50 .git/ai-kit-bot/h*"
+# Read 도구는 이 훅(Bash)을 거치지 않는다. 설치되는 settings.json 의 deny 가 막는다.
+if python3 - "$KIT/claude-code/settings.json" <<'PY'
+import json, sys
+deny = json.load(open(sys.argv[1], encoding='utf-8'))['permissions']['deny']
+sys.exit(0 if any(r.startswith('Read(') and 'ai-kit-bot' in r for r in deny) else 1)
+PY
+then echo "  ✓ 설치되는 settings.json 이 봇 디렉터리를 Read 에서 막는다"
+else echo "  ✗ 설치되는 settings.json 이 봇 디렉터리를 Read 에서 막지 않는다"; fail=1; fi
 guard "토큰을 출력하는 인증 상태(-t)" deny "gh auth status -t"
 guard "토큰을 출력하는 인증 상태(--show-token)" deny "gh auth status --show-token"
 guard "GH_ENTERPRISE_TOKEN 으로 바꿈" deny "GH_ENTERPRISE_TOKEN=x gh api user"

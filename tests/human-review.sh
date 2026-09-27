@@ -44,7 +44,7 @@ if a[:2] == ['pr', 'comment']:
     print('https://github.com/o/r/pull/89#issuecomment-99')
     sys.exit(0)
 if a[:2] == ['pr', 'view'] and 'headRefOid' in joined:
-    print(json.dumps({'headRefOid': d['head']}))
+    print(json.dumps({'headRefOid': d['head'], 'reviewDecision': d.get('decision', '')}))
     sys.exit(0)
 if a[:2] == ['pr', 'view']:
     print(json.dumps([c['body'] for c in d['comments']], ensure_ascii=False))
@@ -92,12 +92,13 @@ PERM='{"4estse4": "admin", "writer": "write", "reader": "read"}'
 H='cccccccccccccccccccccccccccccccccccccccc'
 OLD='dddddddddddddddddddddddddddddddddddddddd'
 
-# data <이름> <코멘트 JSON 목록> [리뷰 JSON 목록] [나눌 자리] — 가짜 gh 가 읽을 파일을 만든다
+# data <이름> <코멘트 JSON 목록> [리뷰 JSON 목록] [나눌 자리] [reviewDecision] — 가짜 gh 가 읽을 파일을 만든다
 data() {
-  python3 - "$T/$1.json" "$2" "${3:-[]}" "$PERM" "$H" "${4:-}" <<'PY'
+  python3 - "$T/$1.json" "$2" "${3:-[]}" "$PERM" "$H" "${4:-}" "${5:-}" <<'PY'
 import json, sys
-out, comments, reviews, perm, head, split = sys.argv[1:]
-d = {'comments': json.loads(comments), 'reviews': json.loads(reviews), 'perm': json.loads(perm), 'head': head}
+out, comments, reviews, perm, head, split, decision = sys.argv[1:]
+d = {'comments': json.loads(comments), 'reviews': json.loads(reviews), 'perm': json.loads(perm), 'head': head,
+     'decision': decision}
 if split:
     d['split'] = int(split)
 json.dump(d, open(out, 'w', encoding='utf-8'), ensure_ascii=False)
@@ -115,6 +116,8 @@ round_body() {
 }
 round_body 2 '고치고 2라운드' > "$T/round2.md"
 round_body 2 '고치고 3라운드' > "$T/round2-other.md"
+# A1 의 `→` 줄(세션이 쓴 글)을 (사람) 인용으로 옮긴 라운드 코멘트
+round_body 2 '고친다' > "$T/round2-arrow.md"
 
 # hook <이름> <pass|deny|ask> <데이터> <본문 파일> [사유에 들어 있어야 할 글자] [cwd] [실패시킬 호출]
 hook() {
@@ -180,6 +183,7 @@ data edited-other "[$(c "$U1" "$A1" 4estse4 OWNER kit-bot)]"
 data edited-self "[$(c "$U1" "$A1" 4estse4 OWNER 4estse4)]"
 data collab "[$(c "$U1" "$A1" writer COLLABORATOR)]"
 data member "[$(c "$U1" "$A1" writer MEMBER)]"
+data member-reader "[$(c "$U1" "$A1" reader MEMBER)]"
 data contrib "[$(c "$U1" "$A1" someone CONTRIBUTOR)]"
 data paged "[$(c "$U2" "## 리뷰 1라운드" kit-bot NONE), $OWNER_A1]" '[]' 1
 data none '[]'
@@ -193,6 +197,11 @@ hook "다른 계정이 고친 사람 코멘트" deny edited-other round2.md "고
 hook "글쓴이가 스스로 고친 코멘트" pass edited-self round2.md
 hook "협력자(COLLABORATOR) 코멘트" pass collab round2.md
 hook "조직 구성원(MEMBER) 코멘트" pass member round2.md
+# MEMBER 는 레포 권한과 상관없이 붙는다. 원본은 쓰기 권한이 있는 사람의 글이다.
+hook "읽기 권한만 있는 조직 구성원의 코멘트" deny member-reader round2.md "사람 계정"
+hook "원본의 권한을 못 읽음" deny person round2.md "실패" "$T/bot" permission
+# 3.5 코멘트의 `→` 줄은 세션의 판단이다. 사람 계정으로 올렸어도 (사람) 인용의 원본이 아니다.
+hook "사람 계정 3.5 코멘트의 → 줄" deny person round2-arrow.md "사람 계정"
 hook "쓰기 권한 없는 기여자(CONTRIBUTOR) 코멘트" deny contrib round2.md "사람 계정"
 hook "둘째 쪽에 있는 사람 코멘트" pass paged round2.md
 hook "코멘트를 못 읽음" deny person round2.md "실패" "$T/bot" graphql
@@ -203,6 +212,9 @@ echo "── 봇 설정이 없을 때 — 지금처럼 3.5 코멘트의 인용�
 hook "3.5 코멘트의 인용" pass person round2.md "" "$T/plain"
 hook "3.5 코멘트는 사람에게 묻는다" ask person answer.md "" "$T/plain"
 hook "3.5 코멘트가 아닌 사람 글의 구절" deny web round2.md "" "$T/plain"
+# 앞 라운드 코멘트의 (사람) 인용은 원본이 아니다 — 원본으로 쓰면 한 번 잘못 옮긴 인용이 계속 통과한다
+data roundonly "[$(c "$U2" "$(cat "$T/round2-other.md")" 4estse4 OWNER)]"
+hook "앞 라운드 코멘트에만 있는 인용" deny roundonly round2-other.md "" "$T/plain"
 
 echo "── merge-pr 2절이 부르는 Approve 판정"
 data ok '[]' "[[\"4estse4\", \"APPROVED\", \"$H\", \"2026-09-27T05:00:00Z\"]]"
@@ -224,6 +236,11 @@ approved "Approve 뒤 같은 사람의 Comment" 0 then-comment "✓ 4estse4"
 approved "없던 것이 된(Dismissed) Approve" 1 dismissed "Approve 가 없다"
 approved "Request changes 뒤 같은 사람의 Approve" 0 changes-then-ok "✓ 4estse4"
 approved "리뷰가 없다" 1 none "Approve 가 없다"
+# 브랜치 보호의 필요 승인 수는 GitHub 이 계산한 reviewDecision 으로 본다
+data ok-short '[]' "[[\"4estse4\", \"APPROVED\", \"$H\", \"2026-09-27T05:00:00Z\"]]" '' REVIEW_REQUIRED
+data ok-enough '[]' "[[\"4estse4\", \"APPROVED\", \"$H\", \"2026-09-27T05:00:00Z\"]]" '' APPROVED
+approved "필요 승인 수가 모자람" 1 ok-short "필요 승인 수"
+approved "필요 승인 수를 채움" 0 ok-enough "✓ 4estse4"
 approved "봇 설정이 없다" 2 ok "봇 설정" "$T/plain"
 STUB_FAIL_ON=reviews approved "리뷰를 못 읽음" 2 ok "판정 못 함"
 STUB_FAIL_ON=permission approved "권한을 못 읽음" 2 ok "판정 못 함"

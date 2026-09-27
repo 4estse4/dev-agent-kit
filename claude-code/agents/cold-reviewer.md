@@ -47,9 +47,10 @@ description: 콜드 컨텍스트 독립 리뷰어. 구현 과정을 보지 않�
 마라.**
 
 **직전 라운드 코멘트와 그 뒤의 사람의 결정을 받아라** — 두 리뷰의 블록과 맨 위 요약, 그리고
-사람의 답까지. **제목이나 글쓴이로 걸러진다** — 3.5 코멘트의 제목이 맞거나, 라운드 코멘트와 글쓴이가
-다른 사람 계정(`authorAssociation` 이 OWNER · MEMBER · COLLABORATOR)의 코멘트만 실린다. 레포에 봇
-설정이 있으면 라운드 코멘트는 봇이 올리고 사람은 PR 웹에서 제목 없이 결정을 쓸 수 있다. 그 창에는
+사람의 답까지. **제목이나 글쓴이로 걸러진다** — 3.5 코멘트의 제목이 맞는 코멘트가 실리고, 라운드
+코멘트를 사람 계정이 아닌 계정(봇)이 올렸으면 사람 계정(`authorAssociation` 이 OWNER · MEMBER ·
+COLLABORATOR)의 코멘트도 실린다. 레포에 봇 설정이 있으면 라운드 코멘트는 봇이 올리고 사람은 PR 웹에서
+제목 없이 결정을 쓸 수 있다. 봇 설정이 없으면 라운드 코멘트도 사람 계정이라 제목만 본다. 그 창에는
 제3자 코멘트도 `merge-pr` 의 결정 코멘트도 들어오므로, 걸러내지 않으면 그것들이 **사람의 답과 같은
 자리로** 실린다:
 
@@ -62,7 +63,7 @@ description: 콜드 컨텍스트 독립 리뷰어. 구현 과정을 보지 않�
                else ([$c[$i].body]
                      + ($c[$i+1:]
                         | map(select((.body|test("^\\s*### .*라운드 코멘트를 읽고 사람이 정한 것"))
-                                     or (.author.login != $c[$i].author.login
+                                     or (($c[$i].authorAssociation|IN("OWNER","MEMBER","COLLABORATOR")|not)
                                          and (.authorAssociation|IN("OWNER","MEMBER","COLLABORATOR"))))
                               |.body)))
                     |join("\n\n———\n\n") end'
