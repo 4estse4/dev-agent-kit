@@ -6,7 +6,7 @@
 #   gate.sh --base <ref> 기준 ref 지정
 #   gate.sh --all        전체 검사 (CI)
 #   gate.sh --lint       린트·정적분석만 (테스트·빌드 제외) — pre-commit 이 쓴다
-#   gate.sh --staged     검사 범위를 스테이지된 파일로 (커밋하려는 그것)
+#   gate.sh --staged     검사 범위를 스테이지된 파일이 있는 모듈로 (커밋하려는 그것)
 set -uo pipefail
 
 # 형제 파일은 자기 디렉터리 기준으로 찾는다 — 킷 원본이든 대상 레포에 복사해 둔
