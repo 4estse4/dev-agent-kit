@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 시크릿 스캔. staged 내용(기본) 또는 지정 ref 범위를 검사한다.
-# 오탐을 줄이려 "높은 확신 패턴"만 본다 — 엔트로피 추정은 하지 않는다.
+# 오탐을 줄이려 시크릿이 거의 확실한 패턴만 본다 — 엔트로피 추정은 하지 않는다.
 # 정당한 테스트 픽스처는 같은 줄에 secret-ok 마커를 달아 면제한다.
 #
 #   secrets.sh              staged 내용 검사 (pre-commit)
@@ -17,7 +17,7 @@ MODE="staged"; RANGE=""
 FORBIDDEN_NAMES='(^|/)(\.env(\..*)?|.*-key\.json|.*\.pem|.*\.p12|.*\.pfx|id_rsa|id_ed25519|credentials\.json|service-account.*\.json)$'
 ALLOWED_NAMES='(\.env\.example|\.env\.sample|\.env\.template)$'
 
-# git 실패를 삼키면 DIFF 가 비어 "매치 없음 = 통과" 가 된다.
+# git 실패를 무시하면 DIFF 가 비어 "매치 없음 = 통과" 가 된다.
 # 범위 해석 실패(shallow clone·사라진 SHA·잘못된 인자)는 검사 불능이지 통과가 아니다.
 #
 # core.quotePath 기본값(true)은 비ASCII 경로를 octal 로 이스케이프해 따옴표째 내보낸다.
@@ -83,7 +83,7 @@ fi
 # 시크릿이 그 모양이다(실제로 확인함). -U0 이라 문맥 줄이 없으므로 이 패턴이 문맥 줄에 맞을 일이 없다.
 #
 # grep 종료코드: 0=매치, 1=매치없음(정상), >=2=grep 자체 오류.
-# 오류를 || true로 삼키면 검사가 고장 난 채 "통과"한다 — 반드시 구분한다.
+# 오류를 || true 로 무시하면 검사가 고장 난 채 "통과"한다 — 반드시 구분한다.
 ADDED=$(printf '%s\n' "$DIFF" | grep -E -- '^[ +]*\+' | grep -vE -- 'secret-ok')
 BAD_CONTENT=$(printf '%s\n' "$ADDED" | grep -nE -- "$PATTERNS")
 rc=$?

@@ -11,19 +11,19 @@ GATE_FAILOUT=""
 gate_have() { command -v "$1" >/dev/null 2>&1; }
 
 # 마커를 찾을 때 건너뛸 디렉터리. **게이트와 설치기가 이 하나를 함께 쓴다** —
-# 두 곳에 적으면 조용히 드리프트한다(gate.sh 머리말의 원칙).
+# 두 곳에 적으면 모르는 사이에 서로 달라진다(gate.sh 머리말의 원칙).
 #
 # 목록이 짧은 이유는 실제로 확인한 결과다. "빌드 산출물이니 걸러야지" 싶은 이름들을 넣었다가
-# **리그레션을 만들었다** — vendor·build·out·dist·target·coverage 는 업무 도메인
+# **회귀를 만들었다** — vendor·build·out·dist·target·coverage 는 업무 도메인
 # 이름이기도 해서(`services/vendor` 같은), 이름으로 제외하면 멀쩡한 모듈이 검사에서
 # 통째로 사라진다. 실제로 그렇게 됐고 콜드 리뷰가 찾아냈다.
 #
-# 센 결과(multimodal-asset-studio, Go+React 모노레포): 마커 파일을 품는 것은
+# 한 Go+React 모노레포에서 센 결과: 마커 파일이 들어 있는 것은
 # node_modules 뿐이다.
 #   frontend/node_modules            package.json 264개
 #   frontend/dist · 빈 node_modules  0개
 #   Go 의 vendor/(go mod vendor 산출) go.mod 0개 · .go 23개
-# 그래서 이름으로 거르는 대상은 **마커를 실제로 품는 것과 VCS 내부**로 한정한다.
+# 그래서 이름으로 거르는 대상은 **마커가 실제로 들어 있는 것과 VCS 내부**로 한정한다.
 # 나머지는 걸러도 얻는 것이 없고 잃을 것만 있다.
 GATE_PRUNE_DIRS="${AI_KIT_PRUNE_DIRS:-.git node_modules .venv .tox __pycache__}"
 
@@ -43,7 +43,7 @@ gate_prune_expr() { # 출력: -name a -o -name b ...  (호출부가 \( \) 로 �
 # parseGoVersionFile, 러너에서 봤다). go 줄을 올리는 go 명령이 toolchain 줄에 자기 버전을 같이
 # 쓰므로(go.dev/doc/toolchain), go 줄을 낮게 둔 채 새 Go 로 빌드하는 모듈이 흔하다.
 # 파일을 고르는 gate_go_highest 와 판정하는 gate_go_min_check 가 이 하나를 쓴다. 한때 판정만
-# toolchain 줄을 봐서, 루트에만 그 줄이 있으면 하위 모듈을 골라 멈췄다(이슈 #99).
+# toolchain 줄을 봐서, 루트에만 그 줄이 있으면 하위 모듈을 골라 멈췄다.
 gate_go_setup_version() { # $1=go.mod
   local tc v
   tc=$(awk '$1 == "toolchain" { print $2; exit }' "$1")
@@ -72,13 +72,13 @@ gate_go_highest() {
 # 견주는 법은 setup-go 가 그 버전을 받는 법을 따른다. go 1.27 처럼 패치가 없으면 버전 범위로
 # 받아 그 계열(1.27.x)에서 러너가 캐시에 가진 가장 높은 것을, 없으면 가장 새것을 설치한다(setup-go v7
 # 의 getGo, 러너에서 봤다). 그래서 go_min 과 계열끼리 견준다. 이 통과는 캐시의 패치가 go_min 의
-# 패치 이상이라는 전제에 기댄다. 낮으면 이 검사를 지나고도 도구 설치가 「requires go >= …」로
+# 패치 이상이라는 전제에 기댄다. 낮으면 이 검사를 통과하고도 도구 설치가 「requires go >= …」로
 # 실패한다. go_min 에 0 이 아닌 패치를 적는 날 이 전제를 다시 본다. 패치가 있으면(go 1.27.0 ·
 # toolchain go1.27.1) 그 버전을 그대로 설치하므로 그대로 견준다. go_min 은 패치까지 적으므로(1.27.0)
 # 그대로만 견주면, Go 의 순서로 1.27 < 1.27.0 이라 1.27.x 를 설치하는 go 1.27 레포가 멈춘다.
 # sort -V 는 이 형태들을 Go 의 순서대로 놓는다(1.27 < 1.27.0 < 1.27.1, go.dev/doc/toolchain).
 # CI 에서 setup-go 를 쓰는 잡이 모두 그 앞에서 부른다. 잡은 저마다 Go 를 설치해서, 한 잡에만 두면
-# security 는 govulncheck 설치에서 「requires go >= …」로 다른 말을 하며 실패하고(실제로 확인함), 도구를
+# security 는 govulncheck 설치에서 「requires go >= …」라는 다른 오류로 실패하고(실제로 확인함), 도구를
 # 설치하지 않는 coverage 는 킷이 지원하지 않는 Go 로 초록을 낸다(실제로 확인함).
 gate_go_min_check() {
   local min f v line want what raise
@@ -103,7 +103,7 @@ gate_go_min_check() {
 # 레포 루트에 .nvmrc 가 있는지 본다. 없으면 GitHub 주석(::error)으로 이유를 말하고 실패한다.
 # CI 의 setup-node 가 그 파일로 node 를 설치한다. node 는 잡 하나에 하나라 py 의 .python-version 처럼
 # 루트에 둔다. setup-node 를 쓰는 잡이 모두 그 앞에서 부른다. 한때 setup-node 가 루트의 .nvmrc 와
-# lockfile 을 가정하고, 그 실패를 continue-on-error 가 초록으로 덮었다(이슈 #95).
+# lockfile 을 가정하고, continue-on-error 때문에 그 실패가 초록으로 끝났다.
 gate_nvmrc_check() {
   local found
   [ -f .nvmrc ] && return 0
@@ -212,7 +212,7 @@ gate_run() {
 # 출력이 비어야 통과인 검사용 (gofmt -l, goimports -l 등).
 #
 # 종료코드도 함께 본다. 출력만 보면 "명령이 실패했는데 아무것도 출력하지 못한" 경우가
-# 통과로 집계된다 — 검사가 고장 났을 때 조용히 green 을 보고하는 것은 검증
+# 통과로 집계된다 — 검사가 고장 났을 때 조용히 통과로 보고하는 것은 검증
 # 시스템에서 가장 위험한 결함이다.
 gate_run_empty() {
   local name="$1"; shift
@@ -233,12 +233,12 @@ gate_run_empty() {
 # gate_skip 과 다르다 — 환경이 덜 갖춰진 게 아니라 프로젝트가 그렇게 구성한 것이고,
 # 이걸 실패로 만들면 평범한 JS 프로젝트가 쓰지도 않는 typecheck 스크립트를 억지로
 # 만들어야 한다. 그러면 사람은 AI_KIT_ALLOW_MISSING_TOOLS 를 상시로 켜게 되고,
-# 그 순간 진짜 도구 부재까지 함께 꺼진다. 보고는 하되 막지 않는다.
+# 그 순간 도구가 정말로 없는 경우를 막는 검사까지 함께 꺼진다. 보고는 하되 막지 않는다.
 gate_absent() { GATE_ABSENT+=("$1"); }
 
 # 도구가 없어 검사를 건너뛴 것을 기록한다.
-# GATE_STRICT=1 이면 건너뜀을 실패로 본다 — CI 에서 도구 부재는 "통과"가 아니라
-# "검사가 실행되지 않았음"이고, 그것을 green 으로 보고하면 게이트가 거짓말을 한다.
+# GATE_STRICT=1 이면 건너뜀을 실패로 처리한다 — CI 에서 도구 부재는 "통과"가 아니라
+# "검사가 실행되지 않았음"이고, 그것을 통과로 보고하면 게이트가 거짓말을 한다.
 gate_skip() {
   # 이름에서 도구를 뽑는다. "golangci-lint" · "ruff" · "gradle(미설치·래퍼없음)" 등.
   local tool="${1%%(*}"; tool="${tool%% *}"

@@ -27,7 +27,7 @@ BEGIN {
 }
 
 # 언어는 조건의 첫 `needs.detect.outputs.<언어>` 에서 읽는다. 마지막 `outputs.` 뒤를 읽으면 조건 뒤에 붙은
-# 다른 스텝의 출력(`steps.gotools.outputs.cache-hit`)을 언어로 읽어, 떨어뜨려야 할 스텝을 남긴다.
+# 다른 스텝의 출력(`steps.gotools.outputs.cache-hit`)을 언어로 읽어, 지워야 할 스텝을 남긴다.
 function lang_of(l) { match(l, /needs\.detect\.outputs\.[a-z]+/); return substr(l, RSTART + 21, RLENGTH - 21) }
 function emit(l)    { if (injobs) job = job l "\n"; else print l }
 function flush_c(   i) { for (i = 1; i <= nc; i++) emit(cbuf[i]); nc = 0 }
@@ -50,8 +50,8 @@ function flush_job() { if (job != "" && !jobdrop) printf "%s", job; job = ""; jo
   inenv = 0
 }
 
-# 떨어뜨리는 스텝을 건너뛰는 중에 모은 주석은 뒤에 스텝 머리가 와야 남는다(아래 2). 잡 머리 ·
-# 0~5칸 줄 · 파일 끝이 먼저 오면 그 주석이 설명할 스텝은 앞의 떨어진 스텝뿐이라 같이 버린다.
+# 지우는 스텝을 건너뛰는 중에 모은 주석은 뒤에 스텝 머리가 와야 남는다(아래 2). 잡 머리 ·
+# 0~5칸 줄 · 파일 끝이 먼저 오면 그 주석이 설명할 스텝은 앞의 지운 스텝뿐이라 같이 버린다.
 injobs && /^  [a-z_-]+:$/ { if (skip) drop_c(); flush_c(); flush_job() }
 injobs && /^    if: needs\.detect\.outputs\.[a-z]+ ==/ { if (lang_of($0) in X) jobdrop = 1 }
 
@@ -86,11 +86,11 @@ infind {
     if (lang_of($0) in X) { drop_c(); skip = 1; next }
     skip = 0
   } else if ($0 ~ /^      - /) { skip = 0 }
-  # 6칸 주석(과 그 뒤의 빈 줄)은 모았다가 다음 줄을 보고 판정한다. 떨어뜨리는 스텝을 건너뛰는
+  # 6칸 주석(과 그 뒤의 빈 줄)은 모았다가 다음 줄을 보고 판정한다. 지우는 스텝을 건너뛰는
   # 중에도 모은다 — 다음 스텝의 설명일 수 있다. 한때 건너뛰는 동안 버려서, 앞 언어를 뺀 설치에서
   # 뒤 스텝의 설명이 사라졌다(이슈 #106). 다음 스텝 머리가 오면 그 스텝과 같이 남거나 지워진다.
   else if ($0 ~ /^      #/ || ($0 == "" && nc > 0)) { cbuf[++nc] = $0; next }
-  # 스텝 본문(7칸 이상)이 이어지면 모은 주석은 그 스텝 안의 것이다. 떨어뜨리는 스텝이면 같이 버리고
+  # 스텝 본문(7칸 이상)이 이어지면 모은 주석은 그 스텝 안의 것이다. 지우는 스텝이면 같이 버리고
   # 건너뛰기를 이어 간다. 주석에서 건너뛰기를 끝내면 그 스텝의 나머지 줄이 남아 워크플로가 깨진다.
   else if (skip && $0 ~ /^       /) { drop_c(); next }
   else if (skip && $0 ~ /^ {0,5}[^ ]/) { drop_c(); skip = 0 }

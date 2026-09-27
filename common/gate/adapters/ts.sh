@@ -17,6 +17,6 @@ if [ "${GATE_LINT_ONLY:-0}" != 1 ]; then
 has_script test         && gate_run "vitest"   npm test --silent             || gate_absent "test"
 # 프로덕션 빌드까지 실행한다. tsc --noEmit 가 통과해도 번들러는 실패할 수 있다
 # (미해결 런타임 import·에셋 경로·플러그인 설정). 배포 산출물을 만드는 경로를
-# 게이트가 한 번도 실행하지 않으면 "기동된다"는 주장을 지탱할 수 없다.
+# 게이트가 한 번도 실행하지 않으면 "기동된다"는 주장의 근거가 없다.
 has_script build        && gate_run "build"    npm run --silent build        || gate_absent "build"
 fi

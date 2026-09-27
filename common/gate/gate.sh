@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 단일 게이트 정의. agent hook · git hook · CI가 모두 이것을 호출한다.
-# 명령을 각자 복붙하면 조용히 드리프트하므로 정의는 여기 한 곳에만 둔다.
+# 명령을 곳곳에 복사해 두면 모르는 사이에 서로 달라지므로 정의는 여기 한 곳에만 둔다.
 #
 #   gate.sh              변경 영역만 검사 (기본: main/master merge-base 기준)
 #   gate.sh --base <ref> 기준 ref 지정
@@ -9,7 +9,7 @@
 #   gate.sh --staged     검사 범위를 스테이지된 파일로 (커밋하려는 그것)
 set -uo pipefail
 
-# 형제 파일은 자기 디렉터리 기준으로 찾는다 — 킷 원본이든 대상 레포에 vendor 된
+# 형제 파일은 자기 디렉터리 기준으로 찾는다 — 킷 원본이든 대상 레포에 복사해 둔
 # .ai-kit/gate/ 든 동일하게 동작한다.
 SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "gate: git 레포가 아님" >&2; exit 1; }
@@ -17,7 +17,7 @@ cd "$REPO_ROOT" || exit 1
 
 BASE=""; ALL=0
 # --lint: 린트·정적분석만 실행한다(테스트·빌드 제외). pre-commit 이 쓴다.
-# 게이트 정의를 훅에 복붙하지 않기 위한 모드다 — 검사 목록이 두 벌이 되면 어긋난다.
+# 게이트 정의를 훅에 복사해 두지 않으려고 둔 모드다 — 검사 목록이 두 벌이 되면 어긋난다.
 GATE_LINT_ONLY=0
 # --staged: 검사 범위를 "커밋하려는 것" 으로 정한다.
 # 이게 없으면 pre-commit 이 엉뚱한 것을 검사한다 — 기본 범위는 main...HEAD 라서,
@@ -47,8 +47,8 @@ done
 # 그 왕복(푸시 → 몇 분 대기 → 실패 확인 → 로컬 수정 → 다시 푸시)은 로컬에서
 # 30초면 끝날 일을 공용 자원과 사람 시간으로 치르는 것이다.
 #
-# 불가피할 때만 AI_KIT_ALLOW_MISSING_TOOLS=1 로 관대 모드로 내린다.
-# 조용히 내려가지 않는다 — 무엇이 검사되지 않는지 눈에 띄게 출력한다.
+# 불가피할 때만 AI_KIT_ALLOW_MISSING_TOOLS=1 로 도구가 없는 검사를 건너뛰게 한다.
+# 그러면 무엇이 검사되지 않는지 눈에 띄게 출력한다.
 export GATE_LINT_ONLY
 if [ "${AI_KIT_ALLOW_MISSING_TOOLS:-0}" = "1" ]; then
   GATE_STRICT=0
@@ -117,20 +117,20 @@ discover go.mod       go
 discover package.json ts
 # JVM: 빌드 루트 마커를 먼저 본다. 멀티모듈이 기본이라 build.gradle 만 찾으면
 # 루트와 서브모듈이 모두 모듈로 찾아지는데, 서브모듈에서 빌드를 부르면 래퍼도 settings 도
-# 없어 깨진다. 루트에서 한 번 실행하는 것이 모든 모듈을 덮는다.
+# 없어 실패한다. 루트에서 한 번 실행하면 모든 모듈이 검사된다.
 discover settings.gradle     jvm
 discover settings.gradle.kts jvm
 discover build.gradle        jvm
 discover build.gradle.kts    jvm
 discover pyproject.toml      py
 
-# 조상 디렉터리의 실행이 이미 덮는 자손을 뺀다 — **JVM 에만 적용한다.**
+# 조상 디렉터리에서 실행할 때 이미 검사되는 자손을 뺀다 — **JVM 에만 적용한다.**
 #
-# Gradle 은 루트에서 한 번 부르면 서브모듈을 다 덮으므로 자손을 또 부르면
-# 낭비이고, 서브모듈엔 래퍼도 settings 도 없어 깨진다.
+# Gradle 은 루트에서 한 번 부르면 서브모듈까지 다 검사하므로 자손을 또 부르면
+# 낭비이고, 서브모듈엔 래퍼도 settings 도 없어 실패한다.
 #
 # Go·TS·Python 은 다르다. 중첩된 go.mod 는 **독립 모듈**이라 조상에서 `go vet ./...`
-# 을 실행해도 자손에 닿지 않는다. 여기에 같은 규칙을 적용했다가 중첩 모듈이 통째로
+# 을 실행해도 자손 모듈은 검사되지 않는다. 여기에 같은 규칙을 적용했다가 중첩 모듈이 통째로
 # 검사에서 빠졌고(콜드 리뷰가 찾아냄), 그건 깊이 제한을 없앤 이유와 정확히 같은 실패다.
 # 같은 디렉터리에 마커가 둘인 경우(build.gradle + settings.gradle)는 어댑터와
 # 무관하게 한 번만 남긴다.

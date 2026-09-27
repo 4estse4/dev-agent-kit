@@ -1,6 +1,6 @@
 // ESLint flat config.
 // 원칙: 포맷은 Prettier 에 맡기고, 여기서는 정확성 + 프로젝트 하드룰만 다룬다.
-// 리뷰 체크리스트에 문장으로 적히던 것을 여기로 내린다.
+// 리뷰 체크리스트에 문장으로 적히던 것을 여기로 옮긴다.
 //
 // 필요 패키지:
 //   eslint typescript-eslint @eslint/js eslint-plugin-react-hooks
@@ -33,8 +33,8 @@ export default tseslint.config(
   },
 
   js.configs.recommended,
-  // strictTypeChecked 는 recommendedTypeChecked 보다 강하다. 초기 도입에서
-  // 노이즈가 크면 recommendedTypeChecked 로 낮추되, 낮췄다는 사실을 기록한다.
+  // recommendedTypeChecked 를 쓴다. 더 엄격한 strictTypeChecked 로 올리거나
+  // 이보다 낮추면 그 사실을 기록한다.
   ...tseslint.configs.recommendedTypeChecked,
 
   {
@@ -50,7 +50,7 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      // 접근성 — 리뷰에서 사람이 눈으로 보던 항목을 기계로 내린다(설치돼 있을 때만).
+      // 접근성 — 리뷰에서 사람이 눈으로 보던 항목을 린트 규칙으로 옮긴다(설치돼 있을 때만).
       ...(jsxA11y ? jsxA11y.flatConfigs.recommended.rules : {}),
 
       '@typescript-eslint/no-explicit-any': 'error',
@@ -60,7 +60,7 @@ export default tseslint.config(
       ],
 
       // ── 프로젝트 하드룰 코드화 ──
-      // 산문 규칙은 에이전트가 "지키려 노력"하지만, 린트 규칙은 어기면 빌드가 깨진다.
+      // 산문 규칙은 에이전트가 "지키려 노력"하지만, 린트 규칙은 어기면 게이트가 실패한다.
       'no-restricted-syntax': [
         'error',
         {

@@ -1,6 +1,6 @@
 # ai-kit 게이트 워크플로.
-# 게이트 명령을 여기 복붙하지 않는다 — 레포에 vendor 된 .ai-kit/gate/gate.sh 를
-# 부른다. 로컬 훅·CI 가 문자 그대로 같은 스크립트를 실행해야 드리프트가 없다.
+# 게이트 명령을 여기 다시 적지 않는다 — 레포에 복사해 둔 .ai-kit/gate/gate.sh 를
+# 부른다. 로컬 훅과 CI 가 문자 그대로 같은 스크립트를 실행해야 둘의 검사가 어긋나지 않는다.
 name: gates
 
 on:
@@ -33,7 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - id: d
-        # 여기서 감지하지 못한 언어는 도구와 의존성을 설치하는 스텝이 건너뛰어진다.
+        # 여기서 감지하지 못한 언어는 도구와 의존성을 설치하지 않는다.
         # gate 잡의 마지막 스텝(gate.sh --all)은 그래도 그 모듈을 찾는다. 러너에 도구가
         # 없으면 빨갛게 끝나지만, 러너 이미지에 이미 있는 도구로 실행되면 버전을 핀하지 않은
         # 채 초록으로 끝난다. security 잡의 언어별 취약점 검사는 어느 쪽이든 조용히
@@ -64,7 +64,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       # 로컬 훅은 clone 마다 활성화가 필요해 신뢰할 수 없다. 최소한 게이트가
-      # 레포에 vendor 돼 있는지는 CI 가 확인한다 — 없으면 CI 도 실행할 수 없다.
+      # 레포에 커밋돼 있는지는 CI 가 확인한다 — 없으면 CI 도 실행할 수 없다.
       - name: .ai-kit 게이트가 커밋돼 있는지
         run: |
           for f in .ai-kit/gate/gate.sh .ai-kit/gate/secrets.sh .ai-kit/gate/trace.sh \
@@ -120,8 +120,8 @@ jobs:
       # 루트의 go.mod 를 가리켜 그런 레포에서 세 잡이 모두 실패했다(실제로 확인함). setup-go 는
       # GOTOOLCHAIN=local 이라 더 높은 go 를 받아 오지 않으므로 가장 높은 것을 설치한다.
       # 캐시 키는 레포 전체의 go.mod 와 go.sum 으로 만든다. `cache-dependency-path` 가 없으면 setup-go 는
-      # 레포 루트의 go.mod 하나만 찾고, 없으면 경고만 출력하고 캐시를 복원도 저장도 하지 않는다(실제로 확인함,
-      # 이슈 #96). go.sum 은 의존성이 없는 모듈에는 없으므로 go.mod 도 같이 적는다 — Go 잡은 go.mod 가
+      # 레포 루트의 go.mod 하나만 찾고, 없으면 경고만 출력하고 캐시를 복원도 저장도 하지 않는다(실제로 확인함).
+      # go.sum 은 의존성이 없는 모듈에는 없으므로 go.mod 도 같이 적는다 — Go 잡은 go.mod 가
       # 있을 때만 실행되므로 맞는 파일이 늘 있다. coverage · security 잡도 같다.
       # 키는 설치한 Go 버전과 cache-dependency-path 에 맞은 파일의 해시로 만든다(setup-go v7 의
       # src/cache-restore.ts). 세 잡이 같은 Go 와 같은 패턴을 적으므로 키가 같고, 먼저 끝난 잡의 모듈 캐시와
@@ -137,8 +137,8 @@ jobs:
             **/go.mod
             **/go.sum
       # go install 이 만든 도구는 setup-go 의 캐시에 남지 않는다. setup-go 는 GOMODCACHE 와 GOCACHE 만 캐시하고
-      # (src/package-managers.ts), 그 캐시도 위처럼 먼저 끝난 잡의 것이다. 그래서 실행마다 도구를 다시 빌드했다
-      # (이슈 #115). 도구만 담는 디렉터리를 잡마다 다른 키로 캐시하고, 복원이 안 됐을 때만 설치한다.
+      # (src/package-managers.ts), 그 캐시도 위처럼 먼저 끝난 잡의 것이다. 그래서 실행마다 도구를 다시 빌드했다.
+      # 도구만 담는 디렉터리를 잡마다 다른 키로 캐시하고, 복원이 안 됐을 때만 설치한다.
       # 키에는 Go 버전과 핀을 넣는다. golangci-lint 는 자기를 빌드한 Go 보다 높은 go.mod 를 검사하지 못하고,
       # 핀이 바뀌면 다시 빌드해야 한다. restore-keys 를 두지 않는 것도 같은 이유다.
       # 저장은 설치 바로 뒤에 한다. actions/cache 와 setup-go 의 저장은 post 단계이고 `post-if: success()` 라서,
@@ -155,12 +155,12 @@ jobs:
           key: ai-kit-go-tools-gate-${{ runner.os }}-${{ runner.arch }}-go${{ steps.go.outputs.go-version }}-goimports-${{ steps.tv.outputs.goimports }}-golangci-lint-${{ steps.tv.outputs.golangci_lint }}
       - if: needs.detect.outputs.go == 'true' && steps.gotools.outputs.cache-hit != 'true'
         run: |
-          # 버전을 핀한다. @latest 는 코드 변경 없이 포맷 규칙이 바뀌어
-          # cold cache 에서 게이트가 빨개지는 재현성 구멍이다.
+          # 버전을 핀한다. @latest 는 코드가 그대로여도 포맷 규칙이 바뀌어
+          # cold cache 에서 게이트가 빨개진다. 같은 코드에서 결과가 달라진다.
           CGO_ENABLED=0 GOBIN="$HOME/.cache/ai-kit/go-tools" go install golang.org/x/tools/cmd/goimports@${{ steps.tv.outputs.goimports }}
-      # golangci-lint-action 은 스스로 lint 를 실행한다 — 게이트 단일 정의와
-      # 충돌하므로 쓰지 않는다. 바이너리만 버전 핀해 설치하고 실행은 gate.sh 가 한다.
-      # curl | sh 대신 go install 을 쓴다(공급망 표면을 모듈 프록시로 한정).
+      # golangci-lint-action 은 스스로 lint 를 실행한다 — 게이트를 gate.sh 한 곳에서만
+      # 정의하는 것과 부딪히므로 쓰지 않는다. 바이너리만 버전 핀해 설치하고 실행은 gate.sh 가 한다.
+      # curl | sh 대신 go install 을 쓴다(받아 오는 곳을 Go 모듈 프록시 하나로 줄인다).
       - if: needs.detect.outputs.go == 'true' && steps.gotools.outputs.cache-hit != 'true'
         name: install golangci-lint
         run: |
@@ -180,13 +180,13 @@ jobs:
       # 있어서 래퍼 없이도 CI 는 통과하는데, 그러면 (a) gradle 버전이 러너 이미지에
       # 묶여 고정되지 않고 — 린터 버전을 핀한 이유와 정면으로
       # 어긋난다 — (b) gradle 이 없는 개발자 머신에서는 로컬이 빨갛고 CI 만 초록이 된다.
-      # 그 드리프트가 이 워크플로가 존재하는 이유다.
+      # 그 어긋남을 막는 것이 이 워크플로가 있는 이유다.
       - if: needs.detect.outputs.jvm == 'true'
         name: require an executable wrapper at every build root
         run: |
           # 어댑터(adapters/jvm.sh)의 판정과 **같은 기준**으로 본다.
           # 존재만 확인하면 두 판정이 어긋난다 — 실행권한 없는 gradlew 는 어댑터가
-          # `[ -x ./gradlew ]` 에서 거짓으로 보고 시스템 gradle 로 내려가는데,
+          # `[ -x ./gradlew ]` 에서 거짓으로 보고 시스템에 설치된 gradle 을 쓰는데,
           # 러너 이미지에는 gradle 이 있어서 초록으로 끝난다. 훅에 대해 vendored 잡이
           # 이미 하는 것과 같은 검사를 래퍼에도 한다.
           #
@@ -201,7 +201,7 @@ jobs:
               echo "::error::$d 에 빌드 래퍼($(basename "$w"))가 없습니다."
               fail=1
             elif [ ! -x "$w" ]; then
-              echo "::error::$w 에 실행권한이 없습니다 — 어댑터가 시스템 빌드 도구로 내려갑니다."
+              echo "::error::$w 에 실행권한이 없습니다 — 어댑터가 시스템에 설치된 빌드 도구를 씁니다."
               echo "  git update-index --chmod=+x $w 로 고치고 커밋하세요."
               fail=1
             fi
@@ -233,7 +233,7 @@ jobs:
       # cache-dependency-path 를 주면 기본 패턴 대신 그것만 보고(setup-java v6 의 src/cache.ts), 기본 패턴 가운데
       # buildSrc 둘과 gradle/*.versions.toml 은 레포 루트에 묶여 있다. 그래서 빌드 루트가 backend/ 같은 하위
       # 디렉터리면 버전 카탈로그가 키에 들지 않았고, 카탈로그에서만 버전을 올리면 키가 그대로라 전의 캐시를
-      # 복원하고 저장하지 않았다(이슈 #116). 기본 패턴을 그대로 적되 그 셋에 **/ 를 붙인다.
+      # 복원하고 저장하지 않았다. 기본 패턴을 그대로 적되 그 셋에 **/ 를 붙인다.
       - if: needs.detect.outputs.jvm == 'true'
         uses: actions/setup-java@v6
         with:
@@ -261,7 +261,7 @@ jobs:
       # Python: ruff 를 핀해 설치한다. 다만 이것은 **프로젝트가 ruff 를 선언하지 않았을
       # 때의 바닥값**이다 — 선언했다면 어댑터가 그 venv 의 것을 먼저 쓴다(adapters/py.sh).
       # 린트 규칙은 프로젝트 설정이 정하므로 버전도 프로젝트가 정하는 것이 맞고,
-      # 킷의 핀은 아무것도 선언하지 않은 레포가 검사 없이 지나가지 않게 하는 장치다.
+      # 킷의 핀은 아무것도 선언하지 않은 레포가 검사 없이 통과하지 않게 하는 장치다.
       # mypy·pytest 는 프로젝트가 자기 의존성으로 설치해야 한다(아래 주석 참조).
       # 런타임 버전은 **프로젝트의 `.python-version`** 이 정한다 — node 가 `.nvmrc` 를
       # 쓰는 것과 같은 모양이고, `uv python pin 3.12` 가 그 파일을 만든다.
@@ -290,7 +290,7 @@ jobs:
       #
       # 킷이 도구 이름을 정하지 않는다 — **프로젝트가 남긴 증거**로 방식을 고른다.
       # 증거가 없으면 설치하지 않고 그 사실을 말한다. 추측해서 설치하면 프로젝트가
-      # 의도한 것과 다른 환경에서 테스트가 실행되고, 그 차이는 조용히 숨는다.
+      # 의도한 것과 다른 환경에서 테스트가 실행되고, 그 차이는 드러나지 않는다.
       - if: needs.detect.outputs.py == 'true'
         name: install project dev dependencies
         run: |
@@ -305,14 +305,14 @@ jobs:
             echo "── $d ──"
             ( cd "$d"
               # $GITHUB_PATH 에 venv 를 얹지 않는다. 그것은 잡 전체에 prepend 되므로
-              # 패키지가 여럿이면 **어느 하나의 venv 가 전부를 이긴다** — 남의 의존성으로
-              # 테스트가 실행되고, 어느 패키지의 도구가 이길지도 순서에 좌우된다.
+              # 패키지가 여럿이면 **어느 하나의 venv 가 모든 패키지에 쓰인다** — 남의 의존성으로
+              # 테스트가 실행되고, 어느 패키지의 도구가 쓰일지도 순서에 따라 달라진다.
               # 대신 어댑터가 자기 디렉터리의 .venv/bin 을 먼저 본다(adapters/py.sh).
               if [ -f uv.lock ]; then
                 pipx install uv >/dev/null 2>&1 || true
                 # --locked: 락과 pyproject 가 어긋나면 조용히 갱신하지 말고 실패한다.
                 # 커밋된 락과 다른 해상도로 CI 가 통과하면 그 차이는 아무도 못 본다.
-                uv sync --locked --all-extras --all-groups   # extras 로 dev 를 선언한 레포도 덮는다
+                uv sync --locked --all-extras --all-groups   # dev 의존성을 extras 로 선언한 레포도 그 의존성까지 설치한다
               elif [ -f poetry.lock ]; then
                 pipx install poetry >/dev/null 2>&1 || true
                 # in-project venv 로 강제해 어댑터가 .venv/bin 에서 찾게 한다.
@@ -353,7 +353,7 @@ jobs:
 
       # node 버전은 **레포 루트의 `.nvmrc`** 가 정한다. 없으면 여기서 이유를 말하며 멈춘다
       # (lib.sh 의 gate_nvmrc_check). 한때 setup-node 가 루트의 `.nvmrc` 와 lockfile 을 가정했고,
-      # 그 실패를 continue-on-error 가 초록으로 덮었다(실제로 확인함). lockfile 은 모듈마다 있을 수 있어
+      # continue-on-error 때문에 그 실패가 초록으로 끝났다(실제로 확인함). lockfile 은 모듈마다 있을 수 있어
       # cache 키를 레포 어디의 lockfile 로든 만든다. 이 값을 주면 setup-node 는 기본 패턴 대신
       # 이것만 보고, 하나도 안 맞으면 멈추므로 npm ci 가 읽는 둘을 다 적는다.
       - if: needs.detect.outputs.node == 'true'

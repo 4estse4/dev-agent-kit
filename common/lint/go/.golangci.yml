@@ -1,5 +1,5 @@
 # golangci-lint v2 설정.
-# 원칙: 리뷰 체크리스트에 문장으로 적히던 것을 여기로 내린다.
+# 원칙: 리뷰 체크리스트에 문장으로 적히던 것을 여기로 옮긴다.
 # 각 린터 옆의 주석 = 이 린터가 대체하는 "리뷰에서 사람이 눈으로 보던 항목".
 version: "2"
 
@@ -16,7 +16,7 @@ linters:
     - unused
     - revive
 
-    # ── 에러 취급 (리뷰: "에러를 삼키지 않았나 / %w 로 감쌌나") ──
+    # ── 에러 취급 (리뷰: "에러를 무시하지 않았나 / %w 로 감쌌나") ──
     - errcheck        # 무시된 에러 반환값
     - errorlint       # %v 로 감싼 에러, errors.Is/As 미사용 비교
     - nilerr          # err != nil 인데 nil 을 반환
@@ -57,7 +57,7 @@ linters:
     #     main:
     #       deny:
     #         - pkg: "gorm.io/gorm"
-    #           desc: "ORM 금지 — pgx + sqlc 를 쓴다 (ADR-0003)"
+    #           desc: "ORM 금지 — pgx + sqlc 를 쓴다 (ADR-<번호>)"
     # forbidigo:
     #   forbid:
     #     - p: '^fmt\.Print.*$'

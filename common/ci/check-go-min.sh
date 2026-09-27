@@ -4,7 +4,7 @@
 # 왜 이게 필요한가 — go_min 은 아래 둘 가운데 가장 높은 것과 같아야 한다. 높으면 gate_go_min_check 가
 # 드는 이유가 거짓이 된다.
 #   · gates.yml 이 go install 로 설치하는 도구들이 요구하는 go(그 모듈의 go 줄). 낮으면 최소 버전 검사를
-#     지난 레포가 그 도구의 설치에서 「requires go >= …」로 실패한다. 한때 goimports 와 govulncheck 만 보고
+#     통과한 레포가 그 도구의 설치에서 「requires go >= …」로 실패한다. 한때 goimports 와 govulncheck 만 보고
 #     1.25 로 정했다가 1.26 을 요구하는 golangci-lint 가 러너에서 실패했다(이슈 #98). 두 값을 맞추는 것이
 #     주석뿐이었다.
 #   · 그 도구 모듈이 require 하는 gofumpt(golangci-lint 의 formatter)의 기준 Go. gofumpt 는 자기 안에 둔
@@ -21,11 +21,11 @@
 #
 # go_min 에 0 이 아닌 패치가 들어가는 날에는 gate_go_min_check 의 전제를 다시 본다. 그쪽은 패치
 # 없는 go 줄을 계열로 통과시키는데, 그 레포에 setup-go 가 설치하는 것은 러너 캐시의 그 계열 패치이고
-# 그것이 go_min 의 패치보다 낮으면 검사를 지나고도 도구 설치가 「requires go >= …」로 실패한다.
+# 그것이 go_min 의 패치보다 낮으면 검사를 통과하고도 도구 설치가 「requires go >= …」로 실패한다.
 #
 # 도구 목록은 gates.yml 의 `go install [플래그…] <패키지>@${{ steps.tv.outputs.<키> }}` 에서
 # 읽는다 — CI 가 실제로 설치하는 목록이라 따로 적지 않는다. 주석이 아닌 줄에 이 모양으로 못 읽은
-# go install 이 있으면 판정하지 않는다. 도구 일부만 보고 내린 판정이 #98 의 모양이다.
+# go install 이 있으면 판정하지 않는다. 도구 일부만 보고 내린 판정이 이슈 #98 의 모양이다.
 # 모듈의 go 줄은 Go 모듈 proxy 의 <모듈>/@v/<버전>.mod 에 있고, 모듈 경로는 패키지 경로의 뒤를
 # 하나씩 떼며 처음 받아지는 것이다. gofumpt 는 그 .mod 의 require 에서 버전을 읽고, 같은 proxy 의
 # mvdan.cc/gofumpt/@v/<버전>.zip 을 받아 unzip 으로 version.txt 만 꺼낸다. proxy 의 그 파일들은 버전마다
