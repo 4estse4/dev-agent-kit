@@ -36,8 +36,8 @@ jobs:
         # 여기서 감지하지 못한 언어는 도구와 의존성을 설치하지 않는다.
         # gate 잡의 마지막 스텝(gate.sh --all)은 그래도 그 모듈을 찾는다. 러너에 도구가
         # 없으면 빨갛게 끝나지만, 러너 이미지에 이미 있는 도구로 실행되면 버전을 핀하지 않은
-        # 채 초록으로 끝난다. security 잡의 언어별 취약점 검사는 어느 쪽이든 조용히
-        # 건너뛰어진다. 어댑터를 추가하면 반드시 여기도 같이 추가해야 한다.
+        # 채 초록으로 끝난다. security 잡은 어느 쪽이든 그 언어의 취약점 검사를
+        # 알리지 않고 건너뛴다. 어댑터를 추가하면 반드시 여기도 같이 추가해야 한다.
         #
         # 마커를 찾는 기준은 게이트(gate.sh)와 같다. 깊이를 제한하지 않고, 건너뛸 디렉터리는
         # lib.sh 의 gate_prune_expr 하나를 쓴다. 한때 여기만 maxdepth 3 이라 네 단계 아래의
@@ -77,7 +77,7 @@ jobs:
           # 우회할 수 없는 것은 CI 뿐이므로 모드 확인도 여기서 한다.
           # (게이트 스크립트는 훅이 `bash <경로>` 로 부르므로 권한이 필요 없다.)
           for f in .ai-kit/git-hooks/pre-commit .ai-kit/git-hooks/pre-push; do
-            [ -x "$f" ] || { echo "::error::$f 에 실행권한이 없습니다 — 훅이 조용히 건너뛰어집니다. git update-index --chmod=+x $f 로 고치고 커밋하세요"; exit 1; }
+            [ -x "$f" ] || { echo "::error::$f 에 실행권한이 없습니다 — git 이 이 훅을 실행하지 않고 건너뜁니다. git update-index --chmod=+x $f 로 고치고 커밋하세요"; exit 1; }
           done
           # 어느 킷에서 왔는지만 출력한다. **내용이 킷과 같은지는 검사하지 않는다** —
           # 이 레포에서 게이트를 고치는 것이 정상 작업이기 때문이다(.ai-kit/README.md).
@@ -160,7 +160,7 @@ jobs:
           CGO_ENABLED=0 GOBIN="$HOME/.cache/ai-kit/go-tools" go install golang.org/x/tools/cmd/goimports@${{ steps.tv.outputs.goimports }}
       # golangci-lint-action 은 스스로 lint 를 실행한다 — 게이트를 gate.sh 한 곳에서만
       # 정의하는 것과 부딪히므로 쓰지 않는다. 바이너리만 버전 핀해 설치하고 실행은 gate.sh 가 한다.
-      # curl | sh 대신 go install 을 쓴다(받아 오는 곳을 Go 모듈 프록시 하나로 줄인다).
+      # curl | sh 대신 go install 을 쓴다(내려받을 때 믿어야 하는 곳을 Go 모듈 프록시 하나로 줄인다).
       - if: needs.detect.outputs.go == 'true' && steps.gotools.outputs.cache-hit != 'true'
         name: install golangci-lint
         run: |
@@ -180,17 +180,17 @@ jobs:
       # 있어서 래퍼 없이도 CI 는 통과하는데, 그러면 (a) gradle 버전이 러너 이미지에
       # 묶여 고정되지 않고 — 린터 버전을 핀한 이유와 정면으로
       # 어긋난다 — (b) gradle 이 없는 개발자 머신에서는 로컬이 빨갛고 CI 만 초록이 된다.
-      # 그 어긋남을 막는 것이 이 워크플로가 있는 이유다.
+      # 로컬과 CI 의 결과가 이렇게 달라지는 것을 막는 것이 이 워크플로가 있는 이유다.
       - if: needs.detect.outputs.jvm == 'true'
         name: require an executable wrapper at every build root
         run: |
           # 어댑터(adapters/jvm.sh)의 판정과 **같은 기준**으로 본다.
           # 존재만 확인하면 두 판정이 어긋난다 — 실행권한 없는 gradlew 는 어댑터가
-          # `[ -x ./gradlew ]` 에서 거짓으로 보고 시스템에 설치된 gradle 을 쓰는데,
+          # `[ -x ./gradlew ]` 에서 거짓으로 판정하고 시스템에 설치된 gradle 을 쓰는데,
           # 러너 이미지에는 gradle 이 있어서 초록으로 끝난다. 훅에 대해 vendored 잡이
           # 이미 하는 것과 같은 검사를 래퍼에도 한다.
           #
-          # 빌드 루트마다 본다. 레포 어딘가에 래퍼가 하나만 있으면 통과시키면,
+          # 빌드 루트마다 본다. 레포 어딘가에 래퍼가 하나만 있어도 통과시키면,
           # 래퍼 없는 다른 빌드 루트가 시스템 gradle 로 조용히 검사된다.
           . .ai-kit/gate/lib.sh
           fail=0
@@ -206,7 +206,7 @@ jobs:
               fail=1
             fi
           # 빌드 루트는 **조상 하나**다 — gate.sh 의 판정과 같아야 한다.
-          # 마커가 있는 모든 디렉터리를 빌드 루트로 보면 표준 멀티모듈 레포(루트에만
+          # 마커가 있는 모든 디렉터리를 빌드 루트로 삼으면 표준 멀티모듈 레포(루트에만
           # gradlew, 서브모듈마다 build.gradle)가 여기서 실패한다. 어댑터는 그 서브모듈에
           # 들어가지도 않는데 CI 만 실패한다.
           # 건너뛰는 디렉터리도 게이트와 같다. build/ 를 이름으로 거르지 않는다 —
@@ -224,7 +224,7 @@ jobs:
           if [ "$fail" = 1 ]; then
             echo "래퍼가 없으면 빌드 도구 버전이 러너 이미지에 묶여 고정되지 않고,"
             echo "래퍼를 쓰지 않는 개발자 머신과 CI 가 서로 다른 버전으로 검사합니다."
-            echo "  gradle wrapper 후 커밋하세요."
+            echo "  gradle wrapper 명령으로 래퍼를 만들고 커밋하세요."
             exit 1
           fi
           echo "모든 빌드 루트에 실행 가능한 래퍼가 있습니다."
@@ -259,7 +259,7 @@ jobs:
           ktlint --version
 
       # Python: ruff 를 핀해 설치한다. 다만 이것은 **프로젝트가 ruff 를 선언하지 않았을
-      # 때의 바닥값**이다 — 선언했다면 어댑터가 그 venv 의 것을 먼저 쓴다(adapters/py.sh).
+      # 때 쓰는 버전**이다 — 선언했다면 어댑터가 그 venv 의 것을 먼저 쓴다(adapters/py.sh).
       # 린트 규칙은 프로젝트 설정이 정하므로 버전도 프로젝트가 정하는 것이 맞고,
       # 킷의 핀은 아무것도 선언하지 않은 레포가 검사 없이 통과하지 않게 하는 장치다.
       # mypy·pytest 는 프로젝트가 자기 의존성으로 설치해야 한다(아래 주석 참조).
@@ -311,7 +311,7 @@ jobs:
               if [ -f uv.lock ]; then
                 pipx install uv >/dev/null 2>&1 || true
                 # --locked: 락과 pyproject 가 어긋나면 조용히 갱신하지 말고 실패한다.
-                # 커밋된 락과 다른 해상도로 CI 가 통과하면 그 차이는 아무도 못 본다.
+                # 커밋된 락과 다르게 고른 의존성 버전으로 CI 가 통과하면 그 차이는 아무도 못 본다.
                 uv sync --locked --all-extras --all-groups   # dev 의존성을 extras 로 선언한 레포도 그 의존성까지 설치한다
               elif [ -f poetry.lock ]; then
                 pipx install poetry >/dev/null 2>&1 || true
@@ -386,7 +386,7 @@ jobs:
     if: needs.detect.outputs.go == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # ⚠️ 프로젝트에 env 게이트된 통합 테스트(DB 등)가 있다면 gate 잡과 같은
+    # ⚠️ 프로젝트에 환경 변수가 있을 때만 실행되는 통합 테스트(DB 등)가 있다면 gate 잡과 같은
     #    services 를 여기에도 붙여야 한다. 없으면 그 테스트가 skip 되어
     #    커버리지가 과소 보고된다 — 틀린 숫자는 없느니만 못하다.
     steps:

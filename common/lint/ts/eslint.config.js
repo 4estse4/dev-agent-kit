@@ -33,8 +33,8 @@ export default tseslint.config(
   },
 
   js.configs.recommended,
-  // recommendedTypeChecked 를 쓴다. 더 엄격한 strictTypeChecked 로 올리거나
-  // 이보다 낮추면 그 사실을 기록한다.
+  // recommendedTypeChecked 를 쓴다(더 엄격한 것은 strictTypeChecked 다).
+  // recommendedTypeChecked 보다 낮추면 그 사실을 기록한다.
   ...tseslint.configs.recommendedTypeChecked,
 
   {

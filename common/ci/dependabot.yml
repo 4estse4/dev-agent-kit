@@ -1,4 +1,4 @@
-# actions 를 major 태그로 쓰되 Dependabot 이 갱신을 열게 한다.
+# actions 를 major 태그로 쓰되 Dependabot 이 갱신 PR 을 열게 한다.
 # SHA 핀이 더 엄격하지만 사람이 손으로 갱신하면 결국 낡는다 — 자동 PR 을 받아야 실제로 갱신된다.
 #
 # 주의: github-actions 생태계는 `.github/workflows/` 만 훑는다. 킷의 템플릿 원본

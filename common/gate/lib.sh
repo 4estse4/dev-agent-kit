@@ -249,7 +249,7 @@ gate_skip() {
     if [ -n "$hint" ]; then
       GATE_FAILOUT+=$'\n'"  설치:  $hint"$'\n'
     fi
-    GATE_FAILOUT+=$'\n'"  전부 설치:  bash .ai-kit/gate/install-tools.sh"$'\n'"  버전은 .ai-kit/gate/tool-versions 가 단일 출처입니다."$'\n'$'\n'"  불가피하게 건너뛰려면(그 검사는 실행되지 않은 채 통과합니다):"$'\n'"    AI_KIT_ALLOW_MISSING_TOOLS=1 <명령>"$'\n'
+    GATE_FAILOUT+=$'\n'"  전부 설치:  bash .ai-kit/gate/install-tools.sh"$'\n'"  버전은 .ai-kit/gate/tool-versions 가 단일 출처입니다."$'\n'$'\n'"  불가피하게 건너뛰려면(그 검사는 실행되지 않고, 그 때문에 게이트가 실패하지도 않습니다):"$'\n'"    AI_KIT_ALLOW_MISSING_TOOLS=1 <명령>"$'\n'
   else
     GATE_SKIPPED+=("$1")
   fi
