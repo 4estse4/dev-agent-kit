@@ -1,4 +1,4 @@
-# .ai-kit — 이 레포에 vendor 된 게이트
+# .ai-kit — 이 레포에 복사해 둔 게이트
 
 이 디렉터리는 [ai-native-kit](https://github.com/4estse4/ai-native-kit) 의 게이트를
 복사해 둔 것이다. **레포와 함께 버전 관리되므로 clone 하면 따라온다.**
@@ -16,7 +16,7 @@ git config core.hooksPath .ai-kit/git-hooks
 
 | 시점 | 막는 것 |
 | --- | --- |
-| `pre-commit` | 보호 브랜치 직접 커밋 · 시크릿 · 커밋 신원 불일치 |
+| `pre-commit` | 보호 브랜치 직접 커밋 · 커밋 신원 불일치 · 충돌 마커 · 시크릿 · 스테이지한 파일이 있는 모듈의 린트 |
 | `pre-push` | 변경 영역의 포맷·린트·타입·테스트 실패 · 시크릿 · 요구 추적 |
 
 ## 로컬 훅은 강제가 아니다
@@ -29,12 +29,16 @@ git config core.hooksPath .ai-kit/git-hooks
 
 ```bash
 bash .ai-kit/gate/gate.sh          # 변경 영역만
-bash .ai-kit/gate/gate.sh --all    # 전체 (CI 와 동일, 도구 부재를 실패로 처리)
+bash .ai-kit/gate/gate.sh --all    # 전체 (CI 와 동일)
 bash .ai-kit/gate/trace.sh         # SPEC ↔ 추적 매트릭스 정합
 bash .ai-kit/gate/secrets.sh       # staged 시크릿 스캔
 ```
 
-## 고쳐도 된다. 대신 킷에 되돌려라
+위 `gate.sh` 두 명령 모두 도구가 없는 검사를 실패로 처리한다. 불가피하게 건너뛰려면
+`AI_KIT_ALLOW_MISSING_TOOLS=1` 을 붙인다. 그러면 그 검사는 실행되지 않고, 그 검사 때문에
+게이트가 실패하지도 않는다. 건너뛴 검사는 `gate — 건너뜀(도구 없음):` 줄에 출력된다.
+
+## 고쳐도 된다. 대신 고친 것을 킷에도 올려라
 
 급하면 여기서 바로 고쳐라 — 게이트가 틀렸는데 고치지 못하게 막는 것이 더 나쁘다.
 검사는 없다. `install-manifest` 는 **어느 킷에서 왔는지**만 적고 내용은 검사하지 않는다.

@@ -5,9 +5,9 @@
 # 진입점이 언어(Kotlin · Java)가 아니라 빌드 도구(Gradle)라서 어댑터가 하나다.
 #
 # **린트가 보장되는 것은 Kotlin 뿐이다.** Java 는 지금 다루지 않는다 — 킷이 린터를
-# 꽂아주는 다른 언어들(Go·TS·Kotlin·Python)과 달리 Java 는 빈 채로 두었다.
+# 설정해 주는 다른 언어들(Go·TS·Kotlin·Python)과 달리 Java 는 빈 채로 두었다.
 # Java 소스가 있어도 gradle check 로 **컴파일과 테스트는** 실행되지만,
-# 프로젝트가 checkstyle 등을 스스로 켜지 않았다면 린트는 0이다.
+# 프로젝트가 checkstyle 등을 스스로 켜지 않았다면 린트는 실행되지 않는다.
 # 필요해지면 checkstyle 독립 CLI 를 ktlint 와 같은 모양으로 붙이면 된다.
 #
 #   린트   ktlint 를 직접 부른다. 독립 실행 바이너리를 배포하고 .editorconfig 를 규칙
@@ -49,7 +49,7 @@ fi
 gate_have java || { gate_skip "java(미설치)"; return 0 2>/dev/null || exit 0; }
 
 # --no-daemon: CI 러너에서 데몬이 남으면 잡이 안 끝난다. 로컬에서도 게이트는 단발이다.
-# AI_KIT_GRADLE_TASKS 로 프로젝트가 태스크를 바꿀 수 있다(게이트를 포크하지 않고).
+# AI_KIT_GRADLE_TASKS 로 프로젝트가 태스크를 바꿀 수 있다(게이트를 복사해 고치지 않고).
 # shellcheck disable=SC2086
 gate_run "gradle ${AI_KIT_GRADLE_TASKS:-check}" \
   "${_jvm_cmd[@]}" --no-daemon --console=plain ${AI_KIT_GRADLE_TASKS:-check}

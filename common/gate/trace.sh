@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPEC 요구 ↔ 추적 매트릭스 정합 검사.
-# 요구가 조용히 증발하는 것을 막는 유일한 기계적 장치다.
+# SPEC 의 요구가 아무도 모르게 추적표에서 빠지는 것을 막는 유일한 기계 장치다.
 #
 #   trace.sh [--spec docs/SPEC.md] [--matrix docs/traceability.md]
 set -uo pipefail
@@ -27,8 +27,8 @@ cd "$REPO" || exit 1
 
 ID_RE='R-[A-Z][A-Z0-9]*-[0-9]+'
 
-# SPEC 에서 ID 를 긁을 때 **HTML 주석 안은 제외한다.**
-# 예전에는 파일 전체를 긁어서, ID 형식을 설명하는 산문의 예시까지 요구로 읽혔다 —
+# SPEC 에서 ID 를 뽑을 때 **HTML 주석 안은 제외한다.**
+# 예전에는 파일 전체에서 뽑아서, ID 형식을 설명하는 산문의 예시까지 요구로 읽혔다 —
 # 킷을 갓 설치한 레포가 CI 에서 바로 실패했다.
 #
 # 여러 줄 주석을 처리해야 한다. sed 로 한 줄씩 거르는 방식은 `<!--` 로 시작하는 줄만
@@ -52,8 +52,8 @@ _strip_comments() { # stdin -> stdout. 닫히지 않은 주석이 있으면 exit
   '
 }
 
-# 닫히지 않은 `<!--` 하나가 그 뒤 파일 전체를 삼켜 요구를 통째로 감출 수 있다.
-# 오타 하나로 강제가 조용히 꺼지는 것이라, 삼키게 두지 않고 실패시킨다.
+# 닫히지 않은 `<!--` 하나가 그 뒤 파일 전체를 주석으로 만들어 요구를 통째로 감출 수 있다.
+# 오타 하나로 강제가 조용히 꺼지는 것이라, 그대로 두지 않고 실패시킨다.
 _strip_or_die() { # $1=파일
   local out; out=$(_strip_comments < "$1"); local rc=$?
   if [ "$rc" = 3 ]; then
@@ -65,7 +65,7 @@ _strip_or_die() { # $1=파일
 
 spec_ids=$(_strip_or_die "$SPEC" | grep -oE "$ID_RE" | grep -v 'R-XXX-' | sort -u)
 # 추적표도 주석을 걷는다. 안 걷으면 행을 <!-- --> 로 감싸는 것만으로 "추적되고 있다" 가
-# 되어, 요구가 조용히 증발하는 것을 막는 유일한 기계적 장치가 꺼진다.
+# 되어, 요구가 아무도 모르게 빠지는 것을 막는 유일한 기계 장치가 꺼진다.
 _mx_body=$(_strip_or_die "$MATRIX")
 mx_ids=$(printf '%s\n' "$_mx_body" | grep -oE "^\| *$ID_RE" | grep -oE "$ID_RE" | grep -v 'R-XXX-' | sort -u)
 
@@ -74,8 +74,8 @@ fail=0; report=""
 missing=$(comm -23 <(printf '%s\n' "$spec_ids") <(printf '%s\n' "$mx_ids") | grep -v '^$' || true)
 orphan=$(comm -13 <(printf '%s\n' "$spec_ids") <(printf '%s\n' "$mx_ids") | grep -v '^$' || true)
 
-[ -n "$missing" ] && { fail=1; report+=$'\n'"추적표에 없는 SPEC 요구 (요구가 증발할 자리):"$'\n'"$(printf '%s\n' "$missing" | sed 's/^/  /')"$'\n'; }
-[ -n "$orphan" ]  && { fail=1; report+=$'\n'"SPEC 에 없는 추적표 행 (유령 요구):"$'\n'"$(printf '%s\n' "$orphan" | sed 's/^/  /')"$'\n'; }
+[ -n "$missing" ] && { fail=1; report+=$'\n'"추적표에 없는 SPEC 요구:"$'\n'"$(printf '%s\n' "$missing" | sed 's/^/  /')"$'\n'; }
+[ -n "$orphan" ]  && { fail=1; report+=$'\n'"SPEC 에 없는 추적표 행:"$'\n'"$(printf '%s\n' "$orphan" | sed 's/^/  /')"$'\n'; }
 
 # 상태 칸 검사 + 구현 경로 실재 확인
 declare -i n_done=0 n_part=0 n_todo=0 n_out=0
