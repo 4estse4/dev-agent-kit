@@ -49,13 +49,15 @@ fix/kit-gaps:docs/evidence.md:1
 
 ## 결정
 
-`--update` 와 3-way 병합을 통째로 걷어낸다. 이 결정 뒤의 동작(2026-09-05):
+`--update` 와 3-way 병합을 통째로 걷어낸다. 이슈 #38 에 적은 동작:
 
 ```
 .ai-kit/gate · git-hooks · .github/workflows/gates.yml   →  항상 교체 (킷 소유)
 없는 파일                                                 →  놓는다
 이미 있고 내용이 다른 파일                                  →  건드리지 않고 diff 명령을 알려준다
 ```
+
+PR #43 이 머지될 때는 `gates.yml` 이 프로젝트 소유였고, 내용이 다른 파일은 `<파일>.ai-kit-new` 로 옆에 놓였다.
 
 설치는 한 번 가져오는 것이고 갱신은 프로젝트의 선택이다. 킷 `CLAUDE.md` 의 「킷은 아직
 미완성이다 — 이전 버전을 고려하지 마라」가 이 결정의 규칙 쪽이다.
@@ -71,7 +73,7 @@ fix/kit-gaps:docs/evidence.md:1
 ## 결과
 
 설치된 프로젝트는 킷의 개선을 자동으로 받지 못한다. 다시 설치하면 킷 소유 파일은
-교체되고, 프로젝트 소유 파일은 diff 명령만 안내받는다.
+교체되고, 프로젝트 소유 파일은 건드리지 않은 채 킷의 것이 `<파일>.ai-kit-new` 로 옆에 놓인다.
 
 「`install.sh --update` 의 baseline + 3-way 병합」을 실증했다는 기록은 이 결정으로 대상이
 없어졌다. 옛 구현은 PR #35 의 head 에 있다 — `git fetch origin refs/pull/35/head`. 브랜치는
