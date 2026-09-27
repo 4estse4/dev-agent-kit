@@ -110,7 +110,7 @@ gh issue list -R 4estse4/ai-native-kit
 **파일 수정을 bash 로 하지 않는 근거.** 킷이 배포하는 `PostToolUse` 훅은 `matcher` 가
 `Edit|Write` 다(`claude-code/settings.json`). **bash 편집은 그 훅을 건너뛴다.**
 `누가 막나` 가 `막는 것 없음` 인 것은 정직하게 그렇다 — 그 훅은 이 레포에 등록돼 있지 않고
-(이슈 #4. 이 레포의 `.claude/settings.json` 은 (사람) 인용을 확인하는 훅과 봇 계정 훅 둘만 등록한다),
+(이슈 #4. 이 레포의 `.claude/settings.json` 은 훅 셋만 등록한다 — (사람) 인용을 확인하는 훅 하나와 봇 계정 훅 둘),
 시스템이 매 세션 반대 지시를 주기도 한다. 통짜 치환이 실제로 무엇을 지웠는지는
 `docs/dev-log.md` 의 2026-09-10 항목에 있다.
 

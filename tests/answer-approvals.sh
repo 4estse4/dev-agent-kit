@@ -167,6 +167,8 @@ hook "레포 권한이 없는 계정의 👍(봇 이름)" deny botlogin round2.m
 hook "읽기 권한만 있는 계정의 👍" deny reader round2.md "reader"
 hook "write 권한 계정의 👍" pass writer round2.md
 hook "👍 뒤에 코멘트를 고침" deny edited-after round2.md "고치기 전에"
+# 리액션은 한 사람당 한 종류에 하나라, 이미 단 👍 를 누르면 떼어진다. 다시 받는 법을 사유에 적는다.
+hook "고친 뒤 👍 를 다시 받는 법" deny edited-after round2.md "떼고 다시 단다"
 hook "코멘트를 고친 뒤에 단 👍" pass edited-before round2.md
 hook "인정되지 않는 👍 뒤에 인정되는 👍" pass mixed round2.md
 hook "👍 가 있는 쪽의 인용만 씀" pass two round3.md

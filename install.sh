@@ -686,12 +686,12 @@ if [ "$DO_AGENT" = 1 ] && [ "$DRY_RUN" = 0 ]; then
   cat <<'MSG'
 
 ── 봇 계정과 👍 승인 ──
-  세션이 GitHub 에 쓰는 글을 봇 계정(GitHub App)으로 올리고, 사람이 3.5 코멘트에 자기 계정으로
-  👍 를 달아 승인하게 하려면 .claude/bot.json 이 필요합니다. 없으면 세션과 사람이 한 계정을 씁니다.
-  App 의 권한은 한 번 정하면 되고, 레포마다 할 일은 둘입니다:
-    1. GitHub 의 App 설치 설정에서 저장소 목록에 이 레포를 더한다
-    2. 이 레포에 .claude/bot.json 을 커밋한다
-  켜는 법 전체는 docs/process/kit-guide.md 의 「봇 계정과 👍 승인」 절에 있습니다.
+  세션이 GitHub 에 쓰는 글을 봇 계정(GitHub App)으로 올리고, PR 리뷰에서 사람이 정한 답을 적은
+  코멘트를 사람이 자기 계정의 👍 로 승인하게 하려면 .claude/bot.json 이 필요합니다. 없으면 세션과
+  사람이 한 계정을 씁니다. App 의 권한은 한 번 정하면 되고, 레포마다 할 일은 둘입니다:
+    1. GitHub 의 App 설치 설정에서 저장소 목록에 이 레포를 더하세요
+    2. 이 레포에 .claude/bot.json 을 커밋하세요
+  켜는 법 전체는 docs/process/kit-guide.md 6절 「봇 계정과 👍 승인」에 있습니다.
 MSG
 fi
 

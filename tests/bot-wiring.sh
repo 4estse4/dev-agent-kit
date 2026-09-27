@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 레포에 봇 설정(`.claude/bot.json`)이 있을 때 세션의 gh 를 봇 계정으로 배선하고, 그 배선을 벗어나는
+# 레포에 봇 설정(`.claude/bot.json`)이 있을 때 세션의 gh 를 봇 계정에 연결하고, 그 연결을 벗어나는
 # 쓰기를 막는가.
 #
 # 세 훅을 Claude Code 가 부르는 모양으로 부른다 — SessionStart 의 `bot_session.sh` 와 PreToolUse 의
@@ -7,7 +7,7 @@
 # `bot_token.sh` 는 두 훅이 부르는 것을 지나가게 한다.
 #
 # **네트워크와 진짜 개인키를 안 쓴다.** 개인키는 이 테스트가 만든 버릴 RSA 키이고, PATH 앞에 둔
-# 가짜 `curl` 이 GitHub API 대신 설치 · 토큰을 돌려주고 받은 URL 을 적어 둔다. `HOME` 을 임시
+# 가짜 `curl` 이 GitHub API 대신 설치 · 토큰을 돌려주고 받은 인자를 적어 둔다. `HOME` 을 임시
 # 디렉터리로 바꿔 개인키의 기본 자리(`~/.config/<App 이름>/key.pem`)를 그대로 지나가게 한다.
 # 토큰 글자(`ghs_stubtoken`)가 훅의 출력에 나오면 실패다 — 훅의 출력은 모델의 맥락에 들어간다.
 set -u
@@ -25,7 +25,9 @@ import json, os, sys
 a = sys.argv[1:]
 url = next(x for x in a if x.startswith('https://'))
 with open(os.environ['STUB_CURL_LOG'], 'a') as fh:
-    fh.write(url + '\n')
+    fh.write(' '.join(a) + '\n')
+if os.environ.get('STUB_CURL_EXIT'):          # 네트워크가 멈춰 curl 이 기다리다 끝난 것(28)
+    sys.exit(int(os.environ['STUB_CURL_EXIT']))
 auth = ''
 for i, x in enumerate(a):
     if x == '-H' and a[i + 1].startswith('@'):
@@ -90,7 +92,7 @@ no_token_in_out() { ok "$1 — 출력에 토큰이 없다" '! printf "%s" "$OUT"
 
 echo "── 세션 시작(bot_session.sh)"
 repo "$R"
-session "배선" "$R"
+session "연결" "$R"
 # macOS 의 git 은 임시 디렉터리의 `/var` 를 `/private/var` 로 풀어 적으므로 글자가 아니라 같은
 # 디렉터리인지 본다.
 ok "GH_CONFIG_DIR 을 CLAUDE_ENV_FILE 에 적는다" '[ "$(sed -n "s/^export GH_CONFIG_DIR=//p" "$T/env")" -ef "$BOTDIR" ]'
@@ -99,10 +101,16 @@ ok "gh 가 옮기기(migration)를 안 하게 config.yml 에 version 을 쓴다"
 mode() { python3 -c 'import os, sys; print(oct(os.stat(sys.argv[1]).st_mode & 0o777))' "$1"; }
 ok "hosts.yml 은 본인만 읽는다(600)" '[ "$(mode "$BOTDIR/hosts.yml")" = 0o600 ]'
 ok "봇 디렉터리는 본인만 연다(700)" '[ "$(mode "$BOTDIR")" = 0o700 ]'
-ok "이 세션을 배선했다고 적는다" '[ -f "$BOTDIR/wired/s1" ]'
+ok "이 세션을 연결했다고 적는다" '[ -f "$BOTDIR/wired/s1" ]'
 ok "JWT 파일을 남기지 않는다" '! grep -rqF Bearer "$BOTDIR"'
 ok "레포의 설치를 찾고 토큰을 받는다" 'grep -qF "repos/o/r/installation" "$T/curl-log" && grep -qF "installations/7/access_tokens" "$T/curl-log"'
-no_token_in_out "배선"
+no_token_in_out "연결"
+
+# 같은 세션을 다시 시작했는데 토큰을 못 받으면, 앞선 시작이 만든 표시가 남아 있으면 안 된다.
+mv "$T/home/.config/kit-bot/key.pem" "$T/key.bak"
+session "다시 시작, 개인키 없음" "$R"
+mv "$T/key.bak" "$T/home/.config/kit-bot/key.pem"
+ok "다시 시작할 때 토큰을 못 받으면 앞선 연결 표시를 지운다" '[ ! -f "$BOTDIR/wired/s1" ]'
 
 repo "$R" "" no
 session "봇 설정 없음" "$R"
@@ -113,12 +121,12 @@ mv "$T/home/.config/kit-bot/key.pem" "$T/key.bak"
 session "개인키 없음" "$R"
 mv "$T/key.bak" "$T/home/.config/kit-bot/key.pem"
 ok "개인키가 없으면 그 자리와 안내 문서를 출력한다" 'printf "%s" "$OUT" | grep -qF "~/.config/kit-bot/key.pem" && printf "%s" "$OUT" | grep -qF kit-guide.md'
-ok "개인키가 없으면 배선하지 않는다" '[ ! -s "$T/env" ] && [ ! -f "$BOTDIR/wired/s1" ]'
+ok "개인키가 없으면 연결하지 않는다" '[ ! -s "$T/env" ] && [ ! -f "$BOTDIR/wired/s1" ]'
 
 repo "$R"
 STUB_INSTALL=404 session "설치 범위 밖" "$R"
 ok "설치에 레포가 없으면 레포 이름과 안내 문서를 출력한다" 'printf "%s" "$OUT" | grep -qF "o/r" && printf "%s" "$OUT" | grep -qF "App 설치" && printf "%s" "$OUT" | grep -qF kit-guide.md'
-ok "설치에 레포가 없으면 배선하지 않는다" '[ ! -s "$T/env" ] && [ ! -f "$BOTDIR/wired/s1" ]'
+ok "설치에 레포가 없으면 연결하지 않는다" '[ ! -s "$T/env" ] && [ ! -f "$BOTDIR/wired/s1" ]'
 
 repo "$R" "https://gitlab.com/o/r.git"
 session "GitHub 이 아닌 origin" "$R"
@@ -130,7 +138,7 @@ ok "ssh 로 적은 origin 에서도 레포를 찾는다" 'grep -qF "repos/o/r/in
 
 repo "$R"
 session "CLAUDE_ENV_FILE 없음" "$R" no
-ok "CLAUDE_ENV_FILE 이 없으면 배선하지 못했다고 알린다" 'printf "%s" "$OUT" | grep -qF CLAUDE_ENV_FILE && [ ! -f "$BOTDIR/wired/s1" ]'
+ok "CLAUDE_ENV_FILE 이 없으면 연결하지 못했다고 알린다" 'printf "%s" "$OUT" | grep -qF CLAUDE_ENV_FILE && [ ! -f "$BOTDIR/wired/s1" ]'
 no_token_in_out "CLAUDE_ENV_FILE 없음"
 
 echo "── gh 명령 막기(bot_guard.sh)"
@@ -138,23 +146,36 @@ repo "$R" "" no
 guard "봇 설정이 없으면 막지 않는다" pass "gh api -X POST repos/o/r/issues/comments/1/reactions -f content=+1"
 
 repo "$R"
-guard "배선 전의 게시" deny "gh pr comment 1 --body-file /tmp/x.md" "$R" "배선"
-guard "배선 전의 이슈 열기" deny "gh issue create --title t --body-file /tmp/x.md"
-guard "배선 전의 REST 쓰기(-f)" deny "gh api repos/o/r/issues/1/comments -f body=x"
-guard "배선 전의 GraphQL 쓰기" deny "gh api graphql -f query='mutation { closeIssue(input: {issueId: \"x\"}) { clientMutationId } }'"
-guard "배선 전의 REST 삭제(-X DELETE, 필드 없음)" deny "gh api -X DELETE repos/o/r/issues/comments/1"
-guard "배선 전의 GET(필드를 줌)" pass "gh api -X GET search/issues -f q=repo:o/r"
-guard "배선 전의 읽기" pass "gh pr diff 1"
-guard "배선 전의 도움말(--help)" pass "gh issue create --help"
-guard "배선 전의 도움말(-h)" pass "gh pr comment -h"
-guard "배선 전 사유의 안내 절 이름" deny "gh pr comment 1 --body-file /tmp/x.md" "$R" "「봇 계정과 👍 승인」 절에 있다"
-guard "배선 전의 GraphQL 읽기" pass "gh api graphql -f query='query { viewer { login } }'"
+guard "연결 전의 게시" deny "gh pr comment 1 --body-file /tmp/x.md" "$R" "연결"
+guard "연결 전의 이슈 열기" deny "gh issue create --title t --body-file /tmp/x.md"
+guard "연결 전의 REST 쓰기(-f)" deny "gh api repos/o/r/issues/1/comments -f body=x"
+guard "연결 전의 GraphQL 쓰기" deny "gh api graphql -f query='mutation { closeIssue(input: {issueId: \"x\"}) { clientMutationId } }'"
+guard "연결 전의 REST 삭제(-X DELETE, 필드 없음)" deny "gh api -X DELETE repos/o/r/issues/comments/1"
+guard "연결 전의 GET(필드를 줌)" pass "gh api -X GET search/issues -f q=repo:o/r"
+guard "연결 전의 읽기" pass "gh pr diff 1"
+guard "연결 전의 도움말(--help)" pass "gh issue create --help"
+guard "연결 전의 도움말(-h)" pass "gh pr comment -h"
+guard "연결 전 사유의 안내 절 이름" deny "gh pr comment 1 --body-file /tmp/x.md" "$R" "「봇 계정과 👍 승인」 절에 있다"
+guard "연결 전의 GraphQL 읽기" pass "gh api graphql -f query='query { viewer { login } }'"
+guard "연결 전의 git push" deny "git push -u origin HEAD" "$R" "연결"
+guard "연결 전의 git fetch" pass "git fetch origin"
+guard "연결 전의 REST 삭제(-XDELETE 붙여 씀)" deny "gh api -XDELETE repos/o/r/issues/comments/1"
+guard "연결 전의 GET(-XGET 붙여 씀)" pass "gh api -XGET repos/o/r"
+guard "연결 전의 목록 밖 쓰기(pr update-branch)" deny "gh pr update-branch 1"
+guard "연결 전의 목록 밖 쓰기(run rerun)" deny "gh run rerun 1"
+guard "연결 전의 목록 밖 쓰기(label create)" deny "gh label create x"
+guard "연결 전 하위 명령 앞의 플래그(pr -R o/r merge)" deny "gh pr -R o/r merge 1"
+guard "연결 전 하위 명령 앞의 플래그 읽기(pr -R o/r view)" pass "gh pr -R o/r view 1"
+guard "연결 전의 읽기(run view)" pass "gh run view 1"
+guard "연결 전의 읽기(search)" pass "gh search issues x"
+guard "연결 전의 읽기(repo view)" pass "gh repo view o/r"
 
-session "배선" "$R"
-guard "배선 뒤의 게시" pass "gh pr comment 1 --body-file /tmp/x.md"
+session "연결" "$R"
+guard "연결 뒤의 게시" pass "gh pr comment 1 --body-file /tmp/x.md"
 ok "토큰이 넉넉하면 새로 받지 않는다" '[ ! -s "$T/curl-log" ]'
-guard "배선 뒤의 머지" pass "gh pr merge 1 --squash --subject s --body b"
+guard "연결 뒤의 머지" pass "gh pr merge 1 --squash --subject s --body b"
 guard "gh 가 아닌 명령" pass "ls -la high"
+guard "연결 뒤의 git push" pass "git push -u origin HEAD"
 
 echo "── 스스로 승인하는 명령"
 guard "REST 로 👍(-X POST)" deny "gh api -X POST repos/o/r/issues/comments/1/reactions -f content=+1" "$R" "👍"
@@ -170,6 +191,11 @@ guard "GITHUB_TOKEN 으로 바꿈" deny "export GITHUB_TOKEN=x; gh api user"
 guard "사람의 토큰을 꺼냄" deny "gh auth token"
 guard "계정을 바꿈" deny "gh auth switch -u someone"
 guard "인증 상태만 봄" pass "gh auth status"
+guard "토큰을 출력하는 인증 상태(-t)" deny "gh auth status -t"
+guard "토큰을 출력하는 인증 상태(--show-token)" deny "gh auth status --show-token"
+guard "GH_ENTERPRISE_TOKEN 으로 바꿈" deny "GH_ENTERPRISE_TOKEN=x gh api user"
+guard "GH_HOST 로 바꿈" deny "GH_HOST=example.com gh pr view 1"
+guard "👍 를 GraphQL 로 읽기만 함" pass "gh api graphql -f query='query { repository(owner: \"o\", name: \"r\") { pullRequest(number: 1) { comments(first: 5) { nodes { reactions(content: THUMBS_UP, first: 5) { nodes { createdAt } } } } } } }'"
 
 echo "── 토큰 갱신"
 printf '2000-01-01T00:00:00Z\n' > "$BOTDIR/expires"
@@ -179,6 +205,12 @@ printf '2000-01-01T00:00:00Z\n' > "$BOTDIR/expires"
 STUB_INSTALL=404 guard "갱신 실패 뒤의 게시" deny "gh pr comment 1 --body-file /tmp/x.md" "$R" "kit-guide.md"
 printf '2000-01-01T00:00:00Z\n' > "$BOTDIR/expires"
 STUB_INSTALL=404 guard "갱신 실패 뒤의 읽기" pass "gh pr diff 1"
+printf '2000-01-01T00:00:00Z\n' > "$BOTDIR/expires"
+guard "만료된 토큰으로 git push" pass "git push -u origin HEAD"
+ok "git push 앞에서도 토큰을 새로 받는다" 'grep -qF access_tokens "$T/curl-log" && grep -qF 2099 "$BOTDIR/expires"'
+printf '2000-01-01T00:00:00Z\n' > "$BOTDIR/expires"
+STUB_CURL_EXIT=28 guard "네트워크가 멈춘 뒤의 게시" deny "gh pr comment 1 --body-file /tmp/x.md" "$R" "네트워크"
+ok "curl 이 기다리는 시간에 끝이 있다" 'grep -qF -- "--max-time" "$T/curl-log"'
 
-[ "$fail" = 0 ] && echo "  ✓ 봇 설정이 있으면 세션의 gh 를 봇으로 배선하고, 벗어나는 쓰기를 막는다"
+[ "$fail" = 0 ] && echo "  ✓ 봇 설정이 있으면 세션의 gh 를 봇 계정에 연결하고, 벗어나는 쓰기를 막는다"
 exit "$fail"

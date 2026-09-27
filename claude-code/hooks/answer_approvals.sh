@@ -139,7 +139,8 @@ try:
             if not who:
                 notes.append("계정을 알 수 없는 👍(봇)")
             elif edited and r['createdAt'] <= edited:
-                notes.append("%s 의 👍 는 코멘트를 고치기 전에 달았다" % who)
+                # 리액션은 한 사람당 한 종류에 하나라, 한 번 누르면 떼어지기만 한다
+                notes.append("%s 의 👍 는 코멘트를 고치기 전에 달았다. 👍 를 떼고 다시 단다" % who)
             elif permission(who) not in ('admin', 'write'):
                 notes.append("%s 는 쓰기 권한이 없다(%s)" % (who, permission(who) or '없음'))
             else:

@@ -59,10 +59,12 @@ auth=$(mktemp "$dir/.auth.XXXXXX")
 trap 'rm -f "$auth"' EXIT
 printf 'Authorization: Bearer %s.%s.%s\n' "$hdr" "$pld" "$sig" > "$auth"
 
-# api <URL> [curl 인자…] — 본문 뒤 마지막 줄에 HTTP 상태를 붙여 출력한다
+# api <URL> [curl 인자…] — 본문 뒤 마지막 줄에 HTTP 상태를 붙여 출력한다.
+# 막기 훅이 명령 앞에서 이 스크립트를 부르므로, 네트워크가 멈춰도 한 호출이 20초를 넘지 않게 한다.
 api() {
   local u=$1; shift
-  curl -sS -w '\n%{http_code}' -H 'Accept: application/vnd.github+json' -H @"$auth" "$@" "$u" 2>/dev/null
+  curl -sS --max-time 20 -w '\n%{http_code}' -H 'Accept: application/vnd.github+json' -H @"$auth" \
+    "$@" "$u" 2>/dev/null
 }
 res=$(api "https://api.github.com/repos/$slug/installation")
 code=${res##*$'\n'}
