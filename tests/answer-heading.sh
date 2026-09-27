@@ -27,7 +27,7 @@ SELECTORS = [
     'claude-code/skills/merge-pr/SKILL.md',
     'claude-code/skills/open-pr/SKILL.md',
     'claude-code/skills/self-review/SKILL.md',
-    'claude-code/hooks/answer_approvals.sh',
+    'claude-code/hooks/human_review.sh',
 ]
 # 제목을 적은 자리(N)와 고르는 정규식(.*). 「라운드」부터 끝 글자 앞까지를 뗀다
 MENTION = re.compile(r'###[ ]+(N|\.\*)(라운드[^"\'`」)\n]*)')

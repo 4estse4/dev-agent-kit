@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
-# PreToolUse(Bash): 라운드 코멘트의 `(사람)` 인용이 그 PR 의 3.5 코멘트에 글자 그대로 있는지 본다.
-# 없으면 그 `gh pr comment` 를 막는다. 3.5 코멘트에는 사람에게 묻게 한다. 필요: python3 · gh
+# PreToolUse(Bash): 라운드 코멘트의 `(사람)` 인용이 그 PR 의 사람의 글에 글자 그대로 있는지 본다.
+# 없으면 그 `gh pr comment` 를 막는다. 필요: python3 · gh
+#
+# **사람의 글은 봇 설정(`.claude/bot.json`)에 따라 다르다.** 봇 설정이 있으면 세션은 봇 계정으로 쓰고
+# 사람은 자기 계정으로 결정을 남기므로, 사람 계정 코멘트 전체가 원본이다. 봇 설정이 없으면 세션과
+# 사람이 한 계정이라 3.5 코멘트(`### N라운드 코멘트를 읽고 사람이 정한 것`)의 `(사람)` 인용이 원본이다.
+# 어느 코멘트가 원본인지는 `human_review.sh sources` 가 고른다.
 #
 # **왜 훅인가.** 라운드 코멘트는 사람의 승인 없이 올라간다(`open-pr` 3.4). 그 코멘트에서
 # 다음 라운드의 두 리뷰가 다시 판정하지 않는 것은 `(사람)` 인용 하나다. 그 대조를 스킬 안에
@@ -22,26 +27,24 @@
 # 호출(`--help` · `--delete-last`)은 게시가 아니라서 건너뛴다.
 #
 # **라운드 코멘트(첫 줄 `## 리뷰 `)에서 무엇을 막나.** 접힌 블록(`<details>`)을 뺀 부분에서
-# - `(사람…) "…"` 의 따옴표 조각이 3.5 코멘트의 `(사람)` 인용 어디에도 없을 때. `…` 로 줄인
-#   조각들은 한 인용 안에 순서대로 있어야 한다
+# - `(사람…) "…"` 의 따옴표 조각이 원본 어디에도 없을 때. `…` 로 줄인 조각들은 한 인용(봇 설정이
+#   있으면 한 코멘트) 안에 순서대로 있어야 한다
 # - 백틱 밖의 `(사람…)` 바로 뒤에 따옴표 인용이 없거나, 따옴표가 닫히지 않을 때.
 #   대조할 인용이 없어 이 훅의 대조가 우회된다. 백틱 안은 예시라서 안 본다
-# - 레포에 봇 설정(`.claude/bot.json`)이 있는데, 인용이 사람의 👍 가 없는 3.5 코멘트에만 있을 때.
-#   봇 설정이 있으면 세션은 봇 계정으로 올리고 사람은 자기 계정으로 3.5 코멘트에 👍 를 단다.
-#   어떤 👍 를 인정하는지는 `answer_approvals.sh` 머리에 있고, 3.5 코멘트는 그 스크립트가 읽는다
 #
-# **3.5 코멘트(`### N라운드 코멘트를 읽고 사람이 정한 것`)에는 `"ask"` 를 낸다.** 그 코멘트가 대조의
-# 원본이라, 세션이 승인 없이 올리면 원본을 스스로 만드는 셈이다. `ask` 규칙이 없는
-# 레포에서도 사람이 한 번 누르게 한다.
+# **3.5 코멘트(`### N라운드 코멘트를 읽고 사람이 정한 것`)는 원본이라 세션이 그냥 올리지 못한다.**
+# 봇 설정이 없으면 `"ask"` 를 낸다 — 세션이 승인 없이 올리면 원본을 스스로 만드는 셈이라, `ask` 규칙이
+# 없는 레포에서도 사람이 한 번 누르게 한다. 봇 설정이 있으면 막는다 — 봇 계정으로 올린 글은 원본이
+# 아니다. 사람 계정으로 올리는 `human_comment.sh` 를 쓰라고 사유에 적는다.
 #
 # **무엇을 못 막나.** 이 에이전트가 Bash 로 실행할 때만 작동한다. 사람이 손으로 올리거나 웹으로
 # 올리면 훅이 불리지 않고, 다른 명령(`gh api` · `gh issue comment <PR 번호>`)으로 올리면 알아보지 못한다. 명령 이름을
 # 꾸며도(변수 `$GH` · 별칭 · 함수 · 낱말 안의 따옴표나 `\` 인 `comm""ent` · `co\mment`) 못
 # 알아보고, 게시 명령을 스크립트 파일에 두고 실행하거나 인라인 인터프리터에 인자 목록으로
 # 전달해도(`python3 -c` · `node -e` 의 `['gh', 'pr', 'comment', …]`) 못 본다 — 이 훅은 형식대로 입력한
-# 게시 명령의 실수를 막고, 작정한 우회는 막으려 하지 않는다. 대조의 원본인 3.5 코멘트의 인용이 진짜
-# 사람 말인지는 이 훅이 모른다. 3.5 코멘트는 사람이 승인하고 올린다. 봇 설정이 있으면 그 승인이
-# 사람 계정의 👍 로 GitHub 에 남고, 이 훅은 👍 가 있는 3.5 코멘트만 원본으로 쓴다.
+# 게시 명령의 실수를 막고, 작정한 우회는 막으려 하지 않는다. 봇 설정이 없으면 대조의 원본인 3.5
+# 코멘트의 인용이 진짜 사람 말인지는 이 훅이 모른다 — 3.5 코멘트는 사람이 승인하고 올린다. 봇 설정이
+# 있으면 원본의 글쓴이를 GitHub 이 기록하므로, 세션이 봇 계정으로 올린 글은 원본이 되지 못한다.
 #
 # **통과시킬 때 아무것도 내지 않는다.** 훅의 `"allow"` 는 권한 프롬프트를 건너뛰게 하지만
 # `ask` 규칙은 그대로 평가된다(공식 문서: "Deny and ask rules … are still evaluated regardless
@@ -265,6 +268,15 @@ except (OSError, UnicodeDecodeError):
     deny("gh pr comment 의 본문 파일을 읽지 못해 판정할 수 없다(없거나 UTF-8 이 아니다). "
          "UTF-8 파일을 --body-file 에 전달해라.")
 
+top = subprocess.run(['git', 'rev-parse', '--show-toplevel'], cwd=data.get('cwd') or None,
+                     capture_output=True, text=True)
+bot = top.returncode == 0 and os.path.isfile(os.path.join(top.stdout.strip(), '.claude', 'bot.json'))
+if ANSWER.match(body) and bot:
+    deny("이 레포에는 봇 설정(.claude/bot.json)이 있어, 3.5 코멘트"
+         "(「### N라운드 코멘트를 읽고 사람이 정한 것」)는 사람 계정으로 올린다. 봇 계정으로 올린 글은 "
+         "다음 라운드 코멘트의 (사람) 인용의 원본이 아니다. `shasum -a 256 <파일>` 로 sha256 을 구해 `bash .claude/hooks/human_comment.sh <N> "
+         "<절대 경로> <sha256>` 로 올린다 — 권한 프롬프트에 글 전문이 보이고, 사람이 허락하면 사람 계정으로 "
+         "올라간다. 사람이 PR 웹에서 직접 쓸 수도 있다.")
 if ANSWER.match(body):
     out("ask", "3.5 코멘트(「### N라운드 코멘트를 읽고 사람이 정한 것」)는 사람의 승인을 받고 올리는 "
                "글이다. 다음 라운드 코멘트의 (사람) 인용이 이것과 대조된다. "
@@ -282,9 +294,9 @@ want = quotes(body)
 if not want:
     sys.exit(0)
 
-# 3.5 코멘트와 그 👍 는 판정 스크립트가 읽는다. `merge-pr` 이 같은 스크립트를 부른다 — 두 벌이면
-# 인정하는 👍 가 어긋난다.
-judge = ['bash', os.path.join(os.environ['HOOK_DIR'], 'answer_approvals.sh'), '--json', pr] \
+# 원본은 판정 스크립트가 고른다. `merge-pr` 이 같은 스크립트로 Approve 를 판정한다 — 사람 계정을
+# 알아보는 기준이 두 벌이면 어긋난다.
+judge = ['bash', os.path.join(os.environ['HOOK_DIR'], 'human_review.sh'), 'sources', pr] \
     + (['-R', repo] if repo else [])
 try:
     r = subprocess.run(judge, cwd=data.get('cwd') or None, capture_output=True, text=True,
@@ -292,42 +304,38 @@ try:
     got = json.loads(r.stdout) if r.returncode == 0 else None
 except (OSError, ValueError, subprocess.TimeoutExpired):
     got = None
-if not isinstance(got, dict) or not isinstance(got.get('answers'), list):
+if not isinstance(got, dict) or not isinstance(got.get('comments'), list):
     deny("라운드 코멘트의 (사람) 인용을 대조하려고 PR 코멘트를 읽다가 실패했다(gh). "
          "판정 못 한 것은 올리지 않는다. gh 인증과 PR 번호를 확인하고 다시 입력해라.")
 
-# 봇 설정이 있으면 👍 가 없는 3.5 코멘트는 원본이 아니다. 인용이 거기에만 있으면 👍 를 요구한다.
-have, waiting = [], []
-for a in got['answers']:
-    b = a.get('body') if isinstance(a, dict) else None
+# 봇 설정이 있으면 사람 계정 코멘트 전체가 원본이다 — 사람이 PR 웹에서 쓴 글에는 `(사람)` 라벨이 없다.
+# 없으면 3.5 코멘트의 `(사람)` 인용이 원본이다.
+have, edited = [], []
+for c in got['comments']:
+    b = c.get('body') if isinstance(c, dict) else None
     if not isinstance(b, str):
+        if isinstance(c, dict) and c.get('why'):
+            edited.append('%s (%s)' % (c.get('url'), c['why']))
         continue
-    if a.get('approved') is False:
-        waiting.append((a, quotes(b)))
-    else:
-        have += quotes(b)
+    have += [norm(mask(b))] if got.get('bot') else quotes(b)
 # 따옴표 안에서 가운데를 `…` 로 줄인 인용이 있다(「길면 잘라 쓰되 낱말을
 # 바꾸지 않는다」). 줄인 조각들이 한 인용 안에 순서대로 있어야 한다.
-missing, unapproved = [], {}
+missing = []
 for s in want:
     pieces = [p.strip() for p in re.split(r'…|\.\.\.', s) if p.strip()]
     pat = re.compile('.*?'.join(re.escape(p) for p in pieces))
-    if any(pat.search(h) for h in have):
-        continue
-    hit = next((a for a, qs in waiting if any(pat.search(h) for h in qs)), None)
-    if hit:
-        unapproved[hit.get('url')] = hit.get('why') or ''
-    else:
+    if not any(pat.search(h) for h in have):
         missing.append(show(s))
+if missing and got.get('bot'):
+    deny("라운드 코멘트의 (사람) 인용 중 이 PR 의 사람 계정 코멘트에 글자 그대로 없는 것이 있다. 이 "
+         "레포에는 봇 설정(.claude/bot.json)이 있어, 사람이 자기 계정으로 쓴 코멘트만 원본이다 — 봇 "
+         "계정으로 올린 3.5 코멘트는 원본이 아니다. 줄였으면 한 코멘트 안에서 순서대로 줄인다. "
+         "없는 조각: " + " / ".join('"%s"' % s for s in missing)
+         + (" 다른 계정이 고쳐 원본에서 뺀 코멘트: " + " / ".join(edited) if edited else ""))
 if missing:
     deny("라운드 코멘트의 (사람) 인용 중 이 PR 의 3.5 코멘트"
          "(「### N라운드 코멘트를 읽고 사람이 정한 것」)의 (사람) 인용에 글자 그대로 없는 것이 있다. "
          "3.5 코멘트에 올라간 문장만 인용한다. 줄였으면 한 인용 안에서 순서대로 줄인다. "
          "없는 조각: " + " / ".join('"%s"' % s for s in missing))
-if unapproved:
-    deny("라운드 코멘트의 (사람) 인용의 원본인 3.5 코멘트에 사람의 👍 가 없다. 이 레포에는 봇 "
-         "설정(.claude/bot.json)이 있어, 사람이 자기 계정으로 👍 를 단 3.5 코멘트만 원본으로 "
-         "인정한다. 사람에게 아래 코멘트에 👍 를 달아 달라고 알리고, 단 뒤에 다시 입력해라. "
-         "직접 달지 마라: " + " / ".join('%s (%s)' % (u, w) for u, w in unapproved.items()))
 sys.exit(0)
 PY

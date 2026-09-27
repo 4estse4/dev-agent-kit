@@ -3,16 +3,17 @@
 # GitHub 에 쓰는 것을 막는다. 필요: python3 · git(토큰을 새로 받을 때 openssl · curl)
 #
 # **무엇을 막나.**
-# - 세션이 👍 를 다는 명령. REST 의 `…/reactions` 에 쓰는 호출(`-X`/`--method` 가 GET 이 아니거나,
-#   `-f` · `-F` · `--field` · `--raw-field` · `--input` · `-d` · `--data` 를 준 호출)과 GraphQL 의
-#   `addReaction`. 👍 는 사람이 3.5 코멘트를 승인하는 표시라서, 세션이 달면 스스로 승인하는 셈이다
 # - gh 와 git 의 신원을 바꾸거나 토큰을 꺼내는 명령. 명령 글자에 `GH_CONFIG_DIR` · `GH_TOKEN` ·
 #   `GITHUB_TOKEN` · `GH_ENTERPRISE_TOKEN` · `GH_HOST` · `GIT_CONFIG_COUNT` · `GIT_CONFIG_KEY_N` ·
 #   `GIT_CONFIG_VALUE_N` · `GIT_CONFIG_PARAMETERS` · `credential.…helper` · `oauth_token` 이 있거나,
 #   `gh auth` 명령. `oauth_token` 은 `gh config get -h github.com oauth_token` 이 토큰 전체를 출력해서다.
 #   `gh auth` 는 `status` 까지 모두 막는다 — gh 2.92 는 토큰을 마지막 `_` 뒤만 가려, `_` 가 여럿인
-#   봇 설치 토큰을 거의 다 출력한다. 사람의 설정이나 토큰으로 바꾸면 세션의 글이 사람의 글로 올라가고
-#   사람의 👍 도 달 수 있다. 토큰은 모델의 맥락에 들어간다
+#   봇 설치 토큰을 거의 다 출력한다. 사람의 설정이나 토큰으로 바꾸면 세션의 글이 사람의 글로 올라가
+#   사람의 결정처럼 읽힌다. 토큰은 모델의 맥락에 들어간다. 환경을 비우는 `env -i`(`--ignore-environment` ·
+#   `-`)도 막는다 — 그 뒤의 gh 와 git 은 봇 계정 연결을 잃는다
+# - 토큰을 출력하는 명령. `git credential …` · `git credential-<도우미>` 와 봇 디렉터리의 `hosts.yml` 을
+#   가리키는 명령이다. 연결된 세션의 git 은 github.com 자격 증명을 봇(gh)에게서 받으므로
+#   `git credential fill` 이 봇 토큰 전체를 출력한다. 연결되지 않은 세션에서는 사람의 토큰을 출력한다
 # - 연결되지 않은 세션의 쓰기. 세션 시작 훅(`bot_session.sh`)이 이 세션을 봇 계정에 연결하지
 #   못했으면 그 세션의 gh 와 git 은 사람 계정이다. gh 의 읽기 명령이 아닌 것과 `git push` 를 막는다.
 #   읽기로 보는 것은 아래 `READ_GROUPS` · `READ_SUBS` 와, 메서드 · 필드로 판정해 쓰지 않는 `gh api` 다.
@@ -21,45 +22,57 @@
 # - 연결된 세션의 푸시가 github.com 의 SSH 주소로 나가는 것. 세션 환경은 github.com 의 SSH 주소를
 #   https 로 바꾸지만, 사람의 git 설정(`url.<ssh>.insteadOf` · `pushInsteadOf`)이 https 를 다시 SSH 로
 #   바꾸면 그 푸시는 SSH 키, 곧 사람 계정으로 나간다. 세션 환경(`<봇 디렉터리>/session-env`)을 적용해
-#   실제 푸시 주소를 푼다
+#   실제 푸시 주소를 풀고(`push_urls`), 풀지 못하면 막는다
 # - 봇 토큰이 끝나 가는데 새로 받지 못한 뒤의 쓰기
+#
+# **사람 계정으로 올리는 명령에는 묻는다.** 사람의 결정은 사람 계정 코멘트로 남는다. 세션이 받은
+# 답을 올리는 길은 `human_comment.sh` 하나이고, 그 명령에 권한 프롬프트(`ask`)를 내며 사유에 올릴 글
+# 전문을 넣는다(`human_comment`). 한 줄 정규형이 아니거나, 스크립트가 이 훅과 같은 디렉터리의 것이
+# 아니거나, 명령의 sha256 이 파일과 다르면 막는다.
 #
 # **명령 치환 안도 본다.** `$(…)` · 백틱 안의 명령을 꺼내 같은 판정을 한다. `url=$(gh pr create …)` ·
 # `-H "Authorization: token $(gh auth token)"` 은 흔한 셸 관용구다. heredoc 의 본문은 명령에 전달하는
-# 글이라 빼고 판정한다(커밋 메시지 · PR 본문). 조각의 명령 자리에 있는 `gh` 는 이름과 상관없이 호출이고,
+# 글이라 빼고 판정한다(커밋 메시지 · PR 본문). 다만 GraphQL 의 `mutation` 은 본문을 빼기 전 글자에서
+# 찾는다 — 여러 줄 쿼리는 heredoc 으로 전달한다. 조각의 명령 자리에 있는 `gh` 는 이름과 상관없이 호출이고,
 # 그 밖의 `gh` 는 바로 뒤 낱말이 gh 의 명령 이름(`GH_GROUPS`)일 때만 호출이다 — `grep -n gh notes.md`
 # 의 `gh` 는 인자다.
 #
 # **토큰을 새로 받는다.** 설치 토큰은 한 시간이면 끝난다. 연결된 세션이 gh 를 부르거나 git 의 원격
-# 명령(push · fetch · pull · clone · ls-remote)을 실행할 때 토큰이 10분 안에 끝나면, 토큰
+# 명령(push · fetch · pull · clone · ls-remote)이나 안에서 gh 를 부르는 판정 스크립트(`human_review.sh`)를
+# 실행할 때 토큰이 10분 안에 끝나면, 토큰
 # 스크립트(`bot_token.sh`)로 새로 받아 봇 디렉터리의 파일만 바꾼다. `GH_CONFIG_DIR` 은 그대로 그
 # 디렉터리를 가리킨다. 연결된 세션의 git 은 github.com 자격 증명을 gh(봇)에게서 받으므로
 # (`bot_session.sh`) 푸시 앞에서도 새로 받아야 한다. 새로 받는 데 드는 시간은 토큰 스크립트의 curl
 # `--max-time` 이 정한다.
 #
 # **무엇을 못 막나.** 명령 글자로 알아보므로, 스크립트 파일 안이나 인라인 인터프리터
-# (`python3 -c` 등) 안의 호출은 못 본다. 명령 글자에 위 낱말이 있으면 검색이나 커밋 메시지도
-# 막힌다 — 그 글자를 파일로 옮겨 전달한다. 이 훅은 형식대로 입력한 명령의 실수를 막고, 작정한
-# 우회는 막으려 하지 않는다. 작정한 우회를 막는 것은 CI 와 브랜치 보호다.
+# (`python3 -c` 등) 안의 호출은 못 본다 — 세션이 봇 연결을 지우는 스크립트를 새로 써서 실행하면 사람
+# 계정으로 올라간다. 명령 글자에 위 낱말이 있으면 검색이나 커밋 메시지도 막힌다 — 그 글자를 파일로
+# 옮겨 전달한다. 이 훅은 형식대로 입력한 명령의 실수를 막고, 작정한 우회는 막으려 하지 않는다. 작정한
+# 우회를 막는 것은 CI 와 브랜치 보호다.
 input=$(cat)
 # 모든 Bash 호출마다 실행되므로 관련 글자가 없으면 파이썬을 실행하지 않고 끝낸다.
 case "$input" in
-  *gh*|*git*|*GH_*|*GITHUB_TOKEN*|*GIT_CONFIG*|*credential*|*reactions*|*addReaction*) ;;
+  *gh*|*git*|*GH_*|*GITHUB_TOKEN*|*GIT_CONFIG*|*credential*|*ai-kit-bot*|*human_comment*|*human_review*|*'env -'*) ;;
   *) exit 0 ;;
 esac
 
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)" HOOK_INPUT="$input" python3 - <<'PY'
-import datetime, json, os, re, shlex, subprocess, sys
+import datetime, hashlib, json, os, re, shlex, subprocess, sys
 
-GUIDE = "docs/process/kit-guide.md 의 「봇 계정과 👍 승인」 절"
+GUIDE = "docs/process/kit-guide.md 의 「봇 계정과 사람의 승인」 절"
+
+
+def decide(decision, why):
+    print(json.dumps({"hookSpecificOutput": {
+        "hookEventName": "PreToolUse",
+        "permissionDecision": decision,
+        "permissionDecisionReason": why}}, ensure_ascii=False))
+    sys.exit(0)
 
 
 def deny(why):
-    print(json.dumps({"hookSpecificOutput": {
-        "hookEventName": "PreToolUse",
-        "permissionDecision": "deny",
-        "permissionDecisionReason": why}}, ensure_ascii=False))
-    sys.exit(0)
+    decide("deny", why)
 
 
 try:
@@ -94,34 +107,48 @@ READ_SUBS = {'view', 'list', 'ls', 'diff', 'checks', 'status', 'download', 'watc
              'check', 'checkout'}
 # 하위 명령 앞에 올 수 있는, 값을 받는 플래그
 VALUED = {'-R', '--repo', '--hostname'}
-GIT_VALUED = {'-C', '-c', '--git-dir', '--work-tree', '--namespace'}
+GIT_VALUED = {'-C', '-c', '--git-dir', '--work-tree', '--namespace', '--config-env'}
 GIT_REMOTE = {'push', 'fetch', 'pull', 'clone', 'ls-remote'}
+# `git push` 의 긴 플래그 가운데 값을 받는 것(git 2.54 의 `git push -h`). git 은 긴 플래그를 앞 글자만
+# 적어도 받으므로 앞부분이 맞으면 값을 받는 것으로 본다.
+PUSH_VALUED = ('repo', 'receive-pack', 'exec', 'push-option', 'recurse-submodules')
 # 명령 자리 앞에 올 수 있는 낱말(래퍼 · 셸 예약어). 그 뒤 첫 낱말이 명령이다.
 WRAPPERS = {'env', 'command', 'exec', 'time', 'nice', 'nohup', 'sudo', 'xargs', 'timeout', 'then',
             'do', 'else', 'if', 'while', 'until', '!', '{', '('}
-HEREDOC = re.compile(r'<<-?[ \t]*([\'"]?)([A-Za-z_][A-Za-z0-9_]*)\1[^\n]*\n(.*?)(?:^[ \t]*\2[ \t]*$|\Z)',
+HEREDOC = re.compile(r'<<-?[ \t]*([\'"]?)([A-Za-z_][A-Za-z0-9_]*)\1[^\n]*\n(.*?)^[ \t]*\2[ \t]*$',
                      re.S | re.M)
 
 
 def strip_heredocs(c):
     """heredoc 의 본문을 뺀다. 본문은 명령에 전달하는 글이다 — 커밋 메시지 · PR 본문에 든 `git push` ·
-    `gh auth` 를 명령으로 읽으면 안 된다. `bash <<'EOF'` 처럼 본문을 실행하는 꼴은 스크립트 파일처럼
-    못 본다."""
+    `gh auth` 를 명령으로 읽으면 안 된다. 끝 줄이 있을 때만 뺀다 — 끝 줄이 없으면 heredoc 이 아니거나
+    (따옴표 안의 `<<EOF`) 셸이 명령 끝까지를 본문으로 읽는데, 어느 쪽인지 모르므로 판정에 남긴다.
+    `bash <<'EOF'` 처럼 본문을 실행하는 꼴은 스크립트 파일처럼 못 본다."""
     return HEREDOC.sub(lambda m: m.group(0)[:m.start(3) - m.start(0)] + '\n', c)
 
 
 def segments(c):
-    """명령을 `;` · `&&` · `||` · `|` · `&` · 줄바꿈에서 나눈 낱말 목록들. 따옴표 안은 한 낱말이다."""
+    """명령을 `;` · `&&` · `||` · `|` · `&` · 줄바꿈에서 나눈 낱말 목록들. 따옴표 안은 한 낱말이다.
+
+    리다이렉션(`>파일` · `2>&1` · `<<끝말`)은 그 대상 · 앞의 파일 번호와 함께 뺀다 — 푸시의 원격 자리를
+    `2>` 나 `>파일` 로 읽으면 주소를 못 푼다. 파일 번호가 띄어 쓴 인자와 구분되지 않아(`push x 2 >f`
+    의 `2`) 숫자만인 인자도 빠지지만, 그 자리에 숫자만 오는 명령은 드물다."""
     try:
-        lex = shlex.shlex(c.replace('\n', ' ; '), posix=True, punctuation_chars=';&|')
+        lex = shlex.shlex(c.replace('\n', ' ; '), posix=True, punctuation_chars=';&|<>')
         lex.whitespace_split = True
         lex.commenters = ''
         toks = list(lex)
     except ValueError:
-        toks = c.split()
-    out, cur = [], []
+        toks = re.findall(r'[;&|<>]+|[^\s;&|<>]+', c.replace('\n', ' ; '))
+    out, cur, target = [], [], False
     for t in toks:
-        if t and set(t) <= set(';&|'):
+        if target:
+            target = False
+        elif t and set(t) <= set(';&|<>') and set(t) & set('<>'):
+            if cur and cur[-1].isdigit():
+                cur.pop()
+            target = True
+        elif t and set(t) <= set(';&|'):
             out.append(cur)
             cur = []
         else:
@@ -223,11 +250,80 @@ def gh_writes(args):
         return False
     if w[0] == 'api':
         if len(w) > 1 and w[1] == 'graphql':
-            return any('mutation' in t for t in args)
+            return 'mutation' in cmd
         return rest_writes(args)
     if w[0] in READ_GROUPS or w[0] == 'auth':
         return False
     return not (len(w) > 1 and w[1] in READ_SUBS)
+
+
+def clears_env(seg):
+    """조각이 `env -i` · `env --ignore-environment` · `env -` 로 환경을 비우고 명령을 실행하는가."""
+    for i, t in enumerate(seg):
+        if os.path.basename(t) != 'env':
+            continue
+        for u in seg[i + 1:]:
+            if u in ('-', '--ignore-environment') or re.match(r'^-[A-Za-z]*i[A-Za-z]*$', u):
+                return True
+            if not (u.startswith('-') or '=' in u):
+                break
+    return False
+
+
+SHELLS = {'bash', 'sh', 'zsh', 'dash', 'ksh', 'source', '.'}
+
+
+def runs(seg, name):
+    """조각이 스크립트 `name` 을 실행하는가. 셸에 `-n`(구문 검사)을 준 것과 인자로 나온 것
+    (`git add` · `cat`)은 실행이 아니다."""
+    at = head(seg)
+    if at >= len(seg):
+        return False
+    if os.path.basename(seg[at]) == name:
+        return True
+    if os.path.basename(seg[at]) not in SHELLS:
+        return False
+    rest = seg[at + 1:]
+    script = next((t for t in rest if not t.startswith('-')), '')
+    return os.path.basename(script) == name and '-n' not in rest[:rest.index(script)]
+
+
+HUMAN = re.compile(r'bash[ \t]+(\S+)[ \t]+(\d+)[ \t]+(\S+)[ \t]+(\S+)(?:[ \t]+-R[ \t]+(\S+))?')
+HUMAN_CANON = ("`bash .claude/hooks/human_comment.sh <PR 번호> <본문 파일의 절대 경로> <sha256> "
+               "[-R <owner/repo>]`")
+
+
+def human_comment():
+    """사람 계정으로 올리는 명령에 권한 프롬프트를 낸다. 사유에 올릴 글 전문을 넣는다.
+
+    권한 프롬프트의 사유는 사람에게만 보인다(hooks 문서: "For "allow" and "ask", shown to the user but
+    not Claude"). 사람이 그 글을 읽고 허락하는 것이 올리기 전의 확인이다. 그래서 프롬프트에 보인 글과
+    올라가는 글이 같아야 한다 — 한 줄 정규형만 받고(다른 명령과 이으면 무엇이 실행되는지 이 훅이 다 알지
+    못한다), 스크립트는 이 훅과 같은 디렉터리의 것이어야 하고, 명령의 sha256 이 파일과 맞아야 한다.
+    스크립트도 올리기 직전에 sha256 을 다시 본다."""
+    line = cmd.strip()
+    m = HUMAN.fullmatch(line)
+    if not m or re.search(r'[;&|<>$`\\\'"\n()]', line):
+        deny("사람 계정으로 올리는 명령은 한 줄 정규형으로 따로 입력한다: " + HUMAN_CANON + ". 다른 명령과 "
+             "잇거나 명령 치환 · 따옴표 · 리다이렉트를 쓰면 권한 프롬프트에 보인 글이 그대로 올라가는지 이 훅이 "
+             "알 수 없다.")
+    script, number, path, sha, repo = m.groups()
+    mine = os.path.realpath(os.path.join(os.environ['HOOK_DIR'], 'human_comment.sh'))
+    if os.path.realpath(os.path.join(cwd or os.getcwd(), script)) != mine:
+        deny("사람 계정으로 올리는 스크립트는 이 훅과 같은 디렉터리의 것만 받는다: " + mine)
+    if not os.path.isabs(path):
+        deny("사람 계정으로 올릴 본문 파일은 절대 경로로 준다: " + HUMAN_CANON)
+    try:
+        with open(path, 'rb') as fh:
+            raw = fh.read()
+        text = raw.decode('utf-8')
+    except (OSError, UnicodeDecodeError):
+        deny("사람 계정으로 올릴 본문 파일을 읽지 못했다(없거나 UTF-8 이 아니다): " + path)
+    if hashlib.sha256(raw).hexdigest() != sha:
+        deny("본문 파일의 sha256 이 명령에 적은 값과 다르다. `shasum -a 256 " + path + "` 로 다시 구해 "
+             "입력한다.")
+    decide("ask", "사람 계정으로 PR #%s%s 에 아래 글을 코멘트로 올린다. 글 전문을 읽고, 사람이 정한 것과 "
+                  "같을 때만 허락한다.\n\n%s" % (number, ' (' + repo + ')' if repo else '', text))
 
 
 body = strip_heredocs(cmd)
@@ -239,22 +335,27 @@ git_subs = [(words(a, 1, GIT_VALUED) or [''])[0] for a in git_calls]
 if IDENTITY.search(cmd):
     deny("이 레포에는 봇 설정(.claude/bot.json)이 있어, 세션의 gh 와 git 은 봇 계정으로만 쓴다. gh 의 "
          "설정 · 토큰과 git 의 자격 증명을 바꾸는 명령(GH_CONFIG_DIR · GH_TOKEN · GITHUB_TOKEN · "
-         "GIT_CONFIG_* · credential.helper)은 막는다 — 사람의 계정으로 바꾸면 세션의 글이 사람의 글로 남고 "
-         "사람의 👍 도 달 수 있다. 그 낱말이 검색어나 글이면 파일로 옮겨 전달한다.")
+         "GIT_CONFIG_* · credential.helper)은 막는다 — 사람의 계정으로 바꾸면 세션의 글이 사람의 글로 남아 "
+         "사람의 결정처럼 읽힌다. 그 낱말이 검색어나 글이면 파일로 옮겨 전달한다.")
 if any(words(a, 1) == ['auth'] for a in gh_calls):
     deny("이 레포에는 봇 설정(.claude/bot.json)이 있어, gh auth 명령은 모두 막는다. 계정을 바꾸면 세션이 "
          "사람 계정으로 쓰고, gh auth status 도 봇 설치 토큰을 거의 다 출력해 토큰이 모델의 맥락에 들어간다. "
          "이 세션의 gh 계정은 세션 시작 때 출력된 줄에 있다. 그 낱말이 검색어나 글이면 파일로 옮겨 전달한다.")
-reacts = 'addReaction' in cmd or any(
-    any('reactions' in t for t in a) and w[:1] == ['api'] and gh_writes(a)
-    for a in gh_calls for w in [words(a, 2)]) or any(
-    any('reactions' in t for t in a) and rest_writes(a)
-    for s in segs for name in ('curl', 'wget', 'http', 'https') for a in calls(s, name))
-if reacts:
-    deny("세션은 👍 를 달지 않는다. 3.5 코멘트의 👍 는 사람이 자기 계정으로 달아 승인하는 표시다. "
-         "사람에게 그 코멘트에 👍 를 달아 달라고 알린다.")
+if any(s == 'credential' or s.startswith('credential-') for s in git_subs) or re.search(
+        r'ai-kit-bot\b.*\bhosts', cmd, re.S):
+    deny("이 레포에는 봇 설정(.claude/bot.json)이 있어, 토큰을 출력하는 명령은 막는다 — git credential 과 "
+         "봇 디렉터리의 hosts.yml 을 읽는 명령이다. 연결된 세션의 git 은 자격 증명을 봇에게서 받으므로 "
+         "git credential fill 이 봇 토큰 전체를 출력하고, 토큰은 모델의 맥락에 들어간다. "
+         "그 낱말이 검색어나 글이면 파일로 옮겨 전달한다.")
+if any(clears_env(s) for s in segs):
+    deny("이 레포에는 봇 설정(.claude/bot.json)이 있어, 환경을 비우는 env -i(--ignore-environment · -)는 "
+         "막는다. 그 뒤의 gh 와 git 은 봇 계정 연결을 잃고 사람 계정으로 쓴다. 사람 계정으로 올릴 결정은 "
+         "human_comment.sh 로 올린다.")
+if any(runs(s, 'human_comment.sh') for s in segs):
+    human_comment()
 
-remote = any(s in GIT_REMOTE for s in git_subs)
+# 판정 스크립트는 안에서 gh 를 부른다(`merge-pr` 2절). 명령 글자에 gh 가 없어도 토큰이 살아 있어야 한다.
+remote = any(s in GIT_REMOTE for s in git_subs) or any(runs(s, 'human_review.sh') for s in segs)
 if not gh_calls and not remote:
     sys.exit(0)
 
@@ -295,31 +396,103 @@ if why or left() < 60:
          + (why or "봇 토큰의 끝나는 시각을 읽지 못했다. " + GUIDE + "을 본다."))
 
 
-def push_urls(args):
-    """연결된 세션의 git 이 이 푸시에 실제로 쓸 주소들. 세션 환경(`session-env`)을 적용해 푼다.
+def git_parts(args):
+    """git 호출 하나의 전역 옵션(`-C` · `-c` …) · 하위 명령 · 그 뒤 낱말."""
+    i = 0
+    while i < len(args) and args[i].startswith('-'):
+        i += 2 if args[i] in GIT_VALUED else 1
+    return args[:i], (args[i] if i < len(args) else ''), args[i + 1:]
 
-    원격 이름을 주지 않으면 지금 브랜치가 푸시할 원격(`@{push}`), 없으면 origin 이다. 원격 자리에 URL 을
-    적으면 그 URL 에 insteadOf 를 적용한 것이다(pushInsteadOf 는 원격 이름에만 적용된다)."""
-    rest = args[args.index('push') + 1:] if 'push' in args else []
-    remote = next((t for t in rest if not t.startswith('-')), '')
+
+def push_remote(rest):
+    """`git push` 의 낱말에서 원격(이름이나 URL)을 꺼낸다. 주지 않았으면 ''.
+
+    원격은 플래그가 아닌 첫 낱말이고, 없으면 `--repo` 의 값이다. 값을 받는 플래그의 값(`-o ci.skip`)은
+    건너뛴다. 짧은 플래그는 `-o` 만 값을 받고, 묶어 쓰면(`-uo x`) 끝 글자가 `o` 일 때 다음 낱말이 값이다."""
+    repo, i = '', 0
+    while i < len(rest):
+        t = rest[i]
+        i += 1
+        if t == '--':
+            return rest[i] if i < len(rest) else repo
+        if not t.startswith('-') or t == '-':
+            return t
+        if t.startswith('--'):
+            name, eq, val = t[2:].partition('=')
+            if name == 'repo':
+                repo = val if eq else (rest[i] if i < len(rest) else '')
+                i += 0 if eq else 1
+            elif not eq and name and any(v.startswith(name) for v in PUSH_VALUED):
+                i += 1
+        elif t.find('o', 1) == len(t) - 1:
+            i += 1
+    return repo
+
+
+def push_urls(args):
+    """연결된 세션의 git 이 이 푸시에 실제로 쓸 주소들. 풀지 못하면 빈 목록이다.
+
+    세션 환경(`session-env`)과 그 호출의 전역 옵션을 적용한 `git config` 를 읽어, git 이 푸시 주소를 푸는
+    규칙대로 푼다(git 의 `remote.c`). `git remote get-url` 은 `-c` 로만 준 원격을 모르고
+    `git ls-remote --get-url` 은 pushInsteadOf 를 적용하지 않아 쓰지 않는다.
+    - 원격을 주지 않으면 `branch.<지금 브랜치>.pushRemote` → `remote.pushDefault` →
+      `branch.<지금 브랜치>.remote` → origin 이다.
+    - 원격에 `pushurl` 이 있으면 그것에 insteadOf 를 적용한 것이다.
+    - 없으면 원격의 `url`(원격 설정이 없으면 원격 자리에 적은 URL)마다 pushInsteadOf 를 적용한 것이고,
+      pushInsteadOf 가 맞는 URL 이 하나도 없으면 insteadOf 를 적용한 것이다.
+    - 규칙이 여럿 맞으면 바꿀 앞부분이 가장 긴 것을 쓴다."""
+    pre, _, rest = git_parts(args)
     envf = os.path.join(botdir, 'session-env')
-    run = lambda script, *a: subprocess.run(
-        ['bash', '-c', '[ -f "$0" ] && { set -a; . "$0"; set +a; }; ' + script, envf, *a], cwd=cwd,
-        capture_output=True, text=True)
+
+    def git(*a):
+        return subprocess.run(
+            ['bash', '-c', '[ -f "$0" ] && { set -a; . "$0"; set +a; }; exec git "$@"', envf, *pre, *a],
+            cwd=cwd, capture_output=True, text=True)
+
+    def cfg(key):
+        return git('config', '--get-all', key).stdout.splitlines()
+
+    if git('rev-parse', '--git-dir').returncode:
+        return []
+    remote = push_remote(rest)
     if not remote:
-        up = run('git rev-parse --abbrev-ref --symbolic-full-name "@{push}"').stdout.strip()
-        remote = up.split('/', 1)[0] if '/' in up else 'origin'
-    if '://' in remote or re.match(r'^[^/]+@[^/:]+:', remote):
-        return run('git ls-remote --get-url "$1"', remote).stdout.split()
-    return run('git remote get-url --push --all "$1"', remote).stdout.split()
+        branch = git('symbolic-ref', '-q', '--short', 'HEAD').stdout.strip()
+        keys = ['branch.%s.pushRemote' % branch] * bool(branch) + ['remote.pushDefault'] + \
+            ['branch.%s.remote' % branch] * bool(branch)
+        remote = next((v[-1] for v in map(cfg, keys) if v), 'origin')
+    rules = {'insteadof': [], 'pushinsteadof': []}
+    for item in git('config', '-z', '--get-regexp', r'^url\..*\.(push)?insteadof$').stdout.split('\0'):
+        key, _, prefix = item.partition('\n')
+        m = re.match(r'^url\.(.*)\.(pushinsteadof|insteadof)$', key, re.S)
+        if m:
+            rules[m.group(2)].append((m.group(1), prefix))
+
+    def alias(url, kind):
+        best = None
+        for base, prefix in rules[kind]:
+            if url.startswith(prefix) and (best is None or len(prefix) > len(best[1])):
+                best = (base, prefix)
+        return best[0] + url[len(best[1]):] if best else None
+
+    pushurls = cfg('remote.%s.pushurl' % remote)
+    if pushurls:
+        return [alias(u, 'insteadof') or u for u in pushurls]
+    urls = cfg('remote.%s.url' % remote) or [remote]
+    return [p for u in urls for p in [alias(u, 'pushinsteadof')] if p] or \
+        [alias(u, 'insteadof') or u for u in urls]
 
 
 # 세션 환경은 github.com 의 SSH 주소를 https 로 바꾸지만, 사람의 git 설정이 https 를 다시 SSH 로 바꾸면
 # (`url.<ssh>.insteadOf` · `pushInsteadOf`) 그 푸시는 SSH 키로, 곧 사람 계정으로 나간다.
 for a in git_calls:
-    if (words(a, 1, GIT_VALUED) or [''])[0] != 'push':
+    if git_parts(a)[1] != 'push':
         continue
-    for u in push_urls(a):
+    urls = push_urls(a)
+    if not urls:
+        deny("이 푸시가 나갈 주소를 풀지 못해 막는다. 막기 훅은 푸시 주소가 github.com 의 SSH 주소가 아닌지, "
+             "곧 사람 계정으로 나가지 않는지 확인한 뒤에 푸시를 통과시킨다. 원격 이름이나 URL 을 적어 다시 "
+             "실행한다.")
+    for u in urls:
         if re.search(r'github\.com[:/]', u) and not u.startswith('https://github.com/'):
             deny("이 푸시는 " + u + " 로 나간다. github.com 의 SSH 주소라서 봇이 아니라 SSH 키, 곧 사람 계정으로 "
                  "나간다. 세션은 github.com 의 SSH 주소를 https 로 바꿔 쓰지만, 사람의 git 설정(url.….insteadOf · "

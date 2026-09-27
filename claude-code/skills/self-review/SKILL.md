@@ -32,8 +32,8 @@ Diff:
 메타데이터:
 !`if [ -n "$ARGUMENTS" ]; then gh pr view $ARGUMENTS --json headRefOid,headRepository --jq '"PERMALINK_BASE=https://github.com/\(.headRepository.nameWithOwner)/blob/\(.headRefOid)/"' || echo "!! 메타데이터를 못 가져왔다"; fi`
 
-**직전 라운드 코멘트 + 그 뒤의 3.5 코멘트 (검증 대상 — 아래 「재리뷰」). 사람의 답이 그 뒤 코멘트에 있다:**
-!`_q='[.comments[].body] as $b | ([$b|to_entries[]|select(.value|test("^\\s*## 리뷰 "))|.key]|last) as $i | if $i == null then (if ($b|length)==0 then "1라운드" else "ANCHOR-MISS \($b|length)" end) else ([$b[$i]] + ($b[$i+1:]|map(select(test("^\\s*### .*라운드 코멘트를 읽고 사람이 정한 것")))))|join("\n\n———\n\n") end'; _o=$(gh pr view $ARGUMENTS --json comments --jq "$_q" 2>/dev/null); case "$_o" in "ANCHOR-MISS "*) echo "!! 코멘트 ${_o#* }건인데 라운드 코멘트를 못 찾았다";; "") if gh pr view $ARGUMENTS --json number >/dev/null 2>&1; then echo "!! 직전 코멘트를 못 가져왔다"; elif [ -z "$ARGUMENTS" ] && gh auth status >/dev/null 2>&1; then echo "1라운드"; else echo "!! 직전 코멘트를 못 가져왔다 (gh 실패 또는 PR 없음)"; fi;; *) printf '%s\n' "$_o";; esac`
+**직전 라운드 코멘트 + 그 뒤의 사람의 결정 (검증 대상 — 아래 「재리뷰」). 3.5 코멘트이거나, 라운드 코멘트와 글쓴이가 다른 사람 계정의 코멘트다:**
+!`_q='.comments as $c | ([$c|to_entries[]|select(.value.body|test("^\\s*## 리뷰 "))|.key]|last) as $i | if $i == null then (if ($c|length)==0 then "1라운드" else "ANCHOR-MISS \($c|length)" end) else ([$c[$i].body] + ($c[$i+1:]|map(select((.body|test("^\\s*### .*라운드 코멘트를 읽고 사람이 정한 것")) or (.author.login != $c[$i].author.login and (.authorAssociation|IN("OWNER","MEMBER","COLLABORATOR"))))|.body)))|join("\n\n———\n\n") end'; _o=$(gh pr view $ARGUMENTS --json comments --jq "$_q" 2>/dev/null); case "$_o" in "ANCHOR-MISS "*) echo "!! 코멘트 ${_o#* }건인데 라운드 코멘트를 못 찾았다";; "") if gh pr view $ARGUMENTS --json number >/dev/null 2>&1; then echo "!! 직전 코멘트를 못 가져왔다"; elif [ -z "$ARGUMENTS" ] && gh auth status >/dev/null 2>&1; then echo "1라운드"; else echo "!! 직전 코멘트를 못 가져왔다 (gh 실패 또는 PR 없음)"; fi;; *) printf '%s\n' "$_o";; esac`
 
 > `$ARGUMENTS` 에 따옴표를 붙이지 마라. 붙이면 `48 -R owner/repo` 가 한 인자로 전달되고
 > 빈 인자가 `""` 로 남아 현재 브랜치 모드가 사라진다.

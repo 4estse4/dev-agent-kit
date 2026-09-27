@@ -31,8 +31,8 @@ def bad(m):
 
 # `--jq '` 뒤부터 다음 작은따옴표까지가 식이다. head 자리 표시가 든 식만 고른다
 filters = [f for f in re.findall(r"--jq '([^']*)'", sk) if PH in f]
-same = [f for f in filters if '$b[$i+1:]' not in f]
-after = [f for f in filters if '$b[$i+1:]' in f]
+same = [f for f in filters if '[$i+1:]' not in f]
+after = [f for f in filters if '[$i+1:]' in f]
 if len(same) != 1 or len(after) != 1:
     bad(f'head 를 쓰는 식이 게시 전 확인 하나와 3.6 의 셈 하나여야 하는데 {len(same)}개 · {len(after)}개다')
     sys.exit(1)
@@ -62,8 +62,17 @@ def tight(h):
 ANS = '### 1라운드 코멘트를 읽고 사람이 정한 것\n\n- (사람) "고친다"\n  → 한 일\n'
 
 
+BOT, ME, OTHER = ('kit-bot', 'NONE'), ('me', 'OWNER'), ('someone', 'CONTRIBUTOR')
+
+
+def comment(b):
+    """본문만 주면 봇 설정이 없는 레포처럼 모든 코멘트가 사람 계정 하나(me)의 것이다."""
+    body, (login, assoc) = (b, ME) if isinstance(b, str) else b
+    return {'body': body, 'author': {'login': login}, 'authorAssociation': assoc}
+
+
 def run(f, bodies, h):
-    r = subprocess.run(['jq', f.replace(PH, h)], input=json.dumps({'comments': [{'body': b} for b in bodies]}),
+    r = subprocess.run(['jq', f.replace(PH, h)], input=json.dumps({'comments': [comment(b) for b in bodies]}),
                        capture_output=True, text=True)
     if r.returncode != 0:
         return 'jq 실패: ' + r.stderr.strip()[:80]
@@ -85,6 +94,12 @@ cases = [
     (after[0], '3.6 의 셈 · 접힌 전문의 head 를 앵커로 쓰지 않는다', [std(A, inner=B), ANS], B, '0'),
     (after[0], '3.6 의 셈 · 3.5 의 코멘트가 라운드 코멘트보다 앞', [ANS, std(A)], A, '0'),
     (after[0], '3.6 의 셈 · head 줄이 없는 라운드 코멘트', [TITLE + '\n\n### 1라운드 발견\n', ANS], A, '0'),
+    (after[0], '3.6 의 셈 · 봇 설정 없음, 같은 계정의 제목 없는 코멘트', [std(A), '머지 결정\n'], A, '0'),
+    # 봇 설정이 있으면 라운드 코멘트는 봇이 올리고, 사람은 PR 웹에서 제목 없이 쓸 수 있다
+    (after[0], '3.6 의 셈 · 봇의 라운드 코멘트 뒤 사람이 웹에서 쓴 코멘트', [(std(A), BOT), ('고치고 한 라운드 더', ME)], A, '1'),
+    (after[0], '3.6 의 셈 · 봇의 라운드 코멘트 뒤 사람 계정의 3.5 코멘트', [(std(A), BOT), (ANS, ME)], A, '1'),
+    (after[0], '3.6 의 셈 · 봇의 라운드 코멘트 뒤 봇의 다른 코멘트', [(std(A), BOT), ('## 머지 결정\n', BOT)], A, '0'),
+    (after[0], '3.6 의 셈 · 봇의 라운드 코멘트 뒤 쓰기 권한 없는 사람의 코멘트', [(std(A), BOT), ('좋아 보인다', OTHER)], A, '0'),
 ]
 for f, name, bodies, h, want in cases:
     got = run(f, bodies, h)

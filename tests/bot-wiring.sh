@@ -11,6 +11,8 @@
 # 디렉터리로 바꿔 개인키의 기본 자리(`~/.config/<App 이름>/key.pem`)를 그대로 지나가게 한다.
 # 토큰 글자(`ghs_stubtoken`)가 훅의 출력에 나오면 실패다 — 훅의 출력은 모델의 맥락에 들어간다.
 set -u
+# 봇에 연결된 세션에서 이 테스트를 실행해도 그 세션의 git 설정이 섞이지 않게 한다
+unset GIT_CONFIG_COUNT GIT_CONFIG_PARAMETERS
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 H="$KIT/claude-code/hooks"
 T=$(mktemp -d)
@@ -92,6 +94,7 @@ guard() {
     bash "$H/bot_guard.sh" 2>&1)
   case "$out" in
     *'"permissionDecision": "deny"'*) got=deny ;;
+    *'"permissionDecision": "ask"'*) got=ask ;;
     '') got=pass ;;
     *) got="?:$out" ;;
   esac
@@ -167,7 +170,8 @@ no_token_in_out "CLAUDE_ENV_FILE 없음"
 
 echo "── gh 명령 막기(bot_guard.sh)"
 repo "$R" "" no
-guard "봇 설정이 없으면 막지 않는다" pass "gh api -X POST repos/o/r/issues/comments/1/reactions -f content=+1"
+guard "봇 설정이 없으면 막지 않는다" pass "gh pr comment 1 --body-file /tmp/x.md"
+guard "봇 설정이 없으면 사람 계정 게시에도 묻지 않는다" pass "bash $H/human_comment.sh 1 /tmp/x.md $(printf '0%.0s' $(seq 64))"
 
 repo "$R"
 guard "연결 전의 게시" deny "gh pr comment 1 --body-file /tmp/x.md" "$R" "연결"
@@ -179,7 +183,7 @@ guard "연결 전의 GET(필드를 줌)" pass "gh api -X GET search/issues -f q=
 guard "연결 전의 읽기" pass "gh pr diff 1"
 guard "연결 전의 도움말(--help)" pass "gh issue create --help"
 guard "연결 전의 도움말(-h)" pass "gh pr comment -h"
-guard "연결 전 사유의 안내 절 이름" deny "gh pr comment 1 --body-file /tmp/x.md" "$R" "「봇 계정과 👍 승인」 절에 있다"
+guard "연결 전 사유의 안내 절 이름" deny "gh pr comment 1 --body-file /tmp/x.md" "$R" "「봇 계정과 사람의 승인」 절에 있다"
 guard "연결 전의 GraphQL 읽기" pass "gh api graphql -f query='query { viewer { login } }'"
 guard "연결 전의 git push" deny "git push -u origin HEAD" "$R" "연결"
 guard "연결 전의 git fetch" pass "git fetch origin"
@@ -207,6 +211,16 @@ guard "연결 전 heredoc 커밋 메시지 안의 git push" pass "git commit -m 
 docs: explain why git push is blocked
 EOF
 )\""
+# 끝 줄이 없는 heredoc 은 본문이 아니다. 그 뒤 줄을 판정에서 빼면 안 된다.
+guard "연결 전 끝 줄 없는 heredoc 뒤의 git push" deny "cat <<EOF
+git push"
+guard "연결 전 따옴표 안의 <<EOF 뒤 줄의 git push" deny "echo \"use <<EOF here\"
+git push origin HEAD"
+guard "연결 전 heredoc 에 적은 GraphQL mutation" deny "gh api graphql -f query=\"\$(cat <<'EOF'
+mutation { closeIssue(input: {issueId: \"x\"}) { clientMutationId } }
+EOF
+)\""
+guard "연결 전 리다이렉션 뒤의 git push" deny "git push >/tmp/push.log 2>&1"
 
 session "연결" "$R"
 guard "연결 뒤의 게시" pass "gh pr comment 1 --body-file /tmp/x.md"
@@ -223,18 +237,83 @@ printf '[url "git@github.com:"]\n\tinsteadOf = https://github.com/\n' > "$T/home
 guard "사람 설정이 https 를 SSH 로 바꾼 푸시(insteadOf)" deny "git push -u origin HEAD" "$R" "SSH"
 printf '[url "git@github.com:"]\n\tpushInsteadOf = https://github.com/\n' > "$T/home/.gitconfig"
 guard "사람 설정이 https 를 SSH 로 바꾼 푸시(pushInsteadOf)" deny "git push" "$R" "SSH"
+# 원격 자리를 리다이렉션이나 플래그의 값으로 읽으면 주소를 못 풀어 지나간다
+guard "리다이렉션이 붙은 푸시(2>&1)" deny "git push 2>&1" "$R" "SSH"
+guard "리다이렉션이 붙은 푸시(>파일)" deny "git push >/tmp/push.log" "$R" "SSH"
+guard "리다이렉션 뒤 원격 이름" deny "git push 2>/dev/null origin HEAD" "$R" "SSH"
+guard "값을 받는 플래그 뒤의 원격(-o)" deny "git push -o ci.skip origin HEAD" "$R" "SSH"
+guard "값을 받는 플래그 뒤의 원격(--push-option)" deny "git push --push-option ci.skip origin HEAD" "$R" "SSH"
+guard "값을 붙여 쓴 플래그 뒤의 원격(-oci.skip)" deny "git push -oci.skip origin HEAD" "$R" "SSH"
+guard "원격을 URL 로 준 푸시" deny "git push https://github.com/o/r.git HEAD" "$R" "SSH"
+# kit-guide 6절이 적은 대로 이 레포에만 소유자까지 적은 더 긴 규칙을 두면, 가장 긴 규칙이 이겨 https 로 나간다
+git -C "$R" config url."https://github.com/o/".pushInsteadOf "https://github.com/o/"
+guard "이 레포에서 SSH 바꾸기를 끈 푸시(더 긴 규칙)" pass "git push origin HEAD"
+git -C "$R" config --unset url."https://github.com/o/".pushInsteadOf
+printf '[url "git@github.com:"]\n\tinsteadOf = https://github.com/\n' > "$T/home/.gitconfig"
+guard "원격을 URL 로 준 푸시(insteadOf)" deny "git push https://github.com/o/r.git HEAD" "$R" "SSH"
+# 사람 계정 레포(p/)만 SSH 로 바꾸는 설정. origin(o/r)은 https 그대로다.
+printf '[url "git@github.com:p/"]\n\tpushInsteadOf = https://github.com/p/\n' > "$T/home/.gitconfig"
+git -C "$R" remote add mine https://github.com/p/r.git
+guard "origin 이 아닌 원격의 푸시" deny "git push mine HEAD" "$R" "SSH"
+guard "https 그대로인 origin 의 푸시" pass "git push origin HEAD"
+guard "원격을 URL 로 준 푸시(p/)" deny "git push https://github.com/p/r.git HEAD" "$R" "SSH"
+guard "원격을 --repo= 로 준 푸시" deny "git push --repo=https://github.com/p/r.git" "$R" "SSH"
+guard "원격을 --repo 로 준 푸시(값을 띄어 씀)" deny "git push --repo mine" "$R" "SSH"
+git -C "$R" config remote.pushDefault mine
+guard "remote.pushDefault 로 고른 원격의 푸시" deny "git push" "$R" "SSH"
+git -C "$R" config --unset remote.pushDefault
+git -C "$R" symbolic-ref HEAD refs/heads/work
+git -C "$R" config branch.work.pushRemote mine
+guard "branch.<이름>.pushRemote 로 고른 원격의 푸시" deny "git push" "$R" "SSH"
+git -C "$R" config --unset branch.work.pushRemote
+git -C "$R" config branch.work.remote mine
+guard "branch.<이름>.remote 로 고른 원격의 푸시" deny "git push" "$R" "SSH"
+git -C "$R" config --unset branch.work.remote
+guard "git -c 로 SSH 로 바꾼 푸시" deny "git -c url.git@github.com:.pushInsteadOf=https://github.com/ push origin HEAD" "$R" "SSH"
+repo "$T/o2" "https://github.com/p/r.git" no
+guard "git -C 로 다른 레포에서 한 푸시" deny "git -C $T/o2 push" "$R" "SSH"
+guard "git -C 로 다른 레포에서 한 푸시(cd 없이 원격 이름)" deny "git -C $T/o2 push origin HEAD" "$R" "SSH"
+guard "주소를 풀지 못한 푸시" deny "git -C $T/nope push" "$R" "풀지 못"
+git -C "$R" remote remove mine
 rm -f "$T/home/.gitconfig"
 git -C "$R" remote set-url origin git@github.com:o/r.git
 guard "SSH origin 의 푸시(세션이 https 로 바꿔 쓴다)" pass "git push origin HEAD"
 git -C "$R" remote set-url origin https://github.com/o/r.git
 
-echo "── 스스로 승인하는 명령"
-guard "REST 로 👍(-X POST)" deny "gh api -X POST repos/o/r/issues/comments/1/reactions -f content=+1" "$R" "👍"
-guard "REST 로 👍(-f 만, 기본 POST)" deny "gh api repos/o/r/issues/comments/1/reactions -f content=+1"
-guard "REST 로 👍(--method post)" deny "gh api --method post repos/o/r/issues/comments/1/reactions --raw-field content=+1"
-guard "GraphQL 로 👍" deny "gh api graphql -f query='mutation { addReaction(input: {subjectId: \"x\", content: THUMBS_UP}) { clientMutationId } }'"
-guard "curl 로 👍" deny "curl -X POST -H \"Authorization: token x\" https://api.github.com/repos/o/r/issues/comments/1/reactions -d '{\"content\":\"+1\"}'"
-guard "👍 를 읽기만 함" pass "gh api repos/o/r/issues/comments/1/reactions"
+echo "── 사람 계정으로 올리는 명령(human_comment.sh)"
+# 사람이 권한 프롬프트에서 글 전문을 읽고 허락해야 올라간다. 스크립트 경로는 훅과 같은 디렉터리의 것이다.
+P="$H/human_comment.sh"
+printf '### 4라운드 코멘트를 읽고 사람이 정한 것\n\n- (사람) "이 PR 에서 만든다"\n  → 새 설계를 만든다\n' > "$T/decision.md"
+SUM=$(shasum -a 256 "$T/decision.md" | cut -d' ' -f1)
+ZERO=$(printf '0%.0s' $(seq 64))
+guard "사람 계정 게시는 글 전문을 보이고 묻는다" ask "bash $P 155 $T/decision.md $SUM" "$R" "이 PR 에서 만든다"
+guard "사람 계정 게시 사유의 끝 줄" ask "bash $P 155 $T/decision.md $SUM" "$R" "새 설계를 만든다"
+guard "사람 계정 게시(-R)" ask "bash $P 155 $T/decision.md $SUM -R o/r" "$R" "o/r"
+guard "sha256 이 다른 사람 계정 게시" deny "bash $P 155 $T/decision.md $ZERO" "$R" "sha256"
+guard "다른 명령과 이은 사람 계정 게시" deny "bash $P 155 $T/decision.md $SUM; echo done" "$R" "human_comment.sh"
+guard "줄바꿈으로 이은 사람 계정 게시" deny "bash $P 155 $T/decision.md $SUM
+echo done"
+# 정규형의 낱말 자리에 붙여 쓰면 모양은 맞는다. 셸이 해석하는 글자가 있으면 막는다.
+guard "레포 자리에 붙여 이은 사람 계정 게시" deny "bash $P 155 $T/decision.md $SUM -R o/r;id"
+guard "레포 자리의 명령 치환" deny "bash $P 155 $T/decision.md $SUM -R \$(id)"
+guard "상대 경로 본문의 사람 계정 게시" deny "bash $P 155 decision.md $SUM"
+guard "없는 파일의 사람 계정 게시" deny "bash $P 155 $T/nofile.md $SUM"
+guard "bash 없이 부른 사람 계정 게시" deny "$P 155 $T/decision.md $SUM"
+guard "명령 치환 안의 사람 계정 게시" deny "x=\$(bash $P 155 $T/decision.md $SUM)"
+mkdir -p "$T/elsewhere"; cp "$P" "$T/elsewhere/human_comment.sh"
+guard "훅 디렉터리 밖의 같은 이름 스크립트" deny "bash $T/elsewhere/human_comment.sh 155 $T/decision.md $SUM"
+guard "환경을 비우고 부른 gh(env -i)" deny "env -i PATH=/usr/bin gh pr comment 1 --body-file /tmp/x.md" "$R" "env -i"
+guard "환경을 비우고 부른 스크립트(env --ignore-environment)" deny "env --ignore-environment bash /tmp/post.sh"
+guard "환경을 비우는 env -(대시 하나)" deny "env - HOME=/tmp gh api user"
+guard "환경을 비우지 않는 env" pass "env LC_ALL=C sort notes.txt"
+# 이름만 나오는 명령(스테이징 · 구문 검사 · 읽기)은 게시가 아니다
+guard "사람 계정 스크립트를 스테이징" pass "git add claude-code/hooks/human_comment.sh"
+guard "사람 계정 스크립트의 구문 검사" pass "bash -n $P"
+guard "사람 계정 스크립트를 읽음" pass "sed -n 1,20p $P"
+
+echo "── 신원을 바꾸거나 토큰을 꺼내는 명령"
+# 👍 는 더 이상 승인 표시가 아니다. 연결된 세션의 리액션은 다른 쓰기와 같다.
+guard "연결된 세션의 리액션" pass "gh api -X POST repos/o/r/issues/comments/1/reactions -f content=+1"
 guard "gh 설정을 바꿈" deny "GH_CONFIG_DIR=\$HOME/.config/gh gh pr comment 1 --body-file /tmp/x.md" "$R" "계정"
 guard "gh 설정을 지움" deny "env -u GH_CONFIG_DIR gh api repos/o/r/issues/comments/1/reactions"
 guard "토큰을 바꿈" deny "GH_TOKEN=x gh pr comment 1 --body-file /tmp/x.md"
@@ -245,19 +324,23 @@ guard "계정을 바꿈" deny "gh auth switch -u someone"
 guard "인증 상태도 막는다" deny "gh auth status"
 guard "명령 치환으로 토큰을 꺼냄" deny "echo \$(gh auth token)"
 guard "curl 인자 안에서 토큰을 꺼냄" deny "curl -H \"Authorization: token \$(gh auth token)\" https://api.github.com/user"
-guard "reactions 를 찾는 grep -F" pass "grep -n -F reactions claude-code/hooks/answer_approvals.sh"
-guard "reactions 이름의 브랜치 지우기" pass "git branch -d fix-reactions"
-guard "reactions 파일 지우기" pass "rm -f /tmp/reactions.json"
 guard "git 의 자격 증명 설정을 바꿈" deny "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=credential.helper GIT_CONFIG_VALUE_0= git push"
 guard "git -c 로 자격 증명 도우미를 바꿈" deny "git -c credential.helper= push"
 guard "GIT_CONFIG_COUNT 만 바꿈" deny "export GIT_CONFIG_COUNT=0"
 guard "gh 설정에서 토큰을 꺼냄" deny "gh config get -h github.com oauth_token"
 guard "명령 치환으로 gh 설정의 토큰을 꺼냄" deny "T=\$(gh config get -h github.com oauth_token); echo \${#T}"
+# 연결된 세션의 git 은 github.com 자격 증명을 봇(gh)에게서 받으므로, 자격 증명을 묻는 명령은 봇 토큰을 출력한다
+guard "git 에게 자격 증명을 물음" deny "printf 'protocol=https\nhost=github.com\n\n' | git credential fill" "$R" "토큰"
+guard "자격 증명 도우미를 직접 부름" deny "git credential-osxkeychain get"
+guard "봇 디렉터리의 hosts.yml 을 읽음" deny "cat .git/ai-kit-bot/hosts.yml" "$R" "토큰"
+guard "봇 디렉터리로 옮겨 hosts.yml 을 읽음" deny "cd .git/ai-kit-bot && grep token hosts.yml"
+# git 디렉터리를 작업 트리 밖에 둔 레포(`--separate-git-dir`)에서는 봇 디렉터리의 경로에 git 이 없다
+guard "git 이 없는 경로의 hosts.yml 을 읽음" deny "cat /srv/repo-meta/ai-kit-bot/hosts.yml"
+guard "봇 디렉터리의 만료 시각을 읽음" pass "cat .git/ai-kit-bot/expires"
 guard "토큰을 출력하는 인증 상태(-t)" deny "gh auth status -t"
 guard "토큰을 출력하는 인증 상태(--show-token)" deny "gh auth status --show-token"
 guard "GH_ENTERPRISE_TOKEN 으로 바꿈" deny "GH_ENTERPRISE_TOKEN=x gh api user"
 guard "GH_HOST 로 바꿈" deny "GH_HOST=example.com gh pr view 1"
-guard "👍 를 GraphQL 로 읽기만 함" pass "gh api graphql -f query='query { repository(owner: \"o\", name: \"r\") { pullRequest(number: 1) { comments(first: 5) { nodes { reactions(content: THUMBS_UP, first: 5) { nodes { createdAt } } } } } } }'"
 
 echo "── 토큰 갱신"
 printf '2000-01-01T00:00:00Z\n' > "$BOTDIR/expires"
@@ -273,6 +356,10 @@ ok "git push 앞에서도 토큰을 새로 받는다" 'grep -qF access_tokens "$
 printf '2000-01-01T00:00:00Z\n' > "$BOTDIR/expires"
 STUB_CURL_EXIT=28 guard "네트워크가 멈춘 뒤의 게시" deny "gh pr comment 1 --body-file /tmp/x.md" "$R" "네트워크"
 ok "curl 이 기다리는 시간에 끝이 있다" 'grep -qF -- "--max-time" "$T/curl-log"'
+# merge-pr 2절이 부르는 판정 스크립트는 안에서 gh 를 부른다. 명령 글자에 gh 가 없어도 새로 받아야 한다.
+printf '2000-01-01T00:00:00Z\n' > "$BOTDIR/expires"
+guard "만료된 토큰으로 판정 스크립트" pass "bash .claude/hooks/human_review.sh approved 1"
+ok "판정 스크립트 앞에서도 토큰을 새로 받는다" 'grep -qF access_tokens "$T/curl-log" && grep -qF 2099 "$BOTDIR/expires"'
 printf '2000-01-01T00:00:00Z\n' > "$BOTDIR/expires"
 guard "만료된 토큰으로 명령 치환 안의 git push" pass "out=\$(git push 2>&1); echo \"\$out\""
 ok "명령 치환 안의 git push 앞에서도 토큰을 새로 받는다" 'grep -qF access_tokens "$T/curl-log" && grep -qF 2099 "$BOTDIR/expires"'

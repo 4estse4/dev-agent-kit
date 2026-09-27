@@ -2,8 +2,8 @@
 # SessionStart: 레포에 봇 설정(`.claude/bot.json`)이 있으면 이 세션의 gh 를 봇 계정에 연결한다.
 # 필요: python3 · openssl · curl · git
 #
-# **왜 연결하나.** 봇 설정이 있으면 세션이 GitHub 에 쓰는 글은 봇 계정으로 올라가고, 사람은 자기
-# 계정으로 3.5 코멘트에 👍 를 단다. 그래서 GitHub 에서 세션의 글과 사람의 승인이 구분된다.
+# **왜 연결하나.** 봇 설정이 있으면 세션이 GitHub 에 쓰는 글은 봇 계정으로 올라가고, 사람의 결정은
+# 사람 계정의 코멘트와 Approve 로 남는다. 그래서 GitHub 에서 세션의 글과 사람의 승인이 구분된다.
 # 세션이 사람 계정으로 쓰면 그 구분이 사라진다.
 #
 # **어떻게.** 토큰 스크립트(`bot_token.sh`)로 설치 토큰을 받아 봇 디렉터리에 두고,
@@ -41,12 +41,12 @@ if ! out=$(bash "$here/bot_token.sh"); then
 fi
 dir=$out
 if [ -z "${CLAUDE_ENV_FILE:-}" ] || [ -z "$sid" ]; then
-  printf '봇 토큰은 받았지만 CLAUDE_ENV_FILE 이나 session_id 가 없어 이 세션의 gh 를 봇 계정에 연결하지 못했다. GitHub 에 쓰는 gh 명령과 git push 는 막힌다. docs/process/kit-guide.md 의 「봇 계정과 👍 승인」 절을 본다.\n'
+  printf '봇 토큰은 받았지만 CLAUDE_ENV_FILE 이나 session_id 가 없어 이 세션의 gh 를 봇 계정에 연결하지 못했다. GitHub 에 쓰는 gh 명령과 git push 는 막힌다. docs/process/kit-guide.md 의 「봇 계정과 사람의 승인」 절을 본다.\n'
   exit 0
 fi
 # git 도 github.com 자격 증명을 봇(gh)에게서만 받게 하고, github.com 의 SSH 주소(`git@github.com:` ·
-# `ssh://git@github.com/`)도 https 로 바꿔 쓰게 한다. origin 만이 아니라 세션 안의 github.com git 이 모두
-# 그렇다(서브모듈 · git 의존성 포함) — 그래서 설치 범위 밖의 비공개 레포는 세션에서 fetch · clone 이 안
+# `ssh://git@github.com/`)도 https 로 바꿔 쓰게 한다. origin 만이 아니라 세션에서 github.com 에 접속하는
+# git 명령이 모두 그렇다(서브모듈 · git 의존성 포함) — 그래서 설치 범위 밖의 비공개 레포는 세션에서 fetch · clone 이 안
 # 된다. 세션 환경 변수로만 바꾼다 — 사용자의 git 설정 파일은 건드리지 않는다. 자격 증명 도우미는 여러
 # 값이 쌓이는 목록이라, 빈 값으로 앞의 것(osxkeychain 같은 사람의 도우미)을 비운 뒤 gh 하나만 둔다.
 # 같은 줄을 봇 디렉터리의 `session-env` 에도 둔다 — 막기 훅은 이 파일로 세션의 git 이 실제로 푸시할
@@ -62,4 +62,4 @@ env_lines=$(
 printf '%s\n' "$env_lines" >> "$CLAUDE_ENV_FILE"
 printf '%s\n' "$env_lines" > "$dir/session-env"
 : > "$dir/wired/$sid"
-printf '이 세션의 gh 는 봇 계정으로 GitHub 에 쓴다(GH_CONFIG_DIR=%s). 3.5 코멘트를 올리면 사람에게 그 코멘트에 자기 계정으로 👍 를 달아 달라고 알린다 — 👍 가 있는 3.5 코멘트만 (사람) 인용의 원본으로 인정된다. 세션이 👍 를 달지 않는다.\n' "$dir"
+printf '이 세션의 gh 는 봇 계정으로 GitHub 에 쓴다(GH_CONFIG_DIR=%s). 사람의 결정은 사람 계정 코멘트로 남긴다 — 세션이 받은 답은 human_comment.sh 로 올리고(권한 프롬프트에 글 전문이 보인다), 사람이 PR 웹에서 직접 쓸 수도 있다. 사람 계정 코멘트만 (사람) 인용의 원본이고, 머지는 사람의 Approve 를 확인한 뒤에 한다.\n' "$dir"
