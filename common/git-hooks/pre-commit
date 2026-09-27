@@ -3,9 +3,9 @@
 # 막는 것: (1) 보호 브랜치 직접 커밋  (2) 잘못된 신원  (3) 충돌 마커  (4) 시크릿  (5) 린트
 #
 # 주의: `git commit --no-verify` 로 우회 가능하다. 그래서 이 훅은 '조기 피드백'이고,
-# 진짜 backstop 은 CI + 브랜치 보호다. (docs/process/verification-stages.md 참조)
+# 우회할 수 없게 막는 것은 CI 와 브랜치 보호다. (docs/process/verification-stages.md 참조)
 set -uo pipefail
-# 게이트는 대상 레포에 vendor 된 .ai-kit/ 에서 찾는다 — 다른 머신·CI 에서도 동일 경로.
+# 게이트는 대상 레포에 복사해 둔 .ai-kit/ 에서 찾는다 — 다른 머신·CI 에서도 동일 경로.
 REPO=$(git rev-parse --show-toplevel) || exit 1
 KIT="${AI_KIT_DIR:-$REPO/.ai-kit}"
 [ -d "$KIT" ] || { echo "$(basename "$0"): .ai-kit 가 없습니다 — install.sh 를 다시 실행하세요" >&2; exit 1; }
@@ -62,7 +62,7 @@ fi
 # 스테이지된 내용만 본다 — 작업트리에 해소 중인 파일이 있어도 커밋 대상이 아니면
 # 막지 않는다. 진단 자체가 실패하면 통과시키지 않는다(검사가 고장 나면 조용히 통과 금지).
 # core.quotePath 기본값(true)은 비ASCII 경로를 octal 로 이스케이프해 따옴표째 내보낸다.
-# 그 문자열로는 git show 가 실패하고, 2>/dev/null 이 삼켜서 "마커 없음" 이 된다 —
+# 그 문자열로는 git show 가 실패하고, 2>/dev/null 이 그 오류를 감춰서 "마커 없음" 이 된다 —
 # 이 킷의 산출물이 한국어 문서라 정확히 그 자리에서 조용히 통과했다.
 staged=$(git -c core.quotePath=false diff --cached --name-only --diff-filter=ACM) || {
   echo "pre-commit: 스테이지 목록을 읽지 못했습니다" >&2; exit 1; }
@@ -98,8 +98,8 @@ fi
 bash "$KIT/gate/secrets.sh" || exit 1
 
 # ── 린트 ──
-# 커밋은 의미 단위라 수 분~수 시간 작업의 끝에 온다. 거기에 린트 시간을 붙이는 것은
-# 감당되고, 얻는 것이 크다 — 위반을 그 커밋에서 찾아내면 푸시할 때 커밋 여러 개를
+# 커밋은 의미 단위라 수 분~수 시간 작업의 끝에 온다. 거기에 린트 시간을 더해도
+# 부담이 작고, 얻는 것이 크다 — 위반을 그 커밋에서 찾아내면 푸시할 때 커밋 여러 개를
 # 되짚지 않아도 된다. 테스트·빌드는 여기서 실행되지 않는다(그건 pre-push 가 한다).
 bash "$KIT/gate/gate.sh" --lint --staged || exit 1
 exit 0

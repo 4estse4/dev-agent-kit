@@ -4,7 +4,7 @@
 # 도구는 **프로젝트가 선언한 것**을 먼저 쓴다. 린트 규칙을 정하는 것이 프로젝트이므로
 # 버전도 프로젝트가 정하는 것이 맞다. 아무것도 선언하지 않았으면 PATH 의 것으로
 # 폴백하고(CI 는 tool-versions 에 핀한 버전을 거기 설치해 둔다), 그것도 없으면 건너뛴다
-# — GATE_STRICT 면 실패로 승격되고 그 사실을 말한다.
+# — GATE_STRICT 면 실패로 바뀌고 그 사실을 알린다.
 
 gate_have python3 || { gate_skip "python3(미설치)"; return 0 2>/dev/null || exit 0; }
 
@@ -23,7 +23,7 @@ _py() { # $1=도구 이름 → 실행할 경로를 echo, 없으면 실패
   return 1
 }
 
-# ruff 는 포맷과 린트를 한 도구가 한다. 둘을 따로 보고해야 어느 쪽이 깨졌는지 보인다.
+# ruff 는 포맷과 린트를 한 도구가 한다. 둘을 따로 보고해야 어느 쪽이 실패했는지 보인다.
 if _r=$(_py ruff); then
   gate_run "ruff format" "$_r" format --check .
   gate_run "ruff check"  "$_r" check .

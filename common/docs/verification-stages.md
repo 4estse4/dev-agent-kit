@@ -25,14 +25,14 @@ L1 으로 옮겨야 하는데 L2 에 남아 있기 쉬운 것들이다.
 | "context를 전파·취소하나" | `contextcheck` · `noctx` |
 | "시크릿이 코드·로그에 없나" | `gosec` · `gitleaks` |
 | "루프 변수 캡처 문제 없나" | `copyloopvar` |
-| "에러를 삼키지 않나" | `errcheck` · `nilerr` |
+| "에러를 무시하지 않나" | `errcheck` · `nilerr` |
 | "접근성 속성이 있나" | `jsx-a11y` |
 | "`any`를 쓰지 않았나" | `@typescript-eslint/no-explicit-any` |
 | "프론트가 절대 URL을 쓰지 않나" | `no-restricted-syntax` (프로젝트 하드룰 코드화) |
 | "금지한 라이브러리를 안 썼나" | `no-restricted-imports` · `depguard` |
 
 > **프로젝트 하드룰은 산문이 아니라 린트 규칙으로 쓴다.** 산문 규칙은 AI가 읽고
-> 지키려 "노력"하지만, 린트 규칙은 지켜지지 않으면 빌드가 깨진다.
+> 지키려 "노력"하지만, 린트 규칙은 지켜지지 않으면 게이트가 실패한다.
 
 ## 2 L2 가 볼 것
 

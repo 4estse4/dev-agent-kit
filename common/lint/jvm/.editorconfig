@@ -14,7 +14,7 @@ indent_style = space
 indent_size = 4
 max_line_length = 120
 ktlint_code_style = intellij_idea
-# import 순서를 강제하면 IDE 설정과 싸우는 일이 잦다 — 포맷터에 맡긴다.
+# import 순서를 강제하면 IDE 설정과 어긋나는 일이 잦다 — 포맷터에 맡긴다.
 ktlint_standard_import-ordering = disabled
 
 [*.{yml,yaml,json}]
