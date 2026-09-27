@@ -17,11 +17,11 @@ root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 # 왜 필요한가 — `go install` 로 받은 도구는 GOPATH/bin 에 들어가는데 그 경로를 PATH 에
 # 넣어두지 않은 환경이 흔하다. 게이트(lib.sh 의 gate_extend_path)는 이걸 하는데 이 훅은
 # 안 해서, **게이트는 goimports 를 찾고 이 훅은 못 찾는** 상태가 된다. 그러면 편집 시
-# import 정렬이 조용히 빠지고, 푸시할 때 게이트가 그제서야 찾아낸다.
+# import 정렬이 조용히 빠지고, 푸시할 때 게이트가 그제야 찾아낸다.
 # 실제로 이 킷을 쓰는 머신이 그 상태였다.
 #
-# lib.sh 를 source 하지 않는 이유: 그쪽은 게이트 상태 배열까지 들고 오고, 이 훅은
-# vendor 된 게이트가 없는 레포에서도 동작해야 한다. 필요한 만큼만 여기서 한다.
+# lib.sh 를 source 하지 않는 이유: 그쪽은 게이트 상태 배열까지 함께 불러오고, 이 훅은
+# 게이트가 복사되지 않은 레포에서도 동작해야 한다. 필요한 만큼만 여기서 한다.
 for d in "$(command -v go >/dev/null 2>&1 && go env GOPATH 2>/dev/null)/bin" \
          "$HOME/go/bin" "$HOME/.local/bin" "/usr/local/bin" "/opt/homebrew/bin"; do
   case "$d" in ""|"/bin") continue ;; esac
@@ -45,7 +45,7 @@ _pyroot() { # $1=파일
 
 # 그 자리의 ruff 를 게이트(adapters/py.sh 의 _py)와 같은 순서로 고른다: .venv → venv → PATH.
 # 한때 PATH 만 봐서, ruff 를 venv 에 둔 레포에서 게이트와 다른 ruff 를 부르거나 「포매터가
-# 없어」로 거짓 알림을 냈다(PR #112 2라운드 콜드 리뷰).
+# 없어」로 거짓 알림을 냈다.
 _ruff() { # $1=_pyroot 가 낸 디렉터리(비어도 된다)
   local v
   if [ -n "$1" ]; then
@@ -72,8 +72,7 @@ case "$file" in
     # 본다. 그 게이트가 실행되는 자리(_pyroot)에서 그 게이트의 ruff(_ruff)로도 포맷한다.
     # --force-exclude 가 없으면 이름을 준 파일은 extend-exclude 로 뺀 .md 여도 포맷된다.
     # 실패는 알리지 않는다. 0.15 는 .md 에 rc=2 를 내는데 그 게이트는 .md 를 안 본다.
-    # 이것이 없던 동안 훅은 .md 를 prettier 에만 전달해서 pre-commit 게이트가 그제서야 막았다
-    # (PR #112 1라운드 콜드 리뷰).
+    # 이것이 없던 동안 훅은 .md 를 prettier 에만 전달해서 pre-commit 게이트가 그제야 막았다.
     case "$file" in
       *.md)
         if d=$(_pyroot "$file") && r=$(_ruff "$d"); then
@@ -94,7 +93,7 @@ case "$file" in
     ;;
   *.py)
     # --force-exclude 는 .md 와 같은 이유다. 없으면 프로젝트가 extend-exclude 로 뺀 .py(마이그레이션 ·
-    # 생성 코드)도 포맷해, 게이트가 보지 않는 파일에 포맷 변경이 섞였다(PR #112 3라운드 콜드 리뷰).
+    # 생성 코드)도 포맷해, 게이트가 보지 않는 파일에 포맷 변경이 섞였다.
     # 제외된 파일에는 경고와 rc=0 을 내므로 실패 판정은 그대로다.
     if r=$(_ruff "$(_pyroot "$file")"); then
       "$r" format --force-exclude "$file" >/dev/null 2>&1 || _failed="ruff"
@@ -103,7 +102,7 @@ case "$file" in
   *.kt|*.kts)
     # JVM 에는 gofmt 같은 "어디에나 있는 단일 파일 포매터" 가 없다. 있는 것만 쓰고
     # 없으면 그냥 건너뛴다 — 여기서 gradle spotlessApply 를 부르면 편집 한 번에
-    # JVM 기동 비용이 붙는다. 그건 편의가 아니라 세금이고, 게이트가 어차피 찾아낸다.
+    # JVM 기동 비용이 붙는다. 그건 편의가 아니라 편집마다 드는 비용이고, 게이트가 어차피 찾아낸다.
     if command -v ktfmt >/dev/null 2>&1; then
       ktfmt "$file" >/dev/null 2>&1
     elif command -v ktlint >/dev/null 2>&1; then

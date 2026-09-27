@@ -20,7 +20,7 @@ STAMP=.ai-kit/install-manifest
 
 # 킷 경로는 install.sh 가 이 레포의 로컬 git config 에 적어둔다.
 # 커밋되는 파일에 넣지 않는 이유: 머신마다 경로가 다르고, 남의 절대경로가
-# 레포에 커밋되면 그 사람 환경을 알려주는 것 외에 아무 값도 없다.
+# 레포에 커밋되면 그 사람 환경을 알려주는 것 외에 아무 쓸모가 없다.
 kit=$(git config --get ai-kit.path 2>/dev/null) || exit 0
 [ -n "$kit" ] && [ -d "$kit/.git" ] || exit 0
 
@@ -38,7 +38,7 @@ _when() {
 }
 
 # 기록된 커밋이 킷에 실재하는지 확인한다. 없으면(재작성·다른 킷) 커밋 수를
-# 세지 않는다 — 틀린 숫자를 말하느니 숫자를 빼는 편이 낫다.
+# 세지 않는다 — 틀린 숫자를 말하지 않고 숫자를 뺀다.
 if git -C "$kit" cat-file -e "${recorded}^{commit}" 2>/dev/null; then
   behind=$(git -C "$kit" rev-list --count "${recorded}..HEAD" 2>/dev/null || echo "")
   [ -n "$behind" ] && [ "$behind" != "0" ] \
