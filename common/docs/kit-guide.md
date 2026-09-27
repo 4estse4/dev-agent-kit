@@ -119,7 +119,7 @@ GitHub 에서 세션의 글과 사람의 승인이 구분된다. 봇 설정이 �
 | 시점 | 무엇 | 막나 |
 |---|---|---|
 | 세션 시작 | 설치 토큰을 받아 세션의 gh 를 봇 계정에 연결한다(`bot_session.sh`) | 못 받으면 까닭을 세션에 알린다. 쓰기는 아래 줄이 막는다 |
-| gh 명령 · git 원격 명령마다 | 세션이 👍 를 다는 것, gh 와 git 의 계정 · 자격 증명을 바꾸는 것, `gh auth` 명령(`status` 도 봇 토큰을 출력한다), 연결되지 않은 세션이 gh 로 쓰거나 `git push` 하는 것. 명령 치환(`$(…)` · 백틱) 안도 본다(`bot_guard.sh`). 토큰이 끝나 가면 새로 받는다 | 막는다. gh 의 읽기 명령과 `git fetch` · `pull` 은 막지 않는다 |
+| gh 명령 · git 원격 명령마다 | 세션이 👍 를 다는 것, gh 와 git 의 계정 · 자격 증명을 바꾸는 것, `gh auth` 명령(`status` 도 봇 토큰을 출력한다), 연결되지 않은 세션이 gh 로 쓰거나 `git push` 하는 것, 연결된 세션의 푸시가 github.com 의 SSH 주소로 나가는 것. 명령 치환(`$(…)` · 백틱) 안도 본다(`bot_guard.sh`). 토큰이 끝나 가면 새로 받는다 | 막는다. gh 의 읽기 명령과 `git fetch` · `pull` 은 막지 않는다 |
 | 라운드 코멘트 게시 | `(사람)` 인용의 원본인 3.5 코멘트에 👍 가 있는지(`round_comment_quotes.sh`) | 막는다 |
 | 머지 전 | 모든 3.5 코멘트에 👍 가 있는지(`merge-pr` 2절) | 멈춘다 |
 
@@ -132,8 +132,9 @@ GitHub 에서 세션의 글과 사람의 승인이 구분된다. 봇 설정이 �
    Actions 읽기다(Metadata 읽기는 기본으로 들어 있다). Contents 쓰기는 푸시와 머지에, Workflows 쓰기는
    `.github/workflows` 를 바꾼 커밋을 푸시하는 데, Issues · Pull requests 쓰기는 이슈 · PR · 코멘트에,
    읽기 둘은 CI 결과와 CI 로그를 읽는 데 쓴다. 세션의 GitHub 행동이 모두 봇 한 계정으로 간다 — 세션 시작 훅이
-   세션 환경에서 git 이 github.com 자격 증명을 gh(봇)에게서만 받고 SSH origin 도 https 로 바꿔 쓰게
-   하므로, 푸시도 봇 토큰으로 간다. 사용자의 git 설정 파일은 바꾸지 않는다.
+   세션 환경에서 git 이 github.com 자격 증명을 gh(봇)에게서만 받고 github.com 의 SSH 주소
+   (`git@github.com:` · `ssh://git@github.com/`)도 https 로 바꿔 쓰게 하므로, 푸시도 봇 토큰으로 간다.
+   사용자의 git 설정 파일은 바꾸지 않는다.
 2. App 의 개인키를 만들어 `~/.config/<App 이름>/key.pem` 에 둔다(권한 600). 커밋하지 않는다.
 3. App 을 설치하고 저장소 범위를 「Only select repositories」로 두어 킷을 쓰는 레포만 고른다.
    개인키나 토큰이 새면 설치 범위 안의 레포에 브랜치를 푸시하고 PR 을 열 수 있고, 브랜치 보호가 승인
@@ -147,6 +148,18 @@ GitHub 에서 세션의 글과 사람의 승인이 구분된다. 봇 설정이 �
 **새 레포에서 쓸 때.** 권한은 App 에 한 번 정하는 것이라 레포마다 다시 주지 않는다. 할 일은 둘이다 —
 App 설치의 저장소 목록에 그 레포를 더하고, 그 레포에 `.claude/bot.json` 을 커밋한다. 목록에 없으면
 세션을 시작할 때 「App 설치에 이 레포가 없다」가 나온다.
+
+**세션의 git 이 닿는 곳.** 세션 안의 github.com git 은 origin 만이 아니라 모두(서브모듈 · git 의존성
+포함) 봇 토큰으로 간다. 그래서 설치 범위 밖의 비공개 레포는 사람의 터미널에서는 받아지지만 세션에서는
+fetch · clone 이 안 된다. 세션에서 써야 하면 그 레포도 App 설치의 저장소 목록에 더한다.
+사람의 git 설정이 github.com 의 https 를 SSH 로 바꾸면(`url."git@github.com:".insteadOf` ·
+`pushInsteadOf`) 세션의 푸시가 SSH 키, 곧 사람 계정으로 나가므로 막기 훅이 그 푸시를 막는다. 이 레포에서만
+그 규칙을 끄려면 소유자까지 적은 더 긴 규칙을 둔다 — git 은 맞는 규칙 가운데 가장 긴 것을 쓴다:
+
+```bash
+git config --local url."https://github.com/<소유자>/".insteadOf "https://github.com/<소유자>/"
+git config --local url."https://github.com/<소유자>/".pushInsteadOf "https://github.com/<소유자>/"
+```
 
 **App 권한을 바꾸면 설치에서 한 번 더 승인한다.** App 설정에서 권한을 더해도, 설치 설정 페이지에서
 새 권한을 승인하기 전에는 설치 토큰이 옛 권한이다.

@@ -127,6 +127,7 @@ cred=$(printf 'protocol=https\nhost=github.com\n\n' | in_session git credential 
 ok "세션의 git 은 github.com 자격 증명을 봇(gh)에게서 받는다" 'printf "%s" "$cred" | grep -qx password=from-gh-bot'
 ok "세션의 git 은 사람의 자격 증명 도우미를 부르지 않는다" '! printf "%s" "$cred" | grep -qF from-person-helper'
 ok "세션의 git 은 SSH origin 을 https 로 바꿔 쓴다" '[ "$(in_session git ls-remote --get-url git@github.com:o/r.git)" = https://github.com/o/r.git ]'
+ok "세션의 git 은 ssh:// 주소도 https 로 바꿔 쓴다" '[ "$(in_session git ls-remote --get-url ssh://git@github.com/o/r.git)" = https://github.com/o/r.git ]'
 ok "세션 밖의 git 은 사람의 도우미를 그대로 쓴다" 'printf "protocol=https\nhost=github.com\n\n" | HOME="$T/person" GIT_CONFIG_NOSYSTEM=1 git credential fill 2>&1 | grep -qx password=from-person-helper'
 
 # 같은 세션을 다시 시작했는데 토큰을 못 받으면, 앞선 시작이 만든 표시가 남아 있으면 안 된다.
@@ -199,6 +200,13 @@ guard "연결 전 백틱 안의 머지" deny "echo \`gh pr merge 1\`"
 guard "연결 전 명령 치환 안의 git push" deny "out=\$(git push 2>&1)"
 guard "연결 전 인자로 나온 gh" pass "grep -n gh notes.md"
 guard "연결 전의 읽기(pr checkout)" pass "gh pr checkout 12"
+guard "연결 전 목록 밖 이름의 gh(alias · 확장)" deny "gh pm 1"
+guard "연결 전 목록 밖 이름의 gh(새 명령)" deny "gh newcmd create x"
+guard "연결 전 래퍼 뒤 목록 밖 이름의 gh" deny "timeout 30 gh pm 1"
+guard "연결 전 heredoc 커밋 메시지 안의 git push" pass "git commit -m \"\$(cat <<'EOF'
+docs: explain why git push is blocked
+EOF
+)\""
 
 session "연결" "$R"
 guard "연결 뒤의 게시" pass "gh pr comment 1 --body-file /tmp/x.md"
@@ -206,6 +214,19 @@ ok "토큰이 넉넉하면 새로 받지 않는다" '[ ! -s "$T/curl-log" ]'
 guard "연결 뒤의 머지" pass "gh pr merge 1 --squash --subject s --body b"
 guard "gh 가 아닌 명령" pass "ls -la high"
 guard "연결 뒤의 git push" pass "git push -u origin HEAD"
+guard "연결 뒤 heredoc 커밋 메시지 안의 gh auth" pass "git commit -m \"\$(cat <<'EOF'
+fix: block gh auth status in the guard
+EOF
+)\""
+# 사람의 git 설정이 github.com 의 https 를 SSH 로 바꾸면 세션의 푸시가 SSH 키로, 곧 사람 계정으로 나간다
+printf '[url "git@github.com:"]\n\tinsteadOf = https://github.com/\n' > "$T/home/.gitconfig"
+guard "사람 설정이 https 를 SSH 로 바꾼 푸시(insteadOf)" deny "git push -u origin HEAD" "$R" "SSH"
+printf '[url "git@github.com:"]\n\tpushInsteadOf = https://github.com/\n' > "$T/home/.gitconfig"
+guard "사람 설정이 https 를 SSH 로 바꾼 푸시(pushInsteadOf)" deny "git push" "$R" "SSH"
+rm -f "$T/home/.gitconfig"
+git -C "$R" remote set-url origin git@github.com:o/r.git
+guard "SSH origin 의 푸시(세션이 https 로 바꿔 쓴다)" pass "git push origin HEAD"
+git -C "$R" remote set-url origin https://github.com/o/r.git
 
 echo "── 스스로 승인하는 명령"
 guard "REST 로 👍(-X POST)" deny "gh api -X POST repos/o/r/issues/comments/1/reactions -f content=+1" "$R" "👍"
@@ -228,6 +249,10 @@ guard "reactions 를 찾는 grep -F" pass "grep -n -F reactions claude-code/hook
 guard "reactions 이름의 브랜치 지우기" pass "git branch -d fix-reactions"
 guard "reactions 파일 지우기" pass "rm -f /tmp/reactions.json"
 guard "git 의 자격 증명 설정을 바꿈" deny "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=credential.helper GIT_CONFIG_VALUE_0= git push"
+guard "git -c 로 자격 증명 도우미를 바꿈" deny "git -c credential.helper= push"
+guard "GIT_CONFIG_COUNT 만 바꿈" deny "export GIT_CONFIG_COUNT=0"
+guard "gh 설정에서 토큰을 꺼냄" deny "gh config get -h github.com oauth_token"
+guard "명령 치환으로 gh 설정의 토큰을 꺼냄" deny "T=\$(gh config get -h github.com oauth_token); echo \${#T}"
 guard "토큰을 출력하는 인증 상태(-t)" deny "gh auth status -t"
 guard "토큰을 출력하는 인증 상태(--show-token)" deny "gh auth status --show-token"
 guard "GH_ENTERPRISE_TOKEN 으로 바꿈" deny "GH_ENTERPRISE_TOKEN=x gh api user"
