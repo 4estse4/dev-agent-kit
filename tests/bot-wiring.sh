@@ -47,6 +47,20 @@ if '-w' in a:
     sys.stdout.write('\n%d' % code)
 EOF
 chmod +x "$T/bin/curl"
+# git 의 자격 증명 도우미로 불릴 가짜 gh. 세션 환경에서 git 이 봇(gh)에게 자격 증명을 받는지 본다.
+cat > "$T/bin/gh" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1 $2 $3" = "auth git-credential get" ]; then
+  printf 'username=x-access-token\npassword=from-gh-bot\n'
+  exit 0
+fi
+exit 1
+EOF
+chmod +x "$T/bin/gh"
+# 사람의 git 설정: osxkeychain 처럼 사람 자격 증명을 주는 도우미가 github.com 에 설정돼 있다
+mkdir -p "$T/person"
+printf '[credential]\n\thelper = "!f() { echo username=person; echo password=from-person-helper; }; f"\n' \
+  > "$T/person/.gitconfig"
 fail=0
 
 # 새 레포: 봇 설정 · GitHub origin 을 둔다. repo <디렉터리> [origin URL] [봇 설정 없음이면 no]
@@ -105,6 +119,15 @@ ok "이 세션을 연결했다고 적는다" '[ -f "$BOTDIR/wired/s1" ]'
 ok "JWT 파일을 남기지 않는다" '! grep -rqF Bearer "$BOTDIR"'
 ok "레포의 설치를 찾고 토큰을 받는다" 'grep -qF "repos/o/r/installation" "$T/curl-log" && grep -qF "installations/7/access_tokens" "$T/curl-log"'
 no_token_in_out "연결"
+# 세션 환경(CLAUDE_ENV_FILE)을 적용한 git 이 github.com 자격 증명을 봇(gh)에게서만 받고,
+# SSH origin 도 https 로 바꿔 쓰는가. 사람의 설정에 자격 증명 도우미가 있어도 그렇다.
+in_session() { ( set -a; . "$T/env"; set +a; HOME="$T/person" GIT_CONFIG_NOSYSTEM=1 PATH="$T/bin:$PATH" \
+  GIT_TERMINAL_PROMPT=0 "$@" ); }
+cred=$(printf 'protocol=https\nhost=github.com\n\n' | in_session git credential fill 2>&1)
+ok "세션의 git 은 github.com 자격 증명을 봇(gh)에게서 받는다" 'printf "%s" "$cred" | grep -qx password=from-gh-bot'
+ok "세션의 git 은 사람의 자격 증명 도우미를 부르지 않는다" '! printf "%s" "$cred" | grep -qF from-person-helper'
+ok "세션의 git 은 SSH origin 을 https 로 바꿔 쓴다" '[ "$(in_session git ls-remote --get-url git@github.com:o/r.git)" = https://github.com/o/r.git ]'
+ok "세션 밖의 git 은 사람의 도우미를 그대로 쓴다" 'printf "protocol=https\nhost=github.com\n\n" | HOME="$T/person" GIT_CONFIG_NOSYSTEM=1 git credential fill 2>&1 | grep -qx password=from-person-helper'
 
 # 같은 세션을 다시 시작했는데 토큰을 못 받으면, 앞선 시작이 만든 표시가 남아 있으면 안 된다.
 mv "$T/home/.config/kit-bot/key.pem" "$T/key.bak"
@@ -169,6 +192,13 @@ guard "연결 전 하위 명령 앞의 플래그 읽기(pr -R o/r view)" pass "g
 guard "연결 전의 읽기(run view)" pass "gh run view 1"
 guard "연결 전의 읽기(search)" pass "gh search issues x"
 guard "연결 전의 읽기(repo view)" pass "gh repo view o/r"
+guard "연결 전 명령 치환 안의 머지" deny "x=\$(gh pr merge 1 --squash)"
+guard "연결 전 명령 치환 안의 PR 만들기" deny "url=\$(gh pr create --title t --body-file b.md)"
+guard "연결 전 큰따옴표 안 명령 치환의 게시" deny "echo \"\$(gh pr comment 1 --body-file b.md)\""
+guard "연결 전 백틱 안의 머지" deny "echo \`gh pr merge 1\`"
+guard "연결 전 명령 치환 안의 git push" deny "out=\$(git push 2>&1)"
+guard "연결 전 인자로 나온 gh" pass "grep -n gh notes.md"
+guard "연결 전의 읽기(pr checkout)" pass "gh pr checkout 12"
 
 session "연결" "$R"
 guard "연결 뒤의 게시" pass "gh pr comment 1 --body-file /tmp/x.md"
@@ -190,7 +220,14 @@ guard "토큰을 바꿈" deny "GH_TOKEN=x gh pr comment 1 --body-file /tmp/x.md"
 guard "GITHUB_TOKEN 으로 바꿈" deny "export GITHUB_TOKEN=x; gh api user"
 guard "사람의 토큰을 꺼냄" deny "gh auth token"
 guard "계정을 바꿈" deny "gh auth switch -u someone"
-guard "인증 상태만 봄" pass "gh auth status"
+# gh 2.92 의 gh auth status 는 토큰을 마지막 `_` 뒤만 가려, `_` 가 여럿인 봇 설치 토큰을 거의 다 출력한다
+guard "인증 상태도 막는다" deny "gh auth status"
+guard "명령 치환으로 토큰을 꺼냄" deny "echo \$(gh auth token)"
+guard "curl 인자 안에서 토큰을 꺼냄" deny "curl -H \"Authorization: token \$(gh auth token)\" https://api.github.com/user"
+guard "reactions 를 찾는 grep -F" pass "grep -n -F reactions claude-code/hooks/answer_approvals.sh"
+guard "reactions 이름의 브랜치 지우기" pass "git branch -d fix-reactions"
+guard "reactions 파일 지우기" pass "rm -f /tmp/reactions.json"
+guard "git 의 자격 증명 설정을 바꿈" deny "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=credential.helper GIT_CONFIG_VALUE_0= git push"
 guard "토큰을 출력하는 인증 상태(-t)" deny "gh auth status -t"
 guard "토큰을 출력하는 인증 상태(--show-token)" deny "gh auth status --show-token"
 guard "GH_ENTERPRISE_TOKEN 으로 바꿈" deny "GH_ENTERPRISE_TOKEN=x gh api user"
@@ -211,6 +248,24 @@ ok "git push 앞에서도 토큰을 새로 받는다" 'grep -qF access_tokens "$
 printf '2000-01-01T00:00:00Z\n' > "$BOTDIR/expires"
 STUB_CURL_EXIT=28 guard "네트워크가 멈춘 뒤의 게시" deny "gh pr comment 1 --body-file /tmp/x.md" "$R" "네트워크"
 ok "curl 이 기다리는 시간에 끝이 있다" 'grep -qF -- "--max-time" "$T/curl-log"'
+printf '2000-01-01T00:00:00Z\n' > "$BOTDIR/expires"
+guard "만료된 토큰으로 명령 치환 안의 git push" pass "out=\$(git push 2>&1); echo \"\$out\""
+ok "명령 치환 안의 git push 앞에서도 토큰을 새로 받는다" 'grep -qF access_tokens "$T/curl-log" && grep -qF 2099 "$BOTDIR/expires"'
+
+echo "── 동시에 토큰을 새로 받음"
+# 병렬 Bash 호출이나 여러 워크트리의 세션이 같은 봇 디렉터리의 토큰을 동시에 새로 받는다.
+input=$(python3 -c 'import json,sys; print(json.dumps({"session_id": "s1", "cwd": sys.argv[1],
+  "hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": "gh pr comment 1 --body-file /tmp/x.md"}}))' "$R")
+: > "$T/curl-log"; rm -f "$T"/par.*
+for n in 1 2 3 4 5; do
+  printf '2000-01-01T00:00:00Z\n' > "$BOTDIR/expires"
+  for k in 1 2 3 4; do
+    printf '%s' "$input" | HOME="$T/home" PATH="$T/bin:$PATH" STUB_CURL_LOG="$T/curl-log" \
+      bash "$H/bot_guard.sh" > "$T/par.$n.$k" 2>&1 &
+  done
+  wait
+done
+ok "동시에 새로 받아도 쓰기가 막히지 않는다" '! grep -lq "\"deny\"" "$T"/par.*'
 
 [ "$fail" = 0 ] && echo "  ✓ 봇 설정이 있으면 세션의 gh 를 봇 계정에 연결하고, 벗어나는 쓰기를 막는다"
 exit "$fail"

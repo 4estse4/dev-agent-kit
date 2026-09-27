@@ -119,7 +119,7 @@ GitHub 에서 세션의 글과 사람의 승인이 구분된다. 봇 설정이 �
 | 시점 | 무엇 | 막나 |
 |---|---|---|
 | 세션 시작 | 설치 토큰을 받아 세션의 gh 를 봇 계정에 연결한다(`bot_session.sh`) | 못 받으면 까닭을 세션에 알린다. 쓰기는 아래 줄이 막는다 |
-| gh 명령 · git 원격 명령마다 | 세션이 👍 를 다는 것, gh 의 계정 · 토큰을 바꾸거나 토큰을 출력하는 것, 연결되지 않은 세션이 gh 로 쓰거나 `git push` 하는 것(`bot_guard.sh`). 토큰이 끝나 가면 새로 받는다 | 막는다. gh 의 읽기 명령과 `git fetch` · `pull` 은 막지 않는다 |
+| gh 명령 · git 원격 명령마다 | 세션이 👍 를 다는 것, gh 와 git 의 계정 · 자격 증명을 바꾸는 것, `gh auth` 명령(`status` 도 봇 토큰을 출력한다), 연결되지 않은 세션이 gh 로 쓰거나 `git push` 하는 것. 명령 치환(`$(…)` · 백틱) 안도 본다(`bot_guard.sh`). 토큰이 끝나 가면 새로 받는다 | 막는다. gh 의 읽기 명령과 `git fetch` · `pull` 은 막지 않는다 |
 | 라운드 코멘트 게시 | `(사람)` 인용의 원본인 3.5 코멘트에 👍 가 있는지(`round_comment_quotes.sh`) | 막는다 |
 | 머지 전 | 모든 3.5 코멘트에 👍 가 있는지(`merge-pr` 2절) | 멈춘다 |
 
@@ -131,8 +131,9 @@ GitHub 에서 세션의 글과 사람의 승인이 구분된다. 봇 설정이 �
 1. GitHub App 을 만든다. 권한은 Contents · Issues · Pull requests · Workflows 쓰기와 Checks ·
    Actions 읽기다(Metadata 읽기는 기본으로 들어 있다). Contents 쓰기는 푸시와 머지에, Workflows 쓰기는
    `.github/workflows` 를 바꾼 커밋을 푸시하는 데, Issues · Pull requests 쓰기는 이슈 · PR · 코멘트에,
-   읽기 둘은 CI 결과와 CI 로그를 읽는 데 쓴다. 세션의 GitHub 행동이 모두 봇 한 계정으로 간다 — git 이
-   GitHub 자격 증명을 gh 로 받으면(`gh auth git-credential`) 푸시도 봇 토큰으로 간다.
+   읽기 둘은 CI 결과와 CI 로그를 읽는 데 쓴다. 세션의 GitHub 행동이 모두 봇 한 계정으로 간다 — 세션 시작 훅이
+   세션 환경에서 git 이 github.com 자격 증명을 gh(봇)에게서만 받고 SSH origin 도 https 로 바꿔 쓰게
+   하므로, 푸시도 봇 토큰으로 간다. 사용자의 git 설정 파일은 바꾸지 않는다.
 2. App 의 개인키를 만들어 `~/.config/<App 이름>/key.pem` 에 둔다(권한 600). 커밋하지 않는다.
 3. App 을 설치하고 저장소 범위를 「Only select repositories」로 두어 킷을 쓰는 레포만 고른다.
    개인키나 토큰이 새면 설치 범위 안의 레포에 브랜치를 푸시하고 PR 을 열 수 있고, 브랜치 보호가 승인

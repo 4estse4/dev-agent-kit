@@ -81,7 +81,10 @@ res=$(api "https://api.github.com/app/installations/$iid/access_tokens" -X POST)
 code=${res##*$'\n'}
 [ "$code" = 201 ] || fail "설치 토큰을 받지 못했다(HTTP ${code:-없음})."
 # 토큰은 명령 인자에 두지 않고 표준입력으로 파이썬에 전달해 파일로만 쓴다.
-printf '%s' "${res%$'\n'*}" | python3 -c 'import json, os, sys
+# 여러 세션 · 병렬 명령이 같은 봇 디렉터리의 토큰을 동시에 새로 받을 수 있다. 임시 파일은 호출마다
+# 다른 이름으로 만들고(mkstemp, 권한 600) 제자리로 옮긴다 — 이름이 같으면 한쪽이 상대의 임시 파일을
+# 옮겨 버려 다른 쪽이 실패한다.
+printf '%s' "${res%$'\n'*}" | python3 -c 'import json, os, sys, tempfile
 d, app, where = json.load(sys.stdin), sys.argv[1], sys.argv[2]
 tok, until = d["token"], d["expires_at"]
 user = "%s[bot]" % app
@@ -92,8 +95,8 @@ files = {
     "expires": until + "\n",
 }
 for name, text in files.items():
-    tmp = os.path.join(where, "." + name + ".tmp")
-    with open(tmp, "w") as fh:          # 위의 umask 077 로 본인만 읽는다
+    fd, tmp = tempfile.mkstemp(dir=where, prefix="." + name + ".")
+    with os.fdopen(fd, "w") as fh:
         fh.write(text)
     os.replace(tmp, os.path.join(where, name))' "$app" "$dir" 2>/dev/null \
   || fail "설치 토큰 응답을 읽지 못했다."
