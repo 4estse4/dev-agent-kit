@@ -26,6 +26,9 @@
 #   조각들은 한 인용 안에 순서대로 있어야 한다
 # - 백틱 밖의 `(사람…)` 바로 뒤에 따옴표 인용이 없거나, 따옴표가 닫히지 않을 때.
 #   대조할 인용이 없어 이 훅의 대조가 우회된다. 백틱 안은 예시라서 안 본다
+# - 레포에 봇 설정(`.claude/bot.json`)이 있는데, 인용이 사람의 👍 가 없는 3.5 코멘트에만 있을 때.
+#   봇 설정이 있으면 세션은 봇 계정으로 올리고 사람은 자기 계정으로 3.5 코멘트에 👍 를 단다.
+#   어떤 👍 를 인정하는지는 `answer_approvals.sh` 머리에 있고, 3.5 코멘트는 그 스크립트가 읽는다
 #
 # **3.5 코멘트(`### N라운드 코멘트를 읽고 사람이 정한 것`)에는 `"ask"` 를 낸다.** 그 코멘트가 대조의
 # 원본이라, 세션이 승인 없이 올리면 원본을 스스로 만드는 셈이다. `ask` 규칙이 없는
@@ -37,7 +40,8 @@
 # 알아보고, 게시 명령을 스크립트 파일에 두고 실행하거나 인라인 인터프리터에 인자 목록으로
 # 전달해도(`python3 -c` · `node -e` 의 `['gh', 'pr', 'comment', …]`) 못 본다 — 이 훅은 형식대로 입력한
 # 게시 명령의 실수를 막고, 작정한 우회는 막으려 하지 않는다. 대조의 원본인 3.5 코멘트의 인용이 진짜
-# 사람 말인지는 이 훅이 모른다. 3.5 코멘트는 사람이 승인하고 올린다.
+# 사람 말인지는 이 훅이 모른다. 3.5 코멘트는 사람이 승인하고 올린다. 봇 설정이 있으면 그 승인이
+# 사람 계정의 👍 로 GitHub 에 남고, 이 훅은 👍 가 있는 3.5 코멘트만 원본으로 쓴다.
 #
 # **통과시킬 때 아무것도 내지 않는다.** 훅의 `"allow"` 는 권한 프롬프트를 건너뛰게 하지만
 # `ask` 규칙은 그대로 평가된다(공식 문서: "Deny and ask rules … are still evaluated regardless
@@ -60,7 +64,7 @@ case "$input" in
   *) exit 0 ;;
 esac
 
-HOOK_INPUT="$input" python3 - <<'PY'
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)" HOOK_INPUT="$input" python3 - <<'PY'
 import json, os, re, shlex, subprocess, sys
 
 ROUND = re.compile(r'^\s*## 리뷰 ')
@@ -278,33 +282,52 @@ want = quotes(body)
 if not want:
     sys.exit(0)
 
-gh = ['gh', 'pr', 'view'] + ([pr] if pr else []) + (['-R', repo] if repo else []) \
-    + ['--json', 'comments', '--jq', '[.comments[].body]']
+# 3.5 코멘트와 그 👍 는 판정 스크립트가 읽는다. `merge-pr` 이 같은 스크립트를 부른다 — 두 벌이면
+# 인정하는 👍 가 어긋난다.
+judge = ['bash', os.path.join(os.environ['HOOK_DIR'], 'answer_approvals.sh'), '--json', pr] \
+    + (['-R', repo] if repo else [])
 try:
-    r = subprocess.run(gh, cwd=data.get('cwd') or None, capture_output=True, text=True, timeout=60)
-    bodies = json.loads(r.stdout) if r.returncode == 0 else None
+    r = subprocess.run(judge, cwd=data.get('cwd') or None, capture_output=True, text=True,
+                       timeout=100)
+    got = json.loads(r.stdout) if r.returncode == 0 else None
 except (OSError, ValueError, subprocess.TimeoutExpired):
-    bodies = None
-if not isinstance(bodies, list):
+    got = None
+if not isinstance(got, dict) or not isinstance(got.get('answers'), list):
     deny("라운드 코멘트의 (사람) 인용을 대조하려고 PR 코멘트를 읽다가 실패했다(gh). "
          "판정 못 한 것은 올리지 않는다. gh 인증과 PR 번호를 확인하고 다시 입력해라.")
 
-have = []
-for b in bodies:
-    if isinstance(b, str) and ANSWER.match(b):
+# 봇 설정이 있으면 👍 가 없는 3.5 코멘트는 원본이 아니다. 인용이 거기에만 있으면 👍 를 요구한다.
+have, waiting = [], []
+for a in got['answers']:
+    b = a.get('body') if isinstance(a, dict) else None
+    if not isinstance(b, str):
+        continue
+    if a.get('approved') is False:
+        waiting.append((a, quotes(b)))
+    else:
         have += quotes(b)
 # 따옴표 안에서 가운데를 `…` 로 줄인 인용이 있다(「길면 잘라 쓰되 낱말을
 # 바꾸지 않는다」). 줄인 조각들이 한 인용 안에 순서대로 있어야 한다.
-missing = []
+missing, unapproved = [], {}
 for s in want:
     pieces = [p.strip() for p in re.split(r'…|\.\.\.', s) if p.strip()]
     pat = re.compile('.*?'.join(re.escape(p) for p in pieces))
-    if not any(pat.search(h) for h in have):
+    if any(pat.search(h) for h in have):
+        continue
+    hit = next((a for a, qs in waiting if any(pat.search(h) for h in qs)), None)
+    if hit:
+        unapproved[hit.get('url')] = hit.get('why') or ''
+    else:
         missing.append(show(s))
 if missing:
     deny("라운드 코멘트의 (사람) 인용 중 이 PR 의 3.5 코멘트"
          "(「### N라운드 코멘트를 읽고 사람이 정한 것」)의 (사람) 인용에 글자 그대로 없는 것이 있다. "
          "3.5 코멘트에 올라간 문장만 인용한다. 줄였으면 한 인용 안에서 순서대로 줄인다. "
          "없는 조각: " + " / ".join('"%s"' % s for s in missing))
+if unapproved:
+    deny("라운드 코멘트의 (사람) 인용의 원본인 3.5 코멘트에 사람의 👍 가 없다. 이 레포에는 봇 "
+         "설정(.claude/bot.json)이 있어, 사람이 자기 계정으로 👍 를 단 3.5 코멘트만 원본으로 "
+         "인정한다. 사람에게 아래 코멘트에 👍 를 달아 달라고 알리고, 단 뒤에 다시 입력해라. "
+         "직접 달지 마라: " + " / ".join('%s (%s)' % (u, w) for u, w in unapproved.items()))
 sys.exit(0)
 PY

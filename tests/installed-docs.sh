@@ -25,6 +25,12 @@ import re, sys, os, subprocess
 R = sys.argv[1]; bad = 0
 KIT = set(subprocess.run(['git', '-C', sys.argv[2], '-c', 'core.quotePath=false', 'ls-files'],
                          capture_output=True, text=True, check=True).stdout.split('\n'))
+# **프로젝트가 만드는 파일은 설치 직후에 없다.** 그 목록은 설치된 kit-guide 2절 「프로젝트가 채워야
+# 하는 것」 표의 첫 칸이다. 여기 따로 적지 않는다 — 두 벌이면 어긋나고, 문서에 없는 파일을 가리키면
+# 그대로 실패해야 한다.
+guide = open(os.path.join(R, 'docs/process/kit-guide.md'), encoding='utf-8').read()
+part = re.search(r'(?ms)^## 2\..*?(?=^## )', guide)
+PROJECT = set(re.findall(r'(?m)^\| `([^`]+)`', part.group(0))) if part else set()
 # **확장자로 고르지 않는다.** `.md`·`.yml`·`.json` 만 보던 탓에 `.sh` 와 훅 파일
 # (`pre-commit`·`pre-push`)이 통째로 검사 밖이었다 — 킷 경로를 가장 많이 적는 자리다.
 # 설치본 전부를 보고, 읽을 수 없는 것(바이너리)만 건너뛴다.
@@ -49,7 +55,7 @@ for f in found:
     for m in re.findall(r'(?a)(?<![\w/-])(?:\.\.?/)*((?:common|\.ai-kit|\.claude|docs/process)/[\w./|-]+)', text):
         m = m.rstrip('.')            # 문장 끝 마침표가 붙어 온다
         m = m.split('|')[0]          # `.claude/skills|agents|hooks` 같은 표기
-        if not os.path.exists(os.path.join(R, m)):
+        if not os.path.exists(os.path.join(R, m)) and m not in PROJECT:
             print(f"  ✗ {f[len(R)+1:]} 가 없는 경로를 가리킨다 — {m}"); bad = 1
     # **킷에만 있는 경로.** 위 접두어 밖(`docs/` 의 나머지 · `.github/` · `tests/`)은
     # 설치된 레포에 없는 것이 정상일 수 있다 — 스킬이 만들 파일(`docs/HANDOFF.md`)이
