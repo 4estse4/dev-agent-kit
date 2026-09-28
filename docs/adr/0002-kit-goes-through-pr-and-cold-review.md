@@ -70,7 +70,7 @@ $ gh api repos/4estse4/ai-native-kit/rulesets --jq '.[] | {name, enforcement, ta
 
 **2026-09-28 11:42 KST 에 사람이 룰셋에 승인 조건 셋을 더했다.** 세션이 GitHub App 의 봇 계정으로 PR 을
 열게 되어(이슈 #53) 사람이 그 PR 을 Approve 할 수 있게 된 뒤다. 필요 승인 1 · 새 커밋이 오면 이전 승인
-무효 · 마지막 푸시는 푸시한 사람이 아닌 사람이 승인이다. 그날 다시 확인한 값:
+무효 · 마지막 푸시는 푸시한 사람이 아닌 사람이 승인해야 한다. 그날 다시 확인한 값:
 
 ```
 $ gh api repos/4estse4/ai-native-kit/rules/branches/main --jq '.[] | select(.type=="pull_request") | .parameters | {required_approving_review_count, dismiss_stale_reviews_on_push, require_last_push_approval}'
