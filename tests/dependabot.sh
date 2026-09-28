@@ -2,7 +2,7 @@
 # 설치되는 .github/dependabot.yml 이 github-actions 만 켜고, 언어별 생태계는 주석으로 두는가(이슈 #39).
 #
 # 이 테스트가 있는 이유: 템플릿이 gomod · npm 을 켜 두어 `--lang` 과 상관없이 그대로 설치됐다. 매니페스트가
-# 없는 생태계는 Dependabot 이 매주 실패시킨다. `--lang py,ts` 로 설치한 프로젝트에서 go_modules ·
+# 없는 생태계는 Dependabot 의 업데이트가 매주 실패한다. `--lang py,ts` 로 설치한 프로젝트에서 go_modules ·
 # npm_and_yarn 업데이터가 설치 직후부터 실패했다. 매니저와 매니페스트가 있는 디렉터리는 설치 시점에 킷이
 # 알 수 없으므로, 언어별 항목은 주석으로 두고 매니페스트를 만든 사람이 채워 켠다.
 #
@@ -81,7 +81,7 @@ if extra:
     print(f"어댑터 언어의 생태계가 아닌 주석 블록이 있다 — {', '.join(extra)}")
     bad = 1
 # 2칸 들여쓴 주석을 모두 풀어도 읽혀야 한다. 에디터로 블록을 고를 때 블록에 붙은 설명 줄까지 함께 풀리기
-# 쉽다. 그 줄이 따로 서 있으면 updates 안에 YAML 이 아닌 줄이 남아 파일 전체가 읽히지 않는다.
+# 쉽다. 그 줄이 블록에 붙지 않고 따로 있으면 updates 안에 YAML 이 아닌 줄이 남아 파일 전체가 읽히지 않는다.
 try:
     ecosystems(re.sub(r"(?m)^  # ", "  ", text))
 except Exception as x:

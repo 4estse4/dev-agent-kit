@@ -72,7 +72,7 @@ for phase in 첫설치 재설치 교체있음 보존있음 삭제있음; do
     # 네 단계가 전부 `교체 0` 이라 그 칸이 실제와 달라도 초록이다 — PR 본문이 "여섯 개를
     # 교체하고도 교체 0건" 이라고 적은 그 결함의 칸이 바로 여기다.
     교체있음) echo '# 프로젝트가 킷 파일을 고쳐둠' >> "$R/.ai-kit/gate/gate.sh" ;;
-    # 프로젝트 소유는 둘이다 — CLAUDE.md 와 .claude/settings.json. 하나만 고쳐두면
+    # 이 검사가 고치는 프로젝트 소유 파일은 둘이다 — CLAUDE.md 와 .claude/settings.json. 하나만 고쳐두면
     # 다른 하나의 소유 판정이 깨져도 이 검사가 실패하지 않는다(실제로 확인함: settings.json 쪽을
     # 킷 소유로 오판하게 만들어도 초록이었다).
     보존있음) printf '\n# 이 프로젝트가 적은 줄\n' >> "$R/CLAUDE.md"
@@ -89,7 +89,7 @@ PYEOF
   a=$(bash "$KIT/install.sh" --hooks --templates --lint --ci --agent          "$R" 2>&1 | cols)
   if [ "$f" = "$a" ]; then echo "  ✓ 미리보기=실제 ($phase: $f)"
   else echo "  ✗ 미리보기≠실제 ($phase)"; echo "      미리보기 [$f]"; echo "      실제     [$a]"; fail=1; fi
-  # 그 단계가 겨눈 칸이 0 이면 확인한 것이 아니다
+  # 그 단계가 확인하려는 칸이 0 이면 확인한 것이 아니다
   case "$phase" in
     교체있음) echo "$a" | grep -q '교체 0' && { echo "  ✗ $phase 인데 교체 칸이 0 이다 — 이 칸은 확인하지 않은 것과 같다"; fail=1; } ;;
     보존있음) echo "$a" | grep -q '보존 0' && { echo "  ✗ $phase 인데 보존 칸이 0 이다 — 이 칸은 확인하지 않은 것과 같다"; fail=1; } ;;

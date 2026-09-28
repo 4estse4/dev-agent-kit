@@ -14,19 +14,19 @@
 # - 토큰을 출력하는 명령. `git credential …` · `git credential-<도우미>` 와 봇 디렉터리를 가리키는
 #   명령이다(`BOTDIR_READ`). 봇 디렉터리에서는 토큰이 없는 `expires` · `session-env` · `wired` 만 가리킬 수
 #   있고, 봇 디렉터리 이름과 `..` 가 한 명령에 함께 있으면 막는다(`wired/../hosts.yml` 처럼 허용한 이름을
-#   거쳐 올라간다) — 파일 이름으로 막던 동안 `cat <봇 디렉터리>/*` · `grep -r` 이 지나갔다. Read 도구는 이
+#   거쳐 올라간다) — 파일 이름으로 막던 동안 `cat <봇 디렉터리>/*` · `grep -r` 을 막지 못했다. Read 도구는 이
 #   훅을 거치지 않으므로 설치되는 `settings.json` 의 `deny` 가 막는다. 그 규칙은 파일 시스템 루트 기준이라
 #   (`//**/…`) 작업 디렉터리 밖에 있는 worktree 세션의 봇 디렉터리도 막는다. 연결된 세션의 git 은 github.com 자격 증명을
 #   봇(gh)에게서 받으므로 `git credential fill` 이 봇 토큰 전체를 출력한다. 연결되지 않은 세션에서는 사람의
 #   토큰을 출력한다
 # - 연결되지 않은 세션의 쓰기. 세션 시작 훅(`bot_session.sh`)이 이 세션을 봇 계정에 연결하지
 #   못했으면 그 세션의 gh 와 git 은 사람 계정이다. gh 의 읽기 명령이 아닌 것과 `git push` 를 막는다.
-#   읽기로 보는 것은 아래 `READ_GROUPS` · `READ_SUBS` 와, 메서드 · 필드로 판정해 쓰지 않는 `gh api` 다.
-#   목록에 없는 gh 명령은 쓰기로 본다 — 목록으로 쓰기를 나열하던 동안 목록 밖의 쓰기
-#   (`gh pr update-branch` · `gh run rerun` …)가 지나갔다
-# - 연결된 세션의 푸시가 github.com 의 SSH 주소로 나가는 것. 세션 환경은 github.com 의 SSH 주소를
+#   읽기로 판정하는 것은 아래 `READ_GROUPS` · `READ_SUBS` 와, 메서드 · 필드로 판정해 쓰지 않는 `gh api` 다.
+#   목록에 없는 gh 명령은 쓰기로 판정한다 — 목록으로 쓰기를 나열하던 동안 목록 밖의 쓰기
+#   (`gh pr update-branch` · `gh run rerun` …)를 막지 못했다
+# - 연결된 세션이 github.com 의 SSH 주소로 푸시하는 것. 세션 환경은 github.com 의 SSH 주소를
 #   https 로 바꾸지만, 사람의 git 설정(`url.<ssh>.insteadOf` · `pushInsteadOf`)이 https 를 다시 SSH 로
-#   바꾸면 그 푸시는 SSH 키, 곧 사람 계정으로 나간다. 세션 환경(`<봇 디렉터리>/session-env`)을 적용해
+#   바꾸면 그 푸시에는 SSH 키, 곧 사람 계정이 쓰인다. 세션 환경(`<봇 디렉터리>/session-env`)을 적용해
 #   실제 푸시 주소를 풀고(`push_urls`), 풀지 못하면 막는다
 # - 봇 토큰이 끝나 가는데 새로 받지 못한 뒤의 쓰기
 #
@@ -108,7 +108,7 @@ GH_GROUPS = {'agent-task', 'alias', 'api', 'attestation', 'auth', 'browse', 'cac
 METHOD = re.compile(r'^(?:-X|--method|--request)(?:=)?([A-Za-z]*)$')
 FIELDS = {'-f', '-F', '--field', '--raw-field', '--input', '-d', '--data', '--data-raw',
           '--data-binary'}
-# 연결되지 않은 세션에서도 되는 gh 명령. 그 밖은 GitHub 에 쓸 수 있는 것으로 본다.
+# 연결되지 않은 세션에서도 되는 gh 명령. 그 밖은 GitHub 에 쓸 수 있는 것으로 판정한다.
 READ_GROUPS = {'search', 'browse', 'status', 'help', 'version', 'completion', 'config', 'alias'}
 READ_SUBS = {'view', 'list', 'ls', 'diff', 'checks', 'status', 'download', 'watch', 'clone', 'get',
              'check', 'checkout'}
@@ -117,7 +117,7 @@ VALUED = {'-R', '--repo', '--hostname'}
 GIT_VALUED = {'-C', '-c', '--git-dir', '--work-tree', '--namespace', '--config-env'}
 GIT_REMOTE = {'push', 'fetch', 'pull', 'clone', 'ls-remote'}
 # `git push` 의 긴 플래그 가운데 값을 받는 것(git 2.54 의 `git push -h`). git 은 긴 플래그를 앞 글자만
-# 적어도 받으므로 앞부분이 맞으면 값을 받는 것으로 본다.
+# 적어도 받으므로 앞부분이 맞으면 값을 받는 것으로 판정한다.
 PUSH_VALUED = ('repo', 'receive-pack', 'exec', 'push-option', 'recurse-submodules')
 # 명령 자리 앞에 올 수 있는 낱말(래퍼 · 셸 예약어). 그 뒤 첫 낱말이 명령이다.
 WRAPPERS = {'env', 'command', 'exec', 'time', 'nice', 'nohup', 'sudo', 'xargs', 'timeout', 'then',
@@ -510,19 +510,19 @@ def push_urls(args):
 
 
 # 세션 환경은 github.com 의 SSH 주소를 https 로 바꾸지만, 사람의 git 설정이 https 를 다시 SSH 로 바꾸면
-# (`url.<ssh>.insteadOf` · `pushInsteadOf`) 그 푸시는 SSH 키로, 곧 사람 계정으로 나간다.
+# (`url.<ssh>.insteadOf` · `pushInsteadOf`) 그 푸시에는 SSH 키, 곧 사람 계정이 쓰인다.
 for a in git_calls:
     if git_parts(a)[1] != 'push':
         continue
     urls = push_urls(a)
     if not urls:
-        deny("이 푸시가 나갈 주소를 풀지 못해 막는다. 막기 훅은 푸시 주소가 github.com 의 SSH 주소가 아닌지, "
-             "곧 사람 계정으로 나가지 않는지 확인한 뒤에 푸시를 통과시킨다. 원격 이름이나 URL 을 적어 다시 "
+        deny("이 푸시의 주소를 풀지 못해 막는다. 막기 훅은 푸시 주소가 github.com 의 SSH 주소가 아닌지, "
+             "곧 사람 계정으로 푸시하지 않는지 확인한 뒤에 푸시를 통과시킨다. 원격 이름이나 URL 을 적어 다시 "
              "실행한다.")
     for u in urls:
         if re.search(r'github\.com[:/]', u) and not u.startswith('https://github.com/'):
-            deny("이 푸시는 " + u + " 로 나간다. github.com 의 SSH 주소라서 봇이 아니라 SSH 키, 곧 사람 계정으로 "
-                 "나간다. 세션은 github.com 의 SSH 주소를 https 로 바꿔 쓰지만, 사람의 git 설정(url.….insteadOf · "
+            deny("이 푸시의 주소는 " + u + " 다. github.com 의 SSH 주소라서 봇이 아니라 SSH 키, 곧 사람 계정으로 "
+                 "푸시된다. 세션은 github.com 의 SSH 주소를 https 로 바꿔 쓰지만, 사람의 git 설정(url.….insteadOf · "
                  "pushInsteadOf)이 https 를 SSH 로 다시 바꾼다. 그 설정을 이 레포에서 끄는 법은 " + GUIDE + "에 있다.")
 sys.exit(0)
 PY

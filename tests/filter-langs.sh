@@ -5,17 +5,17 @@
 # 그 주석이 다음 스텝의 설명이어도 버려서, 앞 언어를 뺀 설치에서 뒤 스텝의 설명이 사라졌다(이슈 #106).
 # 스텝과 동작은 남고 워크플로 안의 근거만 없어지므로 실행 결과로는 드러나지 않는다.
 #
-# 필터를 직접 부르지 않고 설치기를 지나간다(`install.sh <레포> --lang <남길 언어>`). 보는 것:
+# 필터를 직접 부르지 않고 설치기를 거쳐 부른다(`install.sh <레포> --lang <남길 언어>`). 보는 것:
 #   · go · jvm · py · ts 가운데 한~세 개를 남기는 14개 조합마다 설치된 gates.yml 이 YAML 로 읽힌다
-#   · detect 밖의 잡마다, 설치본의 스텝을 YAML 로 읽은 목록이 원본에서 떨어뜨린 스텝만 뺀 목록과
-#     같다. PyYAML 은 같은 키가 두 번 나와도 읽으므로, 떨어뜨린 스텝의 본문 줄이 앞 스텝에 붙어
+#   · detect 밖의 잡마다, 설치본의 스텝을 YAML 로 읽은 목록이 원본에서 필터가 뺀 스텝을 제외한 목록과
+#     같다. PyYAML 은 같은 키가 두 번 나와도 읽으므로, 필터가 뺀 스텝의 본문 줄이 앞 스텝에 붙어
 #     남은 것은 읽히는지만 봐서는 드러나지 않는다
 #   · 원본에서 스텝 바로 앞에 있는 주석 묶음은 그 스텝이 남으면 그 스텝 머리 바로 앞에 그대로 남고,
-#     떨어지면 없다. 스텝의 언어는 스텝의 `- if: needs.detect.outputs.<언어>` 와 잡의 `if:` 에서
+#     빠지면 없다. 스텝의 언어는 스텝의 `- if: needs.detect.outputs.<언어>` 와 잡의 `if:` 에서
 #     읽는다(node 는 ts)
-#   · 떨어뜨리는 스텝의 본문 한가운데 있는 6칸 주석은 그 스텝과 함께 지워지고, 그 뒤의 본문 줄도
+#   · 필터가 빼는 스텝의 본문 한가운데 있는 6칸 주석은 그 스텝과 함께 지워지고, 그 뒤의 본문 줄도
 #     남지 않는다. 그 스텝이 남으면 주석도 제자리에 남는다. 킷 사본의 gates.yml 에 그런 주석을 넣고 본다
-#   · 떨어뜨리는 스텝 뒤의 6칸 주석은, 뒤에 스텝 머리가 오지 않으면(잡 머리 · 2칸 주석 · 파일 끝)
+#   · 필터가 빼는 스텝 뒤의 6칸 주석은, 뒤에 스텝 머리가 오지 않으면(잡 머리 · 2칸 주석 · 파일 끝)
 #     그 스텝과 함께 지워진다. 그 스텝이 남으면 주석도 남는다. 킷 사본의 gates.yml 에 넣고 본다
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -68,7 +68,7 @@ for name, job in S["jobs"].items():
         continue
     if lang(job.get("if")) in drop:
         if name in O["jobs"]:
-            print(f"✗ 떨어지는 잡 {name} 이 남았다")
+            print(f"✗ 빠지는 잡 {name} 이 남았다")
             bad = 1
         continue
     want = [s for s in job.get("steps", []) if lang(s.get("if")) not in drop]
@@ -76,7 +76,7 @@ for name, job in S["jobs"].items():
     for k in range(max(len(got), len(want))):
         g = got[k] if k < len(got) else None
         if g != (want[k] if k < len(want) else None):
-            print(f"✗ {name} 잡의 {k + 1}번째 스텝이 원본에서 떨어뜨린 스텝만 뺀 것과 다르다: {str(g)[:90]}")
+            print(f"✗ {name} 잡의 {k + 1}번째 스텝이 원본에서 필터가 뺀 스텝을 제외한 것과 다르다: {str(g)[:90]}")
             bad = 1
             break
 
@@ -117,10 +117,10 @@ for block, dropped, head in units:
         print(f"✗ 남는 스텝({head.strip()[:50]})의 앞 주석이 사라졌거나 그 스텝 머리 바로 앞에 없다: {first}")
         bad = 1
     if dropped and block not in kept_blocks and contains(outl, block):
-        print(f"✗ 떨어지는 스텝({head.strip()[:50]})의 앞 주석이 남았다: {first}")
+        print(f"✗ 빠지는 스텝({head.strip()[:50]})의 앞 주석이 남았다: {first}")
         bad = 1
 n_keep = sum(1 for _, d, _ in units if not d)
-print(f"묶음 {len(units)} · 남는 스텝 앞 {n_keep} · 떨어지는 스텝 앞 {len(units) - n_keep}")
+print(f"묶음 {len(units)} · 남는 스텝 앞 {n_keep} · 빠지는 스텝 앞 {len(units) - n_keep}")
 sys.exit(bad)
 PY
 
@@ -128,7 +128,7 @@ for keep in go jvm py ts go,jvm go,py go,ts jvm,py jvm,ts py,ts go,jvm,py go,jvm
   y=$(install_lang "$KIT" "$keep")
   if [ -z "$y" ]; then bad "--lang $keep: 설치가 실패했다"; continue; fi
   out=$(python3 "$T/check.py" "$KIT/common/ci/gates.yml" "$y" "$keep" 2>&1)
-  if [ $? -eq 0 ]; then ok "--lang $keep: 스텝이 원본에서 떨어뜨린 것만 빠지고, 스텝 앞 주석이 스텝과 함께 남거나 지워진다 ($(printf '%s\n' "$out" | tail -1))"
+  if [ $? -eq 0 ]; then ok "--lang $keep: 스텝이 원본에서 필터가 뺀 것만 빠지고, 스텝 앞 주석이 스텝과 함께 남거나 지워진다 ($(printf '%s\n' "$out" | tail -1))"
   else bad "--lang $keep:"; printf '%s\n' "$out" | sed 's/^/      /'; fi
 done
 
@@ -143,7 +143,7 @@ kit_copy() {
   echo "$K"
 }
 
-# 떨어뜨리는 스텝의 본문 한가운데 6칸 주석. YAML 은 그 자리의 주석을 허용한다. 필터가 거기서
+# 필터가 빼는 스텝의 본문 한가운데 6칸 주석. YAML 은 그 자리의 주석을 허용한다. 필터가 거기서
 # 건너뛰기를 끝내면 그 스텝의 나머지 줄이 남아 워크플로가 깨진다.
 K2=$(kit_copy mid '{ print } /^        name: install golangci-lint$/ { print "      # 스텝 본문 한가운데의 6칸 주석(tests/filter-langs.sh 가 넣었다)" }')
 if ! grep -q '^      # 스텝 본문 한가운데의 6칸 주석' "$K2/common/ci/gates.yml"; then
@@ -151,7 +151,7 @@ if ! grep -q '^      # 스텝 본문 한가운데의 6칸 주석' "$K2/common/ci
 else
   # go 만 뺀다. 다음 스텝(JVM)이 남아야, 그 주석을 모아 두었다가 다음 스텝 앞에 내보내는 필터가 드러난다.
   y=$(install_lang "$K2" "jvm,py,ts")
-  # 그 스텝의 줄만 센다 — 스텝 이름 · 설치 명령 · 넣은 주석. 다른 스텝의 주석도 golangci-lint 를 든다.
+  # 그 스텝의 줄만 센다 — 스텝 이름 · 설치 명령 · 넣은 주석. 다른 스텝의 주석도 golangci-lint 를 적는다.
   left=$(grep -c -e 'name: install golangci-lint' -e 'golangci-lint/v2/cmd/golangci-lint@' -e '스텝 본문 한가운데' "$y" 2>/dev/null)
   out=$(python3 "$T/check.py" "$K2/common/ci/gates.yml" "$y" "jvm,py,ts" 2>&1); rc=$?
   if [ $rc -eq 0 ] && [ "$left" = 0 ]; then
@@ -171,27 +171,27 @@ else
   fi
 fi
 
-# 떨어뜨리는 스텝 뒤의 6칸 주석. 뒤에 스텝 머리가 오지 않으면 그 주석이 설명할 스텝은 앞의 떨어진
+# 필터가 빼는 스텝 뒤의 6칸 주석. 뒤에 스텝 머리가 오지 않으면 그 주석이 설명할 스텝은 앞의 빠진
 # 스텝뿐이다. security 잡의 마지막 스텝(node) 뒤와, 파일 끝에 덧붙인 node 스텝 뒤에 넣고 본다.
 # $1=사본 이름  $2=자리  $3=gates.yml 을 바꾸는 awk 프로그램
 tail_case() {
   local K y n left out rc
   K=$(kit_copy "$1" "$3")
   n=$(grep -c "$TAIL" "$K/common/ci/gates.yml")
-  if [ "$n" = 0 ]; then bad "떨어뜨리는 스텝 뒤의 6칸 주석($2): 주석을 넣지 못했다 — gates.yml 의 trace 잡이 바뀌었나"; return; fi
+  if [ "$n" = 0 ]; then bad "필터가 빼는 스텝 뒤의 6칸 주석($2): 주석을 넣지 못했다 — gates.yml 의 trace 잡이 바뀌었나"; return; fi
   y=$(install_lang "$K" "go,jvm,py")
   left=$(grep -c "$TAIL" "$y" 2>/dev/null)
   out=$(python3 "$T/check.py" "$K/common/ci/gates.yml" "$y" "go,jvm,py" 2>&1); rc=$?
   if [ $rc -eq 0 ] && [ "$left" = 0 ]; then
-    ok "떨어뜨리는 스텝 뒤의 6칸 주석($2): ts 를 뺀 설치에서 그 스텝과 함께 지워진다"
+    ok "필터가 빼는 스텝 뒤의 6칸 주석($2): ts 를 뺀 설치에서 그 스텝과 함께 지워진다"
   else
-    bad "떨어뜨리는 스텝 뒤의 6칸 주석($2): ts 를 뺀 설치에 ${left:-?}줄 남았거나 설치본이 원본과 다르다"
+    bad "필터가 빼는 스텝 뒤의 6칸 주석($2): ts 를 뺀 설치에 ${left:-?}줄 남았거나 설치본이 원본과 다르다"
     [ $rc -eq 0 ] || printf '%s\n' "$out" | sed 's/^/      /'
   fi
   y=$(install_lang "$K" "jvm,py,ts")
   left=$(grep -c "$TAIL" "$y" 2>/dev/null)
-  if [ "$left" = "$n" ]; then ok "떨어뜨리는 스텝 뒤의 6칸 주석($2): ts 를 남긴 설치에서는 남는다"
-  else bad "떨어뜨리는 스텝 뒤의 6칸 주석($2): ts 를 남긴 설치에 ${left:-?}줄 남았다(넣은 것 ${n}줄)"; fi
+  if [ "$left" = "$n" ]; then ok "필터가 빼는 스텝 뒤의 6칸 주석($2): ts 를 남긴 설치에서는 남는다"
+  else bad "필터가 빼는 스텝 뒤의 6칸 주석($2): ts 를 남긴 설치에 ${left:-?}줄 남았다(넣은 것 ${n}줄)"; fi
 }
 tail_case jobhead "잡 머리 앞" '/^  trace:$/ { print c } { print }'
 tail_case jobnote "2칸 주석 앞" '/^  trace:$/ { print c; print ""; print "  # trace 잡(tests/filter-langs.sh 가 넣었다)" } { print }'

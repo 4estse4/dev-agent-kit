@@ -107,7 +107,7 @@ setup() {
   fi
 }
 
-# $1=경우 이름  $2=명령을 실행할 디렉터리. 4절의 명령을 한 줄씩 실행한다. 한 줄이 실패해도 다음 줄로 간다
+# $1=경우 이름  $2=명령을 실행할 디렉터리. 4절의 명령을 한 줄씩 실행한다. 한 줄이 실패해도 다음 줄을 실행한다
 # (원격 브랜치가 이미 없거나 다른 worktree 가 PR 브랜치를 쓰면 그 줄은 실패하는 것이 맞다).
 # 줄마다 종료 코드를 `<경우>.rc` 에 「코드<탭>명령」으로 적는다.
 run4() {
@@ -194,7 +194,7 @@ if setup remote-gone; then
 fi
 
 # 6) worktree 에서 fetch 가 실패한다(네트워크 · 권한 프롬프트 거절). base 복귀 줄이 실패해야 세션이
-#    멈춘다. 받아 둔 옛 origin/main 에 detach 하면 머지 전 커밋에 detach 한 채 다음 줄로 간다.
+#    멈춘다. 받아 둔 옛 origin/main 에 detach 하면 머지 전 커밋에 detach 한 채 다음 줄을 실행한다.
 #    뒤의 줄은 보지 않는다 — 실제 세션은 실패한 줄에서 멈춘다.
 if setup fetch-fails; then
   R="$T/fetch-fails"
@@ -238,7 +238,7 @@ if setup other-work; then
 fi
 
 # 8) 원래 체크아웃이 PR 브랜치에 있고 다른 worktree 가 main 을 쓴다 — 원래 체크아웃의 `git switch main` 이
-#    실패하는 분기다. 그때도 detach 해서 PR 브랜치에서 내려와야 두 브랜치를 지울 수 있다.
+#    실패하는 분기다. 그때도 detach 해서 PR 브랜치를 벗어나야 두 브랜치를 지울 수 있다.
 if setup held; then
   R="$T/held"
   git -C "$R/main" switch -q feat

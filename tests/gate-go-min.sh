@@ -83,7 +83,7 @@ check() { # $1=잡  $2=설명  $3=기대(fail|pass)  $4=실패할 때 이름대�
   local job="$1" what="$2" want="$3" names="$4" out rc; shift 4
   gomods "$@"
   # TV 가 비면 CI 스텝처럼 lib.sh 가 제 자리에서 tool-versions 를 찾게 둔다. 설치본 케이스가 그
-  # 기본 경로를 지난다 — 모든 케이스에 전달하면 그 경로가 깨져도 초록이었다(PR #108 3라운드 콜드 리뷰).
+  # 기본 경로를 거친다 — 모든 케이스에 전달하면 그 경로가 깨져도 초록이었다(PR #108 3라운드 콜드 리뷰).
   if [ -n "$TV" ]; then out=$(cd "$R" && GATE_TOOL_VERSIONS="$TV" bash -e "$T/step.$job" 2>&1); rc=$?
   else out=$(cd "$R" && bash -e "$T/step.$job" 2>&1); rc=$?; fi
   if [ "$want" = fail ]; then
