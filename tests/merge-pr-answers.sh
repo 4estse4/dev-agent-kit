@@ -42,16 +42,37 @@ bodies = [
     '### 2라운드 코멘트를 읽고 사람이 정한 것\n\n- (사람) "머지"\n  → 머지한다\n',
     '## 머지 결정\n\n- 사람이 머지를 결정했다\n',
 ]
-r = subprocess.run(['jq', '-r', fs[0]], input=json.dumps({'comments': [{'body': b} for b in bodies]}),
-                   capture_output=True, text=True)
-if r.returncode != 0:
-    bad('읽는 명령의 jq 식이 실패했다: ' + r.stderr.strip()[:80])
-    sys.exit(1)
-out = r.stdout
+
+
+def run(comments):
+    r = subprocess.run(['jq', '-r', fs[0]], input=json.dumps({'comments': [
+        {'body': b, 'author': {'login': who}, 'authorAssociation': assoc} for b, who, assoc in comments]}),
+        capture_output=True, text=True)
+    if r.returncode != 0:
+        bad('읽는 명령의 jq 식이 실패했다: ' + r.stderr.strip()[:80])
+        sys.exit(1)
+    return r.stdout
+
+
+# 봇 설정이 없으면 세션과 사람이 한 계정(me)이다. 동료(mate)의 제목 없는 코멘트는 결정이 아니다
+out = run([(b, 'me', 'OWNER') for b in bodies] + [('#66 도 닫자', 'mate', 'COLLABORATOR')])
+if '#66' in out:
+    bad('봇 설정이 없으면 동료의 제목 없는 코멘트는 읽지 않는다(#66)')
+else:
+    ok('봇 설정이 없으면 동료의 제목 없는 코멘트는 읽지 않는다(#66)')
 for name, cond in [('앞 라운드의 3.5 코멘트도 읽는다(#77)', '#77' in out),
                    ('마지막 라운드 뒤의 3.5 코멘트도 읽는다', '"머지"' in out),
                    ('라운드 코멘트는 읽지 않는다', '## 리뷰 ' not in out),
                    ('결정 코멘트는 읽지 않는다', '## 머지 결정' not in out)]:
+    ok(name) if cond else bad(name)
+
+# 봇 설정이 있으면 라운드 코멘트와 결정 코멘트는 봇이 올리고, 사람은 PR 웹에서 제목 없이 쓸 수 있다
+out = run([(bodies[0], 'kit-bot', 'NONE'), ('#88 도 이 PR 로 끝내. 고치고 2라운드', 'me', 'OWNER'),
+           (bodies[2], 'kit-bot', 'NONE'), ('좋아 보인다. #99 도 닫자', 'someone', 'CONTRIBUTOR'),
+           (bodies[4], 'kit-bot', 'NONE')])
+for name, cond in [('봇 설정이 있으면 사람이 웹에서 쓴 코멘트도 읽는다(#88)', '#88' in out),
+                   ('봇 설정이 있어도 쓰기 권한 없는 사람의 코멘트는 읽지 않는다(#99)', '#99' not in out),
+                   ('봇 설정이 있어도 봇의 결정 코멘트는 읽지 않는다', '## 머지 결정' not in out)]:
     ok(name) if cond else bad(name)
 sys.exit(fail)
 PY

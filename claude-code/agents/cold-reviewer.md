@@ -46,18 +46,26 @@ description: 콜드 컨텍스트 독립 리뷰어. 구현 과정을 보지 않�
 **왜 이렇게 하는지는 `docs/process/verification-stages.md` 3.4 에 있다. 여기 옮겨 적지
 마라.**
 
-**직전 라운드 코멘트와 그 뒤의 3.5 코멘트를 받아라** — 두 리뷰의 블록과 맨 위 요약, 그리고
-사람의 답까지. **제목으로 걸러진다** — 그 창에는 제3자 코멘트도 `merge-pr` 의 결정 코멘트도
-들어오므로, 걸러내지 않으면 그것들이 **사람의 답과 같은 자리로** 실린다:
+**직전 라운드 코멘트와 그 뒤의 사람의 결정을 받아라** — 두 리뷰의 블록과 맨 위 요약, 그리고
+사람의 답까지. **제목이나 글쓴이로 걸러진다** — 3.5 코멘트의 제목이 맞는 코멘트가 실리고, 라운드
+코멘트를 사람 계정이 아닌 계정(봇)이 올렸으면 사람 계정(`authorAssociation` 이 OWNER · MEMBER ·
+COLLABORATOR)의 코멘트도 실린다. 레포에 봇 설정이 있으면 라운드 코멘트는 봇이 올리고 사람은 PR 웹에서
+제목 없이 결정을 쓸 수 있다. 봇 설정이 없으면 라운드 코멘트도 사람 계정이라 제목만 본다. 그 창에는
+제3자 코멘트도 `merge-pr` 의 결정 코멘트도 들어오므로, 걸러내지 않으면 그것들이 **사람의 답과 같은
+자리로** 실린다:
 
     gh pr view <N> --json comments \
-      --jq '[.comments[].body] as $b
-             | ([$b|to_entries[]|select(.value|test("^\\s*## 리뷰 "))|.key]|last) as $i
+      --jq '.comments as $c
+             | ([$c|to_entries[]|select(.value.body|test("^\\s*## 리뷰 "))|.key]|last) as $i
              | if $i == null
-               then (if ($b|length)==0 then "1라운드"
-                     else "!! 코멘트 \($b|length)건인데 라운드 코멘트를 못 찾았다" end)
-               else ([$b[$i]]
-                     + ($b[$i+1:]|map(select(test("^\\s*### .*라운드 코멘트를 읽고 사람이 정한 것")))))
+               then (if ($c|length)==0 then "1라운드"
+                     else "!! 코멘트 \($c|length)건인데 라운드 코멘트를 못 찾았다" end)
+               else ([$c[$i].body]
+                     + ($c[$i+1:]
+                        | map(select((.body|test("^\\s*### .*라운드 코멘트를 읽고 사람이 정한 것"))
+                                     or (($c[$i].authorAssociation|IN("OWNER","MEMBER","COLLABORATOR")|not)
+                                         and (.authorAssociation|IN("OWNER","MEMBER","COLLABORATOR"))))
+                              |.body)))
                     |join("\n\n———\n\n") end'
 
 **이 명령이 `1라운드` 를 내면 1라운드다** — 코멘트가 **0건**일 때만 그 값이 나온다.

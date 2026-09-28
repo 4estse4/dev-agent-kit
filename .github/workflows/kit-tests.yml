@@ -191,11 +191,33 @@ jobs:
         continue-on-error: true
         run: bash tests/merge-pr-answers.sh
 
+      # 가짜 gh 가 코멘트 · 리뷰 · 레포 권한을, 가짜 curl 이 App 설치 · 토큰을 돌려준다. 개인키는
+      # 테스트가 만든 버릴 키다 — 네트워크도 진짜 키도 안 쓴다.
+      - name: with a bot config human decisions are human-account comments and a human approve
+        id: humanreview
+        continue-on-error: true
+        run: bash tests/human-review.sh
+
+      - name: branch protection requires a human approve only with a bot config
+        id: protect
+        continue-on-error: true
+        run: bash tests/protect-branch.sh
+
+      - name: reviews and merge-pr pick human decisions after the round comment
+        id: answerwindow
+        continue-on-error: true
+        run: bash tests/answer-window.sh
+
+      - name: with a bot config the session gh is wired to the bot and writes around it are blocked
+        id: botwiring
+        continue-on-error: true
+        run: bash tests/bot-wiring.sh
+
       - name: fail if any check failed
         run: |
           bad=0
-          for r in "${{ steps.deletions.outcome }}" "${{ steps.injections.outcome }}" "${{ steps.docs.outcome }}" "${{ steps.quotepath.outcome }}" "${{ steps.targets.outcome }}" "${{ steps.markers.outcome }}" "${{ steps.discovery.outcome }}" "${{ steps.gomin.outcome }}" "${{ steps.goci.outcome }}" "${{ steps.nodeci.outcome }}" "${{ steps.jvmci.outcome }}" "${{ steps.gominpins.outcome }}" "${{ steps.checkgomin.outcome }}" "${{ steps.toolpins.outcome }}" "${{ steps.roundquotes.outcome }}" "${{ steps.postedit.outcome }}" "${{ steps.evidence.outcome }}" "${{ steps.sections.outcome }}" "${{ steps.terms.outcome }}" "${{ steps.filterlangs.outcome }}" "${{ steps.mergecleanup.outcome }}" "${{ steps.dependabot.outcome }}" "${{ steps.ghlines.outcome }}" "${{ steps.answerheading.outcome }}" "${{ steps.revive.outcome }}" "${{ steps.subject.outcome }}" "${{ steps.roundhead.outcome }}" "${{ steps.answers.outcome }}"; do
+          for r in "${{ steps.deletions.outcome }}" "${{ steps.injections.outcome }}" "${{ steps.docs.outcome }}" "${{ steps.quotepath.outcome }}" "${{ steps.targets.outcome }}" "${{ steps.markers.outcome }}" "${{ steps.discovery.outcome }}" "${{ steps.gomin.outcome }}" "${{ steps.goci.outcome }}" "${{ steps.nodeci.outcome }}" "${{ steps.jvmci.outcome }}" "${{ steps.gominpins.outcome }}" "${{ steps.checkgomin.outcome }}" "${{ steps.toolpins.outcome }}" "${{ steps.roundquotes.outcome }}" "${{ steps.postedit.outcome }}" "${{ steps.evidence.outcome }}" "${{ steps.sections.outcome }}" "${{ steps.terms.outcome }}" "${{ steps.filterlangs.outcome }}" "${{ steps.mergecleanup.outcome }}" "${{ steps.dependabot.outcome }}" "${{ steps.ghlines.outcome }}" "${{ steps.answerheading.outcome }}" "${{ steps.revive.outcome }}" "${{ steps.subject.outcome }}" "${{ steps.roundhead.outcome }}" "${{ steps.answers.outcome }}" "${{ steps.humanreview.outcome }}" "${{ steps.protect.outcome }}" "${{ steps.answerwindow.outcome }}" "${{ steps.botwiring.outcome }}"; do
             [ "$r" = failure ] && bad=1
           done
-          echo "deletions=${{ steps.deletions.outcome }} · injections=${{ steps.injections.outcome }} · docs=${{ steps.docs.outcome }} · quotepath=${{ steps.quotepath.outcome }} · targets=${{ steps.targets.outcome }} · markers=${{ steps.markers.outcome }} · discovery=${{ steps.discovery.outcome }} · gomin=${{ steps.gomin.outcome }} · goci=${{ steps.goci.outcome }} · nodeci=${{ steps.nodeci.outcome }} · jvmci=${{ steps.jvmci.outcome }} · gominpins=${{ steps.gominpins.outcome }} · checkgomin=${{ steps.checkgomin.outcome }} · toolpins=${{ steps.toolpins.outcome }} · roundquotes=${{ steps.roundquotes.outcome }} · postedit=${{ steps.postedit.outcome }} · evidence=${{ steps.evidence.outcome }} · sections=${{ steps.sections.outcome }} · terms=${{ steps.terms.outcome }} · filterlangs=${{ steps.filterlangs.outcome }} · mergecleanup=${{ steps.mergecleanup.outcome }} · dependabot=${{ steps.dependabot.outcome }} · ghlines=${{ steps.ghlines.outcome }} · answerheading=${{ steps.answerheading.outcome }} · revive=${{ steps.revive.outcome }} · subject=${{ steps.subject.outcome }} · roundhead=${{ steps.roundhead.outcome }} · answers=${{ steps.answers.outcome }}"
+          echo "deletions=${{ steps.deletions.outcome }} · injections=${{ steps.injections.outcome }} · docs=${{ steps.docs.outcome }} · quotepath=${{ steps.quotepath.outcome }} · targets=${{ steps.targets.outcome }} · markers=${{ steps.markers.outcome }} · discovery=${{ steps.discovery.outcome }} · gomin=${{ steps.gomin.outcome }} · goci=${{ steps.goci.outcome }} · nodeci=${{ steps.nodeci.outcome }} · jvmci=${{ steps.jvmci.outcome }} · gominpins=${{ steps.gominpins.outcome }} · checkgomin=${{ steps.checkgomin.outcome }} · toolpins=${{ steps.toolpins.outcome }} · roundquotes=${{ steps.roundquotes.outcome }} · postedit=${{ steps.postedit.outcome }} · evidence=${{ steps.evidence.outcome }} · sections=${{ steps.sections.outcome }} · terms=${{ steps.terms.outcome }} · filterlangs=${{ steps.filterlangs.outcome }} · mergecleanup=${{ steps.mergecleanup.outcome }} · dependabot=${{ steps.dependabot.outcome }} · ghlines=${{ steps.ghlines.outcome }} · answerheading=${{ steps.answerheading.outcome }} · revive=${{ steps.revive.outcome }} · subject=${{ steps.subject.outcome }} · roundhead=${{ steps.roundhead.outcome }} · answers=${{ steps.answers.outcome }} · humanreview=${{ steps.humanreview.outcome }} · protect=${{ steps.protect.outcome }} · answerwindow=${{ steps.answerwindow.outcome }} · botwiring=${{ steps.botwiring.outcome }}"
           exit $bad

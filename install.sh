@@ -680,6 +680,23 @@ if [ "$DO_HOOKS" = 1 ] && [ "$DRY_RUN" = 0 ]; then
 MSG
 fi
 
+# 봇 계정은 레포마다 GitHub 쪽에서 할 일이 있어 설치가 대신하지 못한다. 설치 직후 사람이 읽는
+# 이 출력에 그 일을 적고, 사람이 할 일 전체는 kit-guide 3절 한 곳에 둔다.
+if [ "$DO_AGENT" = 1 ] && [ "$DRY_RUN" = 0 ]; then
+  cat <<'MSG'
+
+── 사람이 직접 할 일 ──
+  설치가 대신하지 못하는 일은 docs/process/kit-guide.md 3절 「사람이 직접 할 일」에 모아 두었습니다.
+  세션이 GitHub 에 쓰는 글을 봇 계정(GitHub App)으로 올리고 사람의 결정을 사람 계정의 코멘트와
+  Approve 로 남기려면 .claude/bot.json 이 필요합니다. 없으면 세션과 사람이 한 계정을 씁니다. App 의
+  권한은 한 번 정하면 되고, 레포마다 할 일은 셋입니다:
+    1. GitHub 의 App 설치 설정에서 저장소 목록에 이 레포를 더하세요
+    2. 이 레포에 .claude/bot.json 을 커밋하세요
+    3. install.sh <이 레포 경로> --protect 를 다시 실행해 머지에 사람의 Approve 를 요구하세요
+  켜는 법 전체는 6절 「봇 계정과 사람의 승인」에 있습니다.
+MSG
+fi
+
 if [ ${#CONFLICTS[@]} -gt 0 ] && [ "$DRY_RUN" = 0 ]; then
   echo ""
   echo "보존 — 이 레포 것을 뒀고 킷의 것은 .ai-kit-new 로 옆에 놓았습니다. 확인 후 병합하세요:"
