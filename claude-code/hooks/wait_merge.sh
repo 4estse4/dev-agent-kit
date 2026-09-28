@@ -11,19 +11,25 @@
 #
 # **기다리는 동안 세션 프로세스는 멈추지 않는다.** Claude Code 의 agent view 는 입력을 기다리며 한 시간쯤 아무도
 # 붙어 있지 않은 백그라운드 세션의 프로세스를 멈춘다. 백그라운드 명령이 실행되는 동안에는 그 세션을 일하는
-# 중(`claude agents --json` 의 `working`)으로 센다 — 90분짜리 명령을 켜고 턴을 끝낸 백그라운드 세션에 아무도
+# 중(`claude agents --json` 의 `working`)으로 센다 — 90분짜리 명령을 실행하고 턴을 끝낸 백그라운드 세션에 아무도
 # 붙지 않았는데 프로세스가 그대로였고, 명령이 끝나자 같은 프로세스가 깨어났다(2026-09-28 에 확인했다).
 #
 # **끝나는 까닭.** 출력의 `:` 앞이 까닭이다. 머지됨 · 이미 기다림이면 0, 그 밖은 1 로 끝난다.
 # - 머지됨 · 닫힘(머지 없이) · auto-merge 꺼짐 · head 바뀜(누가 푸시했다. PR 웹의 「Update branch」 포함)
-# - 사람의 글: 시작한 뒤 달린 사람 계정의 코멘트나 Approve 가 아닌 리뷰. 사람 계정은 레포 권한이 write 이상인
-#   계정이다(`human_review.sh` 와 같다 — 봇은 권한 조회가 404 라 빠진다). Approve 는 머지로 이어지므로 까닭이 아니다
+# - 사람의 글: auto-merge 를 켠 뒤(`autoMergeRequest.enabledAt`) 달린 사람 계정의 코멘트나 Approve 가 아닌 리뷰.
+#   사람 계정은 레포 권한이 write 이상인 계정이다(`human_review.sh` 와 같다 — 봇은 권한 조회가 404 라 빠진다).
+#   Approve 는 머지로 이어지므로 까닭이 아니다
+# head 바뀜과 사람의 글은 이 스크립트를 실행한 때가 아니라 auto-merge 를 켠 때를 기준으로 삼는다. 기다리던
+# 세션이 끝나 다시 실행해도 그 사이의 글과 푸시를 알린다. `<잠금>.state` 에 켠 시각 · 켠 때의 head · 이미 알린
+# 사람의 글의 시각을 적고, 켠 시각이 같으면 그 head 와 견주고 그 시각 뒤의 글만 본다 — 사람의 글을 알린 뒤 계속
+# 기다리려고 다시 실행해도 같은 글로 곧바로 끝나지 않는다. 글이 여럿이면 먼저 달린 것부터 하나씩 알린다. 다시
+# 켰으면(켠 시각이 다르면) 새로 적는다.
 # - 머지되지 않음: Approve 됐는데(`reviewDecision` `APPROVED`) 머지되지 않았다. 검사가 실행 중이거나 GitHub 이
 #   아직 계산 중(`UNKNOWN`)이면 기다린다. Approve 직후에는 GitHub 이 머지하기 전의 상태가 한 번 보일 수 있어서
 #   두 번 잇달아 보여야 끝난다
 # - 조회 실패: 조회가 5번 잇달아 실패했다(네트워크 · 봇 키)
 # - 이미 기다림: 같은 PR 을 기다리는 이 스크립트가 실행 중이다. 세션 시작 안내(`bot_session.sh`)가 auto-merge 가
-#   켜진 PR 마다 이 스크립트를 켜라고 하므로, 컴팩션이나 재시작 뒤에 같은 PR 을 두 번 기다리지 않게 한다. 잠금은
+#   켜진 PR 마다 이 스크립트를 실행하라고 하므로, 컴팩션이나 재시작 뒤에 같은 PR 을 두 번 기다리지 않게 한다. 잠금은
 #   `<git 공통 디렉터리>/ai-kit-wait/<PR>` 에 프로세스 번호로 둔다. 끝나도 지우지 않는다 — 그 번호의 프로세스가
 #   이 스크립트가 아니면 잠금을 무시한다
 #
@@ -61,7 +67,7 @@ if repo:
     env['GH_REPO'] = repo              # `gh api` 의 {owner}/{repo} 를 이 레포로 푼다
 R = ['-R', repo] if repo else []
 FIELDS = ('state,mergeCommit,baseRefName,autoMergeRequest,headRefOid,reviewDecision,mergeStateStatus,'
-          'statusCheckRollup,comments,reviews')
+          'statusCheckRollup,comments,reviews')     # 코멘트의 createdAt · 리뷰의 submittedAt 이 함께 온다
 
 # 같은 PR 을 기다리는 스크립트가 실행 중이면 끝낸다
 common = subprocess.run(['git', 'rev-parse', '--git-common-dir'], capture_output=True, text=True)
@@ -133,12 +139,31 @@ def person(login):
 
 
 def items(v):
-    """(id, 글쓴이, 무엇이 달렸나, Approve 인가) — 코멘트와 리뷰"""
+    """(단 시각, 글쓴이, 무엇이 달렸나, Approve 인가) — 코멘트와 리뷰"""
     for c in v.get('comments') or []:
-        yield c['id'], (c.get('author') or {}).get('login'), '코멘트가 달렸다(%s)' % (c.get('url') or ''), False
+        yield (c.get('createdAt') or '', (c.get('author') or {}).get('login'),
+               '코멘트가 달렸다(%s)' % (c.get('url') or ''), False)
     for r in v.get('reviews') or []:
-        yield (r['id'], (r.get('author') or {}).get('login'), '리뷰가 달렸다(%s)' % r.get('state'),
-               r.get('state') == 'APPROVED')
+        yield (r.get('submittedAt') or '', (r.get('author') or {}).get('login'),
+               '리뷰가 달렸다(%s)' % r.get('state'), r.get('state') == 'APPROVED')
+
+
+def save(since, h, seen):
+    if lock:
+        with open(lock + '.state', 'w') as fh:
+            fh.write('%s %s %s\n' % (since, h, seen))
+
+
+def load(since, cur):
+    """(켠 때의 head, 이미 알린 사람의 글의 시각). `<잠금>.state` 에 켠 시각과 함께 적어 두고, 같은 시각이면 그것을 쓴다."""
+    try:
+        at, h, seen = open(lock + '.state').read().split()
+        if at == since:
+            return h, seen
+    except (OSError, ValueError, TypeError):
+        pass
+    save(since, cur, since)
+    return cur, since
 
 
 def checks(v):
@@ -163,31 +188,31 @@ STATES = {
     'BLOCKED': "필요한 검사가 실패했거나 보고되지 않았거나, 풀리지 않은 리뷰 대화가 있다",
     'CLEAN': "머지할 수 있는 상태인데 GitHub 이 머지하지 않았다",
 }
-head, seen = None, None
+head, since, seen = None, '', ''
 fails, approved, why = 0, 0, ''
 while True:
     tok = refresh()
     try:
         v = gh('pr', 'view', pr, *R, '--json', FIELDS)
         if v['state'] == 'MERGED':
-            done(0, "머지됨: PR #%s 이 %s 에 머지됐다(%s). 다른 일을 시작하기 전에 「다음 일」 창을 먼저 묻는다%s."
+            done(0, "머지됨: PR #%s 이 %s 에 머지됐다(%s). 다른 일을 시작하기 전에 「다음 일」 창으로 먼저 묻는다%s."
                  % (pr, v.get('baseRefName'), ((v.get('mergeCommit') or {}).get('oid') or '')[:7], NEXT))
         if v['state'] == 'CLOSED':
             done(1, "닫힘: PR #%s 이 머지되지 않고 닫혔다. 무엇이 일어났는지 사람에게 알린다%s." % (pr, NEXT))
-        if head is None:
-            head, seen = v['headRefOid'], {k for k, *_ in items(v)}
-        if v['headRefOid'] != head:
+        am = v.get('autoMergeRequest')
+        if head is None and am:
+            since = am.get('enabledAt') or ''
+            head, seen = load(since, v['headRefOid'])
+        if head and v['headRefOid'] != head:
             done(1, "head 바뀜: PR #%s 의 head 가 %s 에서 %s 로 바뀌었다. 누가 푸시했는지와 무엇이 필요한지 사람에게 "
                     "알린다%s." % (pr, head[:7], v['headRefOid'][:7], NEXT))
-        if not v.get('autoMergeRequest'):
+        if not am:
             done(1, "auto-merge 꺼짐: PR #%s 의 auto-merge 가 꺼졌다. 무엇이 필요한지 사람에게 알린다%s." % (pr, NEXT))
-        for k, login, what, approve in items(v):
-            if k in seen:
-                continue
-            if not approve and login and person(login):
+        for at, login, what, approve in sorted(items(v), key=lambda t: t[0]):
+            if at > seen and not approve and login and person(login):
+                save(since, head, at)
                 done(1, "사람의 글: PR #%s 에 %s 의 %s. 읽고 무엇이 필요한지 사람에게 알린다%s."
                      % (pr, login, what, NEXT))
-            seen.add(k)
         pending, failed = checks(v)
         state = v.get('mergeStateStatus')
         if v.get('reviewDecision') != 'APPROVED' or pending or state == 'UNKNOWN':
@@ -207,6 +232,6 @@ while True:
         fails = 0
     if fails >= 5:
         done(1, "조회 실패: PR #%s 을 5번 잇달아 조회하지 못했다(%s). 네트워크나 봇 키를 고친 뒤 이 스크립트를 다시 "
-                "켠다%s." % (pr, why, NEXT))
+                "실행한다%s." % (pr, why, NEXT))
     time.sleep(interval)
 PY

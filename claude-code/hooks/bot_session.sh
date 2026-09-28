@@ -62,27 +62,34 @@ env_lines=$(
 printf '%s\n' "$env_lines" >> "$CLAUDE_ENV_FILE"
 printf '%s\n' "$env_lines" > "$dir/session-env"
 : > "$dir/wired/$sid"
-printf '이 세션의 gh 는 봇 계정으로 GitHub 에 쓴다(GH_CONFIG_DIR=%s). 사람의 결정은 사람 계정 코멘트로 남긴다 — 세션이 받은 답은 human_comment.sh 로 올리고(그 명령 바로 전에 응답에 올릴 글의 최종본 전문을 출력한다 — 사람은 그 글을 읽고 권한 프롬프트를 허락한다), 사람이 PR 웹에서 직접 쓸 수도 있다. 사람 계정 코멘트만 (사람) 인용의 원본이다. 머지는 결정 코멘트를 올리고 auto-merge 를 켠 뒤, 대기 스크립트(wait_merge.sh)를 백그라운드로 켜고 사람에게 Approve 를 부탁한다 — 머지되거나 사람이 봐야 할 일이 생기면 그 스크립트가 끝나 세션이 깨어난다. 머지됐으면 다른 일을 시작하기 전에 「다음 일」 창을 먼저 묻는다(merge-pr 3절). 다음 작업의 브랜치는 origin 의 기본 브랜치에서 만든다.\n' "$dir"
+printf '이 세션의 gh 는 봇 계정으로 GitHub 에 쓴다(GH_CONFIG_DIR=%s). 사람의 결정은 사람 계정 코멘트로 남긴다 — 세션이 받은 답은 human_comment.sh 로 올리고(그 명령 바로 전에 응답에 올릴 글의 최종본 전문을 출력한다 — 사람은 그 글을 읽고 권한 프롬프트를 허락한다), 사람이 PR 웹에서 직접 쓸 수도 있다. 사람 계정 코멘트만 (사람) 인용의 원본이다. 머지는 결정 코멘트를 올리고 auto-merge 를 켠 뒤, 대기 스크립트(wait_merge.sh)를 백그라운드로 실행하고 사람에게 Approve 를 부탁한다 — 머지되거나 사람이 봐야 할 일이 생기면 그 스크립트가 끝나 세션이 깨어난다. 머지됐으면 다른 일을 시작하기 전에 「다음 일」 창으로 먼저 묻는다(merge-pr 3절). 다음 작업의 브랜치는 origin 의 기본 브랜치에서 만든다.\n' "$dir"
 
-# auto-merge 가 켜진 열린 PR 과, 머지됐는데 로컬 브랜치가 남은 PR 을 알린다. 세션 프로세스가 멈춘 동안 머지됐거나,
-# 컴팩션 · 재시작 뒤라 대기 스크립트를 켠 것을 모르는 세션도 다음 일을 묻기 전에 알게 된다(merge-pr 3절). 로컬
-# 브랜치가 남아 있으면 아직 다음 일을 묻지 않은 것이다 — 표시 파일을 따로 두지 않는다. 다른 워크트리에서 쓰는
-# 브랜치는 그 워크트리 세션의 것이라 뺀다.
-open_prs=$(cd "$root" && GH_CONFIG_DIR="$dir" gh pr list --state open --limit 100 \
-  --json number,headRefName,reviewDecision,mergeStateStatus,autoMergeRequest 2>/dev/null)
-merged_prs=$(cd "$root" && GH_CONFIG_DIR="$dir" gh pr list --state merged --limit 30 \
-  --json number,headRefName 2>/dev/null)
-python3 - "$root" "$here" "$open_prs" "$merged_prs" <<'PY'
+# auto-merge 가 켜진 열린 PR 과, 머지됐는데 로컬 브랜치가 남은 PR 을 알린다. 세션 프로세스가 끝난 동안 머지됐거나,
+# 컴팩션 · 재시작 뒤라 대기 스크립트를 실행한 것을 모르는 세션도 다음 일을 묻기 전에 알게 된다(merge-pr 3절). 로컬
+# 브랜치가 남아 있으면 아직 다음 일을 묻지 않은 것이다 — 표시 파일을 따로 두지 않는다.
+# **이 clone 의 작업인 PR 만 알린다.** fork 가 아니고(`isCrossRepository`), 로컬 브랜치가 있고 그 SHA 가 PR 의
+# `headRefOid` 와 같고, 다른 워크트리에서 쓰지 않는 브랜치의 PR 이다. 봇 설정은 커밋되므로 동료의 세션과 다른
+# 워크트리의 세션도 같은 봇으로 PR 을 연다 — 좁히지 않으면 남의 PR 을 기다리다 그 머지에 「다음 일」을 묻는다.
+# fork 의 `main` 에서 온 PR 과 머지된 옛 PR 의 이름을 다시 쓴 브랜치는 이름만 같다.
+# **조회마다 시간 제한을 둔다**(`BOT_SESSION_GH_TIMEOUT` 초, 기본 20 — 테스트가 줄인다). 이 훅의 `timeout` 은 90초이고
+# 앞의 `bot_token.sh` 가 40초까지 쓴다. 조회가 멈춰 훅이 먼저 끝나면 위에서 출력한 연결 안내도 세션에 들어가는지
+# 알 수 없다. 첫 조회가 제한 시간 안에 끝나지 않으면 둘째 조회는 하지 않는다.
+python3 - "$root" "$here" "$dir" <<'PY'
 import json, os, subprocess, sys
-root, here, open_prs, merged_prs = sys.argv[1:5]
+root, here, botdir = sys.argv[1:4]
 NEXT = "(merge-pr 3절 「대기 스크립트가 끝나면」)"
-try:
-    waiting = [p for p in json.loads(open_prs) if p.get('autoMergeRequest')]
-    merged = json.loads(merged_prs)
-except ValueError:
-    print("열린 PR 과 머지된 PR 을 조회하지 못했다. 다음 작업을 시작하기 전에 merge-pr 3절의 두 명령으로 본다.")
-    sys.exit(0)
-script = os.path.relpath(os.path.realpath(os.path.join(here, 'wait_merge.sh')), os.path.realpath(root))
+limit = float(os.environ.get('BOT_SESSION_GH_TIMEOUT') or 20)
+env = dict(os.environ, GH_CONFIG_DIR=botdir)
+
+
+def prs(state, fields, n):
+    r = subprocess.run(['gh', 'pr', 'list', '--state', state, '--limit', n, '--json', fields], cwd=root, env=env,
+                       capture_output=True, text=True, timeout=limit)
+    if r.returncode:
+        raise ValueError
+    return json.loads(r.stdout)
+
+
 others, path = set(), ''
 for line in subprocess.run(['git', '-C', root, 'worktree', 'list', '--porcelain'], capture_output=True,
                            text=True).stdout.splitlines():
@@ -90,18 +97,34 @@ for line in subprocess.run(['git', '-C', root, 'worktree', 'list', '--porcelain'
         path = line[9:]
     elif line.startswith('branch refs/heads/') and os.path.realpath(path) != os.path.realpath(root):
         others.add(line[18:])
-left = [p for p in merged if p['headRefName'] not in others and subprocess.run(
-    ['git', '-C', root, 'rev-parse', '--verify', '--quiet', 'refs/heads/' + p['headRefName']],
-    capture_output=True).returncode == 0]
+
+
+def mine(p):
+    if p.get('isCrossRepository') or p['headRefName'] in others:
+        return False
+    r = subprocess.run(['git', '-C', root, 'rev-parse', '--verify', '--quiet', 'refs/heads/' + p['headRefName']],
+                       capture_output=True, text=True)
+    return r.returncode == 0 and r.stdout.strip() == p.get('headRefOid')
+
+
+try:
+    waiting = [p for p in prs('open', 'number,headRefName,headRefOid,isCrossRepository,reviewDecision,'
+                                      'mergeStateStatus,autoMergeRequest', '100')
+               if p.get('autoMergeRequest') and mine(p)]
+    left = [p for p in prs('merged', 'number,headRefName,headRefOid,isCrossRepository', '30') if mine(p)]
+except (ValueError, OSError, subprocess.TimeoutExpired):
+    print("열린 PR 과 머지된 PR 을 조회하지 못했다. 다음 작업을 시작하기 전에 merge-pr 3절의 두 명령으로 본다.")
+    sys.exit(0)
+script = os.path.relpath(os.path.realpath(os.path.join(here, 'wait_merge.sh')), os.path.realpath(root))
 if waiting:
-    print("auto-merge 가 켜진 열린 PR: %s. PR 마다 %s 를 Bash 의 run_in_background 로 켠다 — 같은 PR 을 이미 기다리고 "
-          "있으면 바로 끝난다. Approve 를 받고도(APPROVED) 열려 있는 PR 은 그 상태를 사람에게 알린다%s."
+    print("auto-merge 가 켜진 열린 PR: %s. PR 마다 %s 를 Bash 의 run_in_background 로 실행한다 — 같은 PR 을 이미 "
+          "기다리고 있으면 바로 끝난다. Approve 를 받고도(APPROVED) 열려 있는 PR 은 그 상태를 사람에게 알린다%s."
           % (" · ".join("#%d(%s, %s, %s)" % (p['number'], p['headRefName'], p.get('reviewDecision') or '-',
                                               p.get('mergeStateStatus')) for p in waiting),
              " · ".join("`bash %s %d`" % (script, p['number']) for p in waiting), NEXT))
 if left:
     print("머지됐는데 로컬 브랜치가 남은 PR: %s. 아직 다음 일을 묻지 않은 것이다 — 다른 일을 시작하기 전에 「다음 일」 "
-          "창을 먼저 묻고, 고른 뒤 %s 로 로컬을 정리한다%s."
+          "창으로 먼저 묻고, 고른 뒤 %s 로 로컬을 정리한다%s."
           % (" · ".join("#%d(%s)" % (p['number'], p['headRefName']) for p in left),
              " · ".join("`merge-pr %d`" % p['number'] for p in left), NEXT))
 PY

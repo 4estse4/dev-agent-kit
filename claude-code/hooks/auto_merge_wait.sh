@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# PostToolUse(Bash): `gh pr merge --auto` 가 성공하면, 대기 스크립트(`wait_merge.sh`)를 백그라운드로 켜라고 세션에
-# 알린다. 필요: python3 · git
+# PostToolUse(Bash): `gh pr merge --auto` 가 성공하면, 대기 스크립트(`wait_merge.sh`)를 백그라운드로 실행하라고
+# 세션에 알린다. 필요: python3 · git
 #
 # **왜.** auto-merge 를 켜면 머지는 사람이 Approve 한 순간 GitHub 이 하므로, 세션은 머지를 알 길이 없다. 대기
-# 스크립트가 머지나 사람이 봐야 할 일을 보고 끝나면 Claude Code 가 세션을 깨운다. 그 스크립트를 켜는 것을 스킬
-# 문서(`merge-pr` 3절)에만 적어 두면, 컴팩션 뒤나 스킬을 읽지 않은 세션이 빠뜨린다. 그래서 켜는 명령이 성공한
-# 바로 그 자리에서 알린다. 알림은 `additionalContext` 로 모델의 맥락에 들어간다.
+# 스크립트가 머지나 사람이 봐야 할 일을 보고 끝나면 Claude Code 가 세션을 깨운다. 그 스크립트를 실행하는 것을
+# 스킬 문서(`merge-pr` 3절)에만 적어 두면, 컴팩션 뒤나 스킬을 읽지 않은 세션이 빠뜨린다. 그래서 auto-merge 를 켠
+# 명령이 성공한 바로 그 자리에서 알린다. 알림은 `additionalContext` 로 모델의 맥락에 들어간다.
 #
 # **성공했을 때만.** PostToolUse 는 종료 코드 0 으로 끝난 Bash 뒤에만 실행된다 — 0 이 아니면 `PostToolUseFailure`
 # 가 실행된다(`claude -p` 로 `true` 와 `false` 를 실행해 확인했다). 막기 훅이 막은 명령은 실행되지 않아 이 훅도

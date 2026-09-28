@@ -189,7 +189,7 @@ GitHub auto-merge 를 켠 뒤 Approve 를 부탁하고, Approve 가 달리면 Gi
   **기한을 두고 확인을 되풀이하지 않는다. 기다릴 때는 킷의 대기 스크립트로만 기다린다.** 정해진 시간 동안 몇
   초마다 Approve 를 조회하는 식으로 기다리지 않는다. 협업에서는 Approve 가 몇 시간 뒤에 달릴 수 있어 시간이
   끝나면 결국 사람이 알려야 하고, 그동안 세션은 다른 일을 못 한다. auto-merge 를 켰으면 대기 스크립트를
-  백그라운드로 켜고 부탁으로 응답을 끝낸다 — 머지되거나 사람이 봐야 할 일이 생기면 그 스크립트가 끝나 세션이
+  백그라운드로 실행하고 부탁으로 응답을 끝낸다 — 머지되거나 사람이 봐야 할 일이 생기면 그 스크립트가 끝나 세션이
   깨어난다(3절 「봇 설정이 있을 때」). auto-merge 없이 머지할 때는 부탁으로 응답을 끝내고 사람이 알린 뒤에
   머지한다(`docs/process/verification-stages.md` 6.3).
 
@@ -491,35 +491,39 @@ URL 이다:
    확인하고 머지한다.` 를 남기고, 2절의 「그 밖이면 세션이 Approve 를 확인한다」로 간다. 부탁 블록의 「그 뒤」도
    그 절의 것이다. 봇이 auto-merge 를 켤 권한이 없거나, 2절과 이 명령 사이에 PR 이 바로 머지할 수 있는 상태가 되어
    막기 훅이 막은 경우다.
-4. 대기 스크립트를 Bash 의 `run_in_background` 로 켠다:
+4. 대기 스크립트를 Bash 의 `run_in_background` 로 실행한다:
 
        bash .claude/hooks/wait_merge.sh <N>
 
-   3 이 성공하면 PostToolUse 훅(`auto_merge_wait.sh`)도 이 명령을 켜라고 알린다. 스크립트는 1분에 한 번 PR 을
+   3 이 성공하면 PostToolUse 훅(`auto_merge_wait.sh`)도 이 명령을 실행하라고 알린다. 스크립트는 1분에 한 번 PR 을
    조회하다가 머지되거나 사람이 봐야 할 일이 생기면 한 줄을 출력하고 끝나고, 그때 세션이 깨어난다(아래 「대기
    스크립트가 끝나면」). 기한은 없다. 어떤 경우에 끝나는지는 `.claude/hooks/wait_merge.sh` 머리에 있다.
 5. 응답을 2절의 부탁 블록으로 끝낸다. 할 일 줄에 「Approve 하면 확인 없이 바로 머지된다」를 적는다 — auto-merge
    없이 머지할 때는 Approve 뒤에 세션이 한 번 더 확인했으므로, 사람은 누르기 전에 그 차이를 알아야 한다. 「그
    뒤」는 「GitHub 이 머지하고 head 브랜치를 지운다. 알려 주지 않아도 세션이 머지를 알고, 다른 일을 시작하기 전에
-   「다음 일」 창을 띄운다」다. 5절의 `Auto-merge on …` 줄도 이 응답에 적는다.
+   「다음 일」 창으로 묻는다」다. 5절의 `Auto-merge on …` 줄도 이 응답에 적는다.
 
 **대기 스크립트가 끝나면** 세션은 스크립트가 출력한 한 줄로 깨어난다. `:` 앞이 까닭이다.
 
-- `머지됨` — **다른 일을 시작하기 전에 「다음 일」 창을 먼저 묻는다.** 창에는 머지됐다는 것 · base 의 머지 커밋
+- `머지됨` — **다른 일을 시작하기 전에 「다음 일」 창으로 먼저 묻는다.** 창에는 머지됐다는 것 · base 의 머지 커밋
   SHA · 계획 문서와 이슈에 적힌 다음 일을 적는다. 사람이 고른 뒤에 `merge-pr <N>` 으로 로컬을 정리하고(2절이
   `MERGED` 를 보고 4절과 5절만 한다) 고른 일을 한다. 고르기 전에는 아무것도 시작하지 않는다 — 다음 일은 세션이
   정해 바로 하는 것이 아니다.
 - `이미 기다림` — 같은 PR 을 기다리는 스크립트가 이미 실행 중이다. 아무것도 하지 않는다.
 - 그 밖(`닫힘` · `auto-merge 꺼짐` · `head 바뀜` · `사람의 글` · `머지되지 않음` · `조회 실패`) — 무엇이 일어났고
   무엇이 필요한지 사람에게 알린다. 무엇을 할지는 사람이 정한다. auto-merge 가 아직 켜져 있고 계속 기다리기로
-  했으면(`사람의 글` 을 알린 뒤, `조회 실패` 의 까닭을 고친 뒤) 대기 스크립트를 다시 켠다. `머지되지 않음` 이면
+  했으면(`사람의 글` 을 알린 뒤, `조회 실패` 의 까닭을 고친 뒤) 대기 스크립트를 다시 실행한다. 다시 실행한 대기는
+  auto-merge 를 켠 뒤의 글 가운데 이미 알린 글 뒤의 것만 본다. `머지되지 않음` 이면
   브랜치를 갱신하는 절차가 킷에 아직 없으므로 세션이 스스로 갱신하지 않는다(아래 「다음 작업을 시작할 때 …」의
   `APPROVED` 줄).
 
-세션 시작 안내(`bot_session.sh`)도 같은 목록을 넣는다 — auto-merge 가 켜진 열린 PR 은 대기 스크립트를 켜고(이미
-기다리고 있으면 `이미 기다림` 으로 바로 끝난다), 머지됐는데 로컬 브랜치가 남은 PR 은 `머지됨` 과 같이 한다. 로컬
-브랜치가 남아 있으면 아직 다음 일을 묻지 않은 것이다. 세션 프로세스가 멈춘 동안 머지됐거나, 컴팩션 · 재시작 뒤라
-대기 스크립트를 켠 것을 모르는 세션도 그렇게 알게 된다.
+세션 시작 안내(`bot_session.sh`)도 같은 목록을 넣는다 — auto-merge 가 켜진 열린 PR 은 대기 스크립트를 실행하고
+(이미 기다리고 있으면 `이미 기다림` 으로 바로 끝난다), 머지됐는데 로컬 브랜치가 남은 PR 은 `머지됨` 과 같이 한다.
+로컬 브랜치가 남아 있으면 아직 다음 일을 묻지 않은 것이다. 세션 프로세스가 끝난 동안 머지됐거나, 컴팩션 · 재시작
+뒤라 대기 스크립트를 실행한 것을 모르는 세션도 그렇게 알게 된다. 두 목록은 이 clone 의 작업인 PR 만 담는다 —
+fork 가 아니고(`isCrossRepository` 가 `false`), 로컬 브랜치 `<headRefName>` 이 있고 그 SHA 가 PR 의 `headRefOid` 와
+같고, 다른 워크트리에서 쓰지 않는 브랜치의 PR 이다. 봇 설정은 커밋되므로 동료의 세션과 다른 워크트리의 세션도 같은
+봇으로 PR 을 연다 — 좁히지 않으면 남의 PR 을 기다리다 그 머지에 「다음 일」을 묻는다.
 
 **머지되기 전에 다시 해야 하면 먼저 끈다.** 브랜치에 푸시해야 할 때와, 사람이 결정 코멘트나 스쿼시 제목 · 본문을
 고치라고 할 때다. 차례는 이렇다.
@@ -538,8 +542,13 @@ auto-merge 가 켜진 PR 의 브랜치로 가는 푸시를 막는다.
 **다음 작업을 시작할 때 auto-merge 가 켜진 열린 PR 과 머지된 PR 을 본다.** 세션 시작 안내가 두 목록을 넣지만, 그
 조회가 실패했거나 세션 도중에 다음 작업을 시작하면 그 안내가 없다. 다음 작업의 브랜치를 만들기 전에 둘을 본다:
 
-    gh pr list --state open --json number,headRefName,reviewDecision,mergeStateStatus,autoMergeRequest --jq '.[] | select(.autoMergeRequest != null) | "#\(.number) \(.headRefName) \(.reviewDecision) \(.mergeStateStatus)"'
-    gh pr list --state merged --limit 30 --json number,headRefName --jq '.[] | "#\(.number) \(.headRefName)"'
+    gh pr list --state open --json number,headRefName,headRefOid,isCrossRepository,reviewDecision,mergeStateStatus,autoMergeRequest --jq '.[] | select(.autoMergeRequest != null and (.isCrossRepository | not)) | "#\(.number) \(.headRefName) \(.headRefOid) \(.reviewDecision) \(.mergeStateStatus)"'
+    gh pr list --state merged --limit 30 --json number,headRefName,headRefOid,isCrossRepository --jq '.[] | select(.isCrossRepository | not) | "#\(.number) \(.headRefName) \(.headRefOid)"'
+
+두 목록에서 이 clone 의 작업인 PR 만 본다 — 로컬 브랜치 `<headRefName>` 이 있고(`git rev-parse --verify --quiet
+refs/heads/<headRefName>` 가 SHA 를 출력한다) 그 SHA 가 출력의 `headRefOid` 와 같고, 다른 워크트리에서 쓰지 않는
+(`git worktree list` 에 다른 경로로 나오지 않는) 브랜치의 PR 이다. 세션 시작 안내와 같은 규칙이다(위 「대기
+스크립트가 끝나면」 아래 문단).
 
 - auto-merge 가 켜진 열린 PR 가운데 `reviewDecision` 이 `APPROVED` 인 것은 Approve 를 받고도 머지되지 못한 것이다.
   브랜치가 base 보다 뒤처졌거나(`BEHIND` — `install.sh --protect` 가 켜는 브랜치 보호는 최신 브랜치를 요구한다),
@@ -547,11 +556,10 @@ auto-merge 가 켜진 PR 의 브랜치로 가는 푸시를 막는다.
   보호는 대화 해결도 요구한다). 사람에게 그 PR 과 상태를 알린다. 브랜치를 갱신하는 절차는 킷에 아직 없으므로 세션이
   스스로 갱신하지 않는다 — base 를 합치면 2절의 「리뷰 반영 확인」이 다른 PR 의 커밋을 이 PR 의 커밋으로 나열하고,
   충돌을 푼 내용은 파일 없이 나열한다. 어떻게 할지는 사람이 정한다
-- `REVIEW_REQUIRED` 인 것은 Approve 를 기다리는 중이다. 대기 스크립트를 켠다 — 그 PR 을 이미 기다리고 있으면
+- `REVIEW_REQUIRED` 인 것은 Approve 를 기다리는 중이다. 대기 스크립트를 실행한다 — 그 PR 을 이미 기다리고 있으면
   `이미 기다림` 으로 바로 끝난다
-- 머지된 PR 가운데 로컬 브랜치가 남은 것(`git rev-parse --verify --quiet <headRefName>` 이 출력을 낸다)은 아직
-  다음 일을 묻지 않은 것이다. 「대기 스크립트가 끝나면」의 `머지됨` 과 같이 「다음 일」 창을 먼저 묻고, 고른 뒤
-  `merge-pr <N>` 으로 정리한다
+- 머지된 PR 은 아직 다음 일을 묻지 않은 것이다(로컬 브랜치가 남아 있다). 「대기 스크립트가 끝나면」의 `머지됨` 과
+  같이 「다음 일」 창으로 먼저 묻고, 고른 뒤 `merge-pr <N>` 으로 정리한다
 
 그리고 다음 작업의 브랜치는 `origin/<baseRefName>` 에서 만든다. 앞 PR 브랜치 위에 만들면 앞 PR 이 스쿼시로 머지된
 뒤 다음 PR 의 diff 에 그 변경이 다시 나온다. 세션 시작 안내(`bot_session.sh`)와 템플릿 `CLAUDE.md` 의 작업 루프도

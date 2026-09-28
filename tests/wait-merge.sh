@@ -52,7 +52,8 @@ fail=0
 # 확장해 인자를 둘로 나눈다.
 st() {
   python3 -c 'import json, sys
-d = {"state": "OPEN", "mergeCommit": None, "baseRefName": "main", "autoMergeRequest": {"mergeMethod": "SQUASH"},
+d = {"state": "OPEN", "mergeCommit": None, "baseRefName": "main",
+     "autoMergeRequest": {"mergeMethod": "SQUASH", "enabledAt": "2026-09-28T10:00:00Z"},
      "headRefOid": "a1" * 20, "reviewDecision": "REVIEW_REQUIRED", "mergeStateStatus": "BLOCKED",
      "statusCheckRollup": [{"__typename": "CheckRun", "name": "tests", "status": "COMPLETED", "conclusion": "SUCCESS"}],
      "comments": [], "reviews": []}
@@ -60,7 +61,13 @@ d.update(json.loads("{" + ", ".join(sys.argv[1:]) + "}"))
 print(json.dumps(d))' "$@"
 }
 # scenario <상태 줄>… — 가짜 gh 가 돌려줄 상태를 정하고 기록을 비운다
+# 앞 시나리오가 적어 둔 것(켠 시각 · 켠 때의 head · 알린 글의 시각)도 지운다. restate 는 그것을 두고 상태만
+# 바꾼다 — 같은 PR 을 다시 기다리는 경우다
 scenario() {
+  rm -f "$T/repo/.git/ai-kit-wait/"*.state
+  restate "$@"
+}
+restate() {
   rm -rf "$S"; mkdir -p "$S"
   printf '%s\n' "$@" > "$S/states"
   echo 2099-01-01T00:00:00Z > "$T/cfg/expires"
@@ -83,11 +90,12 @@ check() {
     echo "  ✓ $1 ($2, 조회 ${n}번)"
   fi
 }
-C='"comments": [{"id": "c0", "author": {"login": "person"}, "url": "https://x/c0"}]'
-C1='"comments": [{"id": "c0", "author": {"login": "person"}, "url": "https://x/c0"}, {"id": "c1", "author": {"login": "person"}, "url": "https://x/c1"}]'
+# auto-merge 는 10:00 에 켰다(st 의 기본값). c0 은 그 전에, c1 은 그 뒤에 달린 사람 코멘트다
+C='"comments": [{"id": "c0", "author": {"login": "person"}, "url": "https://x/c0", "createdAt": "2026-09-28T09:00:00Z"}]'
+C1='"comments": [{"id": "c0", "author": {"login": "person"}, "url": "https://x/c0", "createdAt": "2026-09-28T09:00:00Z"}, {"id": "c1", "author": {"login": "person"}, "url": "https://x/c1", "createdAt": "2026-09-28T10:05:00Z"}]'
 MERGED=$(st '"state": "MERGED", "mergeCommit": {"oid": "58d7886abcdef"}')
 OPEN=$(st)
-APPROVED='"reviewDecision": "APPROVED", "reviews": [{"id": "r1", "author": {"login": "person"}, "state": "APPROVED"}]'
+APPROVED='"reviewDecision": "APPROVED", "reviews": [{"id": "r1", "author": {"login": "person"}, "state": "APPROVED", "submittedAt": "2026-09-28T10:05:00Z"}]'
 PENDING='"statusCheckRollup": [{"__typename": "CheckRun", "name": "tests", "status": "IN_PROGRESS", "conclusion": ""}]'
 
 echo "── 끝나는 까닭"
@@ -103,19 +111,45 @@ scenario "$OPEN" "$OPEN" "$(st '"autoMergeRequest": null')"; run 7
 check "auto-merge 가 꺼지면 끝난다" "auto-merge 꺼짐" 1 3
 scenario "$OPEN" "$(st '"headRefOid": "'"$(printf 'b2%.0s' {1..20})"'"')"; run 7
 check "head 가 바뀌면 끝난다" "head 바뀜" 1 2 b2b2b2b
+# 기다리던 세션이 끝난 사이에 누가 푸시했으면, 다시 실행한 대기의 첫 조회에서 이미 head 가 다르다
+B2=$(printf 'b2%.0s' {1..20})
+scenario "$OPEN" "$MERGED"; run 7
+restate "$(st '"headRefOid": "'"$B2"'"')"; run 7
+check "다시 실행해도 auto-merge 를 켠 때의 head 와 견준다" "head 바뀜" 1 1 b2b2b2b
+restate "$(st '"headRefOid": "'"$B2"'", "autoMergeRequest": {"mergeMethod": "SQUASH", "enabledAt": "2026-09-28T11:00:00Z"}')" "$MERGED"; run 7
+check "auto-merge 를 다시 켰으면 그때의 head 를 기준으로 삼는다" 머지됨 0 2
 
 echo "── 사람의 글"
 scenario "$(st "$C")" "$(st "$C1")"; echo admin > "$S/perm-person"; run 7
 check "사람 계정의 새 코멘트면 끝난다" "사람의 글" 1 2 https://x/c1
 scenario "$(st "$C")" "$(st "$C")" "$MERGED"; echo write > "$S/perm-person"; run 7
-check "시작 때 있던 사람 코멘트로는 끝나지 않는다" 머지됨 0 3
+check "auto-merge 를 켜기 전의 사람 코멘트로는 끝나지 않는다" 머지됨 0 3
+# 세션을 다시 시작한 뒤 대기를 실행한 경우다. 기다리지 않던 사이에 달린 글도 새 글이다
+scenario "$(st "$C1")"; echo admin > "$S/perm-person"; run 7
+check "auto-merge 를 켠 뒤 대기를 실행하기 전에 달린 사람 코멘트로도 끝난다" "사람의 글" 1 1 https://x/c1
+# 사람의 글을 알린 뒤 계속 기다리려고 다시 실행한 경우다. 알린 글로 곧바로 다시 끝나면 기다릴 수 없다
+restate "$(st "$C1")" "$MERGED"; echo admin > "$S/perm-person"; run 7
+check "알린 사람의 글은 다시 실행해도 다시 알리지 않는다" 머지됨 0 2
+C2='"comments": [{"id": "c1", "author": {"login": "person"}, "url": "https://x/c1", "createdAt": "2026-09-28T10:05:00Z"}, {"id": "c2", "author": {"login": "person"}, "url": "https://x/c2", "createdAt": "2026-09-28T10:07:00Z"}]'
+restate "$(st "$C2")"; echo admin > "$S/perm-person"; run 7
+check "알린 글 뒤에 달린 사람의 글은 다시 실행하면 알린다" "사람의 글" 1 1 https://x/c2
+# 두 글이 함께 있으면 먼저 달린 것부터 하나씩 알린다
+C3='"comments": [{"id": "c3", "author": {"login": "person"}, "url": "https://x/c3", "createdAt": "2026-09-28T10:09:00Z"}], "reviews": [{"id": "r3", "author": {"login": "person"}, "state": "COMMENTED", "submittedAt": "2026-09-28T10:08:00Z"}]'
+scenario "$(st "$C3")"; echo admin > "$S/perm-person"; run 7
+check "코멘트와 리뷰가 함께 있으면 먼저 달린 리뷰부터 알린다" "사람의 글" 1 1 COMMENTED
+restate "$(st "$C3")"; echo admin > "$S/perm-person"; run 7
+check "다시 실행하면 그다음 글을 알린다" "사람의 글" 1 1 https://x/c3
+# 탈퇴한 계정의 글은 author 가 null 이다. 같은 시각의 글과 나란히 있어도 조회 실패로 세지 않는다
+GH='"comments": [{"id": "g1", "author": null, "url": "https://x/g1", "createdAt": "2026-09-28T10:05:00Z"}, {"id": "c1", "author": {"login": "person"}, "url": "https://x/c1", "createdAt": "2026-09-28T10:05:00Z"}]'
+scenario "$(st "$GH")"; echo admin > "$S/perm-person"; run 7
+check "글쓴이가 없는 글이 같은 시각에 있어도 사람의 글을 알린다" "사람의 글" 1 1 https://x/c1
 # 새 코멘트가 달린 상태를 여섯 번 본다 — 권한 조회의 404 를 실패로 세면 다섯 번째에 조회 실패로 끝난다
-BC=$(st '"comments": [{"id": "c1", "author": {"login": "claude-helper"}, "url": "https://x/c1"}, {"id": "c2", "author": {"login": "reader"}, "url": "https://x/c2"}]')
+BC=$(st '"comments": [{"id": "c1", "author": {"login": "claude-helper"}, "url": "https://x/c1", "createdAt": "2026-09-28T10:05:00Z"}, {"id": "c2", "author": {"login": "reader"}, "url": "https://x/c2", "createdAt": "2026-09-28T10:06:00Z"}]')
 scenario "$OPEN" "$BC" "$BC" "$BC" "$BC" "$BC" "$BC" "$MERGED"
 echo read > "$S/perm-reader"; run 7
 check "봇 · 쓰기 권한 없는 계정의 새 코멘트로는 끝나지 않는다" 머지됨 0 8
 for s in COMMENTED CHANGES_REQUESTED; do
-  scenario "$OPEN" "$(st '"reviews": [{"id": "r1", "author": {"login": "person"}, "state": "'$s'"}]')"
+  scenario "$OPEN" "$(st '"reviews": [{"id": "r1", "author": {"login": "person"}, "state": "'$s'", "submittedAt": "2026-09-28T10:05:00Z"}]')"
   echo admin > "$S/perm-person"; run 7
   check "사람 계정의 새 리뷰($s)면 끝난다" "사람의 글" 1 2 "$s"
 done

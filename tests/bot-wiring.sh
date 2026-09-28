@@ -52,7 +52,7 @@ chmod +x "$T/bin/curl"
 # git 의 자격 증명 도우미로 불릴 가짜 gh. 세션 환경에서 git 이 봇(gh)에게 자격 증명을 받는지 본다.
 # 막기 훅이 auto-merge 를 판정하려고 부르는 `gh pr view` · `gh pr list` 에는 STUB_PR_VIEW · STUB_PR_LIST 를
 # 돌려준다. STUB_GH_FAIL 이 있으면 그 조회가 실패하고, STUB_GH_LOG 가 있으면 받은 인자를, STUB_GH_ENV 가 있으면
-# 받은 GH_CONFIG_DIR 을 적는다.
+# 받은 GH_CONFIG_DIR 을 적는다. STUB_GH_SLEEP 이 있으면 `gh pr …` 가 그 초만큼 멈춘다(네트워크가 멈춘 것).
 # 세션 시작 훅이 부르는 `gh pr list --state merged` 에는 STUB_PR_MERGED 를 돌려준다.
 cat > "$T/bin/gh" <<'EOF'
 #!/usr/bin/env bash
@@ -62,6 +62,7 @@ if [ "$1 $2 $3" = "auth git-credential get" ]; then
 fi
 [ -n "${STUB_GH_LOG:-}" ] && printf '%s\n' "$*" >> "$STUB_GH_LOG"
 [ -n "${STUB_GH_ENV:-}" ] && printf '%s\n' "${GH_CONFIG_DIR:-}" >> "$STUB_GH_ENV"
+[ -n "${STUB_GH_SLEEP:-}" ] && [ "$1" = pr ] && exec sleep "$STUB_GH_SLEEP"
 [ -n "${STUB_GH_FAIL:-}" ] && { echo 'stub: 조회 실패' >&2; exit 1; }
 need='{"reviewDecision":"REVIEW_REQUIRED","mergeStateStatus":"BLOCKED"}'
 case "$1 $2" in
@@ -158,23 +159,41 @@ ok "다시 시작할 때 토큰을 못 받으면 앞선 연결 표시를 지운�
 
 # 세션 시작 때 auto-merge 가 켜진 열린 PR 과, 머지됐는데 로컬 브랜치가 남은 PR 을 알린다
 ok "알릴 PR 이 없으면 목록을 출력하지 않는다" '! printf "%s" "$OUT" | grep -qF "열린 PR:" && ! printf "%s" "$OUT" | grep -qF "남은 PR:"'
+# 알리는 것은 이 clone 의 작업인 PR 이다 — fork 가 아니고, 로컬 브랜치가 있고 그 SHA 가 PR 의 head 와 같고, 다른
+# 워크트리에서 쓰지 않는 브랜치다. 동료 · 다른 세션의 PR, fork 의 main 에서 온 PR, 이름만 같은 브랜치는 뺀다.
 git -C "$R" commit -q --allow-empty -m init
-git -C "$R" branch feat/c; git -C "$R" branch feat/d
+SHA=$(git -C "$R" rev-parse HEAD); MAIN=$(git -C "$R" symbolic-ref --short HEAD); OTHER=$(printf '1%.0s' {1..40})
+for b in feat/a feat/c feat/d feat/e; do git -C "$R" branch "$b"; done
 git -C "$R" worktree add -q "$T/wt" feat/d
 : > "$T/gh-env"
-STUB_GH_ENV="$T/gh-env" STUB_PR_LIST='[{"number": 5, "headRefName": "feat/a", "reviewDecision": "APPROVED", "mergeStateStatus": "BEHIND", "autoMergeRequest": {"mergeMethod": "SQUASH"}}, {"number": 6, "headRefName": "feat/b", "reviewDecision": "", "mergeStateStatus": "CLEAN", "autoMergeRequest": null}]' \
-STUB_PR_MERGED='[{"number": 4, "headRefName": "feat/c"}, {"number": 3, "headRefName": "feat/gone"}, {"number": 2, "headRefName": "feat/d"}]' \
+STUB_GH_ENV="$T/gh-env" STUB_PR_LIST='[{"number": 5, "headRefName": "feat/a", "headRefOid": "'$SHA'", "isCrossRepository": false, "reviewDecision": "APPROVED", "mergeStateStatus": "BEHIND", "autoMergeRequest": {"mergeMethod": "SQUASH"}},
+ {"number": 6, "headRefName": "feat/a", "headRefOid": "'$SHA'", "isCrossRepository": false, "reviewDecision": "", "mergeStateStatus": "CLEAN", "autoMergeRequest": null},
+ {"number": 7, "headRefName": "feat/teammate", "headRefOid": "'$SHA'", "isCrossRepository": false, "reviewDecision": "REVIEW_REQUIRED", "mergeStateStatus": "BLOCKED", "autoMergeRequest": {"mergeMethod": "SQUASH"}},
+ {"number": 8, "headRefName": "feat/c", "headRefOid": "'$SHA'", "isCrossRepository": true, "reviewDecision": "REVIEW_REQUIRED", "mergeStateStatus": "BLOCKED", "autoMergeRequest": {"mergeMethod": "SQUASH"}}]' \
+STUB_PR_MERGED='[{"number": 4, "headRefName": "feat/c", "headRefOid": "'$SHA'", "isCrossRepository": false},
+ {"number": 3, "headRefName": "feat/gone", "headRefOid": "'$SHA'", "isCrossRepository": false},
+ {"number": 2, "headRefName": "feat/d", "headRefOid": "'$SHA'", "isCrossRepository": false},
+ {"number": 9, "headRefName": "'$MAIN'", "headRefOid": "'$SHA'", "isCrossRepository": true},
+ {"number": 10, "headRefName": "feat/e", "headRefOid": "'$OTHER'", "isCrossRepository": false}]' \
   session "알릴 PR 이 있음" "$R"
 ok "auto-merge 가 켜진 열린 PR 과 그 상태를 알린다" 'printf "%s" "$OUT" | grep -qF "#5(feat/a, APPROVED, BEHIND)"'
-ok "그 PR 마다 대기 스크립트를 켜라고 알린다" 'printf "%s" "$OUT" | grep -qF "wait_merge.sh 5"'
+ok "그 PR 마다 대기 스크립트를 실행하라고 알린다" 'printf "%s" "$OUT" | grep -qF "wait_merge.sh 5"'
 ok "auto-merge 가 꺼진 열린 PR 은 알리지 않는다" '! printf "%s" "$OUT" | grep -qF "#6("'
+ok "로컬 브랜치가 없는 열린 PR(동료 · 다른 clone 의 작업)은 알리지 않는다" '! printf "%s" "$OUT" | grep -qF "#7("'
+ok "fork 에서 온 열린 PR 은 알리지 않는다" '! printf "%s" "$OUT" | grep -qF "#8("'
 ok "머지됐는데 로컬 브랜치가 남은 PR 을 알린다" 'printf "%s" "$OUT" | grep -qF "#4(feat/c)" && printf "%s" "$OUT" | grep -qF "merge-pr 4"'
 ok "로컬 브랜치가 없는 머지된 PR 은 알리지 않는다" '! printf "%s" "$OUT" | grep -qF "#3("'
 ok "다른 워크트리에서 쓰는 브랜치의 머지된 PR 은 알리지 않는다" '! printf "%s" "$OUT" | grep -qF "#2("'
+ok "fork 의 기본 브랜치에서 온 머지된 PR 은 알리지 않는다" '! printf "%s" "$OUT" | grep -qF "#9("'
+ok "이름만 같고 SHA 가 다른 로컬 브랜치의 머지된 PR 은 알리지 않는다" '! printf "%s" "$OUT" | grep -qF "#10("'
 no_token_in_out "알릴 PR 이 있음"
 ok "PR 목록은 봇 계정으로 조회한다" '[ "$(wc -l < "$T/gh-env")" -ge 2 ] && ( while read -r d; do [ "$d" -ef "$BOTDIR" ] || exit 1; done < "$T/gh-env" )'
 STUB_GH_FAIL=1 session "PR 조회 실패" "$R"
 ok "PR 을 조회하지 못하면 그렇다고 알린다" 'printf "%s" "$OUT" | grep -qF "조회하지 못했다" && [ -f "$BOTDIR/wired/s1" ]'
+# 네트워크가 멈춰도 훅의 timeout 전에 끝나야 이미 출력한 연결 안내가 세션에 들어간다
+t0=$(date +%s)
+BOT_SESSION_GH_TIMEOUT=1 STUB_GH_SLEEP=8 session "PR 조회가 멈춤" "$R"
+ok "PR 조회가 멈추면 시간 제한에서 그만두고 그렇다고 알린다" '[ $(( $(date +%s) - t0 )) -lt 8 ] && printf "%s" "$OUT" | grep -qF "조회하지 못했다" && printf "%s" "$OUT" | grep -qF "봇 계정으로 GitHub 에 쓴다"'
 git -C "$R" worktree remove --force "$T/wt"
 
 repo "$R" "" no
