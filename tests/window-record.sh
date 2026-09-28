@@ -7,6 +7,7 @@
 #
 # 훅을 Claude Code 가 부르는 모양으로 부른다. 표준입력의 `tool_response` 는 세션 기록에 남는 창의 결과
 # (`toolUseResult`: `questions` · `answers` · `annotations`, `answers` 는 질문 → 고른 보기)와 같은 모양으로 둔다.
+# 훅이 받는 실제 입력도 이 모양이다(백그라운드 세션에서 기록해 확인했다, 2026-09-29).
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 HOOK="$KIT/claude-code/hooks/window_record.sh"
@@ -70,6 +71,19 @@ print(json.dumps({"header": "고칠 것", "question": "고칠 것을 모두 골�
                  ensure_ascii=False))' "$MARK")
 ask "$T/bot" "[$QM]" "{\"고칠 것을 모두 골라 주세요. $MARK\": \"A 를 고친다, B 를 고친다 (추천)\"}"
 check "여러 보기를 고르면 ' · ' 로 잇는다" "- 고칠 것: A 를 고친다 · B 를 고친다" "$(lines 7)"
+
+# 여러 보기를 고른 답은 보기 이름을 `, ` 로 이은 글자이고, 직접 쓴 말도 그 뒤에 `, ` 로 붙는다(세션 기록에서
+# 확인했다). 보기 이름 안의 `, ` 는 보기를 나누는 자리가 아니다
+rm -rf "$W"
+QC=$(python3 -c 'import json, sys
+print(json.dumps({"header": "고칠 것", "question": "고칠 것을 모두 골라 주세요. " + sys.argv[1], "multiSelect": True,
+                  "options": [{"label": l, "description": "d"} for l in ["A, B 를 함께 고친다", "C 를 고친다"]]},
+                 ensure_ascii=False))' "$MARK")
+ask "$T/bot" "[$QC]" "{\"고칠 것을 모두 골라 주세요. $MARK\": \"A, B 를 함께 고친다, C 를 고친다\"}"
+check "보기 이름 안의 ', ' 는 보기를 나누지 않는다" "- 고칠 것: A, B 를 함께 고친다 · C 를 고친다" "$(lines 7)"
+rm -rf "$W"
+ask "$T/bot" "[$QC]" "{\"고칠 것을 모두 골라 주세요. $MARK\": \"C 를 고친다, 나머지는 다음 PR 로\"}"
+check "여러 보기 뒤에 붙은 직접 쓴 말은 표시한다" " [직접 쓴 말: 고칠 것]" "$(lines 7)"
 
 rm -rf "$W"
 ask "$T/bot" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"필수 하나만 고치고 머지하자\"}"
