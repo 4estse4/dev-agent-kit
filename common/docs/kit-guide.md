@@ -65,7 +65,7 @@ bash .ai-kit/gate/gate.sh --all                 # 전부 (CI 가 부르는 것)
 | App 권한을 바꿨을 때 | GitHub 의 App 설치 설정 | 새 권한을 승인한다(6절) | 설치 토큰이 옛 권한이다 |
 | 사람의 git 설정이 github.com 의 https 를 SSH 로 바꿀 때 | 레포 | 더 긴 규칙으로 이 레포에서만 끈다(6절 「세션의 git 이 닿는 곳」) | 세션의 푸시가 막힌다 |
 | 리뷰 라운드마다 | 세션 · PR 웹 | 세션이 대화에 출력한 결정 코멘트 최종본을 읽고 권한 프롬프트를 허락하거나, PR 웹에 코멘트를 쓴다(6절) | 세션이 다음 단계로 가지 않는다 |
-| 머지 전 | PR 웹 · 터미널 | 세션이 부탁한 head 를 Approve 한다. 세션이 auto-merge 를 켰으면 Approve 하는 순간 GitHub 이 머지하고, 켜지 못했으면 Approve 한 뒤 세션에 알린다(세션의 부탁 블록이 어느 쪽인지 적는다). Approve 뒤에도 브랜치가 뒤처지거나 충돌해 머지되지 못하면 세션이 다음 작업을 시작할 때 알린다. PR 브랜치에 직접 푸시하려면 먼저 세션에 알려 auto-merge 를 끄게 하고, 푸시했으면 세션이 다시 푸시한 뒤에 Approve 한다(6절 6) | 머지되지 않는다. auto-merge 를 켠 채 사람이 푸시하면 다른 리뷰어의 Approve 로 옛 결정 코멘트대로 머지된다 |
+| 머지 전 | PR 웹 · 터미널 | 세션이 부탁한 head 를 Approve 한다. 세션이 auto-merge 를 켰으면 Approve 하는 순간 GitHub 이 머지하고, 켜지 못했으면 Approve 한 뒤 세션에 알린다(세션의 부탁 블록이 어느 쪽인지 적는다). Approve 뒤에도 브랜치가 뒤처지거나 충돌해 머지되지 못하면 세션이 다음 작업을 시작할 때 알린다. PR 브랜치에 직접 푸시하려면 먼저 세션에 알려 auto-merge 를 끄게 하고, 푸시했으면 세션이 다시 푸시한 뒤에 Approve 한다(6절 6). PR 웹의 「Update branch」 · 「Resolve conflicts」도 PR 브랜치로 가는 사람의 푸시다 | 머지되지 않는다. auto-merge 를 켠 채 사람이 푸시하면 다른 리뷰어의 Approve 로 옛 결정 코멘트대로 머지된다 |
 
 **커밋 신원.** `install.sh` 는 설치 시점의 `git config user.email` 을 `.ai-kit/identity` 에
 기록하고, 이후 훅이 그 값을 정답으로 검증한다. **틀린 값이 기록되면 훅이 틀린 값을 지켜준다.**

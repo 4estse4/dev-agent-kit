@@ -26,7 +26,7 @@
 feature 브랜치 → 구현 → 테스트 → `commit` → `open-pr` → 리뷰 한 라운드 → 수정 → `dev-log` → 머지.
 
 - 파일 3개 이상 또는 구조에 영향 주는 변경은 **먼저 계획을 제시하고 승인받는다.**
-- **feature 브랜치는 `origin` 의 기본 브랜치에서 만든다.** 그 전에 auto-merge 로 끝낸 PR 들을 본다 — Approve 를
+- **feature 브랜치는 `origin` 의 기본 브랜치에서 만든다.** 그 전에 auto-merge 가 켜진 열린 PR 과 머지된 PR 을 본다 — Approve 를
   받고도 열려 있는 PR 은 사람에게 알리고, 머지된 PR 의 로컬 브랜치는 `merge-pr <번호>` 로 정리한다(`merge-pr` 3절).
   `막는 것 없음`
 - **`dev-log` 는 머지 전에 실행한다.** 겪은 일은 겪은 세션만 쓸 수 있다. 머지 뒤로 미루면 다음
