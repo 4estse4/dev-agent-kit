@@ -35,8 +35,9 @@ ok() { echo "  ✓ $1"; }
 bad() { echo "  ✗ $1"; fail=1; }
 
 # ── 3절: 머지 명령 ──
-m=$(grep -E '^    gh pr merge <N>' "$SK")
-if [ -z "$m" ]; then bad "3절의 머지 명령(\`    gh pr merge <N>\`)을 못 찾았다"
+# 머지 명령은 둘이다(바로 머지 · auto-merge). auto-merge 명령은 번호 목록 안이라 더 들여썼다.
+m=$(grep -E '^ +gh pr merge <N>' "$SK")
+if [ "$(printf '%s\n' "$m" | grep -c 'gh pr merge')" != 2 ]; then bad "3절의 머지 명령(\`gh pr merge <N>\`)이 둘(바로 머지 · auto-merge)이 아니다"
 else
   case "$m" in
     *--delete-branch*) bad "3절의 머지 명령이 --delete-branch 를 쓴다 — worktree 에서 로컬 삭제가 실패하면 원격 삭제도 건너뛴다" ;;

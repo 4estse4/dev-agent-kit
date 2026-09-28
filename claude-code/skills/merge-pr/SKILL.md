@@ -233,7 +233,7 @@ GitHub auto-merge 를 켠 뒤 Approve 를 부탁하고, Approve 가 달리면 Gi
     gh issue close <번호> --comment "<이 PR 의 URL> 로 끝냈다."
 
 **봇 설정이 있으면 닫는 명령 대신 머지 명령의 `--body` 에 `Closes #<번호>` 줄을 더한다.** 창으로 승인받은
-뒤다. auto-merge 로 머지되면 머지 뒤에 세션이 닫는 명령을 실행할 자리가 없다. 스쿼시 커밋 메시지의 닫는
+뒤다. 자리는 머지 명령 틀이 보인 곳이다 — 트레일러 줄 뒤에 붙이면 트레일러가 사라진다(아래 머지 명령의 설명). auto-merge 로 머지되면 머지 뒤에 세션이 닫는 명령을 실행할 자리가 없다. 스쿼시 커밋 메시지의 닫는
 키워드는 그 커밋이 기본 브랜치에 들어갈 때 이슈를 닫는다(GitHub 문서 「Linking a pull request to an issue」:
 "You can also use closing keywords in a commit message. The issue will be closed when you merge the commit into
 the default branch"). PR 본문은 고치지 않는다(아래 「본문을 고쳐서 맞추려 하지 마라」). 같은 문서가 "the pull
@@ -369,6 +369,7 @@ PR 에서도 제목의 키워드가 이슈를 닫았다. 그래서 출력은 이
 
     gh pr merge <N> --squash --subject "<제목 조회의 출력>" --body "- PR: <이 PR 의 URL>
     - Issue: <닫히는 이슈의 URL>
+    Closes #<본문 밖에서 끝낸 이슈의 번호>
 
     <브랜치 커밋의 트레일러 줄>"
 
@@ -430,6 +431,9 @@ URL 이다:
   작은따옴표가 든 제목을 버릴 레포에서 이 명령 그대로 머지해, 스쿼시 제목이 PR 제목 그대로인 것을 봤다
 - `- PR:` 과 `- Issue:` 의 값은 주소 조회의 출력 그대로다. 세션이 고르거나 조립하지 않는다. 이슈
   줄이 안 나오면 `- Issue:` 줄을 빼고, 둘 이상이면 이슈마다 한 줄이다
+- `Closes #<번호>` 줄은 봇 설정이 있고 본문 밖에서 끝낸 이슈가 있을 때만 쓴다(위 「봇 설정이 있으면 닫는 명령
+  대신」). 이슈마다 한 줄이고, 틀의 자리(`- Issue:` 줄 바로 아래, 트레일러 줄 앞의 빈 줄 위)에 둔다. 트레일러
+  줄 뒤에 붙이면 git 이 그 문단을 트레일러로 읽지 못해 스쿼시 커밋에서 트레일러가 사라진다. 없으면 그 줄을 뺀다
 - 라벨은 영어다. 커밋 메시지는 영어라는 규칙이 이 본문에도 적용된다
 - 트레일러 줄은 트레일러 조회의 출력 그대로다. 한 줄이면 한 줄, 여럿이면 줄마다 하나다. `rc=0`
   인데 아무것도 안 나오면 트레일러 줄을 쓰지 않는다. 세션이 지어내지 않는다
@@ -466,25 +470,40 @@ URL 이다:
 
        gh pr merge <N> --auto --squash --match-head-commit <headRefOid> --subject "<제목 조회의 출력>" --body "- PR: <이 PR 의 URL>
        - Issue: <닫히는 이슈의 URL>
+       Closes #<본문 밖에서 끝낸 이슈의 번호>
 
        <브랜치 커밋의 트레일러 줄>"
 
-   `--subject` · `--body` 는 위 머지 명령과 같은 규칙으로 쓴다. `--match-head-commit` 은 결정 코멘트가 말하는
-   head 로만 머지되게 한다 — gh 는 이 값을 auto-merge 의 `expectedHeadOid` 로 전달한다(gh v2.92.0
-   `pkg/cmd/pr/merge/http.go`).
+   `--subject` · `--body` 는 위 머지 명령과 같은 규칙으로 쓴다. gh 는 `--match-head-commit` 의 값을 auto-merge 의
+   `expectedHeadOid` 로 전달한다(gh v2.92.0 `pkg/cmd/pr/merge/http.go`). GitHub 이 그 값을 머지할 때도 대조하는지는
+   확인하지 않았다. 켠 뒤에 오는 새 커밋은 둘이 막는다. 세션의 푸시는 막기 훅이 막고(아래), 사람의 푸시는 브랜치
+   보호가 이전 승인을 없던 것으로 해서(`install.sh --protect` 의 「새 커밋이 오면 이전 승인 무효」) 새 Approve
+   전에는 머지되지 않는다.
+
+   **켜는 명령이 실패하면** 결정 코멘트가 말하는 「Approve 하면 GitHub 이 머지한다」가 거짓이 된다. 결정 코멘트
+   뒤에 코멘트로 한 줄 `auto-merge 를 켜지 못했다: <gh 가 낸 오류의 첫 줄>. 사람이 Approve 한 뒤 알리면 세션이
+   확인하고 머지한다.` 를 남기고, 2절의 「그 밖이면 세션이 Approve 를 확인한다」로 간다. 부탁 블록의 「그 뒤」도
+   그 절의 것이다. 봇이 auto-merge 를 켤 권한이 없거나, 2절 뒤에 누가 푸시해 head 가 어긋난 경우다.
 4. 응답을 2절의 부탁 블록으로 끝낸다. 할 일 줄에 「Approve 하면 확인 없이 바로 머지된다」를 적는다 — auto-merge
    없이 머지할 때는 Approve 뒤에 세션이 한 번 더 확인했으므로, 사람은 누르기 전에 그 차이를 알아야 한다. 「그
-   뒤」는 「GitHub 이 머지하고 head 브랜치를 지운다. 알려 주지 않아도 된다」다. 5절의 첫 줄도 이 응답에 적는다.
+   뒤」는 「GitHub 이 머지하고 head 브랜치를 지운다. 알려 주지 않아도 된다」다. 5절의 `Auto-merge on …` 줄도
+   이 응답에 적는다.
 
-**켠 뒤에 이 브랜치에 푸시해야 하면 먼저 끈다.** `gh pr merge <N> --disable-auto` 로 끄고 푸시한 뒤, 새 head 로
-2절부터 다시 한다(결정 코멘트 · auto-merge · 부탁). 끄지 않으면 사람이 새 커밋을 보고 누른 Approve 가 옛 결정
-코멘트대로 머지된다. 막기 훅(`bot_guard.sh`)이 auto-merge 가 켜진 PR 의 브랜치로 가는 푸시를 막는다.
+**Approve 전에 다시 해야 하면 먼저 끈다.** 브랜치에 푸시해야 할 때와, 사람이 결정 코멘트나 스쿼시 제목 · 본문을
+고치라고 할 때다. `gh pr merge <N> --disable-auto` 로 끄고, 옛 결정 코멘트 뒤에 코멘트로 한 줄 `위 결정 코멘트는
+아래 결정 코멘트로 대신한다(auto-merge 를 끄고 다시 켰다).` 를 남긴 뒤, 2절부터 다시 한다(결정 코멘트 ·
+auto-merge · 부탁). 끄지 않으면 사람이나 다른 리뷰어가 Approve 하는 순간 켤 때 담긴 옛 제목 · 본문과 옛 결정
+코멘트대로 머지된다. 옛 결정 코멘트를 편집하지 않는 이유는 3절의 거절 경로와 같다 — 한 번 올린 기록이 바뀐다.
+막기 훅(`bot_guard.sh`)이 auto-merge 가 켜진 PR 의 브랜치로 가는 푸시를 막는다.
 
 **머지 뒤 정리는 다음 작업을 시작할 때 한다.** 머지는 사람이 Approve 한 순간 GitHub 이 하므로 세션이 그 자리에
-없다. 다음 작업의 브랜치를 만들기 전에 `merge-pr <N>` 을 다시 부른다 — 2절이 `MERGED` 를 보고 4절과 5절만
-한다. 원격 브랜치를 레포 설정 「Automatically delete head branches」가 지웠으면 4절의 원격 삭제는
-`remote ref does not exist` 로 끝난다. 그 설정이 꺼진 레포에서는 4절이 지운다(승인은 Approve 다). 머지 뒤에야
-나온 것이 있으면 4절의 후속 코멘트로 붙인다.
+없다. 다음 작업의 브랜치는 `origin/<baseRefName>` 에서 만든다. 그 전에 앞 PR 의 상태를 보고, 머지됐으면
+`merge-pr <N>` 을 다시 부른다 — 2절이 `MERGED` 를 보고 4절과 5절만 한다. 아직 `OPEN` 이면 정리를 미루고 그대로
+`origin/<baseRefName>` 에서 브랜치를 만든다(앞 PR 브랜치 위에 만들면 앞 PR 이 스쿼시로 머지된 뒤 다음 PR 의
+diff 에 그 변경이 다시 나온다). 세션 시작 안내(`bot_session.sh`)도 이것을 알린다 — 새 세션이나 컴팩션 뒤의
+세션은 이 스킬을 읽지 않은 채 다음 작업을 시작한다. 원격 브랜치를 레포 설정 「Automatically delete head
+branches」가 지웠으면 4절의 원격 삭제는 `remote ref does not exist` 로 끝난다. 그 설정이 꺼진 레포에서는 4절이
+지운다(승인은 Approve 다). 머지 뒤에야 나온 것이 있으면 4절의 후속 코멘트로 붙인다.
 
 ## 4. base 복귀와 브랜치 삭제
 
@@ -525,8 +544,9 @@ fetch 한다.
 조각마다 따로 규칙에 맞는지 보고(권한 문서의 Compound commands: "A rule must match each subcommand
 independently."), `git fetch` 는 설치되는 `settings.json` 의 `allow` 에 없다. 어느 분기가 실행될지는
 실행 전에 모른다. 사람이 거절하면 줄 전체가 실행되지 않는다. 그때도 중단하고, 5절의 보고에 머지는
-끝났고 base 복귀와 브랜치 삭제는 하지 않았다고 적는다. 스킬을 다시 불러도 2절에서 멈추므로(`state` 가
-`OPEN` 이 아니다) 남은 일은 사람이 정한다.
+끝났고 base 복귀와 브랜치 삭제는 하지 않았다고 적는다. 봇 설정이 없으면 스킬을 다시 불러도 2절에서
+멈추므로(`state` 가 `OPEN` 이 아니다) 남은 일은 사람이 정한다. 봇 설정이 있으면 다시 부른 스킬의 2절이
+`MERGED` 를 보고 이 절을 다시 실행하므로, 사람이 거절한 명령이 다시 권한 프롬프트로 나온다.
 
 **원격 브랜치를 지운다. `isCrossRepository` 가 `true` 면 지우지 않는다:**
 
