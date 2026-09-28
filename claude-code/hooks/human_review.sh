@@ -20,7 +20,8 @@
 # - 봇 설정이 없으면 3.5 코멘트(제목 `### N라운드 코멘트를 읽고 사람이 정한 것`)다
 # 코멘트의 어느 글자를 원본으로 쓸지는 훅이 정한다(3.5 제목이 있으면 `(사람) "…"` 조각만).
 #
-# **approved** — 지금 head 에 사람의 Approve 가 있는지 본다. `merge-pr` 2절이 부른다. 있으면 `✓ …` 와
+# **approved** — 지금 head 에 사람의 Approve 가 있는지 본다. `merge-pr` 2절이 auto-merge 를 켤 수 없을 때
+# 부른다(켤 수 있으면 Approve 가 달릴 때 GitHub 이 머지한다). 있으면 `✓ …` 와
 # 종료 0, 없으면 `✗ …` 와 종료 1 이다. 인정하는 Approve 는 둘을 모두 채운다.
 # - 리뷰한 계정의 레포 권한이 write 이상이다(`collaborators/<계정>/permission` 의 admin · write.
 #   maintain 은 write 로 온다). 브랜치 보호가 필요 승인 수로 세는 것도 쓰기 권한자의 Approve 다

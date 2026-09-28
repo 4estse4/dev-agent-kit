@@ -50,12 +50,21 @@ if '-w' in a:
 EOF
 chmod +x "$T/bin/curl"
 # git 의 자격 증명 도우미로 불릴 가짜 gh. 세션 환경에서 git 이 봇(gh)에게 자격 증명을 받는지 본다.
+# 막기 훅이 auto-merge 를 판정하려고 부르는 `gh pr view` · `gh pr list` 에는 STUB_PR_VIEW · STUB_PR_LIST 를
+# 돌려준다. STUB_GH_FAIL 이 있으면 그 조회가 실패하고, STUB_GH_LOG 가 있으면 받은 인자를 적는다.
 cat > "$T/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 if [ "$1 $2 $3" = "auth git-credential get" ]; then
   printf 'username=x-access-token\npassword=from-gh-bot\n'
   exit 0
 fi
+[ -n "${STUB_GH_LOG:-}" ] && printf '%s\n' "$*" >> "$STUB_GH_LOG"
+[ -n "${STUB_GH_FAIL:-}" ] && { echo 'stub: 조회 실패' >&2; exit 1; }
+need='{"reviewDecision":"REVIEW_REQUIRED","mergeStateStatus":"BLOCKED"}'
+case "$1 $2" in
+  "pr view") printf '%s\n' "${STUB_PR_VIEW:-$need}"; exit 0 ;;
+  "pr list") printf '%s\n' "${STUB_PR_LIST:-[]}"; exit 0 ;;
+esac
 exit 1
 EOF
 chmod +x "$T/bin/gh"
@@ -282,6 +291,45 @@ rm -f "$T/home/.gitconfig"
 git -C "$R" remote set-url origin git@github.com:o/r.git
 guard "SSH origin 의 푸시(세션이 https 로 바꿔 쓴다)" pass "git push origin HEAD"
 git -C "$R" remote set-url origin https://github.com/o/r.git
+
+echo "── auto-merge"
+# gh 는 바로 머지할 수 있는 PR(CLEAN · HAS_HOOKS · UNSTABLE)에서 --auto 를 무시하고 그 자리에서 머지한다
+# (gh v2.92.0 pkg/cmd/pr/merge/merge.go 의 isImmediatelyMergeable). 승인이 모자라 막힌 PR 에서만 켠다.
+NEED='{"reviewDecision":"REVIEW_REQUIRED","mergeStateStatus":"BLOCKED"}'
+AUTO="gh pr merge 5 --auto --squash --match-head-commit abc --subject s --body b"
+STUB_PR_VIEW=$NEED guard "승인이 모자라 막힌 PR 에 auto-merge" pass "$AUTO"
+STUB_PR_VIEW='{"reviewDecision":"REVIEW_REQUIRED","mergeStateStatus":"CLEAN"}' guard "바로 머지할 수 있는 PR 에 auto-merge" deny "$AUTO" "$R" "바로 머지"
+STUB_PR_VIEW='{"reviewDecision":"APPROVED","mergeStateStatus":"CLEAN"}' guard "이미 승인된 PR 에 auto-merge" deny "$AUTO"
+STUB_PR_VIEW='{"reviewDecision":"REVIEW_REQUIRED","mergeStateStatus":"UNSTABLE"}' guard "검사가 실패했지만 머지할 수 있는 PR 에 auto-merge" deny "$AUTO"
+# 승인을 요구하지 않는 레포에서는 검사가 끝나 BLOCKED 가 풀리면 Approve 없이 머지된다
+STUB_PR_VIEW='{"reviewDecision":null,"mergeStateStatus":"BLOCKED"}' guard "승인을 요구하지 않는 레포의 auto-merge" deny "$AUTO" "$R" "승인"
+STUB_PR_VIEW='{"reviewDecision":"REVIEW_REQUIRED","mergeStateStatus":"UNKNOWN"}' guard "상태를 아직 모르는 PR 에 auto-merge" deny "$AUTO"
+STUB_GH_FAIL=1 guard "PR 을 조회하지 못한 auto-merge" deny "$AUTO" "$R" "조회"
+STUB_PR_VIEW='{"reviewDecision":"REVIEW_REQUIRED","mergeStateStatus":"CLEAN"}' guard "명령 치환 안의 auto-merge" deny "x=\$($AUTO)"
+STUB_PR_VIEW='{"reviewDecision":"REVIEW_REQUIRED","mergeStateStatus":"CLEAN"}' guard "값을 붙여 쓴 --auto=true" deny "gh pr merge 5 --auto=true --squash"
+STUB_PR_VIEW='{"reviewDecision":"REVIEW_REQUIRED","mergeStateStatus":"CLEAN"}' guard "auto-merge 끄기(--disable-auto)" pass "gh pr merge 5 --disable-auto"
+# 조회는 명령이 가리킨 PR 과 레포로 한다. 값을 받는 플래그의 값을 PR 로 읽으면 다른 PR 을 판정한다.
+: > "$T/gh-log"
+STUB_GH_LOG="$T/gh-log" STUB_PR_VIEW=$NEED guard "레포와 값 있는 플래그 뒤의 PR" pass "gh pr -R o/r merge --subject 5x --auto 7"
+ok "auto-merge 판정은 명령의 PR 과 레포를 조회한다" 'grep -E "^pr view 7( |$)" "$T/gh-log" | grep -qE -- "-R o/r( |$)"'
+# 켠 뒤에 푸시하면 사람이 새 커밋을 보고 누른 Approve 가 옛 결정 코멘트대로 머지된다. 먼저 끈다.
+ON='[{"number":5,"headRefName":"work","autoMergeRequest":{"enabledAt":"2026-09-28T00:00:00Z"}}]'
+OFF='[{"number":5,"headRefName":"work","autoMergeRequest":null}]'
+STUB_PR_LIST=$ON guard "auto-merge 가 켜진 PR 의 브랜치에 푸시" deny "git push" "$R" "--disable-auto"
+STUB_PR_LIST=$ON guard "auto-merge 가 켜진 브랜치에 HEAD 로 푸시" deny "git push origin HEAD"
+STUB_PR_LIST=$ON guard "auto-merge 가 켜진 브랜치 이름으로 푸시" deny "git push -u origin work"
+STUB_PR_LIST=$ON guard "다른 브랜치에서 refspec 으로 푸시" deny "git push origin other:refs/heads/work"
+# 지금 브랜치(work)가 아닌 브랜치의 PR 에 켜져 있어도, 모든 브랜치를 푸시하면 그 브랜치도 바뀐다
+SIDE='[{"number":6,"headRefName":"side","autoMergeRequest":{"enabledAt":"2026-09-28T00:00:00Z"}}]'
+STUB_PR_LIST=$SIDE guard "지금 브랜치가 아닌 브랜치에 켜진 채 지금 브랜치 푸시" pass "git push origin HEAD"
+STUB_PR_LIST=$SIDE guard "모든 브랜치 푸시(--all)" deny "git push --all origin"
+STUB_PR_LIST=$SIDE guard "모든 브랜치 푸시(--mirror)" deny "git push --mirror origin"
+STUB_PR_LIST=$ON guard "auto-merge 가 켜지지 않은 브랜치에 푸시" pass "git push origin other"
+STUB_PR_LIST=$OFF guard "auto-merge 가 꺼진 PR 의 브랜치에 푸시" pass "git push"
+STUB_GH_FAIL=1 guard "PR 목록을 조회하지 못한 푸시" deny "git push" "$R" "조회"
+: > "$T/gh-log"
+STUB_GH_LOG="$T/gh-log" guard "PR 이 없는 브랜치에 푸시" pass "git push origin HEAD"
+ok "푸시 판정은 푸시가 나갈 레포의 PR 을 조회한다" 'grep -E "^pr list( |$)" "$T/gh-log" | grep -qE -- "-R o/r( |$)"'
 
 echo "── 사람 계정으로 올리는 명령(human_comment.sh)"
 # 사람이 권한 프롬프트에서 글 전문을 읽고 허락해야 올라간다. 스크립트 경로는 훅과 같은 디렉터리의 것이다.

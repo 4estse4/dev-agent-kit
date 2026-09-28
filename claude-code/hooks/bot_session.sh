@@ -62,4 +62,4 @@ env_lines=$(
 printf '%s\n' "$env_lines" >> "$CLAUDE_ENV_FILE"
 printf '%s\n' "$env_lines" > "$dir/session-env"
 : > "$dir/wired/$sid"
-printf '이 세션의 gh 는 봇 계정으로 GitHub 에 쓴다(GH_CONFIG_DIR=%s). 사람의 결정은 사람 계정 코멘트로 남긴다 — 세션이 받은 답은 human_comment.sh 로 올리고(그 명령 바로 전에 응답에 올릴 글의 최종본 전문을 출력한다 — 사람은 그 글을 읽고 권한 프롬프트를 허락한다), 사람이 PR 웹에서 직접 쓸 수도 있다. 사람 계정 코멘트만 (사람) 인용의 원본이고, 머지는 사람의 Approve 를 확인한 뒤에 한다.\n' "$dir"
+printf '이 세션의 gh 는 봇 계정으로 GitHub 에 쓴다(GH_CONFIG_DIR=%s). 사람의 결정은 사람 계정 코멘트로 남긴다 — 세션이 받은 답은 human_comment.sh 로 올리고(그 명령 바로 전에 응답에 올릴 글의 최종본 전문을 출력한다 — 사람은 그 글을 읽고 권한 프롬프트를 허락한다), 사람이 PR 웹에서 직접 쓸 수도 있다. 사람 계정 코멘트만 (사람) 인용의 원본이다. 머지는 결정 코멘트를 올리고 auto-merge 를 켠 뒤 사람에게 Approve 를 부탁한다 — Approve 가 달리면 GitHub 이 머지하므로 기다리며 확인을 되풀이하지 않는다(merge-pr 3절).\n' "$dir"

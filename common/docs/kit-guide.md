@@ -61,11 +61,11 @@ bash .ai-kit/gate/gate.sh --all                 # 전부 (CI 가 부르는 것)
 | 머신마다 | `~/.config/<App 이름>/key.pem` | App 의 개인키를 둔다(6절 2) | 그 머신의 세션이 연결되지 않는다 |
 | 레포마다 | GitHub 의 App 설치 설정 | 저장소 목록에 레포를 더한다(6절 3) | 세션 시작 때 「App 설치에 이 레포가 없다」가 나온다 |
 | 레포마다 | 레포 | `.claude/bot.json` 을 커밋하고 세션을 다시 시작한다(6절 4 · 5) | 세션과 사람이 한 계정을 쓴다 |
-| 봇 설정을 커밋한 뒤 레포마다 | 터미널 | `install.sh <경로> --protect` 를 다시 실행해 사람의 Approve 를 요구하게 한다(6절 6). 리뷰하는 사람이 여럿이면 필요 승인 수를 GitHub 의 브랜치 보호 설정에서 올린다 | GitHub 이 사람의 Approve 없이 머지를 받는다. `merge-pr` 만 멈춘다 |
+| 봇 설정을 커밋한 뒤 레포마다 | 터미널 | `install.sh <경로> --protect` 를 다시 실행해 사람의 Approve 를 요구하게 하고, 레포 설정 「Allow auto-merge」 · 「Automatically delete head branches」를 켠다(6절 6). 리뷰하는 사람이 여럿이면 필요 승인 수를 GitHub 의 브랜치 보호 설정에서 올린다 | GitHub 이 사람의 Approve 없이 머지를 받는다. 세션이 auto-merge 를 켜지 못해, 사람이 Approve 한 뒤 세션에 알려야 머지된다 |
 | App 권한을 바꿨을 때 | GitHub 의 App 설치 설정 | 새 권한을 승인한다(6절) | 설치 토큰이 옛 권한이다 |
 | 사람의 git 설정이 github.com 의 https 를 SSH 로 바꿀 때 | 레포 | 더 긴 규칙으로 이 레포에서만 끈다(6절 「세션의 git 이 닿는 곳」) | 세션의 푸시가 막힌다 |
 | 리뷰 라운드마다 | 세션 · PR 웹 | 세션이 대화에 출력한 결정 코멘트 최종본을 읽고 권한 프롬프트를 허락하거나, PR 웹에 코멘트를 쓴다(6절) | 세션이 다음 단계로 가지 않는다 |
-| 머지 전 | PR 웹 | 지금 head 를 Approve 한다. PR 브랜치에 직접 푸시했으면 세션이 다시 푸시한 뒤에 한다(6절 6) | `merge-pr` 이 멈춘다 |
+| 머지 전 | PR 웹 · 터미널 | 세션이 부탁한 head 를 Approve 한다. Approve 하면 GitHub 이 바로 머지한다(auto-merge). PR 브랜치에 직접 푸시했으면 세션이 다시 푸시한 뒤에 한다(6절 6) | 머지되지 않는다 |
 
 **커밋 신원.** `install.sh` 는 설치 시점의 `git config user.email` 을 `.ai-kit/identity` 에
 기록하고, 이후 훅이 그 값을 정답으로 검증한다. **틀린 값이 기록되면 훅이 틀린 값을 지켜준다.**
@@ -150,7 +150,10 @@ PR 의 Approve 로. 그래서 GitHub 이 기록한 글쓴이로 세션의 글과
 
 **머지 승인은 Approve 다.** PR 작성자가 봇이라 사람이 그 PR 을 Approve 할 수 있다 — GitHub 에서
 「Pull request authors cannot approve their own pull requests.」라서, 봇 설정이 없으면 이 길이 없다.
-`merge-pr` 은 지금 head 에 쓰기 권한이 있는 사람 계정의 Approve 가 있을 때 머지한다.
+`merge-pr` 은 결정 코멘트를 올리고 GitHub auto-merge 를 켠 뒤 Approve 를 부탁한다. Approve 가 달리면 GitHub 이
+머지하므로 사람은 세션에 알리지 않아도 된다. auto-merge 를 켤 수 없는 레포(승인을 요구하지 않거나 auto-merge 를
+허용하지 않은 레포)에서는 사람이 Approve 한 뒤 세션에 알리고, 세션이 지금 head 에 쓰기 권한이 있는 사람 계정의
+Approve 가 있는지 확인해 머지한다.
 
 | 시점 | 무엇 | 막나 |
 |---|---|---|
@@ -158,7 +161,8 @@ PR 의 Approve 로. 그래서 GitHub 이 기록한 글쓴이로 세션의 글과
 | gh 명령 · git 원격 명령마다 | gh 와 git 의 계정 · 자격 증명을 바꾸는 것(환경을 비우는 `env -i` 포함), `gh auth` 명령(`status` 도 봇 토큰을 출력한다), 토큰을 출력하는 `git credential` 과 봇 디렉터리를 가리키는 명령(토큰이 없는 `expires` · `session-env` · `wired` 는 뺀다. Read 도구는 설치되는 `settings.json` 의 `deny` 가 막는다), 연결되지 않은 세션이 gh 로 쓰거나 `git push` 하는 것, 연결된 세션의 푸시가 github.com 의 SSH 주소로 나가는 것. 명령 치환(`$(…)` · 백틱) 안도 본다(`bot_guard.sh`). 토큰이 끝나 가면 새로 받는다 | 막는다. gh 의 읽기 명령과 `git fetch` · `pull` 은 막지 않는다 |
 | 사람 계정으로 올릴 때 | `human_comment.sh` 에 권한 프롬프트를 낸다(세션은 그 전에 대화에 글 전문을 출력한다. 사유에도 전문을 넣는다). 명령의 sha256 이 본문 파일과 다르거나, 한 줄 정규형이 아니거나, 셸의 `-c` 인자 안에 두었으면 막는다(`bot_guard.sh`) | 사람이 허락해야 올라간다 |
 | 라운드 코멘트 게시 | `(사람)` 인용이 사람 계정 코멘트에 글자 그대로 있는지. 봇 계정으로 올리는 3.5 코멘트도 막는다(`round_comment_quotes.sh`) | 막는다 |
-| 머지 전 | 지금 head 에 사람 계정의 Approve 가 있는지(`merge-pr` 2절) | 멈춘다. 브랜치 보호가 승인을 요구하면(3절) GitHub 도 막는다 |
+| auto-merge 를 켤 때 | 승인이 모자라 막힌 PR(`reviewDecision` `REVIEW_REQUIRED` · `mergeStateStatus` `BLOCKED`)에서만 켜는지 — gh 는 바로 머지할 수 있는 PR 에서 `--auto` 를 무시하고 그 자리에서 머지한다. auto-merge 가 켜진 PR 의 브랜치로 가는 푸시도 막는다(`bot_guard.sh`) | 막는다. 머지는 브랜치 보호가 요구하는 Approve 가 달릴 때 GitHub 이 한다 |
+| auto-merge 를 켤 수 없을 때의 머지 전 | 지금 head 에 사람 계정의 Approve 가 있는지(`merge-pr` 2절) | 멈춘다. 브랜치 보호가 승인을 요구하면(3절) GitHub 도 막는다 |
 
 `(사람)` 인용의 원본은 글쓴이의 레포 권한이 write 이상이고(봇 계정은 권한 조회에서 빠진다), 글쓴이가 아닌 계정이
 마지막으로 고치지 않은 코멘트다. 3.5 코멘트에서는 그 `(사람) "…"`
@@ -185,7 +189,8 @@ PR 의 Approve 로. 그래서 GitHub 이 기록한 글쓴이로 세션의 글과
    출력한다.
 6. 킷의 `install.sh <이 레포 경로> --protect` 를 다시 실행한다. 봇 설정이 있으면 브랜치 보호가 사람의
    Approve 하나를 요구하고, 새 커밋이 오면 이전 승인을 없던 것으로 하고, 마지막 푸시는 푸시한 사람이
-   아닌 사람이 승인하게 한다. 봇이 푸시하므로 그 승인은 사람의 것이다. 사람이 PR 브랜치에 직접 푸시하면
+   아닌 사람이 승인하게 한다. 레포 설정 「Allow auto-merge」 · 「Automatically delete head branches」도 켜서,
+   Approve 가 달리면 GitHub 이 머지하고 head 브랜치를 지운다. 봇이 푸시하므로 그 승인은 사람의 것이다. 사람이 PR 브랜치에 직접 푸시하면
    그 사람의 Approve 는 브랜치 보호가 세지 않는다 — 세션이 다시 푸시한 뒤에 Approve 한다. PR 웹의 「Update branch」
    버튼이 누른 사람의 푸시로 세어지는지는 확인하지 않았다.
 
