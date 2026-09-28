@@ -37,12 +37,11 @@
 #   막는다
 # - 봇 토큰이 끝나 가는데 새로 받지 못한 뒤의 쓰기
 #
-# **사람 계정으로 올리는 명령에는 묻는다.** 사람의 결정은 사람 계정 코멘트로 남는다. 세션이 받은
-# 답을 올리는 길은 `human_comment.sh` 하나이고, 그 명령에 권한 프롬프트(`ask`)를 낸다(`human_comment`).
-# 사람은 세션이 명령 바로 전에 응답에 출력한 글을 읽고 허락한다. 사유에도 글 전문을 넣지만 폰(Remote
-# Control) 화면에는 보이지 않았다 — 사유는 덧붙이는 것이다. 한 줄 정규형이 아니거나, 스크립트가 이 훅과
-# 같은 디렉터리의 것이 아니거나, 명령의 sha256 이 파일과 다르거나, 셸의 `-c` 인자 안에 두었으면
-# (`wraps`) 막는다.
+# **사람 계정으로 올리는 명령은 모양만 본다.** 사람의 결정은 사람 계정 코멘트로 남는다. 그 길은
+# `human_comment.sh <PR>` 하나이고, 그 스크립트가 올리는 글은 창 기록 훅(`window_record.sh`)이 봇 디렉터리에
+# 적은 기록뿐이다 — 사람이 창에서 고른 보기다. 세션은 그 기록을 읽지도 쓰지도 못하고(위의 봇 디렉터리 막음),
+# 창에서 고른 것이 게시 동의라서 권한 프롬프트를 내지 않는다. 한 줄 정규형이 아니거나, 스크립트가 이 훅과
+# 같은 디렉터리의 것이 아니거나, 셸의 `-c` 인자 안에 두었으면(`wraps`) 막는다(`human_comment`).
 #
 # **명령 치환 안도 본다.** `$(…)` · 백틱 안의 명령을 꺼내 같은 판정을 한다. `url=$(gh pr create …)` ·
 # `-H "Authorization: token $(gh auth token)"` 은 흔한 셸 관용구다. heredoc 의 본문은 명령에 전달하는
@@ -72,7 +71,7 @@ case "$input" in
 esac
 
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)" HOOK_INPUT="$input" python3 - <<'PY'
-import datetime, hashlib, json, os, re, shlex, subprocess, sys
+import datetime, json, os, re, shlex, subprocess, sys
 
 GUIDE = "docs/process/kit-guide.md 의 「봇 계정과 사람의 승인」 절"
 
@@ -319,42 +318,25 @@ def wraps(seg, name):
     return False
 
 
-HUMAN = re.compile(r'bash[ \t]+(\S+)[ \t]+(\d+)[ \t]+(\S+)[ \t]+(\S+)(?:[ \t]+-R[ \t]+(\S+))?')
-HUMAN_CANON = ("`bash .claude/hooks/human_comment.sh <PR 번호> <본문 파일의 절대 경로> <sha256> "
-               "[-R <owner/repo>]`")
+HUMAN = re.compile(r'bash[ \t]+(\S+)[ \t]+(\d+)(?:[ \t]+-R[ \t]+(\S+))?')
+HUMAN_CANON = "`bash .claude/hooks/human_comment.sh <PR 번호> [-R <owner/repo>]`"
 
 
 def human_comment():
-    """사람 계정으로 올리는 명령에 권한 프롬프트를 낸다. 사유에도 올릴 글 전문을 넣는다.
+    """사람 계정으로 올리는 명령이 한 줄 정규형이고 이 훅과 같은 디렉터리의 스크립트인지 본다.
 
-    사람은 세션이 명령 바로 전에 응답에 출력한 최종본을 읽고 이 프롬프트를 허락한다. 사유는 사람에게만
-    보이지만(hooks 문서: "For "allow" and "ask", shown to the user but not Claude") 폰 화면에는 보이지
-    않았으므로 덧붙이는 것이다. 허락한 글과 올라가는 글이 같아야 한다 — 한 줄 정규형만 받고(다른 명령과
-    이으면 무엇이 실행되는지 이 훅이 다 알지 못한다), 스크립트는 이 훅과 같은 디렉터리의 것이어야 하고,
-    명령의 sha256 이 파일과 맞아야 한다. 스크립트도 올리기 직전에 sha256 을 다시 본다."""
+    그 스크립트가 올리는 글은 창 기록 훅(`window_record.sh`)이 적은 기록뿐이다 — 사람이 창에서 고른 보기로
+    만든 줄이고, 세션은 그 기록을 읽지도 쓰지도 못한다. 창에서 고른 것이 게시 동의라서 권한 프롬프트를 내지
+    않는다. 다른 명령과 이으면 무엇이 실행되는지 이 훅이 다 알지 못하므로 한 줄 정규형만 받는다."""
     line = cmd.strip()
     m = HUMAN.fullmatch(line)
     if not m or re.search(r'[;&|<>$`\\\'"\n()]', line):
-        deny("사람 계정으로 올리는 명령은 한 줄 정규형으로 따로 입력한다: " + HUMAN_CANON + ". 다른 명령과 "
-             "잇거나 명령 치환 · 따옴표 · 리다이렉트를 쓰면 권한 프롬프트에 보인 글이 그대로 올라가는지 이 훅이 "
-             "알 수 없다.")
-    script, number, path, sha, repo = m.groups()
+        deny("사람 계정으로 올리는 명령은 한 줄 정규형으로 따로 입력한다: " + HUMAN_CANON + ". 올리는 글은 "
+             "창에서 사람이 고른 보기의 기록뿐이라 본문 파일을 받지 않는다. 다른 명령과 잇거나 명령 치환 · "
+             "따옴표 · 리다이렉트를 쓰면 무엇이 실행되는지 이 훅이 알 수 없다.")
     mine = os.path.realpath(os.path.join(os.environ['HOOK_DIR'], 'human_comment.sh'))
-    if os.path.realpath(os.path.join(cwd or os.getcwd(), script)) != mine:
+    if os.path.realpath(os.path.join(cwd or os.getcwd(), m.group(1))) != mine:
         deny("사람 계정으로 올리는 스크립트는 이 훅과 같은 디렉터리의 것만 받는다: " + mine)
-    if not os.path.isabs(path):
-        deny("사람 계정으로 올릴 본문 파일은 절대 경로로 준다: " + HUMAN_CANON)
-    try:
-        with open(path, 'rb') as fh:
-            raw = fh.read()
-        text = raw.decode('utf-8')
-    except (OSError, UnicodeDecodeError):
-        deny("사람 계정으로 올릴 본문 파일을 읽지 못했다(없거나 UTF-8 이 아니다): " + path)
-    if hashlib.sha256(raw).hexdigest() != sha:
-        deny("본문 파일의 sha256 이 명령에 적은 값과 다르다. `shasum -a 256 " + path + "` 로 다시 구해 "
-             "입력한다.")
-    decide("ask", "사람 계정으로 PR #%s%s 에 아래 글을 코멘트로 올린다. 글 전문을 읽고, 사람이 정한 것과 "
-                  "같을 때만 허락한다.\n\n%s" % (number, ' (' + repo + ')' if repo else '', text))
 
 
 body = strip_heredocs(cmd)
@@ -383,7 +365,7 @@ if any(clears_env(s) for s in segs):
          "막는다. 그 뒤의 gh 와 git 은 봇 계정 연결을 잃고 사람 계정으로 쓴다. 사람 계정으로 올릴 결정은 "
          "human_comment.sh 로 올린다.")
 if any(wraps(s, 'human_comment.sh') for s in segs):
-    deny("사람 계정으로 올리는 명령을 셸의 -c 인자 안에 두면 이 훅이 권한 프롬프트를 내지 못해 막는다. 한 줄 "
+    deny("사람 계정으로 올리는 명령을 셸의 -c 인자 안에 두면 이 훅이 그 모양을 보지 못해 막는다. 한 줄 "
          "정규형으로 따로 입력한다: " + HUMAN_CANON)
 if any(runs(s, 'human_comment.sh') for s in segs):
     human_comment()

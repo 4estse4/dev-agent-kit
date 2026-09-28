@@ -180,7 +180,7 @@ no_token_in_out "CLAUDE_ENV_FILE 없음"
 echo "── gh 명령 막기(bot_guard.sh)"
 repo "$R" "" no
 guard "봇 설정이 없으면 막지 않는다" pass "gh pr comment 1 --body-file /tmp/x.md"
-guard "봇 설정이 없으면 사람 계정 게시에도 묻지 않는다" pass "bash $H/human_comment.sh 1 /tmp/x.md $(printf '0%.0s' $(seq 64))"
+guard "봇 설정이 없으면 사람 계정 게시 명령도 막지 않는다(스크립트가 봇 설정이 없다며 끝난다)" pass "bash $H/human_comment.sh 1"
 
 repo "$R"
 guard "연결 전의 게시" deny "gh pr comment 1 --body-file /tmp/x.md" "$R" "연결"
@@ -332,31 +332,29 @@ STUB_GH_LOG="$T/gh-log" guard "PR 이 없는 브랜치에 푸시" pass "git push
 ok "푸시 판정은 푸시가 나갈 레포의 PR 을 조회한다" 'grep -E "^pr list( |$)" "$T/gh-log" | grep -qE -- "-R o/r( |$)"'
 
 echo "── 사람 계정으로 올리는 명령(human_comment.sh)"
-# 사람이 권한 프롬프트에서 글 전문을 읽고 허락해야 올라간다. 스크립트 경로는 훅과 같은 디렉터리의 것이다.
+# 올리는 글은 창 기록 훅이 적은 기록뿐이라(사람이 창에서 고른 보기) 권한 프롬프트 없이 올린다. 한 줄 정규형만
+# 받고, 스크립트 경로는 훅과 같은 디렉터리의 것이다.
 P="$H/human_comment.sh"
-printf '### 4라운드 코멘트를 읽고 사람이 정한 것\n\n- (사람) "이 PR 에서 만든다"\n  → 새 설계를 만든다\n' > "$T/decision.md"
-SUM=$(shasum -a 256 "$T/decision.md" | cut -d' ' -f1)
-ZERO=$(printf '0%.0s' $(seq 64))
-guard "사람 계정 게시는 글 전문을 보이고 묻는다" ask "bash $P 155 $T/decision.md $SUM" "$R" "이 PR 에서 만든다"
-guard "사람 계정 게시 사유의 끝 줄" ask "bash $P 155 $T/decision.md $SUM" "$R" "새 설계를 만든다"
-guard "사람 계정 게시(-R)" ask "bash $P 155 $T/decision.md $SUM -R o/r" "$R" "o/r"
-guard "sha256 이 다른 사람 계정 게시" deny "bash $P 155 $T/decision.md $ZERO" "$R" "sha256"
-guard "다른 명령과 이은 사람 계정 게시" deny "bash $P 155 $T/decision.md $SUM; echo done" "$R" "human_comment.sh"
-guard "줄바꿈으로 이은 사람 계정 게시" deny "bash $P 155 $T/decision.md $SUM
+guard "사람 계정 게시는 한 줄 정규형이면 묻지 않고 통과한다" pass "bash $P 155"
+guard "사람 계정 게시(-R)" pass "bash $P 155 -R o/r"
+guard "옛 모양(본문 파일 · sha256)의 사람 계정 게시" deny "bash $P 155 $T/decision.md 0000" "$R" "human_comment.sh <PR 번호>"
+guard "다른 명령과 이은 사람 계정 게시" deny "bash $P 155; echo done" "$R" "human_comment.sh"
+guard "줄바꿈으로 이은 사람 계정 게시" deny "bash $P 155
 echo done"
 # 정규형의 낱말 자리에 붙여 쓰면 모양은 맞는다. 셸이 해석하는 글자가 있으면 막는다.
-guard "레포 자리에 붙여 이은 사람 계정 게시" deny "bash $P 155 $T/decision.md $SUM -R o/r;id"
-guard "레포 자리의 명령 치환" deny "bash $P 155 $T/decision.md $SUM -R \$(id)"
-guard "상대 경로 본문의 사람 계정 게시" deny "bash $P 155 decision.md $SUM"
-guard "없는 파일의 사람 계정 게시" deny "bash $P 155 $T/nofile.md $SUM"
-guard "bash 없이 부른 사람 계정 게시" deny "$P 155 $T/decision.md $SUM"
-guard "명령 치환 안의 사람 계정 게시" deny "x=\$(bash $P 155 $T/decision.md $SUM)"
-# 셸의 -c 인자 안은 조각으로 나누지 않는다. 그 안의 사람 계정 게시는 권한 프롬프트 없이 실행된다.
-guard "bash -c 안의 사람 계정 게시" deny "bash -c 'bash $P 155 $T/decision.md $SUM'" "$R" "human_comment.sh"
-guard "sh -c 안의 사람 계정 게시" deny "sh -c \"bash $P 155 $T/decision.md $SUM\""
-guard "bash -lc 안의 사람 계정 게시" deny "bash -lc 'bash $P 155 $T/decision.md $SUM'"
+guard "레포 자리에 붙여 이은 사람 계정 게시" deny "bash $P 155 -R o/r;id"
+guard "레포 자리의 명령 치환" deny "bash $P 155 -R \$(id)"
+guard "bash 없이 부른 사람 계정 게시" deny "$P 155"
+guard "명령 치환 안의 사람 계정 게시" deny "x=\$(bash $P 155)"
+# 셸의 -c 인자 안은 조각으로 나누지 않는다. 그 안의 게시는 이 훅이 모양을 보지 못한다.
+guard "bash -c 안의 사람 계정 게시" deny "bash -c 'bash $P 155'" "$R" "human_comment.sh"
+guard "sh -c 안의 사람 계정 게시" deny "sh -c \"bash $P 155\""
+guard "bash -lc 안의 사람 계정 게시" deny "bash -lc 'bash $P 155'"
 mkdir -p "$T/elsewhere"; cp "$P" "$T/elsewhere/human_comment.sh"
-guard "훅 디렉터리 밖의 같은 이름 스크립트" deny "bash $T/elsewhere/human_comment.sh 155 $T/decision.md $SUM"
+guard "훅 디렉터리 밖의 같은 이름 스크립트" deny "bash $T/elsewhere/human_comment.sh 155"
+# 창 기록은 봇 디렉터리에 있다. 세션이 셸로 읽거나 고치지 못한다
+guard "창 기록을 읽는 명령" deny "cat .git/ai-kit-bot/windows/155.jsonl"
+guard "창 기록을 고치는 명령" deny "printf x >> .git/ai-kit-bot/windows/155.jsonl"
 guard "환경을 비우고 부른 gh(env -i)" deny "env -i PATH=/usr/bin gh pr comment 1 --body-file /tmp/x.md" "$R" "env -i"
 guard "환경을 비우고 부른 스크립트(env --ignore-environment)" deny "env --ignore-environment bash /tmp/post.sh"
 guard "환경을 비우는 env -(대시 하나)" deny "env - HOME=/tmp gh api user"

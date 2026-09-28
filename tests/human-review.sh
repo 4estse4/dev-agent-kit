@@ -41,6 +41,9 @@ if fail and fail in joined:
     sys.exit(1)
 d = json.load(open(os.environ['STUB_DATA'], encoding='utf-8'))
 if a[:2] == ['pr', 'comment']:
+    if os.environ.get('STUB_BODY') and '--body-file' in a:
+        open(os.environ['STUB_BODY'], 'w', encoding='utf-8').write(
+            open(a[a.index('--body-file') + 1], encoding='utf-8').read())
     print('https://github.com/o/r/pull/89#issuecomment-99')
     sys.exit(0)
 if a[:2] == ['pr', 'view'] and 'headRefOid' in joined:
@@ -170,15 +173,17 @@ approved() {
   echo "  ✓ Approve: ${name} (종료 ${rc})"
 }
 
-# post <이름> <기대 종료 코드> <sha256> [cwd] [인자…] — 사람 계정으로 올리는 스크립트를 부른다.
-# 세션의 봇 연결(GH_CONFIG_DIR · GH_TOKEN)을 준 채로 부른다 — 스크립트가 그것을 지워야 사람 계정이다.
+# post <이름> <기대 종료 코드> [cwd] [인자…] — 사람 계정으로 올리는 스크립트를 PR 89 로 부른다. 올린 본문은
+# $T/body 에 남는다. 세션의 봇 연결(GH_CONFIG_DIR · GH_TOKEN)을 준 채로 부른다 — 스크립트가 그것을 지워야 사람
+# 계정이다.
 post() {
-  local name=$1 want=$2 sum=$3 dir=${4:-$T/bot} out rc
-  shift 4 2>/dev/null || shift $#
-  : > "$T/gh-args"
-  out=$(cd "$dir" && PATH="$T/bin:$PATH" STUB_DATA="$T/none.json" STUB_GH_ARGS="$T/gh-args" \
-    GH_CONFIG_DIR="$T/botcfg" GH_TOKEN=ghs_stubtoken bash "$POST" 89 "$T/decision.md" "$sum" "$@" 2>&1)
+  local name=$1 want=$2 dir=${3:-$T/bot} out rc
+  shift 3 2>/dev/null || shift $#
+  : > "$T/gh-args"; rm -f "$T/body"
+  out=$(cd "$dir" && PATH="$T/bin:$PATH" STUB_DATA="$T/none.json" STUB_GH_ARGS="$T/gh-args" STUB_BODY="$T/body" \
+    GH_CONFIG_DIR="$T/botcfg" GH_TOKEN=ghs_stubtoken bash "$POST" 89 "$@" 2>&1)
   rc=$?
+  OUT=$out
   if [ "$rc" != "$want" ]; then
     echo "  ✗ 올리기: ${name} — 기대 종료 ${want}, 실제 ${rc}: ${out}"; fail=1; return
   fi
@@ -266,20 +271,57 @@ if grep -qF 'GH_REPO=4estse4/other' "$T/gh-args" && ! grep -q '^GH_REPO= ' "$T/g
   echo "  ✓ Approve: -R 을 모든 gh 호출에 GH_REPO 로 전달한다"
 else echo "  ✗ Approve: -R 을 GH_REPO 로 전달하지 않은 호출이 있다: $(cat "$T/gh-args")"; fail=1; fi
 
-echo "── 사람 계정으로 올리는 스크립트"
-printf '%s' "$A1" > "$T/decision.md"
-SUM=$(shasum -a 256 "$T/decision.md" | cut -d' ' -f1)
-post "sha256 이 맞으면 올린다" 0 "$SUM"
-if grep -q "^GH_REPO= GH_CONFIG_DIR= GH_TOKEN= pr comment 89 --body-file $T/decision.md\$" "$T/gh-args"; then
+echo "── 사람 계정으로 올리는 스크립트 — 창 기록 훅이 적은 기록만 올린다"
+WIN="$T/bot/.git/ai-kit-bot/windows"
+# rec <줄…> — PR 89 의 기록 하나를 더한다(창 기록 훅이 쓰는 모양). FREE 가 있으면 그 머리말을 직접 쓴 말로 표시한다
+rec() {
+  mkdir -p "$WIN"
+  python3 -c 'import json, os, sys
+print(json.dumps({"at": "2026-09-29T00:00:00Z", "session": "s1", "lines": sys.argv[1:],
+                  "free": [os.environ["FREE"]] if os.environ.get("FREE") else []}, ensure_ascii=False))' "$@" >> "$WIN/89.jsonl"
+}
+body_is() {
+  if [ "$(cat "$T/body" 2>/dev/null)" = "$2" ]; then echo "  ✓ 올리기: $1"
+  else echo "  ✗ 올리기: $1 — 올린 본문: 「$(cat "$T/body" 2>/dev/null)」"; fail=1; fi
+}
+no_gh() {
+  if [ -s "$T/gh-args" ]; then echo "  ✗ 올리기: $1 — gh 를 불렀다: $(cat "$T/gh-args")"; fail=1
+  else echo "  ✓ 올리기: $1"; fi
+}
+post "기록이 없으면 올리지 않는다" 1
+no_gh "기록이 없으면 gh 를 부르지 않는다"
+rec '- 1라운드 코멘트: 제안대로 고치고 2라운드' '- 끝낼 이슈: #77 도 이 PR 로 끝낸다'
+rec '- 2라운드 코멘트: 머지한다'
+post "올리지 않은 기록을 올린다" 0
+body_is "기록들을 창이 끝난 차례대로 한 코멘트에 모은다" '- 1라운드 코멘트: 제안대로 고치고 2라운드
+- 끝낼 이슈: #77 도 이 PR 로 끝낸다
+- 2라운드 코멘트: 머지한다'
+if grep -q "^GH_REPO= GH_CONFIG_DIR= GH_TOKEN= pr comment 89 --body-file " "$T/gh-args"; then
   echo "  ✓ 올리기: 봇 연결을 지우고 사람의 gh 로 올린다"
 else echo "  ✗ 올리기: 봇 연결을 지우지 않았거나 명령이 다르다: $(cat "$T/gh-args")"; fail=1; fi
-post "sha256 이 다르면 올리지 않는다" 1 "$(printf '0%.0s' $(seq 64))"
-if [ -s "$T/gh-args" ]; then echo "  ✗ 올리기: sha256 이 달랐는데 gh 를 불렀다"; fail=1
-else echo "  ✓ 올리기: sha256 이 다르면 gh 를 부르지 않는다"; fi
-post "봇 설정이 없으면 올리지 않는다" 2 "$SUM" "$T/plain"
-post "-R 로 준 레포에 올린다" 0 "$SUM" "$T/bot" -R 4estse4/other
+post "올린 기록은 다시 올리지 않는다" 1
+no_gh "올릴 것이 없으면 gh 를 부르지 않는다"
+rec '- 3라운드 코멘트: 고치지 않고 멈춘다'
+post "그 뒤에 더한 기록만 올린다" 0
+body_is "앞서 올린 기록은 빠진다" '- 3라운드 코멘트: 고치지 않고 멈춘다'
+FREE='4라운드 코멘트' rec
+post "직접 쓴 말이 든 기록이 있으면 올리지 않는다" 1
+no_gh "직접 쓴 말이 있으면 gh 를 부르지 않는다"
+case "$OUT" in *'직접 쓴 말'*) echo "  ✓ 올리기: 올리지 않은 까닭을 낸다" ;;
+  *) echo "  ✗ 올리기: 까닭이 없다: $OUT"; fail=1 ;; esac
+rm -f "$WIN/89.jsonl" "$WIN/89.posted"
+rec '- 5라운드 코멘트: 머지한다'
+STUB_FAIL='pr comment' post "gh 가 실패하면 실패로 끝난다" 1
+post "실패한 기록은 다음에 올린다" 0
+body_is "실패한 기록이 남아 있다" '- 5라운드 코멘트: 머지한다'
+rec '- 6라운드 코멘트: 머지한다'
+post "봇 설정이 없으면 올리지 않는다" 2 "$T/plain"
+post "-R 로 준 레포에 올린다" 0 "$T/bot" -R 4estse4/other
 if grep -qF -- 'pr comment 89 -R 4estse4/other --body-file' "$T/gh-args"; then echo "  ✓ 올리기: -R 을 gh 에 전달한다"
 else echo "  ✗ 올리기: -R 을 전달하지 않았다: $(cat "$T/gh-args")"; fail=1; fi
+post "옛 모양(본문 파일 · sha256)으로 부르면 사용법을 낸다" 2 "$T/bot" /tmp/x.md 0000
+post "PR 번호 뒤에 본문 파일 하나만 주면 사용법을 낸다" 2 "$T/bot" /tmp/x.md
+post "-R 뒤에 인자를 더 주면 사용법을 낸다" 2 "$T/bot" -R 4estse4/other /tmp/x.md
 
 [ "$fail" = 0 ] && echo "  ✓ 봇 설정이 있으면 사람 계정 코멘트와 사람의 Approve 로 사람의 결정을 확인한다"
 exit "$fail"
