@@ -609,9 +609,9 @@ for a in gh_calls:
         deny("auto-merge 는 승인이 모자라 막힌 PR(reviewDecision REVIEW_REQUIRED · mergeStateStatus "
              "BLOCKED)에서만 켠다. 지금은 reviewDecision %s · mergeStateStatus %s 다. gh 는 바로 머지할 수 "
              "있는 PR 에서 --auto 를 무시하고 그 자리에서 머지하고, 승인을 요구하지 않는 레포에서는 검사가 "
-             "끝나면 Approve 없이 머지된다. 상태가 UNKNOWN 이면 잠시 뒤 다시 실행한다. 승인을 요구하지 않는 "
-             "레포에서는 merge-pr 의 돌아가는 흐름(사람이 Approve 한 뒤 human_review.sh 로 확인하고 머지)을 "
-             "따른다." % (st.get('reviewDecision'), st.get('mergeStateStatus')))
+             "끝나면 Approve 없이 머지된다. 상태가 UNKNOWN 이면 잠시 뒤 다시 실행한다. 그 밖의 상태에서는 "
+             "merge-pr 2절의 「그 밖이면 세션이 Approve 를 확인한다」를 따른다(사람이 Approve 한 뒤 "
+             "human_review.sh 로 확인하고 --auto 없이 머지)." % (st.get('reviewDecision'), st.get('mergeStateStatus')))
 
 # 세션 환경은 github.com 의 SSH 주소를 https 로 바꾸지만, 사람의 git 설정이 https 를 다시 SSH 로 바꾸면
 # (`url.<ssh>.insteadOf` · `pushInsteadOf`) 그 푸시는 SSH 키로, 곧 사람 계정으로 나간다.

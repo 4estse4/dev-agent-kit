@@ -34,8 +34,9 @@ GitHub auto-merge 를 켠 뒤 Approve 를 부탁하고, Approve 가 달리면 Gi
 ### 그다음 — 하나라도 실패하면 즉시 중단
 
 - `gh pr view <N> --json state,headRefName,headRefOid,baseRefName,isCrossRepository` → `state` 가 `OPEN` 이 아니면 중단.
-  봇 설정이 있고 `MERGED` 이면 auto-merge 로 머지된 뒤다 — 나머지 확인을 건너뛰고 4절과 5절만 한다(3절 「봇
-  설정이 있을 때」의 머지 뒤 정리). 나머지 넷은 바로 아래와 4절이 쓴다. **셸 변수에 담지 마라. 읽어서 출력한다** — 명령을 여러
+  봇 설정이 있고 `MERGED` 이면 auto-merge 로 머지된 뒤다 — 아래 확인 가운데 「로컬 브랜치가 서버와 같은지」만
+  보고 4절과 5절을 한다(3절 「봇 설정이 있을 때」의 머지 뒤 정리). 그 확인을 빼면 4절의 `git branch -D` 가 켠 뒤에
+  만들고 푸시하지 못한 커밋까지 지운다. 나머지 넷은 바로 아래와 4절이 쓴다. **셸 변수에 담지 마라. 읽어서 출력한다** — 명령을 여러
   번 부르는 사이에 셸 상태는 유지되지 않는다(`open-pr` 3.1 이 그 사고로 적어둔 규칙이다).
 - `gh pr checks <N>` → `fail` 또는 `pending` 이 하나라도 있으면 중단하고 해당 체크를 나열한다.
 - 위 `git status --porcelain` 이 비어 있지 않으면 중단.
@@ -163,7 +164,7 @@ GitHub auto-merge 를 켠 뒤 Approve 를 부탁하고, Approve 가 달리면 Gi
   **다른 상태에서 `--auto` 를 주지 마라.** gh 는 바로 머지할 수 있는 PR(`CLEAN` · `HAS_HOOKS` · `UNSTABLE`)에서
   `--auto` 를 무시하고 그 자리에서 머지한다(gh v2.92.0 `pkg/cmd/pr/merge/merge.go` 의 `isImmediatelyMergeable`).
   승인을 요구하지 않는 레포(`reviewDecision` 이 비었다)에서는 검사가 끝나는 순간 Approve 없이 머지된다. 막기
-  훅(`bot_guard.sh`)도 그 명령을 막는다. `mergeStateStatus` 가 `UNKNOWN` 이면 GitHub 이 아직 계산하는 것이라
+  훅(`bot_guard.sh`)도 그 상태의 `--auto` 를 막는다. `mergeStateStatus` 가 `UNKNOWN` 이면 GitHub 이 아직 계산하는 것이라
   잠시 뒤 다시 본다. `gh api` 는 설치되는 `settings.json` 의 `ask` 에 있어 권한 프롬프트가 하나 표시된다. 읽기뿐이라
   승인하면 그대로 진행한다.
 
