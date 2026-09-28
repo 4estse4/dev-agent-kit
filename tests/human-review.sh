@@ -118,6 +118,12 @@ round_body 2 '고치고 2라운드' > "$T/round2.md"
 round_body 2 '고치고 3라운드' > "$T/round2-other.md"
 # A1 의 `→` 줄(세션이 쓴 글)을 (사람) 인용으로 옮긴 라운드 코멘트
 round_body 2 '고친다' > "$T/round2-arrow.md"
+# 사람이 PR 웹에서 Quote reply 로 봇의 글을 인용해 넣고 답을 쓴 코멘트
+QR='> 결정 필요는 이 코멘트 뒤 질문 창으로 여쭙니다.
+
+그냥 고치고 한 라운드 더'
+round_body 2 '결정 필요는 이 코멘트 뒤 질문 창으로 여쭙니다' > "$T/round2-quoted.md"
+round_body 2 '그냥 고치고 한 라운드 더' > "$T/round2-reply.md"
 
 # hook <이름> <pass|deny|ask> <데이터> <본문 파일> [사유에 들어 있어야 할 글자] [cwd] [실패시킬 호출]
 hook() {
@@ -179,6 +185,7 @@ OWNER_A1=$(c "$U1" "$A1" 4estse4 OWNER)
 data person "[$OWNER_A1]"
 data botonly "[$(c "$U1" "$A1" kit-bot NONE)]"
 data web "[$(c "$U1" "$W1" 4estse4 OWNER)]"
+data quote-reply "[$(c "$U1" "$QR" 4estse4 OWNER)]"
 data edited-other "[$(c "$U1" "$A1" 4estse4 OWNER kit-bot)]"
 data edited-self "[$(c "$U1" "$A1" 4estse4 OWNER 4estse4)]"
 data collab "[$(c "$U1" "$A1" writer COLLABORATOR)]"
@@ -192,6 +199,9 @@ echo "── 봇 설정이 있을 때 — (사람) 인용을 확인하는 훅"
 hook "사람 계정 코멘트의 인용" pass person round2.md
 hook "봇 계정 코멘트에만 있는 인용" deny botonly round2.md "사람 계정"
 hook "사람이 PR 웹에서 쓴 코멘트의 한 구절" pass web round2.md
+# Quote reply 의 `> …` 줄은 봇이 쓴 글이다
+hook "Quote reply 로 인용된 봇의 글" deny quote-reply round2-quoted.md "사람 계정"
+hook "Quote reply 뒤에 사람이 쓴 답" pass quote-reply round2-reply.md
 hook "사람 코멘트에 없는 인용" deny web round2-other.md "고치고 3라운드"
 hook "다른 계정이 고친 사람 코멘트" deny edited-other round2.md "고친"
 hook "글쓴이가 스스로 고친 코멘트" pass edited-self round2.md
@@ -202,6 +212,8 @@ hook "읽기 권한만 있는 조직 구성원의 코멘트" deny member-reader 
 hook "원본의 권한을 못 읽음" deny person round2.md "실패" "$T/bot" permission
 # 3.5 코멘트의 `→` 줄은 세션의 판단이다. 사람 계정으로 올렸어도 (사람) 인용의 원본이 아니다.
 hook "사람 계정 3.5 코멘트의 → 줄" deny person round2-arrow.md "사람 계정"
+# 막힌 세션이 까닭을 알 수 있게, 3.5 코멘트에서는 (사람) 조각만 원본이라는 것을 사유에 적는다
+hook "→ 줄을 막는 사유" deny person round2-arrow.md "조각만"
 hook "쓰기 권한 없는 기여자(CONTRIBUTOR) 코멘트" deny contrib round2.md "사람 계정"
 hook "둘째 쪽에 있는 사람 코멘트" pass paged round2.md
 hook "코멘트를 못 읽음" deny person round2.md "실패" "$T/bot" graphql
@@ -240,6 +252,8 @@ approved "리뷰가 없다" 1 none "Approve 가 없다"
 data ok-short '[]' "[[\"4estse4\", \"APPROVED\", \"$H\", \"2026-09-27T05:00:00Z\"]]" '' REVIEW_REQUIRED
 data ok-enough '[]' "[[\"4estse4\", \"APPROVED\", \"$H\", \"2026-09-27T05:00:00Z\"]]" '' APPROVED
 approved "필요 승인 수가 모자람" 1 ok-short "필요 승인 수"
+# 승인한 사람이 마지막으로 푸시했으면 그 Approve 는 세어지지 않는다(마지막 푸시 승인). 조치가 다르다.
+approved "필요 승인이 모자랄 때 마지막 푸시도 알린다" 1 ok-short "마지막으로 푸시"
 approved "필요 승인 수를 채움" 0 ok-enough "✓ 4estse4"
 approved "봇 설정이 없다" 2 ok "봇 설정" "$T/plain"
 STUB_FAIL_ON=reviews approved "리뷰를 못 읽음" 2 ok "판정 못 함"

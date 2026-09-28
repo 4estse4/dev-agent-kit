@@ -13,8 +13,10 @@
 #   `-`)도 막는다 — 그 뒤의 gh 와 git 은 봇 계정 연결을 잃는다
 # - 토큰을 출력하는 명령. `git credential …` · `git credential-<도우미>` 와 봇 디렉터리를 가리키는
 #   명령이다(`BOTDIR_READ`). 봇 디렉터리에서는 토큰이 없는 `expires` · `session-env` · `wired` 만 가리킬 수
-#   있다 — 파일 이름으로 막던 동안 `cat <봇 디렉터리>/*` · `grep -r` 이 지나갔다. Read 도구는 이 훅을 거치지
-#   않으므로 설치되는 `settings.json` 의 `deny` 가 막는다. 연결된 세션의 git 은 github.com 자격 증명을
+#   있고, 봇 디렉터리 이름과 `..` 가 한 명령에 함께 있으면 막는다(`wired/../hosts.yml` 처럼 허용한 이름을
+#   거쳐 올라간다) — 파일 이름으로 막던 동안 `cat <봇 디렉터리>/*` · `grep -r` 이 지나갔다. Read 도구는 이
+#   훅을 거치지 않으므로 설치되는 `settings.json` 의 `deny` 가 막는다. 그 규칙은 파일 시스템 루트 기준이라
+#   (`//**/…`) 작업 디렉터리 밖에 있는 worktree 세션의 봇 디렉터리도 막는다. 연결된 세션의 git 은 github.com 자격 증명을
 #   봇(gh)에게서 받으므로 `git credential fill` 이 봇 토큰 전체를 출력한다. 연결되지 않은 세션에서는 사람의
 #   토큰을 출력한다
 # - 연결되지 않은 세션의 쓰기. 세션 시작 훅(`bot_session.sh`)이 이 세션을 봇 계정에 연결하지
@@ -364,10 +366,10 @@ if any(words(a, 1) == ['auth'] for a in gh_calls):
          "사람 계정으로 쓰고, gh auth status 도 봇 설치 토큰을 거의 다 출력해 토큰이 모델의 맥락에 들어간다. "
          "이 세션의 gh 계정은 세션 시작 때 출력된 줄에 있다. 그 낱말이 검색어나 글이면 파일로 옮겨 전달한다.")
 if any(s == 'credential' or s.startswith('credential-') for s in git_subs) or re.search(
-        BOTDIR_READ, cmd):
+        BOTDIR_READ, cmd) or ('ai-kit-bot' in cmd and '..' in cmd):
     deny("이 레포에는 봇 설정(.claude/bot.json)이 있어, 토큰을 출력하는 명령은 막는다 — git credential 과 "
          "봇 디렉터리(ai-kit-bot)를 가리키는 명령이다. 토큰이 없는 expires · session-env · wired 는 읽을 수 "
-         "있다. 연결된 세션의 git 은 자격 증명을 봇에게서 받으므로 git credential fill 이 봇 토큰 전체를 "
+         "있지만, 봇 디렉터리 이름과 .. 가 함께 있으면 막는다. 연결된 세션의 git 은 자격 증명을 봇에게서 받으므로 git credential fill 이 봇 토큰 전체를 "
          "출력하고, 토큰은 모델의 맥락에 들어간다. 그 낱말이 검색어나 글이면 파일로 옮겨 전달한다.")
 if any(clears_env(s) for s in segs):
     deny("이 레포에는 봇 설정(.claude/bot.json)이 있어, 환경을 비우는 env -i(--ignore-environment · -)는 "

@@ -11,7 +11,8 @@
 # **sources** — (사람) 인용을 확인하는 훅(`round_comment_quotes.sh`)이 대조할 원본을 JSON 으로 낸다:
 # `{"bot": true|false, "comments": [{"url", "author", "body"}]}`.
 # - 봇 설정이 있으면 사람 계정 코멘트다. 글쓴이의 레포 권한(`collaborators/<계정>/permission`)이 write
-#   이상이고, 글쓴이가 아닌 계정이 마지막으로 고치지 않은 코멘트다. 봇 계정의 권한은 none 이다. 두 리뷰가
+#   이상이고, 글쓴이가 아닌 계정이 마지막으로 고치지 않은 코멘트다. 봇 계정은 권한 조회가 404(사용자가
+#   아니다)라 빠진다. 두 리뷰가
 #   결정을 고르는 `authorAssociation`(OWNER · MEMBER · COLLABORATOR)으로 거르지 않는 것은, MEMBER 가 레포
 #   권한과 상관없이 조직 구성원이면 붙어서다. 레포에 쓰기 권한이 있는 계정은 남의 코멘트도 고칠 수
 #   있어서(GitHub 문서의 역할 표: "Edit and delete anyone's comments on commits, pull requests, and
@@ -171,7 +172,9 @@ try:
             notes.append("%s 의 Approve 는 이전 커밋 %s 에 대한 것이다. 지금 head %s 에 다시 Approve 를 받는다"
                          % (who, (r.get('commit_id') or '')[:7], head[:7]))
     if decision == 'REVIEW_REQUIRED':
-        blocks.append("브랜치 보호의 필요 승인 수가 모자라다(GitHub 의 reviewDecision: REVIEW_REQUIRED)")
+        blocks.append("브랜치 보호가 요구하는 승인이 모자라다(GitHub 의 reviewDecision: REVIEW_REQUIRED). 필요 승인 "
+                      "수가 모자라거나, 승인한 사람이 이 PR 브랜치에 마지막으로 푸시해 그 Approve 가 세어지지 "
+                      "않는다(마지막 푸시 승인). 뒤의 것이면 세션이 다시 푸시한 뒤 Approve 를 다시 받는다")
     elif decision == 'CHANGES_REQUESTED':
         blocks.append("GitHub 이 이 PR 을 Request changes 로 판정했다(reviewDecision: CHANGES_REQUESTED)")
 except GhError as e:

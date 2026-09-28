@@ -349,11 +349,15 @@ guard "봇 디렉터리의 세션 환경을 읽음" pass "cat .git/ai-kit-bot/se
 guard "봇 디렉터리를 통째로 읽음(*)" deny "cat .git/ai-kit-bot/*" "$R" "토큰"
 guard "봇 디렉터리를 통째로 검색" deny "grep -r token .git/ai-kit-bot"
 guard "봇 디렉터리의 h* 를 읽음" deny "head -50 .git/ai-kit-bot/h*"
+# 토큰이 없는 이름을 거쳐 .. 로 올라가면 토큰 파일에 닿는다
+guard "허용한 이름 뒤의 .." deny "cat .git/ai-kit-bot/wired/../hosts.yml" "$R" "토큰"
+guard "허용한 디렉터리로 옮긴 뒤의 .." deny "cd .git/ai-kit-bot/wired && cat ../hosts.yml"
 # Read 도구는 이 훅(Bash)을 거치지 않는다. 설치되는 settings.json 의 deny 가 막는다.
 if python3 - "$KIT/claude-code/settings.json" <<'PY'
 import json, sys
 deny = json.load(open(sys.argv[1], encoding='utf-8'))['permissions']['deny']
-sys.exit(0 if any(r.startswith('Read(') and 'ai-kit-bot' in r for r in deny) else 1)
+# 파일 시스템 루트 기준(//)이어야 작업 디렉터리 밖(worktree 세션의 원래 레포 .git)도 막는다
+sys.exit(0 if any(r.startswith('Read(//') and 'ai-kit-bot' in r for r in deny) else 1)
 PY
 then echo "  ✓ 설치되는 settings.json 이 봇 디렉터리를 Read 에서 막는다"
 else echo "  ✗ 설치되는 settings.json 이 봇 디렉터리를 Read 에서 막지 않는다"; fail=1; fi

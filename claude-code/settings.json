@@ -79,7 +79,7 @@
       "Read(./**/*-key.json)",
       "Read(./.env)",
       "Read(./**/.env)",
-      "Read(./**/ai-kit-bot/**)",
+      "Read(//**/ai-kit-bot/**)",
       "Bash(git commit*--no-verify*)",
       "Bash(git push*--no-verify*)",
       "Bash(git push*--force*)",
