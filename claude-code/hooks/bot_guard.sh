@@ -28,6 +28,13 @@
 #   https 로 바꾸지만, 사람의 git 설정(`url.<ssh>.insteadOf` · `pushInsteadOf`)이 https 를 다시 SSH 로
 #   바꾸면 그 푸시는 SSH 키, 곧 사람 계정으로 나간다. 세션 환경(`<봇 디렉터리>/session-env`)을 적용해
 #   실제 푸시 주소를 풀고(`push_urls`), 풀지 못하면 막는다
+# - 바로 머지될 PR 에 auto-merge 를 켜는 것. gh 는 바로 머지할 수 있는 PR 에서 `--auto` 를 무시하고 그
+#   자리에서 머지하고, 승인을 요구하지 않는 레포에서는 검사가 끝나면 Approve 없이 머지된다. 승인이 모자라
+#   막힌 PR(`reviewDecision` `REVIEW_REQUIRED` · `mergeStateStatus` `BLOCKED`)에서만 켜게 하고, 조회하지
+#   못하면 막는다(`merge_auto`)
+# - auto-merge 가 켜진 PR 의 브랜치로 가는 푸시. 켠 채 푸시하면 사람이 새 커밋을 보고 누른 Approve 가 옛
+#   결정 코멘트대로 머지된다. 푸시가 바꿀 브랜치(`push_branches`)의 열린 PR 을 조회하고, 조회하지 못하면
+#   막는다
 # - 봇 토큰이 끝나 가는데 새로 받지 못한 뒤의 쓰기
 #
 # **사람 계정으로 올리는 명령에는 묻는다.** 사람의 결정은 사람 계정 코멘트로 남는다. 세션이 받은
@@ -456,6 +463,14 @@ def push_remote(rest):
     return repo
 
 
+def session_run(prog, *a):
+    """세션 환경(`<봇 디렉터리>/session-env`)을 적용해 git · gh 를 실행한다. 이 훅은 세션의 Bash 가 받는
+    환경을 받지 않으므로, 세션의 명령이 쓸 설정 · 계정을 보려면 그 파일을 적용해야 한다."""
+    return subprocess.run(
+        ['bash', '-c', '[ -f "$0" ] && { set -a; . "$0"; set +a; }; exec "$@"',
+         os.path.join(botdir, 'session-env'), prog, *a], cwd=cwd, capture_output=True, text=True)
+
+
 def push_urls(args):
     """연결된 세션의 git 이 이 푸시에 실제로 쓸 주소들. 풀지 못하면 빈 목록이다.
 
@@ -469,12 +484,9 @@ def push_urls(args):
       pushInsteadOf 가 맞는 URL 이 하나도 없으면 insteadOf 를 적용한 것이다.
     - 규칙이 여럿 맞으면 바꿀 앞부분이 가장 긴 것을 쓴다."""
     pre, _, rest = git_parts(args)
-    envf = os.path.join(botdir, 'session-env')
 
     def git(*a):
-        return subprocess.run(
-            ['bash', '-c', '[ -f "$0" ] && { set -a; . "$0"; set +a; }; exec git "$@"', envf, *pre, *a],
-            cwd=cwd, capture_output=True, text=True)
+        return session_run('git', *pre, *a)
 
     def cfg(key):
         return git('config', '--get-all', key).stdout.splitlines()
@@ -509,6 +521,98 @@ def push_urls(args):
         [alias(u, 'insteadof') or u for u in urls]
 
 
+# `gh pr merge` 의 플래그 가운데 값을 받는 것(gh 2.92 의 `gh pr merge --help`)
+MERGE_VALUED = {'-R', '--repo', '-t', '--subject', '-b', '--body', '-F', '--body-file',
+                '--match-head-commit', '-A', '--author-email'}
+
+
+def merge_auto(args):
+    """gh 호출 하나가 auto-merge 를 켜는 `gh pr merge --auto` 면 (PR 자리, 레포)를, 아니면 None 을 돌려준다.
+    PR 자리를 주지 않았으면 ''(지금 브랜치의 PR)이다."""
+    if words(args, 2) != ['pr', 'merge']:
+        return None
+    if not any(t == '--auto' or (t.startswith('--auto=') and t[7:].lower() not in ('false', '0'))
+               for t in args):
+        return None
+    pos, repo, i = [], '', 0
+    while i < len(args):
+        t = args[i]
+        i += 1
+        if t in ('-R', '--repo'):
+            repo, i = (args[i] if i < len(args) else ''), i + 1
+        elif t.startswith('--repo='):
+            repo = t[7:]
+        elif t.startswith('-R') and len(t) > 2:
+            repo = t[2:]
+        elif t in MERGE_VALUED:
+            i += 1
+        elif not t.startswith('-'):
+            pos.append(t)
+    return (pos[2] if len(pos) > 2 else ''), repo
+
+
+def push_branches(args):
+    """`git push` 가 바꿀 수 있는 원격 브랜치 이름들. 모든 브랜치이거나 알 수 없으면 None.
+
+    원격 다음 낱말이 refspec 이고, 받는 쪽(`:` 뒤, 없으면 그 낱말)이 브랜치다. refspec 이 없으면 지금
+    브랜치를 푸시한다(git 의 기본 `push.default=simple`)."""
+    pre, _, rest = git_parts(args)
+    pos, i, every = [], 0, False
+    while i < len(rest):
+        t = rest[i]
+        i += 1
+        if t == '--':
+            pos += rest[i:]
+            break
+        if not t.startswith('-') or t == '-':
+            pos.append(t)
+        elif t.startswith('--'):
+            name, eq, _ = t[2:].partition('=')
+            if name in ('all', 'branches', 'mirror'):
+                every = True
+            elif not eq and name and any(v.startswith(name) for v in PUSH_VALUED):
+                i += 1
+        elif t.find('o', 1) == len(t) - 1:
+            i += 1
+    if every:
+        return None
+    cur = session_run('git', *pre, 'symbolic-ref', '-q', '--short', 'HEAD').stdout.strip()
+    got = set()
+    for r in pos[1:] or ['HEAD']:
+        dst = r.lstrip('+').split(':', 1)[-1]
+        if dst in ('HEAD', '@', ''):
+            dst = cur
+        if not dst or '*' in dst:
+            return None
+        got.add(re.sub(r'^refs/heads/', '', dst))
+    return got
+
+
+# gh 는 바로 머지할 수 있는 PR(CLEAN · HAS_HOOKS · UNSTABLE)에서 `--auto` 를 무시하고 그 자리에서 머지한다
+# (gh v2.92.0 `pkg/cmd/pr/merge/merge.go` 의 `isImmediatelyMergeable`). 승인을 요구하지 않는 레포라면
+# 검사가 끝나 막힘이 풀리는 순간 Approve 없이 머지된다. 그래서 승인이 모자라 막힌 PR 에서만 켠다.
+for a in gh_calls:
+    target = merge_auto(a)
+    if target is None:
+        continue
+    sel, repo = target
+    r = session_run('gh', 'pr', 'view', *([sel] if sel else []), *(['-R', repo] if repo else []),
+                    '--json', 'reviewDecision,mergeStateStatus')
+    try:
+        st = json.loads(r.stdout) if not r.returncode else None
+    except ValueError:
+        st = None
+    if not isinstance(st, dict):
+        deny("PR 의 상태를 조회하지 못해 auto-merge 를 켜는 명령을 막는다. 조회가 되는지 `gh pr view "
+             + (sel or '') + " --json reviewDecision,mergeStateStatus` 로 본 뒤 다시 실행한다.")
+    if (st.get('reviewDecision'), st.get('mergeStateStatus')) != ('REVIEW_REQUIRED', 'BLOCKED'):
+        deny("auto-merge 는 승인이 모자라 막힌 PR(reviewDecision REVIEW_REQUIRED · mergeStateStatus "
+             "BLOCKED)에서만 켠다. 지금은 reviewDecision %s · mergeStateStatus %s 다. gh 는 바로 머지할 수 "
+             "있는 PR 에서 --auto 를 무시하고 그 자리에서 머지하고, 승인을 요구하지 않는 레포에서는 검사가 "
+             "끝나면 Approve 없이 머지된다. 상태가 UNKNOWN 이면 잠시 뒤 다시 실행한다. 그 밖의 상태에서는 "
+             "merge-pr 2절의 「그 밖이면 세션이 Approve 를 확인한다」를 따른다(사람이 Approve 한 뒤 "
+             "human_review.sh 로 확인하고 --auto 없이 머지)." % (st.get('reviewDecision'), st.get('mergeStateStatus')))
+
 # 세션 환경은 github.com 의 SSH 주소를 https 로 바꾸지만, 사람의 git 설정이 https 를 다시 SSH 로 바꾸면
 # (`url.<ssh>.insteadOf` · `pushInsteadOf`) 그 푸시는 SSH 키로, 곧 사람 계정으로 나간다.
 for a in git_calls:
@@ -524,5 +628,30 @@ for a in git_calls:
             deny("이 푸시는 " + u + " 로 나간다. github.com 의 SSH 주소라서 봇이 아니라 SSH 키, 곧 사람 계정으로 "
                  "나간다. 세션은 github.com 의 SSH 주소를 https 로 바꿔 쓰지만, 사람의 git 설정(url.….insteadOf · "
                  "pushInsteadOf)이 https 를 SSH 로 다시 바꾼다. 그 설정을 이 레포에서 끄는 법은 " + GUIDE + "에 있다.")
+    # auto-merge 를 켠 뒤 그 브랜치에 푸시하면, 사람이 새 커밋을 보고 누른 Approve 가 옛 결정 코멘트대로
+    # 머지된다. 먼저 끄게 한다.
+    slugs = {m.group(1) for u in urls
+             for m in [re.match(r'^https://github\.com/([^/]+/[^/]+?)(?:\.git)?/?$', u)] if m}
+    if not slugs:
+        continue
+    targets = push_branches(a)
+    for slug in sorted(slugs):
+        r = session_run('gh', 'pr', 'list', '-R', slug, '--state', 'open', '--limit', '100',
+                        '--json', 'number,headRefName,autoMergeRequest')
+        try:
+            prs = json.loads(r.stdout) if not r.returncode else None
+        except ValueError:
+            prs = None
+        if not isinstance(prs, list):
+            deny("이 푸시가 바꿀 브랜치의 PR 에 auto-merge 가 켜져 있는지 조회하지 못해 막는다. `gh pr list -R "
+                 + slug + " --json number,headRefName,autoMergeRequest` 가 되는지 본 뒤 다시 실행한다.")
+        for p in prs:
+            if p.get('autoMergeRequest') and (targets is None or p.get('headRefName') in targets):
+                deny("PR #%s 에 auto-merge 가 켜져 있어 그 브랜치(%s)에 푸시하는 것을 막는다. 켠 채 푸시하면 "
+                     "사람이 새 커밋을 보고 누른 Approve 가 옛 결정 코멘트대로 머지된다. 먼저 `gh pr merge %s "
+                     "--disable-auto` 로 끄고, 옛 결정 코멘트 뒤에 「auto-merge 를 껐다. 이 결정 코멘트로는 머지하지 "
+                     "않는다.」 한 줄을 남긴 뒤 푸시하고, 2절부터 다시 한다 — 2절이 새 커밋을 나열하며 멈추고, "
+                     "한 라운드 더 할지는 사람이 정한다(merge-pr 3절 「머지되기 전에 다시 해야 하면 먼저 끈다」)."
+                     % (p.get('number'), p.get('headRefName'), p.get('number')))
 sys.exit(0)
 PY
