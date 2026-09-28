@@ -474,9 +474,8 @@ N+1라운드를 진행한다.
               | .key]|last) as $i
          | if $i == null then 0
            else [$c[$i+1:][]
-                 | select((.body|test("^\\s*### .*라운드 코멘트를 읽고 사람이 정한 것"))
-                          or (($c[$i].authorAssociation|IN("OWNER","MEMBER","COLLABORATOR")|not)
-                              and (.authorAssociation|IN("OWNER","MEMBER","COLLABORATOR"))))]
+                 | select(($c[$i].authorAssociation|IN("OWNER","MEMBER","COLLABORATOR")|not)
+                          and (.authorAssociation|IN("OWNER","MEMBER","COLLABORATOR")))]
                 |length end'
 
 6. 푸시한다

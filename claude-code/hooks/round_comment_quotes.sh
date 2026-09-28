@@ -74,7 +74,6 @@ HOOK_DIR="$(cd "$(dirname "$0")" && pwd)" HOOK_INPUT="$input" python3 - <<'PY'
 import json, os, re, shlex, subprocess, sys
 
 ROUND = re.compile(r'^\s*## 리뷰 ')
-ANSWER = re.compile(r'^\s*### .*라운드 코멘트를 읽고 사람이 정한 것')
 BULLET = re.compile(r'^\s*(?:[-*]|\d+\.)\s')
 # 출처 라벨은 `(사람)` 과 `(사람, N라운드부터)` 둘뿐이다.
 # `(사람이 연다)` 같은 괄호 글은 라벨이 아니다.
@@ -271,31 +270,26 @@ except (OSError, UnicodeDecodeError):
     deny("gh pr comment 의 본문 파일을 읽지 못해 판정할 수 없다(없거나 UTF-8 이 아니다). "
          "UTF-8 파일을 --body-file 에 전달해라.")
 
-top = subprocess.run(['git', 'rev-parse', '--show-toplevel'], cwd=data.get('cwd') or None,
-                     capture_output=True, text=True)
-bot = top.returncode == 0 and os.path.isfile(os.path.join(top.stdout.strip(), '.claude', 'bot.json'))
-if ANSWER.match(body) and bot:
-    deny("이 레포에는 봇 설정(.claude/bot.json)이 있어, 3.5 코멘트"
-         "(「### N라운드 코멘트를 읽고 사람이 정한 것」)는 사람 계정으로 올린다. 봇 계정으로 올린 글은 "
-         "다음 라운드 코멘트의 (사람) 인용의 원본이 아니다. `shasum -a 256 <파일>` 로 sha256 을 구해 `bash .claude/hooks/human_comment.sh <N> "
-         "<절대 경로> <sha256>` 로 올린다 — 그 명령 바로 전에 응답에 올릴 글의 최종본 전문을 출력하고, "
-         "사람이 그 글을 읽고 권한 프롬프트를 허락하면 사람 계정으로 올라간다. 사람이 PR 웹에서 직접 쓸 수도 있다.")
-if ANSWER.match(body):
-    out("ask", "3.5 코멘트(「### N라운드 코멘트를 읽고 사람이 정한 것」)는 사람의 승인을 받고 올리는 "
-               "글이다. 다음 라운드 코멘트의 (사람) 인용이 이것과 대조된다. "
-               "세션이 응답에 초안 전문을 보이고 승인받았을 때만 허락한다.")
 if not ROUND.match(body):
     sys.exit(0)
 
 bad = bad_labels(body)
 if bad:
     deny("라운드 코멘트에 따옴표로 인용하지 않은 (사람) 이 있다(뒤에 따옴표 인용이 없거나 "
-         "닫히지 않았거나 불릿 밖이다). (사람) 은 3.5 코멘트에 올라간 문장을 \"…\" 로 "
+         "닫히지 않았거나 불릿 밖이다). (사람) 은 이 PR 의 사람 계정 코멘트에 있는 글자를 \"…\" 로 "
          "인용할 때만 쓴다. 예시는 백틱으로 감싼다. 기록이 없으면 셀프+ 로 쓴다. 해당 줄: "
          + " / ".join(bad))
 want = quotes(body)
 if not want:
     sys.exit(0)
+
+top = subprocess.run(['git', 'rev-parse', '--show-toplevel'], cwd=data.get('cwd') or None,
+                     capture_output=True, text=True)
+if not (top.returncode == 0 and os.path.isfile(os.path.join(top.stdout.strip(), '.claude', 'bot.json'))):
+    deny("이 레포에는 봇 설정(.claude/bot.json)이 없어, 라운드 코멘트의 (사람) 인용을 대조할 원본이 없다. "
+         "원본은 사람 계정 코멘트인데, 봇 설정이 없으면 세션과 사람이 한 계정이라 글쓴이로 사람의 글을 "
+         "가려낼 수 없다. 킷은 봇과 함께 쓴다 — 켜는 법은 docs/process/kit-guide.md 의 「봇 계정과 사람의 "
+         "승인」 절에 있다. 그 전까지는 (사람) 인용 없이 올린다.")
 
 # 원본은 판정 스크립트가 고른다. `merge-pr` 이 같은 스크립트로 Approve 를 판정한다 — 사람 계정을
 # 알아보는 기준이 두 벌이면 어긋난다.
@@ -311,9 +305,9 @@ if not isinstance(got, dict) or not isinstance(got.get('comments'), list):
     deny("라운드 코멘트의 (사람) 인용을 대조하려고 PR 코멘트를 읽다가 실패했다(gh). "
          "판정 못 한 것은 올리지 않는다. gh 인증과 PR 번호를 확인하고 다시 입력해라.")
 
-# 3.5 코멘트는 그 `(사람)` 인용만 원본이다 — `→` 줄과 머리 글은 세션이 쓴 글이고, 봇 설정이 있어 사람
-# 계정으로 올렸어도 그렇다. 3.5 제목이 없는 사람 계정 코멘트(봇 설정이 있을 때 사람이 PR 웹에서 쓴 글)는
-# `(사람)` 라벨이 없으므로 본문 전체가 원본이다. 봇 설정이 없으면 판정 스크립트가 3.5 코멘트만 준다.
+# 사람 계정 코멘트가 원본이다 — 창에서 고른 보기로 만든 `- 주제: 보기` 줄이거나, 사람이 PR 웹에서 쓴 글이다.
+# 원본의 단위는 불릿 하나(이어지는 들여쓴 줄 포함) 또는 불릿 밖의 줄 하나다. 한 줄이 결정 하나라서, 서로 다른
+# 결정의 조각을 `…` 로 잇거나 순서를 바꾼 인용이 통과하지 않게 한다.
 have, edited = [], []
 for c in got['comments']:
     b = c.get('body') if isinstance(c, dict) else None
@@ -321,9 +315,8 @@ for c in got['comments']:
         if isinstance(c, dict) and c.get('why'):
             edited.append('%s (%s)' % (c.get('url'), c['why']))
         continue
-    # 제목 없는 코멘트의 `> …` 줄은 Quote reply 로 인용해 넣은 남의 글(대개 봇의 라운드 코멘트)이다
-    have += quotes(b) if ANSWER.match(b) else [
-        norm(mask('\n'.join(l for l in b.split('\n') if not l.lstrip().startswith('>'))))]
+    # `> …` 줄은 Quote reply 로 인용해 넣은 남의 글(대개 봇의 라운드 코멘트)이다
+    have += [norm(t) for _, t in items('\n'.join(l for l in b.split('\n') if not l.lstrip().startswith('>')))]
 # 따옴표 안에서 가운데를 `…` 로 줄인 인용이 있다(「길면 잘라 쓰되 낱말을
 # 바꾸지 않는다」). 줄인 조각들이 한 인용 안에 순서대로 있어야 한다.
 missing = []
@@ -332,18 +325,11 @@ for s in want:
     pat = re.compile('.*?'.join(re.escape(p) for p in pieces))
     if not any(pat.search(h) for h in have):
         missing.append(show(s))
-if missing and got.get('bot'):
-    deny("라운드 코멘트의 (사람) 인용 중 이 PR 의 사람 계정 코멘트의 원본에 글자 그대로 없는 것이 있다. "
-         "이 레포에는 봇 설정(.claude/bot.json)이 있어, 쓰기 권한이 있는 사람 계정의 코멘트만 원본이다. "
-         "3.5 코멘트에서는 (사람) \"…\" 조각만 원본이고(→ 줄과 머리 글은 세션이 쓴 글이다), 제목 없는 "
-         "코멘트에서는 > 인용 줄을 뺀 본문이 원본이다. 봇 계정으로 올린 글은 원본이 아니다. 줄였으면 한 "
-         "인용(제목 없는 코멘트는 한 코멘트) 안에서 순서대로 줄인다. "
+if missing:
+    deny("라운드 코멘트의 (사람) 인용 중 이 PR 의 사람 계정 코멘트에 글자 그대로 없는 것이 있다. "
+         "쓰기 권한이 있는 사람 계정의 코멘트만 원본이고, > 인용 줄을 뺀 불릿 하나나 줄 하나가 원본의 단위다. "
+         "봇 계정으로 올린 글은 원본이 아니다. 줄였으면 한 불릿(줄) 안에서 순서대로 줄인다. "
          "없는 조각: " + " / ".join('"%s"' % s for s in missing)
          + (" 다른 계정이 고쳐 원본에서 뺀 코멘트: " + " / ".join(edited) if edited else ""))
-if missing:
-    deny("라운드 코멘트의 (사람) 인용 중 이 PR 의 3.5 코멘트"
-         "(「### N라운드 코멘트를 읽고 사람이 정한 것」)의 (사람) 인용에 글자 그대로 없는 것이 있다. "
-         "3.5 코멘트에 올라간 문장만 인용한다. 줄였으면 한 인용 안에서 순서대로 줄인다. "
-         "없는 조각: " + " / ".join('"%s"' % s for s in missing))
 sys.exit(0)
 PY

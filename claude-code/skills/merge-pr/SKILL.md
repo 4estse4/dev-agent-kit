@@ -142,9 +142,8 @@ GitHub auto-merge 를 켠 뒤 Approve 를 부탁하고, Approve 가 달리면 Gi
               | ([$c|to_entries[]|select(.value.body|test("^\\s*## 리뷰 "))|.key]|last) as $i
               | if $i == null then []
                 else $c[$i+1:]
-                  | map(select((.body|test("^\\s*### .*라운드 코멘트를 읽고 사람이 정한 것"))
-                               or (($c[$i].authorAssociation|IN("OWNER","MEMBER","COLLABORATOR")|not)
-                                   and (.authorAssociation|IN("OWNER","MEMBER","COLLABORATOR")))))
+                  | map(select(($c[$i].authorAssociation|IN("OWNER","MEMBER","COLLABORATOR")|not)
+                               and (.authorAssociation|IN("OWNER","MEMBER","COLLABORATOR"))))
                 end
               | map(.body) | join("\n\n———\n\n")'
 
@@ -295,8 +294,7 @@ delete head branches」가 지우고, 4절은 머지 뒤 다음 작업을 시작
         --jq '.comments as $c
               | ([$c[]|select(.body|test("^\\s*## 리뷰 "))
                   |.authorAssociation|IN("OWNER","MEMBER","COLLABORATOR")|not]|any) as $bot
-              | [$c[]|select((.body|test("^\\s*### .*라운드 코멘트를 읽고 사람이 정한 것"))
-                             or ($bot and (.authorAssociation|IN("OWNER","MEMBER","COLLABORATOR"))))
+              | [$c[]|select($bot and (.authorAssociation|IN("OWNER","MEMBER","COLLABORATOR")))
                      |.body]|join("\n\n———\n\n")'
 
 - 남은 것을 이슈로 옮겼으면 그 번호

@@ -79,7 +79,11 @@ EOF
 chmod +x "$T/bin/gh"
 fail=0
 
-A1='### 1라운드 코멘트를 읽고 사람이 정한 것
+# 창에서 고른 보기로 만든 사람 계정 코멘트
+A1='- 1라운드 코멘트: 고치고 2라운드
+'
+# 옛 제목 코멘트. 이제 따로 다루지 않는다
+OLDANS='### 1라운드 코멘트를 읽고 사람이 정한 것
 
 - (사람) "고치고 2라운드"
   → 고친다
@@ -116,8 +120,8 @@ round_body() {
 }
 round_body 2 '고치고 2라운드' > "$T/round2.md"
 round_body 2 '고치고 3라운드' > "$T/round2-other.md"
-# A1 의 `→` 줄(세션이 쓴 글)을 (사람) 인용으로 옮긴 라운드 코멘트
-round_body 2 '고친다' > "$T/round2-arrow.md"
+round_body 2 '1라운드 코멘트: 고치고 2라운드' > "$T/round2-line.md"
+printf '## 리뷰 2라운드 — 셀프 ***`Comment`*** · 콜드 ***`Comment`***\n\n- **해결** (셀프) 고쳤다\n' > "$T/round2-noquote.md"
 # 사람이 PR 웹에서 Quote reply 로 봇의 글을 인용해 넣고 답을 쓴 코멘트
 QR='> 결정 필요는 이 코멘트 뒤 질문 창으로 여쭙니다.
 
@@ -210,23 +214,22 @@ hook "조직 구성원(MEMBER) 코멘트" pass member round2.md
 # MEMBER 는 레포 권한과 상관없이 붙는다. 원본은 쓰기 권한이 있는 사람의 글이다.
 hook "읽기 권한만 있는 조직 구성원의 코멘트" deny member-reader round2.md "사람 계정"
 hook "원본의 권한을 못 읽음" deny person round2.md "실패" "$T/bot" permission
-# 3.5 코멘트의 `→` 줄은 세션의 판단이다. 사람 계정으로 올렸어도 (사람) 인용의 원본이 아니다.
-hook "사람 계정 3.5 코멘트의 → 줄" deny person round2-arrow.md "사람 계정"
-# 막힌 세션이 까닭을 알 수 있게, 3.5 코멘트에서는 (사람) 조각만 원본이라는 것을 사유에 적는다
-hook "→ 줄을 막는 사유" deny person round2-arrow.md "조각만"
+# 사람 계정 코멘트는 `- 주제: 보기` 줄이다. 줄 전체를 인용해도, 보기 글자만 인용해도 원본에 있다
+hook "사람 계정 코멘트의 줄 전체" pass person round2-line.md
 hook "쓰기 권한 없는 기여자(CONTRIBUTOR) 코멘트" deny contrib round2.md "사람 계정"
 hook "둘째 쪽에 있는 사람 코멘트" pass paged round2.md
 hook "코멘트를 못 읽음" deny person round2.md "실패" "$T/bot" graphql
-printf '%s' "$A1" > "$T/answer.md"
-hook "봇 계정으로 올리는 3.5 코멘트" deny person answer.md "human_comment.sh"
+# 옛 제목(`### N라운드 코멘트를 읽고 사람이 정한 것`)의 글은 이제 따로 다루지 않는다 — 봇이 올리면 봇의 글일
+# 뿐 원본이 아니다
+printf '%s' "$OLDANS" > "$T/answer.md"
+hook "옛 제목의 글은 따로 막지 않는다" pass person answer.md
+data botold "[$(c "$U1" "$OLDANS" kit-bot NONE)]"
+hook "봇이 올린 옛 제목 코멘트의 인용" deny botold round2.md "사람 계정"
 
-echo "── 봇 설정이 없을 때 — 지금처럼 3.5 코멘트의 인용과 대조한다"
-hook "3.5 코멘트의 인용" pass person round2.md "" "$T/plain"
-hook "3.5 코멘트는 사람에게 묻는다" ask person answer.md "" "$T/plain"
-hook "3.5 코멘트가 아닌 사람 글의 구절" deny web round2.md "" "$T/plain"
-# 앞 라운드 코멘트의 (사람) 인용은 원본이 아니다 — 원본으로 쓰면 한 번 잘못 옮긴 인용이 계속 통과한다
-data roundonly "[$(c "$U2" "$(cat "$T/round2-other.md")" 4estse4 OWNER)]"
-hook "앞 라운드 코멘트에만 있는 인용" deny roundonly round2-other.md "" "$T/plain"
+echo "── 봇 설정이 없을 때 — (사람) 인용의 원본이 없어 막는다(킷은 봇과 함께 쓴다)"
+hook "(사람) 인용이 든 라운드 코멘트" deny person round2.md "봇" "$T/plain"
+hook "(사람) 인용이 없는 라운드 코멘트" pass person round2-noquote.md "" "$T/plain"
+hook "옛 제목의 글은 묻지 않는다" pass person answer.md "" "$T/plain"
 
 echo "── merge-pr 2절이 부르는 Approve 판정"
 data ok '[]' "[[\"4estse4\", \"APPROVED\", \"$H\", \"2026-09-27T05:00:00Z\"]]"

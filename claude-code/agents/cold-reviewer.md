@@ -62,9 +62,8 @@ COLLABORATOR)의 코멘트도 실린다. 레포에 봇 설정이 있으면 라�
                      else "!! 코멘트 \($c|length)건인데 라운드 코멘트를 못 찾았다" end)
                else ([$c[$i].body]
                      + ($c[$i+1:]
-                        | map(select((.body|test("^\\s*### .*라운드 코멘트를 읽고 사람이 정한 것"))
-                                     or (($c[$i].authorAssociation|IN("OWNER","MEMBER","COLLABORATOR")|not)
-                                         and (.authorAssociation|IN("OWNER","MEMBER","COLLABORATOR"))))
+                        | map(select(($c[$i].authorAssociation|IN("OWNER","MEMBER","COLLABORATOR")|not)
+                                     and (.authorAssociation|IN("OWNER","MEMBER","COLLABORATOR")))
                               |.body)))
                     |join("\n\n———\n\n") end'
 

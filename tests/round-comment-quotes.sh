@@ -6,40 +6,59 @@
 # JSON 을 넣어 훅의 명령 해석부터 지나가게 한다. 대조 함수만 부르면 명령을 잘못 읽는 결함이
 # 초록으로 지나간다.
 #
-# **네트워크를 안 쓴다.** 훅은 `gh pr view` 로 PR 코멘트를 읽는다. 여기서는 PATH 앞에 둔 가짜
-# `gh` 가 `tests/fixtures/round-comment-quotes/` 에 저장해 둔 3.5 코멘트를 JSON 목록으로 돌려주고,
-# 받은 인자를 적어 둔다. 3.5 코멘트(`answer*.md`)는 올라간 것을 그대로 복사한 것이다. 라운드
-# 코멘트(`round*.md`)는 접히지 않은 부분만 복사했고, `pr64/round7.md` 는 거기서 줄을 더 발췌했다.
-# 3.5 코멘트의 제목 줄만 지금 제목(`### N라운드 코멘트를 읽고 사람이 정한 것`)으로 바꿨다(이슈 #84).
-# 올라갈 때는 옛 제목이었다. 대조하는 인용은 올라간 그대로다.
+# **네트워크를 안 쓴다.** 훅은 판정 스크립트(`human_review.sh sources`)로 PR 의 사람 계정 코멘트를 읽는다.
+# 여기서는 PATH 앞에 둔 가짜 `gh` 가 디렉터리의 `answer*.md` 를 사람 계정(쓰기 권한 admin)의 코멘트로,
+# `bot*.md` 를 봇 계정의 코멘트로 GraphQL 응답 모양에 담아 돌려주고, 받은 인자와 `GH_REPO` 를 적어 둔다.
+# 훅은 봇 설정(`.claude/bot.json`)이 있는 임시 레포에서 부른다 — 킷은 봇과 함께 쓴다. 봇 설정이 없는
+# 레포에서는 `(사람)` 인용이 든 라운드 코멘트를 막는 것만 본다.
 #
-# `pr64` 는 실제로 난 일이다. 7라운드 코멘트가 3.5 코멘트의 `→` 줄(세션의 판단)을 `(사람)`
-# 인용으로 옮겼다. 이 훅이 겨누는 원본 형태다.
+# `pr89` 는 실제로 올라간 코멘트다. 라운드 코멘트(`round*.md`)는 접히지 않은 부분만 복사했고, 그 뒤의
+# 답(`answer*.md`)은 올라간 그대로다. 그때는 3.5 제목과 `(사람)` 인용 · `→` 줄이 있는 모양이었다. 지금
+# 사람 계정 코멘트는 창에서 고른 보기로 만든 `- 주제: 보기` 줄이지만, 원본이 사람 계정 코멘트 본문 전체라는
+# 규칙은 옛 모양에도 그대로 적용되므로 여기서는 사람이 PR 웹에서 쓴 사람 계정 코멘트로 읽는다.
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$KIT" || exit 1                      # 상대 경로 경우가 레포 뿌리를 기준으로 한다
 HOOK="$KIT/claude-code/hooks/round_comment_quotes.sh"
 FX="$KIT/tests/fixtures/round-comment-quotes"
 T=$(mktemp -d)
-mkdir -p "$T/bin" "$T/empty" "$T/odd"
+mkdir -p "$T/bin" "$T/empty" "$T/odd" "$T/repo/.claude" "$T/plain"
+git init -q "$T/repo"; git init -q "$T/plain"
+printf '{"app_id": 1, "app": "kit-bot"}\n' > "$T/repo/.claude/bot.json"
 cat > "$T/bin/gh" <<'EOF'
 #!/usr/bin/env bash
-printf '%s\n' "$*" >> "$STUB_GH_ARGS"
+printf '%s|%s\n' "${GH_REPO:-}" "$*" >> "$STUB_GH_ARGS"
 [ -n "${STUB_GH_FAIL:-}" ] && { echo "HTTP 502: Bad Gateway" >&2; exit 1; }
-python3 - "$STUB_GH_DIR" <<'PY'
-import glob, json, os, sys
-files = sorted(glob.glob(os.path.join(sys.argv[1], 'answer*.md')))
-print(json.dumps([open(f, encoding='utf-8').read() for f in files], ensure_ascii=False))
+exec python3 - "$STUB_GH_DIR" "$@" <<'PY'
+import glob, json, os, re, sys
+d, a = sys.argv[1], sys.argv[2:]
+if a[:2] == ['api', 'graphql']:
+    nodes = [{'url': 'https://x/%s' % os.path.basename(f), 'body': open(f, encoding='utf-8').read(),
+              'author': {'login': 'kit-bot' if os.path.basename(f).startswith('bot') else '4estse4'},
+              'editor': None}
+             for f in sorted(glob.glob(os.path.join(d, 'answer*.md')) + glob.glob(os.path.join(d, 'bot*.md')))]
+    print(json.dumps([{'data': {'repository': {'pullRequest': {'comments': {
+        'pageInfo': {'hasNextPage': False, 'endCursor': None}, 'nodes': nodes}}}}}], ensure_ascii=False))
+    sys.exit(0)
+m = re.search(r'collaborators/([^/ ]+)/permission', ' '.join(a))
+if a[:1] == ['api'] and m:
+    if m.group(1) != '4estse4':
+        sys.stderr.write('gh: Not Found (HTTP 404)\n')
+        sys.exit(1)
+    print(json.dumps({'permission': 'admin'}))
+    sys.exit(0)
+sys.stderr.write('stub gh: 모르는 호출: %s\n' % ' '.join(a))
+sys.exit(1)
 PY
 EOF
 chmod +x "$T/bin/gh"
 fail=0
 
-# check <이름> <pass|deny|ask> <명령> [3.5 코멘트 디렉터리] [사유에 들어 있어야 할 글자]
+# check <이름> <pass|deny|ask> <명령> [사람 계정 코멘트 디렉터리] [사유에 들어 있어야 할 글자] [cwd]
 check() {
-  local name=$1 want=$2 cmd=$3 dir=${4:-$FX/pr89} must=${5:-} input out got
+  local name=$1 want=$2 cmd=$3 dir=${4:-$FX/pr89} must=${5:-} cwd=${6:-$T/repo} input out got
   input=$(python3 -c 'import json,sys; print(json.dumps({"tool_name": "Bash", "cwd": sys.argv[1],
-    "tool_input": {"command": sys.argv[2]}}))' "$T" "$cmd")
+    "tool_input": {"command": sys.argv[2]}}))' "$cwd" "$cmd")
   : > "$T/gh-args"
   out=$(printf '%s' "$input" | PATH="$T/bin:$PATH" STUB_GH_DIR="$dir" STUB_GH_ARGS="$T/gh-args" bash "$HOOK")
   case "$out" in
@@ -71,9 +90,9 @@ post() { printf 'gh pr comment %s --body-file %s' "${2:-89}" "$T/$1"; }
 
 # ── 통과해야 하는 것 ──
 check "올라간 2라운드 코멘트 그대로" pass "gh pr comment 89 --body-file $FX/pr89/round2.md"
-args_has "gh 에 PR 번호를 전달한다" "pr view 89 "
+args_has "gh 에 PR 번호를 전달한다" "number=89 "
 check "레포를 밝힌 호출" pass "gh pr comment 89 -R 4estse4/ai-native-kit --body-file $FX/pr89/round2.md"
-args_has "gh 에 레포를 전달한다" "-R 4estse4/ai-native-kit"
+args_has "gh 에 레포를 전달한다" "4estse4/ai-native-kit|"
 check "올라간 4라운드 코멘트 그대로" pass "gh pr comment 89 --body-file $FX/pr89/round4.md"
 check "\\ 줄넘김은 한 줄로 잇는다" pass "gh pr comment 89 \\
   --body-file $FX/pr89/round2.md"
@@ -85,7 +104,7 @@ check "제목에 comment 가 든 gh pr create" pass \
   "gh pr create --title \"feat(review): round comment quote hook\" --body-file $T/body.md"
 check "gh 를 뺀 글자로 찾는 명령" pass "grep -n 'pr comment' claude-code/skills/merge-pr/SKILL.md"
 check "레포를 붙인 -R=" pass "gh pr comment 89 -R=4estse4/ai-native-kit --body-file $FX/pr89/round2.md"
-args_has "붙인 -R= 의 값을 gh 에 전달한다" "-R 4estse4/ai-native-kit"
+args_has "붙인 -R= 의 값을 gh 에 전달한다" "4estse4/ai-native-kit|"
 mk inner.md "$r4
 - (사람) \"고치고 한 라운드 더. … 홈 주소를 명령 인자로 쓰는 모양은 비추천 그대로 둔다.\""
 check "따옴표 안을 … 로 줄인 진짜 인용" pass "$(post inner.md)"
@@ -103,7 +122,7 @@ check "백틱 안의 (사람) \"…\" 예시" pass "$(post span.md)"
 mk paren.md "$r4
 - (콜드) 새 이슈는 따로 연다(사람이 연다)"
 check "라벨이 아닌 괄호 글 (사람이 …)" pass "$(post paren.md)"
-# 사람의 답에 백틱 안의 " 가 홀수 개 든 경우. PR #59 의 3.5 코멘트에 실제로 있었다.
+# 사람의 글에 백틱 안의 " 가 홀수 개 든 경우. PR #59 의 사람의 글에 실제로 있었다.
 cat > "$T/odd/answer1.md" <<'EOF'
 ### 1라운드 코멘트를 읽고 사람이 정한 것
 
@@ -116,19 +135,18 @@ cat > "$T/oddround.md" <<'EOF'
 - **해결** (사람) "고친다. 둘째 줄은 `(사람) "` 를 안 품는다"
   → 고쳤다
 EOF
-check "사람의 답에 백틱 안의 \" 가 홀수 개" pass "$(post oddround.md)" "$T/odd"
+check "사람의 글에 백틱 안의 \" 가 홀수 개" pass "$(post oddround.md)" "$T/odd"
 # 사람의 문장 안에 큰따옴표나 `(사람)` 라벨과 같은 글자가 든 인용. `open-pr` 형식 절이 아래 동작에
 # 기대어 「그 글자 자리를 `…` 로 바꿔 한 따옴표 안에 쓴다」고 적는다. 훅은 인용을 큰따옴표 짝으로
-# 나눠 대조하고 짝과 짝 사이는 대조하지 않는다. 한 따옴표 안에서 `…` 로 줄인 조각은 3.5 코멘트의
-# 따옴표 하나 안에 순서대로 있어야 한다. 경우마다 3.5 코멘트를 따로 두고 그 경우에 필요한 항목만
+# 나눠 대조하고 짝과 짝 사이는 대조하지 않는다. 한 따옴표 안에서 `…` 로 줄인 조각은 사람 계정 코멘트
+# 한 개 안에 순서대로 있어야 한다. 경우마다 사람 계정 코멘트를 따로 두고 그 경우에 필요한 항목만
 # 넣는다 — 다른 항목과 맞으면 이름이 말하는 경로를 고정하지 못한다.
-# inner <이름> <기대> <3.5 코멘트의 인용, 줄마다 한 항목> <라운드 코멘트의 인용> [사유에 들어 있어야 할 글자]
+# inner <이름> <기대> <사람 계정 코멘트의 글, 줄마다 한 항목> <라운드 코멘트의 인용> [사유에 들어 있어야 할 글자]
 n_inner=0
 inner() {
   local d="$T/inner$((++n_inner))" q
   mkdir -p "$d"
-  { printf '### 1라운드 코멘트를 읽고 사람이 정한 것\n\n'
-    while IFS= read -r q; do printf -- '- (사람) %s\n  → 고친다\n' "$q"; done <<< "$3"; } > "$d/answer1.md"
+  while IFS= read -r q; do printf -- '- 1라운드 코멘트: %s\n' "$q"; done <<< "$3" > "$d/answer1.md"
   mk "inner$n_inner.md" "$(printf '## 리뷰 2라운드 — 셀프 ***`Comment`*** · 콜드 ***`Comment`***\n\n- **해결** (사람) %s\n  → 고쳤다\n' "$4")"
   check "$1" "$2" "$(post "inner$n_inner.md")" "$d" "${5:-}"
 }
@@ -149,24 +167,32 @@ inner "따옴표를 여럿으로 나누면 다른 답의 낱말이 섞여도 대
 check "--help" pass "gh pr comment --help"
 check "--delete-last(본문 없음)" pass "gh pr comment 89 --delete-last --yes"
 
-# ── 3.5 코멘트는 사람에게 묻는다 ──
+# ── 옛 제목(`### N라운드 코멘트를 읽고 사람이 정한 것`)의 글은 따로 다루지 않는다 ──
+# 사람 계정 코멘트는 창에서 고른 보기로 만들어 사람 계정으로 올라간다. 세션이 봇 계정으로 올리는 옛 제목의
+# 글은 원본이 아니라 봇의 글일 뿐이라 묻지도 막지도 않는다.
 mk answer.md "$(cat "$FX/pr89/answer2.md")"
-check "3.5 코멘트" ask "$(post answer.md)" "" "사람의 승인을 받고"
-check "3.5 코멘트, \\ 줄넘김" ask "gh pr comment 89 \\
+check "옛 제목의 글" pass "$(post answer.md)"
+check "옛 제목의 글, \\ 줄넘김" pass "gh pr comment 89 \\
   --body-file $T/answer.md"
+
+# ── 봇 설정이 없는 레포 — (사람) 인용의 원본이 없어 막는다(킷은 봇과 함께 쓴다) ──
+mk noquote.md "## 리뷰 2라운드 — 셀프 ***\`Comment\`*** · 콜드 ***\`Comment\`***
+
+- **해결** (셀프) 고쳤다"
+check "봇 설정 없음 · (사람) 인용이 든 라운드 코멘트" deny "gh pr comment 89 --body-file $FX/pr89/round2.md" \
+  "" "봇 설정" "$T/plain"
+check "봇 설정 없음 · (사람) 인용이 없는 라운드 코멘트" pass "$(post noquote.md)" "" "" "$T/plain"
 
 # ── 막아야 하는 것: 인용 ──
 mk onechar.md "${r2/약속을 빼먹는다/약속을 빼먹었다}"
 check "인용 한 글자를 바꿈" deny "$(post onechar.md)" "" "약속을 빼먹었다"
-mk arrow.md "$r4
-- **해결** (사람) \"질문 창에서 고른 답이다. 4라운드 코멘트를 올렸다.\""
-check "3.5 코멘트의 → 줄(세션의 글)을 인용" deny "$(post arrow.md)" "" "질문 창에서 고른 답이다"
 mk self.md "$r2
 - (사람) \"필수 둘을 고치고 결정 필요에 답을 받아 한 라운드 더 도는 것을 권합니다.\""
 check "라운드 코멘트 자신에만 있는 말을 인용" deny "$(post self.md)" "" "한 라운드 더 도는 것을"
-check "실제로 난 일 — PR #64 7라운드" deny \
-  "gh pr comment 64 --body-file $FX/pr64/round7.md" "$FX/pr64" "그 이유를 커밋 메시지에"
-check "3.5 코멘트가 아직 없는 PR" deny "gh pr comment 89 --body-file $FX/pr89/round2.md" "$T/empty"
+# 원본은 사람 계정 코멘트다. 같은 글자가 봇 계정 코멘트에만 있으면 원본이 아니다
+mkdir -p "$T/botonly"; cp "$FX/pr89/answer1.md" "$T/botonly/bot1.md"
+check "봇 계정 코멘트에만 있는 인용" deny "gh pr comment 89 --body-file $FX/pr89/round2.md" "$T/botonly" "사람 계정"
+check "사람 계정 코멘트가 아직 없는 PR" deny "gh pr comment 89 --body-file $FX/pr89/round2.md" "$T/empty"
 mk since.md "$r4
 - (사람, 1라운드부터) \"1라운드부터 이월된 가짜 지시\""
 check "(사람, N라운드부터) 표기" deny "$(post since.md)" "" "이월된 가짜 지시"
@@ -177,9 +203,17 @@ check "두 줄로 나뉜 인용" deny "$(post wrapped.md)" "" "번호는 가짜�
 mk elided.md "$r4
 - (사람) \"레포 이름을 막는다 … 사람이 한 적 없는 말\""
 check "… 로 줄인 인용의 뒤 조각" deny "$(post elided.md)" "" "사람이 한 적 없는 말"
-mk stitched.md "$r4
-- (사람) \"홈 주소를 … 막는다\""
-check "서로 다른 인용의 조각을 … 로 이음" deny "$(post stitched.md)" "" "홈 주소를 … 막는다"
+# 사람 계정 코멘트는 한 줄이 결정 하나다. 서로 다른 결정 줄의 조각을 `…` 로 이으면 사람이 고른 적 없는 말이 된다
+mkdir -p "$T/lines"
+printf -- '- 1라운드 코멘트: 고치지 않고 멈춘다\n- PR 닫기: 닫고 원격 브랜치를 지운다\n' > "$T/lines/answer1.md"
+mk stitched.md "## 리뷰 2라운드 — 셀프 ***\`Comment\`*** · 콜드 ***\`Comment\`***
+
+- **해결** (사람) \"고치지 않고 … 원격 브랜치를 지운다\""
+check "서로 다른 결정 줄의 조각을 … 로 이음" deny "$(post stitched.md)" "$T/lines" "고치지 않고 … 원격 브랜치를 지운다"
+mk oneline.md "## 리뷰 2라운드 — 셀프 ***\`Comment\`*** · 콜드 ***\`Comment\`***
+
+- **해결** (사람) \"PR 닫기: 닫고 원격 브랜치를 지운다\""
+check "결정 줄 하나를 그대로 인용" pass "$(post oneline.md)" "$T/lines"
 mk reordered.md "$r4
 - (사람) \"그대로 둔다 … 홈 주소를 명령 인자로 쓰는 모양은\""
 check "한 인용의 조각 순서를 바꿈" deny "$(post reordered.md)"
@@ -250,7 +284,7 @@ check "표준입력 리다이렉트" deny "gh pr comment 89 --body-file - < $FX/
 check "짧은 플래그에 붙인 -F<경로>" deny "gh pr comment 89 -F$T/onechar.md" "" "약속을 빼먹었다"
 check "붙인 -F=<경로>" deny "gh pr comment 89 -F=$T/onechar.md" "" "약속을 빼먹었다"
 check "번호 앞의 -F<경로>" deny "gh pr comment -F$T/onechar.md 89" "" "약속을 빼먹었다"
-check "붙인 -F<경로> 의 3.5 코멘트" ask "gh pr comment 89 -F$T/answer.md"
+check "붙인 -F<경로> 의 옛 제목 글" pass "gh pr comment 89 -F$T/answer.md"
 check "붙인 -b<값>" deny "gh pr comment 89 -bx" "" "절대 경로 파일 하나로만"
 check "모르는 플래그" deny "gh pr comment 89 -y --body-file $T/onechar.md" "" "모르는 플래그"
 check "하위 명령 앞의 -R" deny \
@@ -287,7 +321,7 @@ check "then 뒤" deny "if true; then $(post onechar.md); fi" "" "정규형"
 check "! 뒤" deny "! $(post onechar.md)" "" "정규형"
 check "{ } 안" deny "{ $(post onechar.md); }" "" "정규형"
 check "timeout 앞붙임" deny "timeout 60 $(post onechar.md)" "" "정규형"
-check "timeout 앞붙임의 3.5 코멘트" deny "timeout 60 $(post answer.md)" "" "정규형"
+check "timeout 앞붙임의 옛 제목 글" deny "timeout 60 $(post answer.md)" "" "정규형"
 check "변수 대입 앞붙임" deny "GH_REPO=4estse4/ai-native-kit $(post onechar.md)" "" "정규형"
 check "env 앞붙임" deny "env X=1 $(post onechar.md)" "" "정규형"
 check "nice 앞붙임" deny "nice $(post onechar.md)" "" "정규형"
