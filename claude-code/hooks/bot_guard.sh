@@ -649,7 +649,9 @@ for a in git_calls:
             if p.get('autoMergeRequest') and (targets is None or p.get('headRefName') in targets):
                 deny("PR #%s 에 auto-merge 가 켜져 있어 그 브랜치(%s)에 푸시하는 것을 막는다. 켠 채 푸시하면 "
                      "사람이 새 커밋을 보고 누른 Approve 가 옛 결정 코멘트대로 머지된다. 먼저 `gh pr merge %s "
-                     "--disable-auto` 로 끄고 푸시한 뒤, 새 head 로 결정 코멘트와 Approve 요청을 다시 한다"
-                     "(merge-pr 3절)." % (p.get('number'), p.get('headRefName'), p.get('number')))
+                     "--disable-auto` 로 끄고, 옛 결정 코멘트 뒤에 「auto-merge 를 껐다. 이 결정 코멘트로는 머지하지 "
+                     "않는다.」 한 줄을 남긴 뒤 푸시하고, 새 head 로 결정 코멘트와 Approve 요청을 다시 한다"
+                     "(merge-pr 3절 「머지되기 전에 다시 해야 하면 먼저 끈다」)."
+                     % (p.get('number'), p.get('headRefName'), p.get('number')))
 sys.exit(0)
 PY

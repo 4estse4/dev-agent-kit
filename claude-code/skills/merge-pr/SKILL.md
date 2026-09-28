@@ -476,34 +476,55 @@ URL 이다:
 
    `--subject` · `--body` 는 위 머지 명령과 같은 규칙으로 쓴다. gh 는 `--match-head-commit` 의 값을 auto-merge 의
    `expectedHeadOid` 로 전달한다(gh v2.92.0 `pkg/cmd/pr/merge/http.go`). GitHub 이 그 값을 머지할 때도 대조하는지는
-   확인하지 않았다. 켠 뒤에 오는 새 커밋은 둘이 막는다. 세션의 푸시는 막기 훅이 막고(아래), 사람의 푸시는 브랜치
-   보호가 이전 승인을 없던 것으로 해서(`install.sh --protect` 의 「새 커밋이 오면 이전 승인 무효」) 새 Approve
-   전에는 머지되지 않는다.
+   확인하지 않았다. 켠 뒤에 오는 새 커밋을 막는 것은 막기 훅뿐이고, 그 훅은 세션의 푸시만 막는다(아래). 사람이
+   PR 브랜치에 푸시하면 막는 것이 없다 — 마지막 푸시 승인은 푸시한 사람의 Approve 만 세지 않으므로, 쓰기 권한이
+   있는 다른 사람이 Approve 하는 순간 새 커밋이 켤 때 담긴 옛 제목 · 본문과 옛 결정 코멘트대로 머지된다. 그래서
+   사람은 PR 브랜치에 푸시하기 전에 세션에 알려 auto-merge 를 끄게 한다(`docs/process/kit-guide.md` 3절).
 
    **켜는 명령이 실패하면** 결정 코멘트가 말하는 「Approve 하면 GitHub 이 머지한다」가 거짓이 된다. 결정 코멘트
    뒤에 코멘트로 한 줄 `auto-merge 를 켜지 못했다: <gh 가 낸 오류의 첫 줄>. 사람이 Approve 한 뒤 알리면 세션이
    확인하고 머지한다.` 를 남기고, 2절의 「그 밖이면 세션이 Approve 를 확인한다」로 간다. 부탁 블록의 「그 뒤」도
-   그 절의 것이다. 봇이 auto-merge 를 켤 권한이 없거나, 2절 뒤에 누가 푸시해 head 가 어긋난 경우다.
+   그 절의 것이다. 봇이 auto-merge 를 켤 권한이 없거나, 2절과 이 명령 사이에 PR 이 바로 머지할 수 있는 상태가 되어
+   막기 훅이 막은 경우다.
 4. 응답을 2절의 부탁 블록으로 끝낸다. 할 일 줄에 「Approve 하면 확인 없이 바로 머지된다」를 적는다 — auto-merge
    없이 머지할 때는 Approve 뒤에 세션이 한 번 더 확인했으므로, 사람은 누르기 전에 그 차이를 알아야 한다. 「그
    뒤」는 「GitHub 이 머지하고 head 브랜치를 지운다. 알려 주지 않아도 된다」다. 5절의 `Auto-merge on …` 줄도
    이 응답에 적는다.
 
-**Approve 전에 다시 해야 하면 먼저 끈다.** 브랜치에 푸시해야 할 때와, 사람이 결정 코멘트나 스쿼시 제목 · 본문을
-고치라고 할 때다. `gh pr merge <N> --disable-auto` 로 끄고, 옛 결정 코멘트 뒤에 코멘트로 한 줄 `위 결정 코멘트는
-아래 결정 코멘트로 대신한다(auto-merge 를 끄고 다시 켰다).` 를 남긴 뒤, 2절부터 다시 한다(결정 코멘트 ·
-auto-merge · 부탁). 끄지 않으면 사람이나 다른 리뷰어가 Approve 하는 순간 켤 때 담긴 옛 제목 · 본문과 옛 결정
-코멘트대로 머지된다. 옛 결정 코멘트를 편집하지 않는 이유는 3절의 거절 경로와 같다 — 한 번 올린 기록이 바뀐다.
-막기 훅(`bot_guard.sh`)이 auto-merge 가 켜진 PR 의 브랜치로 가는 푸시를 막는다.
+**머지되기 전에 다시 해야 하면 먼저 끈다.** 브랜치에 푸시해야 할 때, 사람이 결정 코멘트나 스쿼시 제목 · 본문을
+고치라고 할 때, Approve 를 받고도 머지되지 못한 PR 의 브랜치를 갱신할 때(아래)다. 차례는 이렇다.
 
-**머지 뒤 정리는 다음 작업을 시작할 때 한다.** 머지는 사람이 Approve 한 순간 GitHub 이 하므로 세션이 그 자리에
-없다. 다음 작업의 브랜치는 `origin/<baseRefName>` 에서 만든다. 그 전에 앞 PR 의 상태를 보고, 머지됐으면
-`merge-pr <N>` 을 다시 부른다 — 2절이 `MERGED` 를 보고 4절과 5절만 한다. 아직 `OPEN` 이면 정리를 미루고 그대로
-`origin/<baseRefName>` 에서 브랜치를 만든다(앞 PR 브랜치 위에 만들면 앞 PR 이 스쿼시로 머지된 뒤 다음 PR 의
-diff 에 그 변경이 다시 나온다). 세션 시작 안내(`bot_session.sh`)도 이것을 알린다 — 새 세션이나 컴팩션 뒤의
-세션은 이 스킬을 읽지 않은 채 다음 작업을 시작한다. 원격 브랜치를 레포 설정 「Automatically delete head
-branches」가 지웠으면 4절의 원격 삭제는 `remote ref does not exist` 로 끝난다. 그 설정이 꺼진 레포에서는 4절이
-지운다(승인은 Approve 다). 머지 뒤에야 나온 것이 있으면 4절의 후속 코멘트로 붙인다.
+1. `gh pr merge <N> --disable-auto` 로 끈다.
+2. 옛 결정 코멘트 뒤에 코멘트로 한 줄 `auto-merge 를 껐다. 이 결정 코멘트로는 머지하지 않는다.` 를 남긴다. 올리는
+   시점의 사실만 적는다 — 다시 켤지는 그 뒤의 일이다.
+3. 푸시해야 하면 푸시한다.
+4. 2절부터 다시 한다(결정 코멘트 · auto-merge · 부탁). 푸시했으면 2절의 「리뷰 반영 확인」이 새 커밋을 나열하며
+   멈추고, 한 라운드 더 할지는 사람이 정한다.
+
+끄지 않으면 사람이나 다른 리뷰어가 Approve 하는 순간 켤 때 담긴 옛 제목 · 본문과 옛 결정 코멘트대로 머지된다.
+옛 결정 코멘트를 편집하지 않는 이유는 3절의 거절 경로와 같다 — 한 번 올린 기록이 바뀐다. 막기 훅(`bot_guard.sh`)이
+auto-merge 가 켜진 PR 의 브랜치로 가는 푸시를 막는다.
+
+**다음 작업을 시작할 때 auto-merge 로 끝낸 PR 들을 본다.** 머지는 사람이 Approve 한 순간 GitHub 이 하므로 세션이 그
+자리에 없고, Approve 를 받고도 머지되지 못할 수도 있다. 다음 작업의 브랜치를 만들기 전에 둘을 본다:
+
+    gh pr list --state open --json number,headRefName,reviewDecision,mergeStateStatus,autoMergeRequest --jq '.[] | select(.autoMergeRequest != null) | "#\(.number) \(.headRefName) \(.reviewDecision) \(.mergeStateStatus)"'
+    gh pr list --state merged --limit 30 --json number,headRefName --jq '.[] | "#\(.number) \(.headRefName)"'
+
+- auto-merge 가 켜진 열린 PR 가운데 `reviewDecision` 이 `APPROVED` 인 것은 Approve 를 받고도 머지되지 못한 것이다.
+  브랜치가 base 보다 뒤처졌거나(`BEHIND` — `install.sh --protect` 가 켜는 브랜치 보호는 최신 브랜치를 요구한다),
+  충돌했거나(`DIRTY`), 필요한 검사가 실패했다(`BLOCKED`). 사람에게 그 PR 과 상태를 알리고, 갱신할지 묻는다. 갱신하면
+  위 「머지되기 전에 다시 해야 하면 먼저 끈다」대로 끄고, base 를 합쳐 푸시하고, 2절부터 다시 한다. 새 커밋이 오면
+  브랜치 보호가 이전 승인을 없던 것으로 하므로 Approve 를 다시 부탁한다
+- `REVIEW_REQUIRED` 인 것은 Approve 를 기다리는 중이라 그대로 둔다
+- 머지된 PR 가운데 로컬 브랜치가 남은 것(`git rev-parse --verify --quiet <headRefName>` 이 출력을 낸다)은
+  `merge-pr <N>` 으로 정리한다 — 2절이 `MERGED` 를 보고 4절과 5절만 한다
+
+그리고 다음 작업의 브랜치는 `origin/<baseRefName>` 에서 만든다. 앞 PR 브랜치 위에 만들면 앞 PR 이 스쿼시로 머지된
+뒤 다음 PR 의 diff 에 그 변경이 다시 나온다. 세션 시작 안내(`bot_session.sh`)와 템플릿 `CLAUDE.md` 의 작업 루프도
+이것을 알린다 — 새 세션이나 컴팩션 뒤의 세션은 이 스킬을 읽지 않은 채 다음 작업을 시작한다. 원격 브랜치를 레포
+설정 「Automatically delete head branches」가 지웠으면 4절의 원격 삭제는 `remote ref does not exist` 로 끝난다. 그
+설정이 꺼진 레포에서는 4절이 지운다(승인은 Approve 다). 머지 뒤에야 나온 것이 있으면 4절의 후속 코멘트로 붙인다.
 
 ## 4. base 복귀와 브랜치 삭제
 
