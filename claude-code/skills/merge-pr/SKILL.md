@@ -162,9 +162,12 @@ $ARGUMENTS
   않는다. `rc=1` 이면 Approve 가 없거나, 이전 커밋에 대한 것이거나, 쓰기 권한자의 Request changes 가
   남아 있거나, 브랜치 보호가 요구하는 승인이 모자라다 — 중단하고 `✗` 줄을 사람에게 보이고, 지금 head 를
   Approve 해 달라고 한다. 3절의 결정 코멘트와 명령 전문을 먼저 출력하고, 응답은 그 부탁으로 끝낸다
-  (`docs/process/verification-stages.md` 6.3). 할 일 · 어디서 · 순서 · 그 뒤 세션이 할 일을 적는다. 길은 둘이고
-  사람이 고른다. PR 웹은 `https://github.com/<owner>/<repo>/pull/<N>/files` 에서 「Review changes」 →
-  「Approve」 → 「Submit review」다. 터미널은 이 세션 밖의 사람 터미널에서
+  (`docs/process/verification-stages.md` 6.3). 할 일 · 어디서 · 순서 · 그 뒤 세션이 할 일을 적는다. 그 뒤에는
+  무엇이 GitHub 에 올라가고 무엇이 실행만 되는지를 나눠 적는다 — 결정 코멘트는 PR 코멘트로, 머지 명령의
+  `--subject` · `--body` 는 `main` 의 커밋 메시지로 올라가고, 브랜치 삭제는 실행만 된다(원격 브랜치가 지워진다).
+  길은 둘이고 사람이 고른다. PR 웹은 `https://github.com/<owner>/<repo>/pull/<N>/files` 에서 오른쪽 위의 초록
+  버튼(새 화면 「Submit review ▾」, 예전 화면 「Review changes」) → 「Approve」 → 「Submit review」다. 새
+  화면에서는 주소가 `/changes` 로 바뀐다. 터미널은 이 세션 밖의 사람 터미널에서
   `gh pr review <N> -R <owner>/<repo> --approve` 다 — 세션이 실행하는 gh 는 봇 계정이라 PR 작성자의 승인이
   되어 GitHub 이 받지 않는다. 알림에도 링크를 넣는다. 승인이 모자란 까닭은 둘이다. 필요 승인 수가 모자라면 다른 리뷰어의
   Approve 를 기다린다. 승인한 사람이 PR 브랜치에 마지막으로 푸시했으면 그 Approve 는 세어지지 않으므로
