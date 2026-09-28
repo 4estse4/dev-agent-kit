@@ -78,7 +78,7 @@ for pr, rec in got.items():
                              'free': rec['free']}, ensure_ascii=False) + '\n')
     if rec['free']:
         notes.append("PR #%s: 사람이 보기 대신 직접 쓴 말(%s)이 있어 그대로 올리지 않는다. 결정이 담긴 이어진 한 구간을 "
-                     "글자 그대로 보기로 만든 창을 다시 띄워 받는다(open-pr 3.5)." % (pr, ', '.join(rec['free'])))
+                     "글자 그대로 보기로 만든 창을 같은 머리말로 다시 띄워 받는다(open-pr 3.5)." % (pr, ', '.join(rec['free'])))
     else:
         notes.append("PR #%s: 사람 계정으로 올릴 결정 %d줄을 기록했다. 지금 `bash %s %s` 로 올린다(open-pr 3.5)."
                      % (pr, len(rec['lines']), script, pr))
