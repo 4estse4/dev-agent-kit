@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SessionStart: 레포에 봇 설정(`.claude/bot.json`)이 있으면 이 세션의 gh 를 봇 계정에 연결한다.
-# 필요: python3 · openssl · curl · git
+# 필요: python3 · openssl · curl · git · gh
 #
 # **왜 연결하나.** 봇 설정이 있으면 세션이 GitHub 에 쓰는 글은 봇 계정으로 올라가고, 사람의 결정은
 # 사람 계정의 코멘트와 Approve 로 남는다. 그래서 GitHub 에서 세션의 글과 사람의 승인이 구분된다.
@@ -62,4 +62,46 @@ env_lines=$(
 printf '%s\n' "$env_lines" >> "$CLAUDE_ENV_FILE"
 printf '%s\n' "$env_lines" > "$dir/session-env"
 : > "$dir/wired/$sid"
-printf '이 세션의 gh 는 봇 계정으로 GitHub 에 쓴다(GH_CONFIG_DIR=%s). 사람의 결정은 사람 계정 코멘트로 남긴다 — 세션이 받은 답은 human_comment.sh 로 올리고(그 명령 바로 전에 응답에 올릴 글의 최종본 전문을 출력한다 — 사람은 그 글을 읽고 권한 프롬프트를 허락한다), 사람이 PR 웹에서 직접 쓸 수도 있다. 사람 계정 코멘트만 (사람) 인용의 원본이다. 머지는 결정 코멘트를 올리고 auto-merge 를 켠 뒤 사람에게 Approve 를 부탁한다 — Approve 가 달리면 GitHub 이 머지하므로 기다리며 확인을 되풀이하지 않는다(merge-pr 3절). 다음 작업의 브랜치는 origin 의 기본 브랜치에서 만들고, 그 전에 auto-merge 가 켜진 열린 PR 과 머지된 PR 을 본다 — Approve 를 받고도 열려 있는 PR 은 사람에게 알리고, 머지된 PR 의 로컬 브랜치는 merge-pr <번호> 로 정리한다(merge-pr 3절).\n' "$dir"
+printf '이 세션의 gh 는 봇 계정으로 GitHub 에 쓴다(GH_CONFIG_DIR=%s). 사람의 결정은 사람 계정 코멘트로 남긴다 — 세션이 받은 답은 human_comment.sh 로 올리고(그 명령 바로 전에 응답에 올릴 글의 최종본 전문을 출력한다 — 사람은 그 글을 읽고 권한 프롬프트를 허락한다), 사람이 PR 웹에서 직접 쓸 수도 있다. 사람 계정 코멘트만 (사람) 인용의 원본이다. 머지는 결정 코멘트를 올리고 auto-merge 를 켠 뒤, 대기 스크립트(wait_merge.sh)를 백그라운드로 켜고 사람에게 Approve 를 부탁한다 — 머지되거나 사람이 봐야 할 일이 생기면 그 스크립트가 끝나 세션이 깨어난다. 머지됐으면 다른 일을 시작하기 전에 「다음 일」 창을 먼저 묻는다(merge-pr 3절). 다음 작업의 브랜치는 origin 의 기본 브랜치에서 만든다.\n' "$dir"
+
+# auto-merge 가 켜진 열린 PR 과, 머지됐는데 로컬 브랜치가 남은 PR 을 알린다. 세션 프로세스가 멈춘 동안 머지됐거나,
+# 컴팩션 · 재시작 뒤라 대기 스크립트를 켠 것을 모르는 세션도 다음 일을 묻기 전에 알게 된다(merge-pr 3절). 로컬
+# 브랜치가 남아 있으면 아직 다음 일을 묻지 않은 것이다 — 표시 파일을 따로 두지 않는다. 다른 워크트리에서 쓰는
+# 브랜치는 그 워크트리 세션의 것이라 뺀다.
+open_prs=$(cd "$root" && GH_CONFIG_DIR="$dir" gh pr list --state open --limit 100 \
+  --json number,headRefName,reviewDecision,mergeStateStatus,autoMergeRequest 2>/dev/null)
+merged_prs=$(cd "$root" && GH_CONFIG_DIR="$dir" gh pr list --state merged --limit 30 \
+  --json number,headRefName 2>/dev/null)
+python3 - "$root" "$here" "$open_prs" "$merged_prs" <<'PY'
+import json, os, subprocess, sys
+root, here, open_prs, merged_prs = sys.argv[1:5]
+NEXT = "(merge-pr 3절 「대기 스크립트가 끝나면」)"
+try:
+    waiting = [p for p in json.loads(open_prs) if p.get('autoMergeRequest')]
+    merged = json.loads(merged_prs)
+except ValueError:
+    print("열린 PR 과 머지된 PR 을 조회하지 못했다. 다음 작업을 시작하기 전에 merge-pr 3절의 두 명령으로 본다.")
+    sys.exit(0)
+script = os.path.relpath(os.path.realpath(os.path.join(here, 'wait_merge.sh')), os.path.realpath(root))
+others, path = set(), ''
+for line in subprocess.run(['git', '-C', root, 'worktree', 'list', '--porcelain'], capture_output=True,
+                           text=True).stdout.splitlines():
+    if line.startswith('worktree '):
+        path = line[9:]
+    elif line.startswith('branch refs/heads/') and os.path.realpath(path) != os.path.realpath(root):
+        others.add(line[18:])
+left = [p for p in merged if p['headRefName'] not in others and subprocess.run(
+    ['git', '-C', root, 'rev-parse', '--verify', '--quiet', 'refs/heads/' + p['headRefName']],
+    capture_output=True).returncode == 0]
+if waiting:
+    print("auto-merge 가 켜진 열린 PR: %s. PR 마다 %s 를 Bash 의 run_in_background 로 켠다 — 같은 PR 을 이미 기다리고 "
+          "있으면 바로 끝난다. Approve 를 받고도(APPROVED) 열려 있는 PR 은 그 상태를 사람에게 알린다%s."
+          % (" · ".join("#%d(%s, %s, %s)" % (p['number'], p['headRefName'], p.get('reviewDecision') or '-',
+                                              p.get('mergeStateStatus')) for p in waiting),
+             " · ".join("`bash %s %d`" % (script, p['number']) for p in waiting), NEXT))
+if left:
+    print("머지됐는데 로컬 브랜치가 남은 PR: %s. 아직 다음 일을 묻지 않은 것이다 — 다른 일을 시작하기 전에 「다음 일」 "
+          "창을 먼저 묻고, 고른 뒤 %s 로 로컬을 정리한다%s."
+          % (" · ".join("#%d(%s)" % (p['number'], p['headRefName']) for p in left),
+             " · ".join("`merge-pr %d`" % p['number'] for p in left), NEXT))
+PY

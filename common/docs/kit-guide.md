@@ -65,7 +65,7 @@ bash .ai-kit/gate/gate.sh --all                 # 전부 (CI 가 부르는 것)
 | App 권한을 바꿨을 때 | GitHub 의 App 설치 설정 | 새 권한을 승인한다(6절) | 설치 토큰이 옛 권한이다 |
 | 사람의 git 설정이 github.com 의 https 를 SSH 로 바꿀 때 | 레포 | 더 긴 규칙으로 이 레포에서만 끈다(6절 「세션의 git 이 닿는 곳」) | 세션의 푸시가 막힌다 |
 | 리뷰 라운드마다 | 세션 · PR 웹 | 세션이 대화에 출력한 결정 코멘트 최종본을 읽고 권한 프롬프트를 허락하거나, PR 웹에 코멘트를 쓴다(6절) | 세션이 다음 단계로 가지 않는다 |
-| 머지 전 | PR 웹 · 터미널 | 세션이 부탁한 head 를 Approve 한다. 세션이 auto-merge 를 켰으면 Approve 하는 순간 GitHub 이 머지하고, 켜지 못했으면 Approve 한 뒤 세션에 알린다(세션의 부탁 블록이 어느 쪽인지 적는다). Approve 뒤에도 브랜치가 뒤처지거나 충돌해 머지되지 못하면 세션이 다음 작업을 시작할 때 알린다. PR 브랜치에 직접 푸시하려면 먼저 세션에 알려 auto-merge 를 끄게 하고, 푸시했으면 세션이 다시 푸시한 뒤에 Approve 한다(6절 6). PR 웹의 「Update branch」 · 「Resolve conflicts」도 PR 브랜치로 가는 사람의 푸시다 | 머지되지 않는다. auto-merge 를 켠 채 사람이 푸시하면 다른 리뷰어의 Approve 로 옛 결정 코멘트대로 머지된다 |
+| 머지 전 | PR 웹 · 터미널 | 세션이 부탁한 head 를 Approve 한다. 세션이 auto-merge 를 켰으면 Approve 하는 순간 GitHub 이 머지하고, 켜지 못했으면 Approve 한 뒤 세션에 알린다(세션의 부탁 블록이 어느 쪽인지 적는다). Approve 뒤에도 브랜치가 뒤처지거나 충돌해 머지되지 못하면 세션의 대기 스크립트가 그것을 보고 세션이 알린다. 머지되면 세션이 「다음 일」 창을 띄운다 — 고르기 전에는 세션이 다음 일을 시작하지 않는다. PR 브랜치에 직접 푸시하려면 먼저 세션에 알려 auto-merge 를 끄게 하고, 푸시했으면 세션이 다시 푸시한 뒤에 Approve 한다(6절 6). PR 웹의 「Update branch」 · 「Resolve conflicts」도 PR 브랜치로 가는 사람의 푸시다 | 머지되지 않는다. auto-merge 를 켠 채 사람이 푸시하면 다른 리뷰어의 Approve 로 옛 결정 코멘트대로 머지된다 |
 
 **커밋 신원.** `install.sh` 는 설치 시점의 `git config user.email` 을 `.ai-kit/identity` 에
 기록하고, 이후 훅이 그 값을 정답으로 검증한다. **틀린 값이 기록되면 훅이 틀린 값을 지켜준다.**
@@ -151,7 +151,8 @@ PR 의 Approve 로. 그래서 GitHub 이 기록한 글쓴이로 세션의 글과
 **머지 승인은 Approve 다.** PR 작성자가 봇이라 사람이 그 PR 을 Approve 할 수 있다 — GitHub 에서
 「Pull request authors cannot approve their own pull requests.」라서, 봇 설정이 없으면 이 길이 없다.
 `merge-pr` 은 결정 코멘트를 올리고 GitHub auto-merge 를 켠 뒤 Approve 를 부탁한다. Approve 가 달리면 GitHub 이
-머지하므로 사람은 세션에 알리지 않아도 된다. auto-merge 를 켤 수 없는 레포(승인을 요구하지 않거나 auto-merge 를
+머지하므로 사람은 세션에 알리지 않아도 된다 — 세션은 백그라운드로 켜 둔 대기 스크립트(`wait_merge.sh`)가 끝나면
+깨어나 머지를 알고, 다른 일을 시작하기 전에 「다음 일」 창을 띄운다. auto-merge 를 켤 수 없는 레포(승인을 요구하지 않거나 auto-merge 를
 허용하지 않은 레포)에서는 사람이 Approve 한 뒤 세션에 알리고, 세션이 지금 head 에 쓰기 권한이 있는 사람 계정의
 Approve 가 있는지 확인해 머지한다.
 
@@ -162,6 +163,7 @@ Approve 가 있는지 확인해 머지한다.
 | 사람 계정으로 올릴 때 | `human_comment.sh` 에 권한 프롬프트를 낸다(세션은 그 전에 대화에 글 전문을 출력한다. 사유에도 전문을 넣는다). 명령의 sha256 이 본문 파일과 다르거나, 한 줄 정규형이 아니거나, 셸의 `-c` 인자 안에 두었으면 막는다(`bot_guard.sh`) | 사람이 허락해야 올라간다 |
 | 라운드 코멘트 게시 | `(사람)` 인용이 사람 계정 코멘트에 글자 그대로 있는지. 봇 계정으로 올리는 3.5 코멘트도 막는다(`round_comment_quotes.sh`) | 막는다 |
 | auto-merge 를 켤 때 | 승인이 모자라 막힌 PR(`reviewDecision` `REVIEW_REQUIRED` · `mergeStateStatus` `BLOCKED`)에서만 켜는지 — gh 는 바로 머지할 수 있는 PR 에서 `--auto` 를 무시하고 그 자리에서 머지한다. auto-merge 가 켜진 PR 의 브랜치로 가는 푸시도 막는다(`bot_guard.sh`) | 막는다. 머지는 브랜치 보호가 요구하는 Approve 가 달릴 때 GitHub 이 한다 |
+| auto-merge 를 켠 뒤 | 켠 명령이 성공하면 대기 스크립트를 켜라고 세션에 알린다(`auto_merge_wait.sh`). 대기 스크립트(`wait_merge.sh`)는 1분에 한 번 PR 을 조회하고 봇 토큰이 끝나 가면 새로 받는다. 세션 시작 때는 auto-merge 가 켜진 열린 PR 과 머지됐는데 로컬 브랜치가 남은 PR 을 알린다(`bot_session.sh`) | 막지 않는다. 머지되거나 사람이 봐야 할 일(닫힘 · auto-merge 꺼짐 · 새 푸시 · 사람의 새 코멘트나 리뷰 · Approve 뒤에도 머지되지 않음 · 잇단 조회 실패)이 생기면 세션을 깨운다 |
 | auto-merge 를 켤 수 없을 때의 머지 전 | 지금 head 에 사람 계정의 Approve 가 있는지(`merge-pr` 2절) | 멈춘다. 브랜치 보호가 승인을 요구하면(3절) GitHub 도 막는다 |
 
 `(사람)` 인용의 원본은 글쓴이의 레포 권한이 write 이상이고(봇 계정은 권한 조회에서 빠진다), 글쓴이가 아닌 계정이

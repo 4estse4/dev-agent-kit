@@ -51,7 +51,9 @@ EOF
 chmod +x "$T/bin/curl"
 # git 의 자격 증명 도우미로 불릴 가짜 gh. 세션 환경에서 git 이 봇(gh)에게 자격 증명을 받는지 본다.
 # 막기 훅이 auto-merge 를 판정하려고 부르는 `gh pr view` · `gh pr list` 에는 STUB_PR_VIEW · STUB_PR_LIST 를
-# 돌려준다. STUB_GH_FAIL 이 있으면 그 조회가 실패하고, STUB_GH_LOG 가 있으면 받은 인자를 적는다.
+# 돌려준다. STUB_GH_FAIL 이 있으면 그 조회가 실패하고, STUB_GH_LOG 가 있으면 받은 인자를, STUB_GH_ENV 가 있으면
+# 받은 GH_CONFIG_DIR 을 적는다.
+# 세션 시작 훅이 부르는 `gh pr list --state merged` 에는 STUB_PR_MERGED 를 돌려준다.
 cat > "$T/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 if [ "$1 $2 $3" = "auth git-credential get" ]; then
@@ -59,11 +61,17 @@ if [ "$1 $2 $3" = "auth git-credential get" ]; then
   exit 0
 fi
 [ -n "${STUB_GH_LOG:-}" ] && printf '%s\n' "$*" >> "$STUB_GH_LOG"
+[ -n "${STUB_GH_ENV:-}" ] && printf '%s\n' "${GH_CONFIG_DIR:-}" >> "$STUB_GH_ENV"
 [ -n "${STUB_GH_FAIL:-}" ] && { echo 'stub: 조회 실패' >&2; exit 1; }
 need='{"reviewDecision":"REVIEW_REQUIRED","mergeStateStatus":"BLOCKED"}'
 case "$1 $2" in
   "pr view") printf '%s\n' "${STUB_PR_VIEW:-$need}"; exit 0 ;;
-  "pr list") printf '%s\n' "${STUB_PR_LIST:-[]}"; exit 0 ;;
+  "pr list")
+    case " $* " in
+      *" merged "*) printf '%s\n' "${STUB_PR_MERGED:-[]}" ;;
+      *) printf '%s\n' "${STUB_PR_LIST:-[]}" ;;
+    esac
+    exit 0 ;;
 esac
 exit 1
 EOF
@@ -147,6 +155,27 @@ mv "$T/home/.config/kit-bot/key.pem" "$T/key.bak"
 session "다시 시작, 개인키 없음" "$R"
 mv "$T/key.bak" "$T/home/.config/kit-bot/key.pem"
 ok "다시 시작할 때 토큰을 못 받으면 앞선 연결 표시를 지운다" '[ ! -f "$BOTDIR/wired/s1" ]'
+
+# 세션 시작 때 auto-merge 가 켜진 열린 PR 과, 머지됐는데 로컬 브랜치가 남은 PR 을 알린다
+ok "알릴 PR 이 없으면 목록을 출력하지 않는다" '! printf "%s" "$OUT" | grep -qF "열린 PR:" && ! printf "%s" "$OUT" | grep -qF "남은 PR:"'
+git -C "$R" commit -q --allow-empty -m init
+git -C "$R" branch feat/c; git -C "$R" branch feat/d
+git -C "$R" worktree add -q "$T/wt" feat/d
+: > "$T/gh-env"
+STUB_GH_ENV="$T/gh-env" STUB_PR_LIST='[{"number": 5, "headRefName": "feat/a", "reviewDecision": "APPROVED", "mergeStateStatus": "BEHIND", "autoMergeRequest": {"mergeMethod": "SQUASH"}}, {"number": 6, "headRefName": "feat/b", "reviewDecision": "", "mergeStateStatus": "CLEAN", "autoMergeRequest": null}]' \
+STUB_PR_MERGED='[{"number": 4, "headRefName": "feat/c"}, {"number": 3, "headRefName": "feat/gone"}, {"number": 2, "headRefName": "feat/d"}]' \
+  session "알릴 PR 이 있음" "$R"
+ok "auto-merge 가 켜진 열린 PR 과 그 상태를 알린다" 'printf "%s" "$OUT" | grep -qF "#5(feat/a, APPROVED, BEHIND)"'
+ok "그 PR 마다 대기 스크립트를 켜라고 알린다" 'printf "%s" "$OUT" | grep -qF "wait_merge.sh 5"'
+ok "auto-merge 가 꺼진 열린 PR 은 알리지 않는다" '! printf "%s" "$OUT" | grep -qF "#6("'
+ok "머지됐는데 로컬 브랜치가 남은 PR 을 알린다" 'printf "%s" "$OUT" | grep -qF "#4(feat/c)" && printf "%s" "$OUT" | grep -qF "merge-pr 4"'
+ok "로컬 브랜치가 없는 머지된 PR 은 알리지 않는다" '! printf "%s" "$OUT" | grep -qF "#3("'
+ok "다른 워크트리에서 쓰는 브랜치의 머지된 PR 은 알리지 않는다" '! printf "%s" "$OUT" | grep -qF "#2("'
+no_token_in_out "알릴 PR 이 있음"
+ok "PR 목록은 봇 계정으로 조회한다" '[ "$(wc -l < "$T/gh-env")" -ge 2 ] && ( while read -r d; do [ "$d" -ef "$BOTDIR" ] || exit 1; done < "$T/gh-env" )'
+STUB_GH_FAIL=1 session "PR 조회 실패" "$R"
+ok "PR 을 조회하지 못하면 그렇다고 알린다" 'printf "%s" "$OUT" | grep -qF "조회하지 못했다" && [ -f "$BOTDIR/wired/s1" ]'
+git -C "$R" worktree remove --force "$T/wt"
 
 repo "$R" "" no
 session "봇 설정 없음" "$R"
