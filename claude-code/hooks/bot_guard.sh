@@ -28,14 +28,27 @@
 #   https 로 바꾸지만, 사람의 git 설정(`url.<ssh>.insteadOf` · `pushInsteadOf`)이 https 를 다시 SSH 로
 #   바꾸면 그 푸시에는 SSH 키, 곧 사람 계정이 쓰인다. 세션 환경(`<봇 디렉터리>/session-env`)을 적용해
 #   실제 푸시 주소를 풀고(`push_urls`), 풀지 못하면 막는다
+# - 바로 머지될 PR 에 auto-merge 를 켜는 것. gh 는 바로 머지할 수 있는 PR 에서 `--auto` 를 무시하고 그
+#   자리에서 머지하고, 승인을 요구하지 않는 레포에서는 검사가 끝나면 Approve 없이 머지된다. 승인이 모자라
+#   막힌 PR(`reviewDecision` `REVIEW_REQUIRED` · `mergeStateStatus` `BLOCKED`)에서만 켜게 하고, 조회하지
+#   못하면 막는다(`merge_auto`)
+# - auto-merge 가 켜진 PR 의 브랜치로 가는 푸시. 켠 채 푸시하면 사람이 새 커밋을 보고 누른 Approve 가 옛
+#   결정 코멘트대로 머지된다. 푸시가 바꿀 브랜치(`push_branches`)의 열린 PR 을 조회하고, 조회하지 못하면
+#   막는다
 # - 봇 토큰이 끝나 가는데 새로 받지 못한 뒤의 쓰기
 #
-# **사람 계정으로 올리는 명령에는 묻는다.** 사람의 결정은 사람 계정 코멘트로 남는다. 세션이 받은
-# 답을 올리는 길은 `human_comment.sh` 하나이고, 그 명령에 권한 프롬프트(`ask`)를 낸다(`human_comment`).
-# 사람은 세션이 명령 바로 전에 응답에 출력한 글을 읽고 허락한다. 사유에도 글 전문을 넣지만 폰(Remote
-# Control) 화면에는 보이지 않았다 — 사유는 덧붙이는 것이다. 한 줄 정규형이 아니거나, 스크립트가 이 훅과
-# 같은 디렉터리의 것이 아니거나, 명령의 sha256 이 파일과 다르거나, 셸의 `-c` 인자 안에 두었으면
-# (`wraps`) 막는다.
+# **사람 계정으로 올리는 명령은 모양만 본다.** 사람의 결정은 사람 계정 코멘트로 남는다. 그 길은
+# `human_comment.sh <PR>` 하나이고, 그 스크립트가 올리는 글은 창 기록 훅(`window_record.sh`)이 봇 디렉터리에
+# 적은 기록뿐이다 — 사람이 창에서 고른 보기다. 세션은 그 기록을 읽지도 쓰지도 못하고(위의 봇 디렉터리 막음),
+# 창에서 고른 것이 게시 동의라서 권한 프롬프트를 내지 않는다. 한 줄 정규형이 아니거나, 스크립트가 이 훅과
+# 같은 디렉터리의 것이 아니거나(세션이 레포의 하위 디렉터리에서 입력한 경우도 여기 든다 — 경로를 cwd 기준으로
+# 푼다), 셸의 `-c` 인자 안에 두었으면(`wraps`) 막는다(`human_comment`).
+#
+# **창 기록 훅을 세션이 직접 실행하면 막는다.** 그 훅에 지어낸 창 결과를 표준입력으로 주면 사람이 고르지 않은
+# 결정이 기록되고, 게시 스크립트는 그 기록을 권한 프롬프트 없이 사람 계정으로 올린다. 사람이 정했다 — 작정한
+# 우회만이 아니라, 훅이 등록되지 않은 세션이 사람이 창에서 고른 것을 되살리려는 실수도 이 모양이다. 구문 검사
+# (`bash -n`)와 읽기는 실행이 아니라 막지 않는다. 이 훅은 cwd 가 봇 설정이 있는 레포 안일 때만 판정하므로, 레포
+# 밖을 cwd 로 두고 실행하는 것은 막지 못한다(작정한 우회다).
 #
 # **명령 치환 안도 본다.** `$(…)` · 백틱 안의 명령을 꺼내 같은 판정을 한다. `url=$(gh pr create …)` ·
 # `-H "Authorization: token $(gh auth token)"` 은 흔한 셸 관용구다. heredoc 의 본문은 명령에 전달하는
@@ -60,12 +73,12 @@
 input=$(cat)
 # 모든 Bash 호출마다 실행되므로 관련 글자가 없으면 파이썬을 실행하지 않고 끝낸다.
 case "$input" in
-  *gh*|*git*|*GH_*|*GITHUB_TOKEN*|*GIT_CONFIG*|*credential*|*ai-kit-bot*|*human_comment*|*human_review*|*'env -'*) ;;
+  *gh*|*git*|*GH_*|*GITHUB_TOKEN*|*GIT_CONFIG*|*credential*|*ai-kit-bot*|*human_comment*|*human_review*|*window_record*|*'env -'*) ;;
   *) exit 0 ;;
 esac
 
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)" HOOK_INPUT="$input" python3 - <<'PY'
-import datetime, hashlib, json, os, re, shlex, subprocess, sys
+import datetime, json, os, re, shlex, subprocess, sys
 
 GUIDE = "docs/process/kit-guide.md 의 「봇 계정과 사람의 승인」 절"
 
@@ -312,42 +325,30 @@ def wraps(seg, name):
     return False
 
 
-HUMAN = re.compile(r'bash[ \t]+(\S+)[ \t]+(\d+)[ \t]+(\S+)[ \t]+(\S+)(?:[ \t]+-R[ \t]+(\S+))?')
-HUMAN_CANON = ("`bash .claude/hooks/human_comment.sh <PR 번호> <본문 파일의 절대 경로> <sha256> "
-               "[-R <owner/repo>]`")
+HUMAN = re.compile(r'bash[ \t]+(\S+)[ \t]+(\d+)(?:[ \t]+-R[ \t]+(\S+))?')
+HUMAN_CANON = "`bash .claude/hooks/human_comment.sh <PR 번호> [-R <owner/repo>]`"
 
 
 def human_comment():
-    """사람 계정으로 올리는 명령에 권한 프롬프트를 낸다. 사유에도 올릴 글 전문을 넣는다.
+    """사람 계정으로 올리는 명령이 한 줄 정규형이고 이 훅과 같은 디렉터리의 스크립트인지 본다.
 
-    사람은 세션이 명령 바로 전에 응답에 출력한 최종본을 읽고 이 프롬프트를 허락한다. 사유는 사람에게만
-    보이지만(hooks 문서: "For "allow" and "ask", shown to the user but not Claude") 폰 화면에는 보이지
-    않았으므로 덧붙이는 것이다. 허락한 글과 올라가는 글이 같아야 한다 — 한 줄 정규형만 받고(다른 명령과
-    이으면 무엇이 실행되는지 이 훅이 다 알지 못한다), 스크립트는 이 훅과 같은 디렉터리의 것이어야 하고,
-    명령의 sha256 이 파일과 맞아야 한다. 스크립트도 올리기 직전에 sha256 을 다시 본다."""
+    그 스크립트가 올리는 글은 창 기록 훅(`window_record.sh`)이 적은 기록뿐이다 — 사람이 창에서 고른 보기로
+    만든 줄이고, 세션은 그 기록을 읽지도 쓰지도 못한다. 창에서 고른 것이 게시 동의라서 권한 프롬프트를 내지
+    않는다. 다른 명령과 이으면 무엇이 실행되는지 이 훅이 다 알지 못하므로 한 줄 정규형만 받는다."""
     line = cmd.strip()
     m = HUMAN.fullmatch(line)
     if not m or re.search(r'[;&|<>$`\\\'"\n()]', line):
-        deny("사람 계정으로 올리는 명령은 한 줄 정규형으로 따로 입력한다: " + HUMAN_CANON + ". 다른 명령과 "
-             "잇거나 명령 치환 · 따옴표 · 리다이렉트를 쓰면 권한 프롬프트에 보인 글이 그대로 올라가는지 이 훅이 "
-             "알 수 없다.")
-    script, number, path, sha, repo = m.groups()
+        deny("사람 계정으로 올리는 명령은 한 줄 정규형으로 따로 입력한다: " + HUMAN_CANON + ". 올리는 글은 "
+             "창에서 사람이 고른 보기의 기록뿐이라 본문 파일을 받지 않는다. 다른 명령과 잇거나 명령 치환 · "
+             "따옴표 · 리다이렉트를 쓰면 무엇이 실행되는지 이 훅이 알 수 없다.")
     mine = os.path.realpath(os.path.join(os.environ['HOOK_DIR'], 'human_comment.sh'))
-    if os.path.realpath(os.path.join(cwd or os.getcwd(), script)) != mine:
-        deny("사람 계정으로 올리는 스크립트는 이 훅과 같은 디렉터리의 것만 받는다: " + mine)
-    if not os.path.isabs(path):
-        deny("사람 계정으로 올릴 본문 파일은 절대 경로로 준다: " + HUMAN_CANON)
-    try:
-        with open(path, 'rb') as fh:
-            raw = fh.read()
-        text = raw.decode('utf-8')
-    except (OSError, UnicodeDecodeError):
-        deny("사람 계정으로 올릴 본문 파일을 읽지 못했다(없거나 UTF-8 이 아니다): " + path)
-    if hashlib.sha256(raw).hexdigest() != sha:
-        deny("본문 파일의 sha256 이 명령에 적은 값과 다르다. `shasum -a 256 " + path + "` 로 다시 구해 "
-             "입력한다.")
-    decide("ask", "사람 계정으로 PR #%s%s 에 아래 글을 코멘트로 올린다. 글 전문을 읽고, 사람이 정한 것과 "
-                  "같을 때만 허락한다.\n\n%s" % (number, ' (' + repo + ')' if repo else '', text))
+    if os.path.realpath(os.path.join(cwd or os.getcwd(), m.group(1))) != mine:
+        # 알려 주는 경로는 레포 루트에서 이 훅의 스크립트까지다 — 설치된 레포는 `.claude/hooks/…` 이고, 훅을
+        # 다른 곳에서 등록한 레포(킷 레포)는 그 자리다
+        rel = os.path.relpath(mine, os.path.realpath(top.stdout.strip()))
+        deny("사람 계정으로 올리는 스크립트는 이 훅과 같은 디렉터리의 것만 받는다: " + mine + ". 레포 루트에서 "
+             "`bash " + rel + " <PR 번호> [-R <owner/repo>]` 로 입력한다 — 세션이 하위 디렉터리에 있으면 먼저 "
+             "cd 로 레포 루트로 옮긴다(한 줄로 잇지 않는다). 설치되는 settings.json 의 allow 도 그 모양만 받는다.")
 
 
 body = strip_heredocs(cmd)
@@ -375,8 +376,13 @@ if any(clears_env(s) for s in segs):
     deny("이 레포에는 봇 설정(.claude/bot.json)이 있어, 환경을 비우는 env -i(--ignore-environment · -)는 "
          "막는다. 그 뒤의 gh 와 git 은 봇 계정 연결을 잃고 사람 계정으로 쓴다. 사람 계정으로 올릴 결정은 "
          "human_comment.sh 로 올린다.")
+if any(runs(s, 'window_record.sh') or wraps(s, 'window_record.sh') for s in segs):
+    deny("창 기록 훅(window_record.sh)은 Claude Code 가 질문 창이 끝날 때 실행한다. 세션이 직접 실행하면 사람이 "
+         "고르지 않은 결정이 기록돼 사람 계정으로 올라가므로 막는다. 창 뒤에 창 기록 훅의 안내가 오지 않았으면 "
+         "open-pr 3.5 대로 한다 — 질문의 게시 표지가 글자 그대로가 아니면 고쳐 같은 창을 다시 띄우고, 표지가 "
+         "맞으면 훅이 실행되지 않은 것이라 PR 링크와 쓸 글을 적어 PR 웹에 써 달라고 요청한다.")
 if any(wraps(s, 'human_comment.sh') for s in segs):
-    deny("사람 계정으로 올리는 명령을 셸의 -c 인자 안에 두면 이 훅이 권한 프롬프트를 내지 못해 막는다. 한 줄 "
+    deny("사람 계정으로 올리는 명령을 셸의 -c 인자 안에 두면 이 훅이 그 모양을 보지 못해 막는다. 한 줄 "
          "정규형으로 따로 입력한다: " + HUMAN_CANON)
 if any(runs(s, 'human_comment.sh') for s in segs):
     human_comment()
@@ -456,6 +462,14 @@ def push_remote(rest):
     return repo
 
 
+def session_run(prog, *a):
+    """세션 환경(`<봇 디렉터리>/session-env`)을 적용해 git · gh 를 실행한다. 이 훅은 세션의 Bash 가 받는
+    환경을 받지 않으므로, 세션의 명령이 쓸 설정 · 계정을 보려면 그 파일을 적용해야 한다."""
+    return subprocess.run(
+        ['bash', '-c', '[ -f "$0" ] && { set -a; . "$0"; set +a; }; exec "$@"',
+         os.path.join(botdir, 'session-env'), prog, *a], cwd=cwd, capture_output=True, text=True)
+
+
 def push_urls(args):
     """연결된 세션의 git 이 이 푸시에 실제로 쓸 주소들. 풀지 못하면 빈 목록이다.
 
@@ -469,12 +483,9 @@ def push_urls(args):
       pushInsteadOf 가 맞는 URL 이 하나도 없으면 insteadOf 를 적용한 것이다.
     - 규칙이 여럿 맞으면 바꿀 앞부분이 가장 긴 것을 쓴다."""
     pre, _, rest = git_parts(args)
-    envf = os.path.join(botdir, 'session-env')
 
     def git(*a):
-        return subprocess.run(
-            ['bash', '-c', '[ -f "$0" ] && { set -a; . "$0"; set +a; }; exec git "$@"', envf, *pre, *a],
-            cwd=cwd, capture_output=True, text=True)
+        return session_run('git', *pre, *a)
 
     def cfg(key):
         return git('config', '--get-all', key).stdout.splitlines()
@@ -509,6 +520,98 @@ def push_urls(args):
         [alias(u, 'insteadof') or u for u in urls]
 
 
+# `gh pr merge` 의 플래그 가운데 값을 받는 것(gh 2.92 의 `gh pr merge --help`)
+MERGE_VALUED = {'-R', '--repo', '-t', '--subject', '-b', '--body', '-F', '--body-file',
+                '--match-head-commit', '-A', '--author-email'}
+
+
+def merge_auto(args):
+    """gh 호출 하나가 auto-merge 를 켜는 `gh pr merge --auto` 면 (PR 자리, 레포)를, 아니면 None 을 돌려준다.
+    PR 자리를 주지 않았으면 ''(지금 브랜치의 PR)이다."""
+    if words(args, 2) != ['pr', 'merge']:
+        return None
+    if not any(t == '--auto' or (t.startswith('--auto=') and t[7:].lower() not in ('false', '0'))
+               for t in args):
+        return None
+    pos, repo, i = [], '', 0
+    while i < len(args):
+        t = args[i]
+        i += 1
+        if t in ('-R', '--repo'):
+            repo, i = (args[i] if i < len(args) else ''), i + 1
+        elif t.startswith('--repo='):
+            repo = t[7:]
+        elif t.startswith('-R') and len(t) > 2:
+            repo = t[2:]
+        elif t in MERGE_VALUED:
+            i += 1
+        elif not t.startswith('-'):
+            pos.append(t)
+    return (pos[2] if len(pos) > 2 else ''), repo
+
+
+def push_branches(args):
+    """`git push` 가 바꿀 수 있는 원격 브랜치 이름들. 모든 브랜치이거나 알 수 없으면 None.
+
+    원격 다음 낱말이 refspec 이고, 받는 쪽(`:` 뒤, 없으면 그 낱말)이 브랜치다. refspec 이 없으면 지금
+    브랜치를 푸시한다(git 의 기본 `push.default=simple`)."""
+    pre, _, rest = git_parts(args)
+    pos, i, every = [], 0, False
+    while i < len(rest):
+        t = rest[i]
+        i += 1
+        if t == '--':
+            pos += rest[i:]
+            break
+        if not t.startswith('-') or t == '-':
+            pos.append(t)
+        elif t.startswith('--'):
+            name, eq, _ = t[2:].partition('=')
+            if name in ('all', 'branches', 'mirror'):
+                every = True
+            elif not eq and name and any(v.startswith(name) for v in PUSH_VALUED):
+                i += 1
+        elif t.find('o', 1) == len(t) - 1:
+            i += 1
+    if every:
+        return None
+    cur = session_run('git', *pre, 'symbolic-ref', '-q', '--short', 'HEAD').stdout.strip()
+    got = set()
+    for r in pos[1:] or ['HEAD']:
+        dst = r.lstrip('+').split(':', 1)[-1]
+        if dst in ('HEAD', '@', ''):
+            dst = cur
+        if not dst or '*' in dst:
+            return None
+        got.add(re.sub(r'^refs/heads/', '', dst))
+    return got
+
+
+# gh 는 바로 머지할 수 있는 PR(CLEAN · HAS_HOOKS · UNSTABLE)에서 `--auto` 를 무시하고 그 자리에서 머지한다
+# (gh v2.92.0 `pkg/cmd/pr/merge/merge.go` 의 `isImmediatelyMergeable`). 승인을 요구하지 않는 레포라면
+# 검사가 끝나 막힘이 풀리는 순간 Approve 없이 머지된다. 그래서 승인이 모자라 막힌 PR 에서만 켠다.
+for a in gh_calls:
+    target = merge_auto(a)
+    if target is None:
+        continue
+    sel, repo = target
+    r = session_run('gh', 'pr', 'view', *([sel] if sel else []), *(['-R', repo] if repo else []),
+                    '--json', 'reviewDecision,mergeStateStatus')
+    try:
+        st = json.loads(r.stdout) if not r.returncode else None
+    except ValueError:
+        st = None
+    if not isinstance(st, dict):
+        deny("PR 의 상태를 조회하지 못해 auto-merge 를 켜는 명령을 막는다. 조회가 되는지 `gh pr view "
+             + (sel or '') + " --json reviewDecision,mergeStateStatus` 로 본 뒤 다시 실행한다.")
+    if (st.get('reviewDecision'), st.get('mergeStateStatus')) != ('REVIEW_REQUIRED', 'BLOCKED'):
+        deny("auto-merge 는 승인이 모자라 막힌 PR(reviewDecision REVIEW_REQUIRED · mergeStateStatus "
+             "BLOCKED)에서만 켠다. 지금은 reviewDecision %s · mergeStateStatus %s 다. gh 는 바로 머지할 수 "
+             "있는 PR 에서 --auto 를 무시하고 그 자리에서 머지하고, 승인을 요구하지 않는 레포에서는 검사가 "
+             "끝나면 Approve 없이 머지된다. 상태가 UNKNOWN 이면 잠시 뒤 다시 실행한다. 그 밖의 상태에서는 "
+             "merge-pr 2절의 「그 밖이면 세션이 Approve 를 확인한다」를 따른다(사람이 Approve 한 뒤 "
+             "human_review.sh 로 확인하고 --auto 없이 머지)." % (st.get('reviewDecision'), st.get('mergeStateStatus')))
+
 # 세션 환경은 github.com 의 SSH 주소를 https 로 바꾸지만, 사람의 git 설정이 https 를 다시 SSH 로 바꾸면
 # (`url.<ssh>.insteadOf` · `pushInsteadOf`) 그 푸시에는 SSH 키, 곧 사람 계정이 쓰인다.
 for a in git_calls:
@@ -524,5 +627,30 @@ for a in git_calls:
             deny("이 푸시의 주소는 " + u + " 다. github.com 의 SSH 주소라서 봇이 아니라 SSH 키, 곧 사람 계정으로 "
                  "푸시된다. 세션은 github.com 의 SSH 주소를 https 로 바꿔 쓰지만, 사람의 git 설정(url.….insteadOf · "
                  "pushInsteadOf)이 https 를 SSH 로 다시 바꾼다. 그 설정을 이 레포에서 끄는 법은 " + GUIDE + "에 있다.")
+    # auto-merge 를 켠 뒤 그 브랜치에 푸시하면, 사람이 새 커밋을 보고 누른 Approve 가 옛 결정 코멘트대로
+    # 머지된다. 먼저 끄게 한다.
+    slugs = {m.group(1) for u in urls
+             for m in [re.match(r'^https://github\.com/([^/]+/[^/]+?)(?:\.git)?/?$', u)] if m}
+    if not slugs:
+        continue
+    targets = push_branches(a)
+    for slug in sorted(slugs):
+        r = session_run('gh', 'pr', 'list', '-R', slug, '--state', 'open', '--limit', '100',
+                        '--json', 'number,headRefName,autoMergeRequest')
+        try:
+            prs = json.loads(r.stdout) if not r.returncode else None
+        except ValueError:
+            prs = None
+        if not isinstance(prs, list):
+            deny("이 푸시가 바꿀 브랜치의 PR 에 auto-merge 가 켜져 있는지 조회하지 못해 막는다. `gh pr list -R "
+                 + slug + " --json number,headRefName,autoMergeRequest` 가 되는지 본 뒤 다시 실행한다.")
+        for p in prs:
+            if p.get('autoMergeRequest') and (targets is None or p.get('headRefName') in targets):
+                deny("PR #%s 에 auto-merge 가 켜져 있어 그 브랜치(%s)에 푸시하는 것을 막는다. 켠 채 푸시하면 "
+                     "사람이 새 커밋을 보고 누른 Approve 가 옛 결정 코멘트대로 머지된다. 먼저 `gh pr merge %s "
+                     "--disable-auto` 로 끄고, 옛 결정 코멘트 뒤에 「auto-merge 를 껐다. 이 결정 코멘트로는 머지하지 "
+                     "않는다.」 한 줄을 남긴 뒤 푸시하고, 2절부터 다시 한다 — 2절이 새 커밋을 나열하며 멈추고, "
+                     "한 라운드 더 할지는 사람이 정한다(merge-pr 3절 「머지되기 전에 다시 해야 하면 먼저 끈다」)."
+                     % (p.get('number'), p.get('headRefName'), p.get('number')))
 sys.exit(0)
 PY

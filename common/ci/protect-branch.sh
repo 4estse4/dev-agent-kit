@@ -9,6 +9,10 @@
 # PR 작성자와 푸시한 계정이 봇이라 사람이 승인할 수 있다. 없으면 PR 작성자가 사람 자신이라 자기 PR 을
 # 승인할 수 없어(GitHub: "Pull request authors cannot approve their own pull requests.") 승인을
 # 요구하지 않는다 — 요구하면 모든 머지가 막힌다.
+#
+# 봇 설정이 있으면 레포 설정 「Allow auto-merge」 · 「Automatically delete head branches」도 켠다. 세션은
+# 결정 코멘트를 올리고 auto-merge 를 켠 뒤 Approve 를 요청하고(`merge-pr` 3절), 사람이 Approve 하면
+# GitHub 이 머지하고 head 브랜치를 지운다.
 set -uo pipefail
 BRANCH="${1:-main}"; shift || true
 CHECKS=("$@"); [ ${#CHECKS[@]} -eq 0 ] && CHECKS=(gate security trace)
@@ -43,7 +47,16 @@ out=$(printf '%s' "$body" | gh api -X PUT "repos/$slug/branches/$BRANCH/protecti
 rc=$?
 if [ $rc -eq 0 ]; then
   echo "protect ✓ $slug@$BRANCH — 필수 체크: ${CHECKS[*]} · force push·삭제 금지 · PR 필수 · 필요 승인 $approvals"
-  exit 0
+  [ "$approvals" = 1 ] || exit 0
+  out=$(printf '{"allow_auto_merge": true, "delete_branch_on_merge": true}' \
+    | gh api -X PATCH "repos/$slug" --input - 2>&1)
+  if [ $? -eq 0 ]; then
+    echo "protect ✓ $slug — auto-merge 허용 · 머지 뒤 head 브랜치 삭제"
+    exit 0
+  fi
+  echo "protect ✗ 레포 설정(auto-merge 허용 · 머지 뒤 head 브랜치 삭제) 실패" >&2
+  printf '%s\n' "$out" | head -5 >&2
+  exit 1
 fi
 
 echo "protect ✗ 설정 실패" >&2

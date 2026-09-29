@@ -50,12 +50,21 @@ if '-w' in a:
 EOF
 chmod +x "$T/bin/curl"
 # git 의 자격 증명 도우미로 불릴 가짜 gh. 세션 환경에서 git 이 봇(gh)에게 자격 증명을 받는지 본다.
+# 막기 훅이 auto-merge 를 판정하려고 부르는 `gh pr view` · `gh pr list` 에는 STUB_PR_VIEW · STUB_PR_LIST 를
+# 돌려준다. STUB_GH_FAIL 이 있으면 그 조회가 실패하고, STUB_GH_LOG 가 있으면 받은 인자를 적는다.
 cat > "$T/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 if [ "$1 $2 $3" = "auth git-credential get" ]; then
   printf 'username=x-access-token\npassword=from-gh-bot\n'
   exit 0
 fi
+[ -n "${STUB_GH_LOG:-}" ] && printf '%s\n' "$*" >> "$STUB_GH_LOG"
+[ -n "${STUB_GH_FAIL:-}" ] && { echo 'stub: 조회 실패' >&2; exit 1; }
+need='{"reviewDecision":"REVIEW_REQUIRED","mergeStateStatus":"BLOCKED"}'
+case "$1 $2" in
+  "pr view") printf '%s\n' "${STUB_PR_VIEW:-$need}"; exit 0 ;;
+  "pr list") printf '%s\n' "${STUB_PR_LIST:-[]}"; exit 0 ;;
+esac
 exit 1
 EOF
 chmod +x "$T/bin/gh"
@@ -171,7 +180,7 @@ no_token_in_out "CLAUDE_ENV_FILE 없음"
 echo "── gh 명령 막기(bot_guard.sh)"
 repo "$R" "" no
 guard "봇 설정이 없으면 막지 않는다" pass "gh pr comment 1 --body-file /tmp/x.md"
-guard "봇 설정이 없으면 사람 계정 게시에도 묻지 않는다" pass "bash $H/human_comment.sh 1 /tmp/x.md $(printf '0%.0s' $(seq 64))"
+guard "봇 설정이 없으면 사람 계정 게시 명령도 막지 않는다(스크립트가 봇 설정이 없다며 끝난다)" pass "bash $H/human_comment.sh 1"
 
 repo "$R"
 guard "연결 전의 게시" deny "gh pr comment 1 --body-file /tmp/x.md" "$R" "연결"
@@ -283,32 +292,88 @@ git -C "$R" remote set-url origin git@github.com:o/r.git
 guard "SSH origin 의 푸시(세션이 https 로 바꿔 쓴다)" pass "git push origin HEAD"
 git -C "$R" remote set-url origin https://github.com/o/r.git
 
+echo "── auto-merge"
+# gh 는 바로 머지할 수 있는 PR(CLEAN · HAS_HOOKS · UNSTABLE)에서 --auto 를 무시하고 그 자리에서 머지한다
+# (gh v2.92.0 pkg/cmd/pr/merge/merge.go 의 isImmediatelyMergeable). 승인이 모자라 막힌 PR 에서만 켠다.
+NEED='{"reviewDecision":"REVIEW_REQUIRED","mergeStateStatus":"BLOCKED"}'
+AUTO="gh pr merge 5 --auto --squash --match-head-commit abc --subject s --body b"
+STUB_PR_VIEW=$NEED guard "승인이 모자라 막힌 PR 에 auto-merge" pass "$AUTO"
+STUB_PR_VIEW='{"reviewDecision":"REVIEW_REQUIRED","mergeStateStatus":"CLEAN"}' guard "바로 머지할 수 있는 PR 에 auto-merge" deny "$AUTO" "$R" "바로 머지"
+STUB_PR_VIEW='{"reviewDecision":"APPROVED","mergeStateStatus":"CLEAN"}' guard "이미 승인된 PR 에 auto-merge" deny "$AUTO"
+STUB_PR_VIEW='{"reviewDecision":"REVIEW_REQUIRED","mergeStateStatus":"UNSTABLE"}' guard "검사가 실패했지만 머지할 수 있는 PR 에 auto-merge" deny "$AUTO"
+# 승인을 요구하지 않는 레포에서는 검사가 끝나 BLOCKED 가 풀리면 Approve 없이 머지된다
+STUB_PR_VIEW='{"reviewDecision":null,"mergeStateStatus":"BLOCKED"}' guard "승인을 요구하지 않는 레포의 auto-merge" deny "$AUTO" "$R" "승인"
+STUB_PR_VIEW='{"reviewDecision":"REVIEW_REQUIRED","mergeStateStatus":"UNKNOWN"}' guard "상태를 아직 모르는 PR 에 auto-merge" deny "$AUTO"
+STUB_GH_FAIL=1 guard "PR 을 조회하지 못한 auto-merge" deny "$AUTO" "$R" "조회"
+STUB_PR_VIEW='{"reviewDecision":"REVIEW_REQUIRED","mergeStateStatus":"CLEAN"}' guard "명령 치환 안의 auto-merge" deny "x=\$($AUTO)"
+STUB_PR_VIEW='{"reviewDecision":"REVIEW_REQUIRED","mergeStateStatus":"CLEAN"}' guard "값을 붙여 쓴 --auto=true" deny "gh pr merge 5 --auto=true --squash"
+STUB_PR_VIEW='{"reviewDecision":"REVIEW_REQUIRED","mergeStateStatus":"CLEAN"}' guard "auto-merge 끄기(--disable-auto)" pass "gh pr merge 5 --disable-auto"
+# 조회는 명령이 가리킨 PR 과 레포로 한다. 값을 받는 플래그의 값을 PR 로 읽으면 다른 PR 을 판정한다.
+: > "$T/gh-log"
+STUB_GH_LOG="$T/gh-log" STUB_PR_VIEW=$NEED guard "레포와 값 있는 플래그 뒤의 PR" pass "gh pr -R o/r merge --subject 5x --auto 7"
+ok "auto-merge 판정은 명령의 PR 과 레포를 조회한다" 'grep -E "^pr view 7( |$)" "$T/gh-log" | grep -qE -- "-R o/r( |$)"'
+# 켠 뒤에 푸시하면 사람이 새 커밋을 보고 누른 Approve 로 옛 결정 코멘트대로 머지된다. 먼저 끈다.
+ON='[{"number":5,"headRefName":"work","autoMergeRequest":{"enabledAt":"2026-09-28T00:00:00Z"}}]'
+OFF='[{"number":5,"headRefName":"work","autoMergeRequest":null}]'
+STUB_PR_LIST=$ON guard "auto-merge 가 켜진 PR 의 브랜치에 푸시" deny "git push" "$R" "--disable-auto"
+STUB_PR_LIST=$ON guard "auto-merge 가 켜진 브랜치에 HEAD 로 푸시" deny "git push origin HEAD"
+STUB_PR_LIST=$ON guard "auto-merge 가 켜진 브랜치 이름으로 푸시" deny "git push -u origin work"
+STUB_PR_LIST=$ON guard "다른 브랜치에서 refspec 으로 푸시" deny "git push origin other:refs/heads/work"
+# 지금 브랜치(work)가 아닌 브랜치의 PR 에 켜져 있어도, 모든 브랜치를 푸시하면 그 브랜치도 바뀐다
+SIDE='[{"number":6,"headRefName":"side","autoMergeRequest":{"enabledAt":"2026-09-28T00:00:00Z"}}]'
+STUB_PR_LIST=$SIDE guard "지금 브랜치가 아닌 브랜치에 켜진 채 지금 브랜치 푸시" pass "git push origin HEAD"
+STUB_PR_LIST=$SIDE guard "모든 브랜치 푸시(--all)" deny "git push --all origin"
+STUB_PR_LIST=$SIDE guard "모든 브랜치 푸시(--mirror)" deny "git push --mirror origin"
+STUB_PR_LIST=$ON guard "auto-merge 가 켜지지 않은 브랜치에 푸시" pass "git push origin other"
+STUB_PR_LIST=$OFF guard "auto-merge 가 꺼진 PR 의 브랜치에 푸시" pass "git push"
+STUB_GH_FAIL=1 guard "PR 목록을 조회하지 못한 푸시" deny "git push" "$R" "조회"
+: > "$T/gh-log"
+STUB_GH_LOG="$T/gh-log" guard "PR 이 없는 브랜치에 푸시" pass "git push origin HEAD"
+ok "푸시 판정은 푸시가 나갈 레포의 PR 을 조회한다" 'grep -E "^pr list( |$)" "$T/gh-log" | grep -qE -- "-R o/r( |$)"'
+
 echo "── 사람 계정으로 올리는 명령(human_comment.sh)"
-# 사람이 권한 프롬프트에서 글 전문을 읽고 허락해야 올라간다. 스크립트 경로는 훅과 같은 디렉터리의 것이다.
+# 올리는 글은 창 기록 훅이 적은 기록뿐이라(사람이 창에서 고른 보기) 권한 프롬프트 없이 올린다. 한 줄 정규형만
+# 받고, 스크립트 경로는 훅과 같은 디렉터리의 것이다.
 P="$H/human_comment.sh"
-printf '### 4라운드 코멘트를 읽고 사람이 정한 것\n\n- (사람) "이 PR 에서 만든다"\n  → 새 설계를 만든다\n' > "$T/decision.md"
-SUM=$(shasum -a 256 "$T/decision.md" | cut -d' ' -f1)
-ZERO=$(printf '0%.0s' $(seq 64))
-guard "사람 계정 게시는 글 전문을 보이고 묻는다" ask "bash $P 155 $T/decision.md $SUM" "$R" "이 PR 에서 만든다"
-guard "사람 계정 게시 사유의 끝 줄" ask "bash $P 155 $T/decision.md $SUM" "$R" "새 설계를 만든다"
-guard "사람 계정 게시(-R)" ask "bash $P 155 $T/decision.md $SUM -R o/r" "$R" "o/r"
-guard "sha256 이 다른 사람 계정 게시" deny "bash $P 155 $T/decision.md $ZERO" "$R" "sha256"
-guard "다른 명령과 이은 사람 계정 게시" deny "bash $P 155 $T/decision.md $SUM; echo done" "$R" "human_comment.sh"
-guard "줄바꿈으로 이은 사람 계정 게시" deny "bash $P 155 $T/decision.md $SUM
+guard "사람 계정 게시는 한 줄 정규형이면 묻지 않고 통과한다" pass "bash $P 155"
+guard "사람 계정 게시(-R)" pass "bash $P 155 -R o/r"
+guard "옛 모양(본문 파일 · sha256)의 사람 계정 게시" deny "bash $P 155 $T/decision.md 0000" "$R" "human_comment.sh <PR 번호>"
+guard "다른 명령과 이은 사람 계정 게시" deny "bash $P 155; echo done" "$R" "human_comment.sh"
+guard "줄바꿈으로 이은 사람 계정 게시" deny "bash $P 155
 echo done"
 # 정규형의 낱말 자리에 붙여 쓰면 모양은 맞는다. 셸이 해석하는 글자가 있으면 막는다.
-guard "레포 자리에 붙여 이은 사람 계정 게시" deny "bash $P 155 $T/decision.md $SUM -R o/r;id"
-guard "레포 자리의 명령 치환" deny "bash $P 155 $T/decision.md $SUM -R \$(id)"
-guard "상대 경로 본문의 사람 계정 게시" deny "bash $P 155 decision.md $SUM"
-guard "없는 파일의 사람 계정 게시" deny "bash $P 155 $T/nofile.md $SUM"
-guard "bash 없이 부른 사람 계정 게시" deny "$P 155 $T/decision.md $SUM"
-guard "명령 치환 안의 사람 계정 게시" deny "x=\$(bash $P 155 $T/decision.md $SUM)"
-# 셸의 -c 인자 안은 조각으로 나누지 않는다. 그 안의 사람 계정 게시는 권한 프롬프트 없이 실행된다.
-guard "bash -c 안의 사람 계정 게시" deny "bash -c 'bash $P 155 $T/decision.md $SUM'" "$R" "human_comment.sh"
-guard "sh -c 안의 사람 계정 게시" deny "sh -c \"bash $P 155 $T/decision.md $SUM\""
-guard "bash -lc 안의 사람 계정 게시" deny "bash -lc 'bash $P 155 $T/decision.md $SUM'"
+guard "레포 자리에 붙여 이은 사람 계정 게시" deny "bash $P 155 -R o/r;id"
+guard "레포 자리의 명령 치환" deny "bash $P 155 -R \$(id)"
+guard "bash 없이 부른 사람 계정 게시" deny "$P 155"
+guard "명령 치환 안의 사람 계정 게시" deny "x=\$(bash $P 155)"
+# 셸의 -c 인자 안은 조각으로 나누지 않는다. 그 안의 게시는 이 훅이 모양을 보지 못한다.
+guard "bash -c 안의 사람 계정 게시" deny "bash -c 'bash $P 155'" "$R" "human_comment.sh"
+guard "sh -c 안의 사람 계정 게시" deny "sh -c \"bash $P 155\""
+guard "bash -lc 안의 사람 계정 게시" deny "bash -lc 'bash $P 155'"
 mkdir -p "$T/elsewhere"; cp "$P" "$T/elsewhere/human_comment.sh"
-guard "훅 디렉터리 밖의 같은 이름 스크립트" deny "bash $T/elsewhere/human_comment.sh 155 $T/decision.md $SUM"
+guard "훅 디렉터리 밖의 같은 이름 스크립트" deny "bash $T/elsewhere/human_comment.sh 155" "$R" "레포 루트"
+# 세션의 cwd 는 레포의 하위 디렉터리일 수 있다. 거절 사유가 레포 루트에서 입력하라고 알려야 세션이 allow 에 맞는
+# 모양으로 다시 입력한다
+mkdir -p "$R/sub"
+guard "하위 디렉터리에서 입력한 사람 계정 게시" deny "bash .claude/hooks/human_comment.sh 155" "$R/sub" "레포 루트"
+# 거절 사유가 알려 주는 명령은 레포 루트에서 이 훅의 스크립트까지의 실제 경로다 — 킷 레포처럼 훅을
+# `.claude/hooks/` 밖에 둔 레포에서 설치 경로를 알려 주면 그대로 입력해도 다시 막힌다
+REL=$(python3 -c 'import os, sys; print(os.path.relpath(os.path.realpath(sys.argv[1]), os.path.realpath(sys.argv[2])))' "$H/human_comment.sh" "$R")
+guard "거절 사유가 레포 루트에서의 실제 경로를 알려 준다" deny "bash .claude/hooks/human_comment.sh 155" "$R/sub" "bash $REL <PR 번호>"
+# 창 기록은 창 기록 훅이 사람이 고른 창에서만 만든다. 세션이 그 훅을 직접 실행하면 지어낸 창 결과로 기록이 생겨
+# 사람이 고르지 않은 결정이 사람 계정으로 올라간다
+W="$H/window_record.sh"
+guard "창 기록 훅을 직접 실행(표준입력)" deny "bash $W < /tmp/fake-window.json" "$R" "창 기록 훅"
+# 거절 사유가 시키는 일은 open-pr 3.5 와 같다 — 게시 표지부터 보고, 맞으면 PR 웹으로 받는다
+guard "창 기록 훅 직접 실행의 거절 사유가 3.5 와 같은 할 일을 적는다" deny "bash $W < /tmp/fake-window.json" "$R" "게시 표지"
+guard "파이프로 창 기록 훅을 실행" deny "printf '{}' | bash $W"
+guard "bash 없이 창 기록 훅을 실행" deny "$W < /tmp/fake-window.json"
+guard "bash -c 안의 창 기록 훅" deny "bash -c 'bash $W < /tmp/fake-window.json'"
+guard "창 기록 훅의 구문 검사" pass "bash -n $W"
+guard "창 기록 훅을 읽음" pass "sed -n 1,20p $W"
+# 창 기록은 봇 디렉터리에 있다. 세션이 셸로 읽거나 고치지 못한다
+guard "창 기록을 읽는 명령" deny "cat .git/ai-kit-bot/windows/155.jsonl"
+guard "창 기록을 고치는 명령" deny "printf x >> .git/ai-kit-bot/windows/155.jsonl"
 guard "환경을 비우고 부른 gh(env -i)" deny "env -i PATH=/usr/bin gh pr comment 1 --body-file /tmp/x.md" "$R" "env -i"
 guard "환경을 비우고 부른 스크립트(env --ignore-environment)" deny "env --ignore-environment bash /tmp/post.sh"
 guard "환경을 비우는 env -(대시 하나)" deny "env - HOME=/tmp gh api user"

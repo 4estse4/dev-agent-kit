@@ -62,4 +62,4 @@ env_lines=$(
 printf '%s\n' "$env_lines" >> "$CLAUDE_ENV_FILE"
 printf '%s\n' "$env_lines" > "$dir/session-env"
 : > "$dir/wired/$sid"
-printf '이 세션의 gh 는 봇 계정으로 GitHub 에 쓴다(GH_CONFIG_DIR=%s). 사람의 결정은 사람 계정 코멘트로 남긴다 — 세션이 받은 답은 human_comment.sh 로 올리고(그 명령 바로 전에 응답에 올릴 글의 최종본 전문을 출력한다 — 사람은 그 글을 읽고 권한 프롬프트를 허락한다), 사람이 PR 웹에서 직접 쓸 수도 있다. 사람 계정 코멘트만 (사람) 인용의 원본이고, 머지는 사람의 Approve 를 확인한 뒤에 한다.\n' "$dir"
+printf '이 세션의 gh 는 봇 계정으로 GitHub 에 쓴다(GH_CONFIG_DIR=%s). 사람의 결정은 사람 계정 코멘트로 남긴다 — 질문에 「이 결정은 사람 계정으로 PR #N 에 그대로 올라간다」를 적은 창으로 묻고, 사람이 고른 보기를 창 기록 훅이 기록하면 human_comment.sh <PR> 로 올린다. 그 글은 세션이 쓰지 않는다. 사람이 PR 웹에서 직접 쓸 수도 있다. 사람 계정 코멘트만 (사람) 인용의 원본이다(open-pr 3.5). 머지는 결정 코멘트를 올리고 auto-merge 를 켠 뒤, 응답을 Approve 요청 블록과 「PR #N 최종 검토」 창으로 끝낸다(merge-pr 3절). 다음 작업의 브랜치는 origin 의 기본 브랜치에서 만들고, 그 전에 auto-merge 가 켜진 열린 PR 과 머지된 PR 을 본다 — Approve 를 받고도 열려 있는 PR 은 사람에게 알리고, 머지된 PR 의 로컬 브랜치는 merge-pr <번호> 로 정리한다(merge-pr 3절).\n' "$dir"

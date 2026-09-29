@@ -528,7 +528,7 @@ if [ "$DO_PROTECT" = 1 ]; then
       echo "          대화형 터미널에서 다시 실행하세요." >&2
       PROTECT_SKIPPED=1
     else
-      printf 'install: %s 의 브랜치 보호를 GitHub 에 설정합니다 — 원격이 바뀝니다. 계속할까요? [y/N] ' "$TARGET"
+      printf 'install: %s 의 브랜치 보호를 GitHub 에 설정합니다(봇 설정이 있으면 auto-merge 허용 · 머지 뒤 head 브랜치 삭제도 켭니다) — 원격이 바뀝니다. 계속할까요? [y/N] ' "$TARGET"
       read -r _ans
       case "$_ans" in
         [yY]|[yY][eE][sS])
@@ -686,11 +686,14 @@ if [ "$DO_AGENT" = 1 ] && [ "$DRY_RUN" = 0 ]; then
 ── 사람이 직접 할 일 ──
   설치가 대신하지 못하는 일은 docs/process/kit-guide.md 3절 「사람이 직접 할 일」에 모아 두었습니다.
   세션이 GitHub 에 쓰는 글을 봇 계정(GitHub App)으로 올리고 사람의 결정을 사람 계정의 코멘트와
-  Approve 로 남기려면 .claude/bot.json 이 필요합니다. 없으면 세션과 사람이 한 계정을 씁니다. App 의
+  Approve 로 남기려면 .claude/bot.json 이 필요합니다.
+  주의 — 킷은 봇과 함께 씁니다. 없으면 세션과 사람이 한 계정을 써서, 사람의 결정이 사람 계정 코멘트로
+  남지 않고 라운드 코멘트의 (사람) 인용이 막히며, 리뷰 라운드와 머지가 끝까지 가지 못합니다. App 의
   권한은 한 번 정하면 되고, 레포마다 할 일은 셋입니다:
     1. GitHub 의 App 설치 설정에서 저장소 목록에 이 레포를 더하세요
     2. 이 레포에 .claude/bot.json 을 커밋하세요
-    3. install.sh <이 레포 경로> --protect 를 다시 실행해 머지에 사람의 Approve 를 요구하세요
+    3. install.sh <이 레포 경로> --protect 를 다시 실행해 머지에 사람의 Approve 를 요구하고
+       auto-merge 를 허용하세요. 세션이 auto-merge 를 켜 두면 Approve 가 달릴 때 GitHub 이 머지합니다
   켜는 법 전체는 6절 「봇 계정과 사람의 승인」에 있습니다.
 MSG
 fi
