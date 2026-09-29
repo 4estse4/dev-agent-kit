@@ -135,7 +135,8 @@ if mode == 'sources':
 
 if not bot:
     stop(2, "봇 설정(.claude/bot.json)이 없어 Approve 를 판정하지 않는다. 세션과 사람이 한 계정이라 PR "
-            "작성자인 사람이 자기 PR 을 Approve 할 수 없다. 머지는 결정 코멘트 초안의 승인으로 정한다.")
+            "작성자인 사람이 자기 PR 을 Approve 할 수 없다. 킷은 봇과 함께 쓴다 — 봇을 켜는 법은 "
+            "docs/process/kit-guide.md 의 「봇 계정과 사람의 승인」 절에 있다.")
 
 try:
     view = gh('pr', 'view', pr, *R, '--json', 'headRefOid,reviewDecision')
