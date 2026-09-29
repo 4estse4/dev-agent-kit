@@ -20,14 +20,17 @@ W="$T/bot/.git/ai-kit-bot/windows"
 fail=0
 MARK='이 결정은 사람 계정으로 PR #7 에 그대로 올라간다.'
 
-# ask <디렉터리> <questions JSON> <answers JSON> — 훅을 부르고 출력을 $OUT 에 둔다
+# ask <디렉터리> <questions JSON> <answers JSON> [tool_response 에 더할 JSON] — 훅을 부르고 출력을 $OUT 에 둔다.
+# 넷째 인자는 창 결과의 다른 필드다(`annotations` 의 메모 · `afkTimeoutMs` · `followUp`)
 ask() {
   OUT=$(python3 -c 'import json, sys
 qs, ans = json.loads(sys.argv[2]), json.loads(sys.argv[3])
+resp = {"questions": qs, "answers": ans, "annotations": {}}
+resp.update(json.loads(sys.argv[4]) if len(sys.argv) > 4 else {})
 print(json.dumps({"session_id": "s1", "cwd": sys.argv[1], "hook_event_name": "PostToolUse",
                   "tool_name": "AskUserQuestion", "tool_input": {"questions": qs},
-                  "tool_response": {"questions": qs, "answers": ans, "annotations": {}}}, ensure_ascii=False))' \
-    "$1" "$2" "$3" | (cd "$1" && bash "$HOOK") 2>&1)
+                  "tool_response": resp}, ensure_ascii=False))' \
+    "$@" | (cd "$1" && bash "$HOOK") 2>&1)
 }
 # q <머리말> <질문> <보기…> — 질문 하나의 JSON
 q() {
@@ -72,18 +75,55 @@ print(json.dumps({"header": "고칠 것", "question": "고칠 것을 모두 골�
 ask "$T/bot" "[$QM]" "{\"고칠 것을 모두 골라 주세요. $MARK\": \"A 를 고친다, B 를 고친다 (추천)\"}"
 check "여러 보기를 고르면 ' · ' 로 잇는다" "- 고칠 것: A 를 고친다 · B 를 고친다" "$(lines 7)"
 
-# 여러 보기를 고른 답은 보기 이름을 `, ` 로 이은 글자이고, 직접 쓴 말도 그 뒤에 `, ` 로 붙는다(세션 기록에서
-# 확인했다). 보기 이름 안의 `, ` 는 보기를 나누는 자리가 아니다
+# 여러 보기를 고른 답은 보기 이름을 `, ` 로 이은 글자이고, 직접 쓴 말도 그 뒤에 `, ` 로 붙는다. `, ` 나 `"` 가
+# 든 이름은 JSON 문자열로 감싸 온다 — Claude Code 2.1.283 이 답을 잇는 함수(`t.includes(", ")||t.includes('"')`
+# 이면 감싼다)와 그 역변환(따옴표 조각을 `JSON.parse` 로 읽는다)에서 확인했다
 rm -rf "$W"
 QC=$(python3 -c 'import json, sys
 print(json.dumps({"header": "고칠 것", "question": "고칠 것을 모두 골라 주세요. " + sys.argv[1], "multiSelect": True,
-                  "options": [{"label": l, "description": "d"} for l in ["A, B 를 함께 고친다", "C 를 고친다"]]},
+                  "options": [{"label": l, "description": "d"} for l in ["A, B 를 함께 고친다", "C 를 고친다", "\"머지로\" 표시를 고친다"]]},
                  ensure_ascii=False))' "$MARK")
-ask "$T/bot" "[$QC]" "{\"고칠 것을 모두 골라 주세요. $MARK\": \"A, B 를 함께 고친다, C 를 고친다\"}"
-check "보기 이름 안의 ', ' 는 보기를 나누지 않는다" "- 고칠 것: A, B 를 함께 고친다 · C 를 고친다" "$(lines 7)"
+# pick <보기…> — Claude Code 가 여러 보기 답을 잇는 모양 그대로 answers JSON 을 만든다
+pick() {
+  python3 -c 'import json, sys
+parts = [json.dumps(t, ensure_ascii=False) if ", " in t or "\"" in t else t for t in sys.argv[2:]]
+print(json.dumps({"고칠 것을 모두 골라 주세요. " + sys.argv[1]: ", ".join(parts)}, ensure_ascii=False))' "$MARK" "$@"
+}
+ask "$T/bot" "[$QC]" "$(pick 'A, B 를 함께 고친다' 'C 를 고친다')"
+check "따옴표로 감싸 온 보기 이름은 하나의 보기다" "- 고칠 것: A, B 를 함께 고친다 · C 를 고친다" "$(lines 7)"
 rm -rf "$W"
-ask "$T/bot" "[$QC]" "{\"고칠 것을 모두 골라 주세요. $MARK\": \"C 를 고친다, 나머지는 다음 PR 로\"}"
+ask "$T/bot" "[$QC]" "$(pick 'C 를 고친다' '"머지로" 표시를 고친다')"
+check "이름에 큰따옴표가 든 보기도 하나의 보기다" "- 고칠 것: C 를 고친다 · \"머지로\" 표시를 고친다" "$(lines 7)"
+rm -rf "$W"
+ask "$T/bot" "[$QC]" "$(pick 'C 를 고친다' '나머지는 다음 PR 로')"
 check "여러 보기 뒤에 붙은 직접 쓴 말은 표시한다" " [직접 쓴 말: 고칠 것]" "$(lines 7)"
+rm -rf "$W"
+ask "$T/bot" "[$QC]" "$(pick 'C 를 고친다' '나머지는, 다음 PR 로')"
+check "따옴표로 감싸 온 직접 쓴 말도 표시한다" " [직접 쓴 말: 고칠 것]" "$(lines 7)"
+
+# 사람이 고른 보기에 단 메모(`annotations[질문].notes`)는 결정의 일부다. 보기만 올리면 사람이 붙인 조건이 빠진다
+rm -rf "$W"
+ask "$T/bot" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}" \
+  "{\"annotations\": {\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": {\"notes\": \"단, 필수 2 는 고치지 말 것\"}}}"
+check "보기에 메모를 달았으면 직접 쓴 말로 표시한다" " [직접 쓴 말: 1라운드 코멘트]" "$(lines 7)"
+
+# 사람이 자리를 비워 저절로 닫힌 창(`afkTimeoutMs`)과 질문을 더 요청하며 닫은 창(`followUp`)은 사람이 제출한 답이
+# 아니다 — 게시 동의가 아니므로 기록하지 않는다
+rm -rf "$W"
+ask "$T/bot" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}" '{"afkTimeoutMs": 600000}'
+check "사람 없이 저절로 닫힌 창은 기록하지 않는다" "없음" "$(lines 7)"
+case "$OUT" in *'기록하지 않았다'*) echo "  ✓ 기록하지 않은 까닭을 세션에 알린다" ;;
+  *) echo "  ✗ 기록하지 않은 까닭을 알리지 않았다: $OUT"; fail=1 ;; esac
+ask "$T/bot" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}" '{"followUp": "질문을 더 해 주세요"}'
+check "질문을 더 요청하며 닫은 창은 기록하지 않는다" "없음" "$(lines 7)"
+
+# 세션의 cwd 는 Bash 의 cd 를 따라 레포의 하위 디렉터리일 수 있다. 기록은 그래도 레포의 git 디렉터리에 둔다.
+# 레포를 $T 에서 두 단계 아래에 두어, cwd 기준 상대 경로를 레포 루트에 붙이는 잘못이 기록을 $T/.git 에 두게 한다
+rm -rf "$W"; mkdir -p "$T/x/repo/.claude" "$T/x/repo/sub/deep"; git init -q "$T/x/repo"
+cp "$T/bot/.claude/bot.json" "$T/x/repo/.claude/"
+ask "$T/x/repo/sub/deep" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
+check "cwd 가 하위 디렉터리여도 레포의 git 디렉터리에 기록한다" "있음" "$([ -s "$T/x/repo/.git/ai-kit-bot/windows/7.jsonl" ] && echo 있음 || echo 없음)"
+check "레포 밖에 git 디렉터리를 만들지 않는다" "없음" "$([ -e "$T/.git" ] && echo 있음 || echo 없음)"
 
 rm -rf "$W"
 ask "$T/bot" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"필수 하나만 고치고 머지하자\"}"
@@ -100,6 +140,11 @@ for rule in 'Read(//**/ai-kit-bot/**)' 'Write(//**/ai-kit-bot/**)' 'Edit(//**/ai
     "$rule" "$KIT/claude-code/settings.json"; then echo "  ✓ settings.json 이 막는다: $rule"
   else echo "  ✗ settings.json 의 deny 에 없다: $rule"; fail=1; fi
 done
+# 게시는 창에서 고른 것이 동의라서 권한 프롬프트를 두지 않는다 — 설치되는 settings.json 이 그 명령을 허용한다
+rule='Bash(bash .claude/hooks/human_comment.sh *)'
+if python3 -c 'import json, sys; sys.exit(0 if sys.argv[1] in json.load(open(sys.argv[2]))["permissions"]["allow"] else 1)' \
+  "$rule" "$KIT/claude-code/settings.json"; then echo "  ✓ settings.json 이 게시 명령을 허용한다: $rule"
+else echo "  ✗ settings.json 의 allow 에 없다: $rule"; fail=1; fi
 
 [ "$fail" = 0 ] && echo "  ✓ 창 기록 훅은 사람이 고른 보기만 사람 계정으로 올릴 결정으로 기록한다"
 exit "$fail"

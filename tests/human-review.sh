@@ -325,6 +325,11 @@ post "실패한 기록은 다음에 올린다" 0
 body_is "실패한 기록이 남아 있다" '- 5라운드 코멘트: 머지한다'
 rec '- 6라운드 코멘트: 머지한다'
 post "봇 설정이 없으면 올리지 않는다" 2 "$T/plain"
+# 세션의 cwd 는 레포의 하위 디렉터리일 수 있다. 기록은 그래도 레포의 git 디렉터리에서 읽는다
+mkdir -p "$T/bot/sub/deep"
+post "하위 디렉터리에서 불러도 레포의 기록을 올린다" 0 "$T/bot/sub/deep"
+body_is "하위 디렉터리에서 올린 본문" '- 6라운드 코멘트: 머지한다'
+rec '- 7라운드 코멘트: 머지한다'
 post "-R 로 준 레포에 올린다" 0 "$T/bot" -R 4estse4/other
 if grep -qF -- 'pr comment 89 -R 4estse4/other --body-file' "$T/gh-args"; then echo "  ✓ 올리기: -R 을 gh 에 전달한다"
 else echo "  ✗ 올리기: -R 을 전달하지 않았다: $(cat "$T/gh-args")"; fail=1; fi

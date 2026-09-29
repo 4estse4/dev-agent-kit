@@ -10,9 +10,11 @@
 #
 # **무엇을 올리나.** 그 PR 의 아직 올리지 않은 기록을 모두, 창이 끝난 차례대로 한 코멘트에 모은다. 창에서 정한
 # 뒤 올리기 전에 다른 결정 창이 또 끝나도 앞의 기록이 남지 않게 한다. 올린 기록의 수는 `<PR>.posted` 에 적는다.
-# gh 가 실패하면 적지 않으므로 다음에 다시 올린다. 올리지 않은 기록 가운데 직접 쓴 말(`free`)이 있으면 하나도
-# 올리지 않는다 — 그 말은 결정이 담긴 구간을 보기로 만든 창을 같은 머리말로 다시 띄워 받는다(`open-pr` 3.5).
-# 뒤의 기록에 같은 머리말의 줄이 생기면 그 직접 쓴 말은 정해진 것이고, 그때 쌓인 기록을 모두 올린다.
+# gh 가 실패하면 적지 않으므로 다음에 다시 올린다. 올리지 않은 기록 가운데 보기만 고르지 않은 질문(`free` —
+# 직접 쓴 말이나 메모가 있다)이 있으면 하나도 올리지 않는다 — 그 질문은 결정이 담긴 구간이나 요지를 보기로 만든
+# 창을 같은 머리말로 다시 띄워 받는다(`open-pr` 3.5). 뒤의 기록에 같은 머리말의 줄이 생기면 그 질문은 정해진
+# 것이고, 그때 쌓인 기록을 모두 올린다. 기록은 레포의 git 공통 디렉터리(절대 경로)에서 읽으므로 레포의 하위
+# 디렉터리에서 불러도 된다.
 #
 # 세션의 gh 는 봇 계정이므로, gh 를 봇 계정으로 보내는 환경 변수를 지우고 gh 를 불러 사람의 gh 로그인으로 올린다.
 #
@@ -37,8 +39,8 @@ if [ -z "$top" ] || [ ! -f "$top/.claude/bot.json" ]; then
   echo "봇 설정(.claude/bot.json)이 없다. 킷은 봇과 함께 쓴다 — 봇 설정이 없으면 사람 계정 코멘트를 올리지 않는다." >&2
   exit 2
 fi
-gitdir=$(git rev-parse --git-common-dir) || exit 2
-case "$gitdir" in /*) ;; *) gitdir="$top/$gitdir" ;; esac
+# 절대 경로로 받는다 — 상대 경로는 cwd 기준이라, 레포의 하위 디렉터리에서 부르면 루트에 붙였을 때 레포 밖을 가리킨다
+gitdir=$(git rev-parse --path-format=absolute --git-common-dir) || exit 2
 win="$gitdir/ai-kit-bot/windows"
 body=$(mktemp) || exit 1
 trap 'rm -f "$body"' EXIT
@@ -67,9 +69,9 @@ if not todo:
 free = [h for i, r in enumerate(todo) for h in r.get('free') or []
         if not any(l.startswith('- %s: ' % h) for s in todo[i + 1:] for l in s.get('lines') or [])]
 if free:
-    sys.stderr.write('올리지 않은 기록에 사람이 보기 대신 직접 쓴 말(%s)이 있어 하나도 올리지 않는다. 결정이 담긴 이어진 '
-                     '한 구간을 글자 그대로 보기로 만든 창을 같은 머리말로 다시 띄워 받는다(open-pr 3.5).\n'
-                     % ', '.join(free))
+    sys.stderr.write('올리지 않은 기록에 보기만 고르지 않은 질문(머리말 %s — 직접 쓴 말이나 메모가 있다)이 있어 하나도 '
+                     '올리지 않는다. 결정이 담긴 이어진 한 구간이나 요지를 보기로 만든 창을 같은 머리말로 다시 띄워 '
+                     '받는다(open-pr 3.5).\n' % ', '.join('「%s」' % h for h in free))
     sys.exit(1)
 lines = [l for r in todo for l in r.get('lines') or []]
 open(out, 'w', encoding='utf-8').write('\n'.join(lines) + '\n')
