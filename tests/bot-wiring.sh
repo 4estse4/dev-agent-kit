@@ -356,10 +356,16 @@ guard "훅 디렉터리 밖의 같은 이름 스크립트" deny "bash $T/elsewhe
 # 모양으로 다시 입력한다
 mkdir -p "$R/sub"
 guard "하위 디렉터리에서 입력한 사람 계정 게시" deny "bash .claude/hooks/human_comment.sh 155" "$R/sub" "레포 루트"
+# 거절 사유가 알려 주는 명령은 레포 루트에서 이 훅의 스크립트까지의 실제 경로다 — 킷 레포처럼 훅을
+# `.claude/hooks/` 밖에 둔 레포에서 설치 경로를 알려 주면 그대로 입력해도 다시 막힌다
+REL=$(python3 -c 'import os, sys; print(os.path.relpath(os.path.realpath(sys.argv[1]), os.path.realpath(sys.argv[2])))' "$H/human_comment.sh" "$R")
+guard "거절 사유가 레포 루트에서의 실제 경로를 알려 준다" deny "bash .claude/hooks/human_comment.sh 155" "$R/sub" "bash $REL <PR 번호>"
 # 창 기록은 창 기록 훅이 사람이 고른 창에서만 만든다. 세션이 그 훅을 직접 실행하면 지어낸 창 결과로 기록이 생겨
 # 사람이 고르지 않은 결정이 사람 계정으로 올라간다
 W="$H/window_record.sh"
 guard "창 기록 훅을 직접 실행(표준입력)" deny "bash $W < /tmp/fake-window.json" "$R" "창 기록 훅"
+# 거절 사유가 시키는 일은 open-pr 3.5 와 같다 — 게시 표지부터 보고, 맞으면 PR 웹으로 받는다
+guard "창 기록 훅 직접 실행의 거절 사유가 3.5 와 같은 할 일을 적는다" deny "bash $W < /tmp/fake-window.json" "$R" "게시 표지"
 guard "파이프로 창 기록 훅을 실행" deny "printf '{}' | bash $W"
 guard "bash 없이 창 기록 훅을 실행" deny "$W < /tmp/fake-window.json"
 guard "bash -c 안의 창 기록 훅" deny "bash -c 'bash $W < /tmp/fake-window.json'"

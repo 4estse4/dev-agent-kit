@@ -45,9 +45,10 @@
 # 푼다), 셸의 `-c` 인자 안에 두었으면(`wraps`) 막는다(`human_comment`).
 #
 # **창 기록 훅을 세션이 직접 실행하면 막는다.** 그 훅에 지어낸 창 결과를 표준입력으로 주면 사람이 고르지 않은
-# 결정이 기록되고, 게시 스크립트는 그 기록을 권한 프롬프트 없이 사람 계정으로 올린다. 사람이 정했다(PR #164) —
-# 작정한 우회만이 아니라, 훅이 등록되지 않은 세션이 고른 것을 되살리려는 실수도 이 모양이다. 구문 검사
-# (`bash -n`)와 읽기는 실행이 아니라 막지 않는다.
+# 결정이 기록되고, 게시 스크립트는 그 기록을 권한 프롬프트 없이 사람 계정으로 올린다. 사람이 정했다 — 작정한
+# 우회만이 아니라, 훅이 등록되지 않은 세션이 사람이 창에서 고른 것을 되살리려는 실수도 이 모양이다. 구문 검사
+# (`bash -n`)와 읽기는 실행이 아니라 막지 않는다. 이 훅은 cwd 가 봇 설정이 있는 레포 안일 때만 판정하므로, 레포
+# 밖을 cwd 로 두고 실행하는 것은 막지 못한다(작정한 우회다).
 #
 # **명령 치환 안도 본다.** `$(…)` · 백틱 안의 명령을 꺼내 같은 판정을 한다. `url=$(gh pr create …)` ·
 # `-H "Authorization: token $(gh auth token)"` 은 흔한 셸 관용구다. heredoc 의 본문은 명령에 전달하는
@@ -342,9 +343,12 @@ def human_comment():
              "따옴표 · 리다이렉트를 쓰면 무엇이 실행되는지 이 훅이 알 수 없다.")
     mine = os.path.realpath(os.path.join(os.environ['HOOK_DIR'], 'human_comment.sh'))
     if os.path.realpath(os.path.join(cwd or os.getcwd(), m.group(1))) != mine:
+        # 알려 주는 경로는 레포 루트에서 이 훅의 스크립트까지다 — 설치된 레포는 `.claude/hooks/…` 이고, 훅을
+        # 다른 곳에서 등록한 레포(킷 레포)는 그 자리다
+        rel = os.path.relpath(mine, os.path.realpath(top.stdout.strip()))
         deny("사람 계정으로 올리는 스크립트는 이 훅과 같은 디렉터리의 것만 받는다: " + mine + ". 레포 루트에서 "
-             + HUMAN_CANON + " 로 입력한다 — 세션이 하위 디렉터리에 있으면 먼저 cd 로 레포 루트로 옮긴다(한 줄로 "
-             "잇지 않는다). 설치되는 settings.json 의 allow 도 그 모양만 받는다.")
+             "`bash " + rel + " <PR 번호> [-R <owner/repo>]` 로 입력한다 — 세션이 하위 디렉터리에 있으면 먼저 "
+             "cd 로 레포 루트로 옮긴다(한 줄로 잇지 않는다). 설치되는 settings.json 의 allow 도 그 모양만 받는다.")
 
 
 body = strip_heredocs(cmd)
@@ -374,8 +378,9 @@ if any(clears_env(s) for s in segs):
          "human_comment.sh 로 올린다.")
 if any(runs(s, 'window_record.sh') or wraps(s, 'window_record.sh') for s in segs):
     deny("창 기록 훅(window_record.sh)은 Claude Code 가 질문 창이 끝날 때 실행한다. 세션이 직접 실행하면 사람이 "
-         "고르지 않은 결정이 기록돼 사람 계정으로 올라가므로 막는다. 창 기록이 없으면 같은 머리말의 창을 다시 "
-         "띄우고, 그래도 기록되지 않으면 PR 웹에 써 달라고 요청한다(open-pr 3.5).")
+         "고르지 않은 결정이 기록돼 사람 계정으로 올라가므로 막는다. 창 뒤에 창 기록 훅의 안내가 오지 않았으면 "
+         "open-pr 3.5 대로 한다 — 질문의 게시 표지가 글자 그대로가 아니면 고쳐 같은 창을 다시 띄우고, 표지가 "
+         "맞으면 훅이 실행되지 않은 것이라 PR 링크와 쓸 글을 적어 PR 웹에 써 달라고 요청한다.")
 if any(wraps(s, 'human_comment.sh') for s in segs):
     deny("사람 계정으로 올리는 명령을 셸의 -c 인자 안에 두면 이 훅이 그 모양을 보지 못해 막는다. 한 줄 "
          "정규형으로 따로 입력한다: " + HUMAN_CANON)
