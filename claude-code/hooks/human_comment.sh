@@ -6,7 +6,8 @@
 # **세션은 글을 쓰지 않는다.** 올리는 글은 창 기록 훅(`window_record.sh`)이 봇 디렉터리
 # (`<git 공통 디렉터리>/ai-kit-bot/windows/<PR>.jsonl`)에 적어 둔 기록뿐이다 — 질문에 「이 결정은 사람 계정으로
 # PR #N 에 그대로 올라간다」가 적힌 창에서 사람이 고른 보기로 만든 `- <머리말>: <보기>` 줄이다. 그래서 초안 ·
-# sha256 · 권한 프롬프트가 없다. 창에서 고른 것이 게시 동의다. 세션은 봇 디렉터리를 읽지도 쓰지도 못한다.
+# sha256 · 권한 프롬프트가 없다. 창에서 고른 것이 게시 동의다. 세션은 봇 디렉터리를 읽지도 쓰지도 못하고, 창
+# 기록 훅을 직접 실행해 기록을 만드는 명령도 막기 훅(`bot_guard.sh`)이 막는다.
 #
 # **무엇을 올리나.** 그 PR 의 아직 올리지 않은 기록을 모두, 창이 끝난 차례대로 한 코멘트에 모은다. 창에서 정한
 # 뒤 올리기 전에 다른 결정 창이 또 끝나도 앞의 기록이 남지 않게 한다. 올린 기록의 수는 `<PR>.posted` 에 적는다.
@@ -18,8 +19,8 @@
 #
 # 세션의 gh 는 봇 계정이므로, gh 를 봇 계정으로 보내는 환경 변수를 지우고 gh 를 불러 사람의 gh 로그인으로 올린다.
 #
-# 종료 코드: 올렸으면 0, 올릴 기록이 없거나 직접 쓴 말이 있거나 gh 가 실패하면 1, 인자가 틀리거나 봇 설정이
-# 없으면 2.
+# 종료 코드: 올렸으면 0, 올릴 기록이 없거나(모두 올렸으면 그렇다고 알린다) 보기로 정하지 않은 질문이 있거나 gh
+# 가 실패하면 1, 인자가 틀리거나 봇 설정이 없으면 2.
 set -uo pipefail
 usage() {
   echo "사용: human_comment.sh <PR 번호> [-R <owner/repo>]" >&2
@@ -60,9 +61,13 @@ try:
 except (OSError, ValueError):
     done = 0
 todo = records[done:]
+if not todo and records:
+    # 이미 올린 결정이다 — 세션이 되감기거나 컴팩션 뒤에 다시 부른 경우. 다시 올리거나 PR 웹에 쓰게 하지 않는다
+    sys.stderr.write('PR #%s 의 창 기록은 모두 올렸다(%d개). 새로 올릴 것이 없다.\n' % (pr, len(records)))
+    sys.exit(1)
 if not todo:
     sys.stderr.write('PR #%s 에 올릴 창 기록이 없다. 질문에 「이 결정은 사람 계정으로 PR #%s 에 그대로 올라간다」를 '
-                     '적은 창으로 사람이 정한 뒤에 올린다.\n' % (pr, pr))
+                     '글자 그대로 적은 창으로 사람이 정한 뒤에 올린다.\n' % (pr, pr))
     sys.exit(1)
 # 직접 쓴 말은 뒤의 기록에 같은 머리말의 줄이 있으면 정해진 것이다 — 세션이 같은 머리말로 다시 띄운 창에서
 # 사람이 고른 것이다. 그런 줄이 없는 것이 하나라도 있으면 하나도 올리지 않는다.
@@ -70,8 +75,9 @@ free = [h for i, r in enumerate(todo) for h in r.get('free') or []
         if not any(l.startswith('- %s: ' % h) for s in todo[i + 1:] for l in s.get('lines') or [])]
 if free:
     sys.stderr.write('올리지 않은 기록에 보기로 정하지 않은 질문(머리말 %s)이 있어 하나도 올리지 않는다. 같은 머리말의 '
-                     '창을 다시 띄워 받는다 — 직접 쓴 말이면 결정이 담긴 이어진 한 구간이나 요지를 보기로 '
-                     '만든다(open-pr 3.5).\n' % ', '.join('「%s」' % h for h in free))
+                     '창을 다시 띄워 받는다 — 직접 쓴 말 · 메모 · 창에 쓴 글이 있던 질문은 결정이 담긴 이어진 한 '
+                     '구간이나 요지를 보기로 만들고, 답이 없던 질문은 같은 보기로 다시 묻는다(open-pr 3.5).\n'
+                     % ', '.join('「%s」' % h for h in free))
     sys.exit(1)
 lines = [l for r in todo for l in r.get('lines') or []]
 open(out, 'w', encoding='utf-8').write('\n'.join(lines) + '\n')

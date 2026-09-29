@@ -301,6 +301,9 @@ if grep -q "^GH_REPO= GH_CONFIG_DIR= GH_TOKEN= pr comment 89 --body-file " "$T/g
 else echo "  ✗ 올리기: 봇 연결을 지우지 않았거나 명령이 다르다: $(cat "$T/gh-args")"; fail=1; fi
 post "올린 기록은 다시 올리지 않는다" 1
 no_gh "올릴 것이 없으면 gh 를 부르지 않는다"
+# 기록이 아예 없을 때(창 기록 훅이 실행되지 않았다)와 모두 올렸을 때를 세션이 다르게 다뤄야 한다
+case "$OUT" in *'모두 올렸다'*) echo "  ✓ 올리기: 모두 올린 뒤에는 모두 올렸다고 알린다" ;;
+  *) echo "  ✗ 올리기: 모두 올린 뒤인데 그렇게 알리지 않았다: $OUT"; fail=1 ;; esac
 rec '- 3라운드 코멘트: 고치지 않고 멈춘다'
 post "그 뒤에 더한 기록만 올린다" 0
 body_is "앞서 올린 기록은 빠진다" '- 3라운드 코멘트: 고치지 않고 멈춘다'

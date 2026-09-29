@@ -21,7 +21,8 @@
 # **어디에.** `<git 공통 디렉터리>/ai-kit-bot/windows/<PR>.jsonl` 에 기록 하나를 한 줄로 더한다. git 공통
 # 디렉터리는 절대 경로로 받는다 — 세션의 cwd 가 레포의 하위 디렉터리여도 레포의 것을 가리킨다. 세션은 봇
 # 디렉터리를 읽지도 쓰지도 못한다 — 셸 명령은 막기 훅(`bot_guard.sh`)이, Read · Write · Edit 도구는 설치되는
-# `settings.json` 의 deny 가 막는다.
+# `settings.json` 의 deny 가 막는다. 세션이 이 훅을 직접 실행해 지어낸 창 결과로 기록을 만드는 명령도 막기 훅이
+# 막는다.
 #
 # 입력의 `tool_response` 는 세션 기록에 남는 창의 결과와 같은 모양이다: `questions` 와, 질문 글자에서 고른
 # 보기로 가는 `answers`, 질문 글자에서 메모로 가는 `annotations`. 백그라운드 세션에서 이 이벤트의 실제 입력을
@@ -145,12 +146,13 @@ for pr, rec in got.items():
                              'free': rec['free']}, ensure_ascii=False) + '\n')
     if rec['free']:
         notes.append("PR #%s: 보기로 정하지 않은 질문(%s)이 있어 그대로 올리지 않는다. 같은 머리말의 창을 다시 띄워 "
-                     "받는다 — 직접 쓴 말이면 결정이 담긴 이어진 한 구간이나 요지를 보기로 만든다(open-pr 3.5)."
+                     "받는다 — 직접 쓴 말 · 메모 · 창에 쓴 글이 있는 질문은 결정이 담긴 이어진 한 구간이나 요지를 "
+                     "보기로 만들고, 답이 없는 질문은 같은 보기로 다시 묻는다(open-pr 3.5)."
                      % (pr, ', '.join(rec['why'])))
     else:
         notes.append("PR #%s: 사람 계정으로 올릴 결정 %d줄을 기록했다. 이번 head 의 라운드 코멘트가 이미 올라가 있으면 "
-                     "지금 %s`bash %s %s` 로 올리고, 라운드 도중에 정한 것이면 라운드 코멘트를 올린 뒤에 올린다"
-                     "(open-pr 3.1 · 3.5)." % (pr, len(rec['lines']), move, script, pr))
+                     "지금 %s`bash %s %s` 로 올리고, 라운드 도중에 정한 것이면 라운드 코멘트를 올린 뒤 레포 루트에서 "
+                     "같은 명령으로 올린다(open-pr 3.1 · 3.5)." % (pr, len(rec['lines']), move, script, pr))
 print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse",
                                          "additionalContext": " ".join(notes)}}, ensure_ascii=False))
 PY

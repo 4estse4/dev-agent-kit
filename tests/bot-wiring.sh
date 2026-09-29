@@ -351,7 +351,20 @@ guard "bash -c 안의 사람 계정 게시" deny "bash -c 'bash $P 155'" "$R" "h
 guard "sh -c 안의 사람 계정 게시" deny "sh -c \"bash $P 155\""
 guard "bash -lc 안의 사람 계정 게시" deny "bash -lc 'bash $P 155'"
 mkdir -p "$T/elsewhere"; cp "$P" "$T/elsewhere/human_comment.sh"
-guard "훅 디렉터리 밖의 같은 이름 스크립트" deny "bash $T/elsewhere/human_comment.sh 155"
+guard "훅 디렉터리 밖의 같은 이름 스크립트" deny "bash $T/elsewhere/human_comment.sh 155" "$R" "레포 루트"
+# 세션의 cwd 는 레포의 하위 디렉터리일 수 있다. 거절 사유가 레포 루트에서 입력하라고 알려야 세션이 allow 에 맞는
+# 모양으로 다시 입력한다
+mkdir -p "$R/sub"
+guard "하위 디렉터리에서 입력한 사람 계정 게시" deny "bash .claude/hooks/human_comment.sh 155" "$R/sub" "레포 루트"
+# 창 기록은 창 기록 훅이 사람이 고른 창에서만 만든다. 세션이 그 훅을 직접 실행하면 지어낸 창 결과로 기록이 생겨
+# 사람이 고르지 않은 결정이 사람 계정으로 올라간다
+W="$H/window_record.sh"
+guard "창 기록 훅을 직접 실행(표준입력)" deny "bash $W < /tmp/fake-window.json" "$R" "창 기록 훅"
+guard "파이프로 창 기록 훅을 실행" deny "printf '{}' | bash $W"
+guard "bash 없이 창 기록 훅을 실행" deny "$W < /tmp/fake-window.json"
+guard "bash -c 안의 창 기록 훅" deny "bash -c 'bash $W < /tmp/fake-window.json'"
+guard "창 기록 훅의 구문 검사" pass "bash -n $W"
+guard "창 기록 훅을 읽음" pass "sed -n 1,20p $W"
 # 창 기록은 봇 디렉터리에 있다. 세션이 셸로 읽거나 고치지 못한다
 guard "창 기록을 읽는 명령" deny "cat .git/ai-kit-bot/windows/155.jsonl"
 guard "창 기록을 고치는 명령" deny "printf x >> .git/ai-kit-bot/windows/155.jsonl"
