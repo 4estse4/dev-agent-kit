@@ -598,7 +598,7 @@ worktree 가 base 를 쓰면 `git switch` 가 `fatal: '<baseRefName>' is already
 둔다. 킷이 전제하는 macOS · ubuntu CI 의 git 은 그보다 새것이다.
 
 **이 줄의 종료 코드가 0 이 아니면 중단한다.** fetch 가 네트워크 때문에 실패하면 그 줄이 실패한다.
-fetch 를 따로 두면 fetch 가 실패해도 받아 둔 옛 `origin/<baseRefName>` 에 알리지 않고 detach 해서, 머지 전
+fetch 를 따로 두면 fetch 가 실패해도 받아 둔 옛 `origin/<baseRefName>` 에 멈추지 않고 detach 해서, 머지 전
 커밋에 있는 채 브랜치를 지우고 5절이 그 SHA 를 보고한다. base 로 옮기는 경로는 `git pull --ff-only` 가
 fetch 한다.
 
