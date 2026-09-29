@@ -72,6 +72,17 @@ TARGET=$(git -C "$TARGET_ARG" rev-parse --show-toplevel 2>/dev/null) \
 echo "install: 대상 $TARGET"
 echo "install: 킷   $KIT_ROOT"
 
+# 킷과 무관한 .kit/ 가 이미 있으면 설치하지 않는다. .kit/ 는 설치할 때마다 통째로 비우고 놓는 자리라
+# (아래 vendor_into), 킷이 놓은 것이 아닌 파일도 지운다. 추적하지 않던 파일은 되돌릴 수 없다.
+# 킷이 놓은 것인지는 install-manifest 로 가린다. dry-run 도 같은 판정을 내야 하므로 임시 트리를 만들기 전에 본다.
+if [ "$DO_HOOKS" = 1 ] && [ ! -f "$TARGET/.kit/install-manifest" ] \
+   && [ -n "$(find "$TARGET/.kit" -type f -print 2>/dev/null | head -1)" ]; then
+  echo "install: $TARGET/.kit 이 이미 있고 킷이 설치한 것이 아닙니다(.kit/install-manifest 없음)." >&2
+  echo "  킷은 설치할 때마다 .kit 을 통째로 비우고 놓으므로, 그 안의 파일을 지우지 않고 멈춥니다." >&2
+  echo "  그 디렉터리를 다른 이름으로 옮긴 뒤 다시 실행하세요." >&2
+  exit 1
+fi
+
 PROTECT_SKIPPED=0
 INSTALLED=(); REPLACED=(); DELETED=(); SKIPPED=(); CONFLICTS=(); WARNINGS=()
 # dry-run 은 대상 대신 이 트리에 놓는다. 놓고 나서 대상과 비교하면 무엇이 달라지는지가

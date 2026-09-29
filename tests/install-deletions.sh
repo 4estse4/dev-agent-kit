@@ -97,4 +97,29 @@ PYEOF
   esac
 done
 
+# 킷과 무관한 `.kit/` 가 이미 있으면 설치기는 그 안을 지우지 않고 멈춘다. `.kit/` 는 설치할 때마다 통째로
+# 비우고 놓는 자리라, 킷이 놓은 것인지(`install-manifest`)를 보지 않으면 추적하지 않던 파일까지 지운다.
+# 미리보기도 같은 판정을 내야 하므로 둘 다 본다.
+for mode in 미리보기 실제; do
+  R=$(mkrepo); mkdir -p "$R/.kit"; echo keep > "$R/.kit/local.conf"
+  flag=""; [ "$mode" = 미리보기 ] && flag=--dry-run
+  out=$(bash "$KIT/install.sh" --hooks $flag "$R" 2>&1); rc=$?
+  if [ "$rc" -ne 0 ] && [ "$(cat "$R/.kit/local.conf" 2>/dev/null)" = keep ] && [ ! -e "$R/.kit/install-manifest" ] \
+     && printf '%s' "$out" | grep -qF '킷이 설치한 것이 아닙니다'; then
+    echo "  ✓ $mode: 킷과 무관한 .kit/ 가 있으면 지우지 않고 멈춘다"
+  else
+    echo "  ✗ $mode: 킷과 무관한 .kit/ 가 있는데 rc=$rc · local.conf=[$(cat "$R/.kit/local.conf" 2>/dev/null)] · 멈춤 안내 $(printf '%s' "$out" | grep -cF '킷이 설치한 것이 아닙니다')줄"
+    fail=1
+  fi
+  # 킷이 설치한 .kit/ 는 멈추지 않는다. 재설치가 멈추면 위 단계들은 칸이 빈 채로 미리보기=실제가 되어 초록이다.
+  R=$(mkrepo); bash "$KIT/install.sh" --hooks "$R" >/dev/null 2>&1; echo keep > "$R/.kit/local.conf"
+  out=$(bash "$KIT/install.sh" --hooks $flag "$R" 2>&1); rc=$?
+  if [ "$rc" -eq 0 ] && ! printf '%s' "$out" | grep -qF '킷이 설치한 것이 아닙니다'; then
+    echo "  ✓ $mode: 킷이 설치한 .kit/ 는 재설치가 멈추지 않는다"
+  else
+    echo "  ✗ $mode: 킷이 설치한 .kit/ 인데 재설치가 멈췄다(rc=$rc)"
+    fail=1
+  fi
+done
+
 exit $fail
