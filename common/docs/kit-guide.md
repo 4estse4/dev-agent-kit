@@ -140,7 +140,7 @@ version … used to build golangci-lint is lower than the targeted Go version」
 PR 의 Approve 로. 그래서 GitHub 이 기록한 글쓴이로 세션의 글과 사람의 결정이 구분된다.
 
 > **주의 — 킷은 봇과 함께 쓴다.** 봇 설정이 없으면 세션과 사람이 한 계정을 쓰고, 이 절의 것은 하나도 동작하지
-> 않는다. 사람의 결정이 사람 계정 코멘트로 남지 않고, 인용 대조 훅이 `(사람)` 인용이 든 라운드 코멘트를 막는다 —
+> 않는다. 사람의 결정이 사람 계정 코멘트로 남지 않고, `(사람)` 인용을 확인하는 훅이 그 인용이 든 라운드 코멘트를 막는다 —
 > 글쓴이로 사람의 글을 가려낼 수 없어 대조할 원본이 없다. PR 작성자가 사람 자신이라 Approve 로 머지를 승인할
 > 수도 없다(「Pull request authors cannot approve their own pull requests.」). 그래서 리뷰 라운드와 머지가 끝까지
 > 가지 못한다 — `open-pr` 3.6 의 5 가 사람 계정 코멘트를 세지 못해 푸시하지 않고, `merge-pr` 2절은 Approve 를

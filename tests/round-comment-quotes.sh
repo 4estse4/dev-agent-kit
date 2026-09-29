@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 라운드 코멘트 인용 대조 훅(`claude-code/hooks/round_comment_quotes.sh`)이 막아야 할 것을 막고
+# 라운드 코멘트의 (사람) 인용을 확인하는 훅(`claude-code/hooks/round_comment_quotes.sh`)이 막아야 할 것을 막고
 # 통과시킬 것을 통과시키는가.
 #
 # **훅을 직접 부르는 쪽이 아니라 Claude Code 가 부르는 모양으로 부른다.** 표준입력에 도구 호출
@@ -357,5 +357,5 @@ printf '\xff\xfe## \xeb\xa6\xac\xeb\xb7\xb0 x\n' > "$T/latin.md"
 check "UTF-8 이 아닌 본문" deny "$(post latin.md)" "" "UTF-8"
 
 rm -rf "$T"
-[ "$fail" = 0 ] && echo "  ✓ 라운드 코멘트 인용 대조 훅이 막을 것만 막는다"
+[ "$fail" = 0 ] && echo "  ✓ 라운드 코멘트의 (사람) 인용을 확인하는 훅이 막을 것만 막는다"
 exit $fail

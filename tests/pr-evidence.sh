@@ -74,7 +74,7 @@ open=$(head -1 "$T/fence-cmd.part" 2>/dev/null); close=$(tail -1 "$T/fence-cmd.p
 ( cd "$T" && printf '%s\n' 'echo hi' | bash "$S" "$T/no-such-dir/x.part" >/dev/null 2>&1 ); rc=$?
 [ "$rc" != 0 ] && ok "덧붙이지 못하면 0 이 아니다" || bad "덧붙이지 못하면 0 이 아니다 — rc=$rc"
 
-# ── 덧붙인다 ── 앞의 블록을 덮지 않는다
+# ── 덧붙인다 ── 앞의 블록을 덮어쓰지 않는다
 run "$T/twice.part" 'echo first'
 run "$T/twice.part" 'echo second'
 grep -qx 'first' "$T/twice.part" 2>/dev/null && grep -qx 'second' "$T/twice.part" \
