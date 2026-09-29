@@ -614,7 +614,7 @@ git config core.hooksPath .ai-kit/git-hooks
 
 그리고 `git commit --no-verify` 로도 우회된다.
 
-세 번째 한계는 더 드러나지 않는다. **훅 파일이 실행 권한 없이 커밋돼 있으면 git 은 그것을
+세 번째 한계는 알아채기가 더 어렵다. **훅 파일이 실행 권한 없이 커밋돼 있으면 git 은 그것을
 건너뛴다** — `hint:` 한 줄이 stderr 로 나갈 뿐 커밋은 성공한다.
 
 ```

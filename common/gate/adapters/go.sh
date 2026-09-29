@@ -4,7 +4,7 @@ gate_have go || { gate_skip "go(미설치)"; return 0 2>/dev/null || exit 0; }
 
 gate_run_empty "gofmt"        gofmt -l .
 # go.mod 가 tool 로 선언했으면 그 버전을, 아니면 PATH 의 것을 쓴다.
-# 선언해두면 로컬과 CI 가 같은 버전이 되고, 이 검사가 알림 없이 빠지는 일이 없어진다:
+# 선언해두면 로컬과 CI 가 같은 버전이 되고, 도구가 없어 이 검사가 실행되지 않는 일이 없어진다:
 #   go get -tool golang.org/x/tools/cmd/goimports@<버전>
 if _gi=$(gate_go_tool goimports); then
   # shellcheck disable=SC2086
