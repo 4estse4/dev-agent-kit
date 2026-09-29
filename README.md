@@ -179,7 +179,7 @@ diff 가 길면 `AI_KIT_DIFF_MAX_LINES`·`AI_KIT_DIFF_MAX_TOTAL` 로 조절한�
 | 대상 | 갱신 방식 |
 |---|---|
 | `.ai-kit/gate/` · `git-hooks/` | 킷 소유 — 통째로 교체 |
-| `CLAUDE.md` · `.claude/settings.json` · CI · 린터 | 프로젝트 소유 — 건드리지 않고 킷의 것을 `<파일>.ai-kit-new` 로 옆에 둔다 |
+| `CLAUDE.md` · `.claude/settings.json` · CI · 린터 · 템플릿으로 놓는 `docs/` 문서와 PR 템플릿 | 프로젝트 소유 — 건드리지 않고 킷의 것을 `<파일>.ai-kit-new` 로 옆에 둔다 |
 | `.claude/skills|agents|hooks` · `docs/process` | **킷 소유 — 재설치가 덮어쓴다** |
 
 ### 자동 병합을 하지 않는 이유

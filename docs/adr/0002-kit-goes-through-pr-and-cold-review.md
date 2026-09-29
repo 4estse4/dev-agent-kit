@@ -81,7 +81,7 @@ $ gh api repos/4estse4/ai-native-kit/rules/branches/main --jq '.[] | select(.typ
 `main` 삭제까지다. **콜드 리뷰를 실행했는지는 룰셋이 안 본다.** 그것은 여전히 `사람`(지금의 `막는 것 없음`) 이다.
 
 룰셋 때문에 낡은 자리가 있고, 그 자리는 이슈 #4 에 적었다. `.github/workflows/kit-tests.yml`
-머리는 「이것은 required check 가 아니다」라고 적는다. `merge-pr` 2절에는 보호를 확인하는
+머리는 「이것은 required check 가 아니다」라고 적었다(2026-09-29 PR #166 에서 고침). `merge-pr` 2절에는 보호를 확인하는
 명령이 없고 「브랜치 보호가 없는 레포라면 그 사실을 먼저 알린다」 한 줄만 있는데, 그 줄이
 가리키는 `install.sh --protect` 는 클래식 보호를 설정한다(`gh api -X PUT`). 사람이 켠 것은
 룰셋이라 클래식 엔드포인트로 보면 404 이고, 룰셋은

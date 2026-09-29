@@ -127,8 +127,8 @@ version … used to build golangci-lint is lower than the targeted Go version」
 
 `.ai-kit/**` 와 `.claude/skills|agents|hooks/**`, `docs/process/**` 는 킷 소유라
 **재설치가 덮어쓴다** — 여기 손댄 것은 다음 설치에서 사라진다. 고칠 것이 있으면 킷 레포에
-이슈나 PR 로 올려라. `CLAUDE.md`·`.claude/settings.json`·CI·린터 설정은
-**프로젝트 소유**라 건드리지 않는다 — 킷의 것과 다르면 킷의 것을 `<파일>.ai-kit-new` 로 옆에 두고,
+이슈나 PR 로 올려라. `CLAUDE.md`·`.claude/settings.json`·CI·린터 설정과 템플릿으로 놓는 `docs/` 문서 · PR
+템플릿은 **프로젝트 소유**라 건드리지 않는다 — 킷의 것과 다르면 킷의 것을 `<파일>.ai-kit-new` 로 옆에 두고,
 가져올지는 사람이 정한다. **자동 병합은 하지 않는다.**
 
 **킷 파일로 덮어쓰지 마라**: 그 파일들엔 프로젝트 고유 설정이 들어 있다.

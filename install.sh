@@ -10,9 +10,10 @@
 #   <kit>/install.sh <경로> --dry-run    아무것도 바꾸지 않고 무엇이 달라질지만 본다
 #
 # 킷 소유는 .ai-kit/** 와 .claude/{skills,agents,hooks}/** 와 docs/process/** 다 —
-# 재설치가 **덮어쓴다.** 프로젝트 소유는 CLAUDE.md · .claude/settings.json · CI · 린터 설정이고, 이미
-# 있으면 건드리지 않고 내용이 다르면 .ai-kit-new 로 옆에 둔다. **자동 병합은 하지
-# 않는다** — 합치는 것은 사람·에이전트가 한다. 무엇을 덮어쓰는지는 --dry-run 이 보여준다.
+# 재설치가 **덮어쓴다.** 프로젝트 소유는 CLAUDE.md · .claude/settings.json · CI · 린터 설정과,
+# 템플릿으로 놓는 docs/ 문서(SPEC · dev-log 등) · PR 템플릿이다. 이미 있으면 건드리지 않고 내용이
+# 다르면 .ai-kit-new 로 옆에 둔다. **자동 병합은 하지 않는다** — 합치는 것은 사람·에이전트가 한다.
+# 무엇을 덮어쓰는지는 --dry-run 이 보여준다.
 set -uo pipefail
 
 KIT_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -220,7 +221,7 @@ if [ "$DO_HOOKS" = 1 ]; then
   #
   # **경로 규칙도 다시 적지 않는다.** 한 번은 `common/` 아래 존재 여부로 판정하게 적었다가
   # dry-run 과 어긋났다 — `common/` 에는 복사할 때 가져오지 않는 ci·docs·templates 도 있어서
-  # `.ai-kit/ci/*` 가 "킷이 놓는 것" 으로 오판돼 알리지 않고 지워졌다(실제로 확인함: `삭제 0건` 인데
+  # `.ai-kit/ci/*` 가 "킷이 놓는 것" 으로 오판돼 알림 없이 지워졌다(실제로 확인함: `삭제 0건` 인데
   # 셋이 사라졌다). 근거가 하나면 어긋날 수 없다.
   _before=$( cd "$TARGET" 2>/dev/null && find .ai-kit -type f 2>/dev/null )
 
@@ -500,7 +501,7 @@ PYEOF
       while IFS= read -r _m; do
         [ -n "$_m" ] && WARNINGS+=("    $_m")
       done <<< "$_missing"
-      WARNINGS+=("  훅은 등록이 없으면 .claude/hooks/ 에 파일만 놓인 채 실행되지 않고, permissions 는 그 규칙이 없으면 적용되지 않습니다.")
+      WARNINGS+=("  훅은 등록이 없으면 .claude/hooks/ 에 파일만 놓인 채 실행되지 않고, 킷의 ask · deny 규칙이 없으면 킷이 묻거나 막게 한 명령이 이 레포의 다른 권한 설정대로 처리됩니다.")
       if [ "$DRY_RUN" = 1 ]; then
         WARNINGS+=("  실제로 설치하면 .claude/settings.json.ai-kit-new 가 옆에 놓입니다. 그것과 비교하세요.")
       else

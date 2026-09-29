@@ -241,7 +241,7 @@ guard "연결 뒤 heredoc 커밋 메시지 안의 gh auth" pass "git commit -m \
 fix: block gh auth status in the guard
 EOF
 )\""
-# 사람 설정이 없으면 원격을 URL 로 준 푸시도 https 로 된다. 막는 사유는 「주소를 풀지 못해」와 「SSH 주소라서」로
+# 사람 설정이 없으면 원격을 URL 로 준 푸시도 https 주소를 쓴다. 막는 사유는 「주소를 풀지 못해」와 「SSH 주소라서」로
 # 다르다 — 아래 SSH 푸시 테스트는 뒤의 것을 본다.
 guard "사람 설정 없는 URL 푸시" pass "git push https://github.com/o/r.git HEAD"
 # 사람의 git 설정이 github.com 의 https 를 SSH 로 바꾸면 세션의 푸시에 SSH 키, 곧 사람 계정이 쓰인다
@@ -249,7 +249,7 @@ printf '[url "git@github.com:"]\n\tinsteadOf = https://github.com/\n' > "$T/home
 guard "사람 설정이 https 를 SSH 로 바꾼 푸시(insteadOf)" deny "git push -u origin HEAD" "$R" "SSH 주소라서"
 printf '[url "git@github.com:"]\n\tpushInsteadOf = https://github.com/\n' > "$T/home/.gitconfig"
 guard "사람 설정이 https 를 SSH 로 바꾼 푸시(pushInsteadOf)" deny "git push" "$R" "SSH 주소라서"
-# 원격 자리를 리다이렉션이나 플래그의 값으로 읽으면 주소를 못 풀어 막지 못한다
+# 원격 자리를 리다이렉션이나 플래그의 값으로 읽으면 주소를 잘못 풀어 통과시킨다
 guard "리다이렉션이 붙은 푸시(2>&1)" deny "git push 2>&1" "$R" "SSH 주소라서"
 guard "리다이렉션이 붙은 푸시(>파일)" deny "git push >/tmp/push.log" "$R" "SSH 주소라서"
 guard "리다이렉션 뒤 원격 이름" deny "git push 2>/dev/null origin HEAD" "$R" "SSH 주소라서"
@@ -257,7 +257,7 @@ guard "값을 받는 플래그 뒤의 원격(-o)" deny "git push -o ci.skip orig
 guard "값을 받는 플래그 뒤의 원격(--push-option)" deny "git push --push-option ci.skip origin HEAD" "$R" "SSH 주소라서"
 guard "값을 붙여 쓴 플래그 뒤의 원격(-oci.skip)" deny "git push -oci.skip origin HEAD" "$R" "SSH 주소라서"
 guard "원격을 URL 로 준 푸시" deny "git push https://github.com/o/r.git HEAD" "$R" "SSH 주소라서"
-# kit-guide 6절이 적은 대로 이 레포에만 소유자까지 적은 더 긴 규칙을 두면, 가장 긴 규칙이 적용돼 https 로 된다
+# kit-guide 6절이 적은 대로 이 레포에만 소유자까지 적은 더 긴 규칙을 두면, 가장 긴 규칙이 적용돼 https 주소로 푸시한다
 git -C "$R" config url."https://github.com/o/".pushInsteadOf "https://github.com/o/"
 guard "이 레포에서 SSH 바꾸기를 끈 푸시(더 긴 규칙)" pass "git push origin HEAD"
 git -C "$R" config --unset url."https://github.com/o/".pushInsteadOf

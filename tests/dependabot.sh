@@ -81,7 +81,7 @@ if extra:
     print(f"어댑터 언어의 생태계가 아닌 주석 블록이 있다 — {', '.join(extra)}")
     bad = 1
 # 2칸 들여쓴 주석을 모두 풀어도 읽혀야 한다. 에디터로 블록을 고를 때 블록에 붙은 설명 줄까지 함께 풀리기
-# 쉽다. 그 줄이 블록에 붙지 않고 따로 있으면 updates 안에 YAML 이 아닌 줄이 남아 파일 전체가 읽히지 않는다.
+# 쉽다. 그 설명이 YAML 줄 끝의 주석이 아니라 제 줄에 따로 있으면 updates 안에 YAML 이 아닌 줄이 남아 파일 전체가 읽히지 않는다.
 try:
     ecosystems(re.sub(r"(?m)^  # ", "  ", text))
 except Exception as x:

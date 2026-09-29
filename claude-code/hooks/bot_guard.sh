@@ -624,7 +624,7 @@ for a in git_calls:
              "실행한다.")
     for u in urls:
         if re.search(r'github\.com[:/]', u) and not u.startswith('https://github.com/'):
-            deny("이 푸시의 주소는 " + u + " 다. github.com 의 SSH 주소라서 봇이 아니라 SSH 키, 곧 사람 계정으로 "
+            deny("이 푸시의 주소는 " + u + " 이다. github.com 의 SSH 주소라서 봇이 아니라 SSH 키, 곧 사람 계정으로 "
                  "푸시된다. 세션은 github.com 의 SSH 주소를 https 로 바꿔 쓰지만, 사람의 git 설정(url.….insteadOf · "
                  "pushInsteadOf)이 https 를 SSH 로 다시 바꾼다. 그 설정을 이 레포에서 끄는 법은 " + GUIDE + "에 있다.")
     # auto-merge 를 켠 뒤 그 브랜치에 푸시하면, 사람이 새 커밋을 보고 누른 Approve 가 옛 결정 코멘트대로
