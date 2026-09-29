@@ -67,7 +67,7 @@ if printf '%s' "$out" | grep -qi 'upgrade\|not available\|403'; then
 private 레포의 브랜치 보호는 유료 플랜이 필요할 수 있습니다.
 대안(강한 것부터):
   1. 레포를 public 으로 바꿀 수 있으면, 바꾼 뒤 킷의 install.sh <경로> --protect 로 보호 설정을 다시 실행하세요. public 레포는 브랜치 보호가 무료입니다.
-  2. 그럴 수 없으면 로컬 훅(.ai-kit/git-hooks) + CI 결과로 운영하고,
+  2. 그럴 수 없으면 로컬 훅(.kit/git-hooks) + CI 결과로 운영하고,
      "브랜치 보호 없음"을 알려진 한계로 문서에 기록합니다 — 숨기지 않습니다.
 MSG
 fi

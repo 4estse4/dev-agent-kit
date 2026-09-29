@@ -32,8 +32,8 @@ check() { # $1=설명  나머지=install.sh 플래그
   bash "$KIT/install.sh" "$@" "$R" >/dev/null 2>&1
   # 킷이 안 놓는 파일을 하나 둔다 — 재설치가 지우는 정상 상황이고,
   # 대문자로 시작해야 C 정렬과 로케일 정렬의 순서가 달라진다.
-  echo x > "$R/.ai-kit/git-hooks/README.md"
-  local before; before=$(cd "$R" && find .ai-kit -type f)
+  echo x > "$R/.kit/git-hooks/README.md"
+  local before; before=$(cd "$R" && find .kit -type f)
   local out;    out=$(bash "$KIT/install.sh" "$@" "$R" 2>&1)
   local said;   said=$(printf '%s\n' "$out" | sed -n 's/^  - \([^ ]*\).*/\1/p')
   local p
@@ -46,7 +46,7 @@ check() { # $1=설명  나머지=install.sh 플래그
   done <<< "$before"
   # 훅은 재설치가 절대 안 지운다
   for p in pre-commit pre-push; do
-    [ -e "$R/.ai-kit/git-hooks/$p" ] || { echo "  ✗ [$what] 훅이 사라졌다: $p"; fail=1; bad=1; }
+    [ -e "$R/.kit/git-hooks/$p" ] || { echo "  ✗ [$what] 훅이 사라졌다: $p"; fail=1; bad=1; }
   done
   [ "$bad" = 0 ] && echo "  ✓ $what"
   return 0
@@ -71,7 +71,7 @@ for phase in 첫설치 재설치 교체있음 보존있음 삭제있음; do
     # 킷 소유 파일을 고쳐두면 재설치가 그것을 되돌린다 = `교체`. 이 칸을 안 만들면
     # 네 단계가 전부 `교체 0` 이라 그 칸이 실제와 달라도 초록이다 — PR 본문이 "여섯 개를
     # 교체하고도 교체 0건" 이라고 적은 그 결함의 칸이 바로 여기다.
-    교체있음) echo '# 프로젝트가 킷 파일을 고쳐둠' >> "$R/.ai-kit/gate/gate.sh" ;;
+    교체있음) echo '# 프로젝트가 킷 파일을 고쳐둠' >> "$R/.kit/gate/gate.sh" ;;
     # 이 검사가 고치는 프로젝트 소유 파일은 둘이다 — CLAUDE.md 와 .claude/settings.json. 하나만 고쳐두면
     # 다른 하나의 소유 판정이 깨져도 이 검사가 실패하지 않는다(실제로 확인함: settings.json 쪽을
     # 킷 소유로 오판하게 만들어도 초록이었다).
@@ -83,7 +83,7 @@ d["permissions"]["allow"].append("Bash(echo project-owned)")
 json.dump(d, open(p,"w"), indent=2, ensure_ascii=False)
 PYEOF
               ;;
-    삭제있음) echo x > "$R/.ai-kit/git-hooks/README.md" ;;
+    삭제있음) echo x > "$R/.kit/git-hooks/README.md" ;;
   esac
   f=$(bash "$KIT/install.sh" --hooks --templates --lint --ci --agent --dry-run "$R" 2>&1 | cols)
   a=$(bash "$KIT/install.sh" --hooks --templates --lint --ci --agent          "$R" 2>&1 | cols)

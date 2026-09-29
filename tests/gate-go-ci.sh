@@ -273,7 +273,7 @@ elif len(keys) > 1:
     ok("도구 캐시 키가 잡마다 다르다")
 sys.exit(1 if fails else 0)
 PY
-python3 "$T/gotools.py" "$Y" "$T" "$R/.ai-kit/gate/tool-versions" || fail=1
+python3 "$T/gotools.py" "$Y" "$T" "$R/.kit/gate/tool-versions" || fail=1
 
 # ── coverage ───────────────────────────────────────────────────────────
 step_run coverage '패키지별 커버리지' | sed "s#/tmp/cov.txt#$T/cov.txt#g" > "$T/coverage.sh"

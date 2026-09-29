@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# 활성화: `git config core.hooksPath .ai-kit/git-hooks` (clone 마다 필요하다).
+# 활성화: `git config core.hooksPath .kit/git-hooks` (clone 마다 필요하다).
 # 푸시되는 범위에 대해 게이트(포맷·린트·타입·테스트)와 시크릿 스캔을 실행하고,
 # 브랜치를 올리는 푸시면 요구 추적(trace.sh)도 본다.
 # 에이전트 훅과 달리 사람이 손으로 푸시해도, 다른 에이전트를 써도 작동한다.
 set -uo pipefail
-# 게이트는 대상 레포에 복사해 둔 .ai-kit/ 에서 찾는다 — 다른 머신·CI 에서도 동일 경로.
+# 게이트는 대상 레포에 복사해 둔 .kit/ 에서 찾는다 — 다른 머신·CI 에서도 동일 경로.
 REPO=$(git rev-parse --show-toplevel) || exit 1
-KIT="${AI_KIT_DIR:-$REPO/.ai-kit}"
-[ -d "$KIT" ] || { echo "$(basename "$0"): .ai-kit 가 없습니다 — install.sh 를 다시 실행하세요" >&2; exit 1; }
+KIT="${AI_KIT_DIR:-$REPO/.kit}"
+[ -d "$KIT" ] || { echo "$(basename "$0"): .kit 이 없습니다 — install.sh 를 다시 실행하세요" >&2; exit 1; }
 
 ZERO='0000000000000000000000000000000000000000'
 fail=0

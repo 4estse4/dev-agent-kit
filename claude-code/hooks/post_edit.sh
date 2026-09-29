@@ -122,7 +122,7 @@ if [ -n "${_failed:-}" ]; then
 fi
 if [ -n "${_missing:-}" ]; then
   echo "post_edit: 포매터가 없어 ${file##*/} 을 포맷하지 못했습니다 — ${_missing}" >&2
-  echo "  설치: bash .ai-kit/gate/install-tools.sh   (버전은 .ai-kit/gate/tool-versions)" >&2
+  echo "  설치: bash .kit/gate/install-tools.sh   (버전은 .kit/gate/tool-versions)" >&2
   exit 2
 fi
 exit 0

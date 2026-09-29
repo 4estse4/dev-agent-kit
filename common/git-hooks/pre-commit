@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# 활성화: `git config core.hooksPath .ai-kit/git-hooks` (clone 마다 필요하다).
+# 활성화: `git config core.hooksPath .kit/git-hooks` (clone 마다 필요하다).
 # 막는 것: (1) 보호 브랜치 직접 커밋  (2) 잘못된 신원  (3) 충돌 마커  (4) 시크릿  (5) 린트
 #
 # 주의: `git commit --no-verify` 로 우회 가능하다. 그래서 이 훅은 '조기 피드백'이고,
 # 우회할 수 없게 막는 것은 CI 와 브랜치 보호다. (docs/process/verification-stages.md 참조)
 set -uo pipefail
-# 게이트는 대상 레포에 복사해 둔 .ai-kit/ 에서 찾는다 — 다른 머신·CI 에서도 동일 경로.
+# 게이트는 대상 레포에 복사해 둔 .kit/ 에서 찾는다 — 다른 머신·CI 에서도 동일 경로.
 REPO=$(git rev-parse --show-toplevel) || exit 1
-KIT="${AI_KIT_DIR:-$REPO/.ai-kit}"
-[ -d "$KIT" ] || { echo "$(basename "$0"): .ai-kit 가 없습니다 — install.sh 를 다시 실행하세요" >&2; exit 1; }
+KIT="${AI_KIT_DIR:-$REPO/.kit}"
+[ -d "$KIT" ] || { echo "$(basename "$0"): .kit 이 없습니다 — install.sh 를 다시 실행하세요" >&2; exit 1; }
 
 PROTECTED="${AI_KIT_PROTECTED_BRANCHES:-main master}"
 branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo "")
@@ -31,10 +31,10 @@ MSG
 done
 
 # ── 신원 검증 ──
-# .ai-kit/identity 가 있으면 그 이메일로만 커밋할 수 있다.
+# .kit/identity 가 있으면 그 이메일로만 커밋할 수 있다.
 # includeIf 설정을 잊거나 새 머신에서 clone 했을 때 잘못된 신원으로
 # 커밋이 쌓이는 것을 막는다. 기억에 의존하지 않는다.
-idfile="$REPO/.ai-kit/identity"
+idfile="$REPO/.kit/identity"
 if [ -f "$idfile" ]; then
   want=$(grep -v '^[[:space:]]*#' "$idfile" | grep -v '^[[:space:]]*$' | head -1 | tr -d '[:space:]')
   have=$(git config user.email 2>/dev/null)
@@ -48,7 +48,7 @@ if [ -f "$idfile" ]; then
 
   이 레포에만 지정:  git config user.email "$want"
   또는 ~/.gitconfig 의 includeIf 에 이 레포 경로를 추가하세요.
-  기대값을 바꾸려면 .ai-kit/identity 를 수정합니다.
+  기대값을 바꾸려면 .kit/identity 를 수정합니다.
 MSG
     exit 1
   fi

@@ -10,7 +10,7 @@
 set -uo pipefail
 
 # 형제 파일은 자기 디렉터리 기준으로 찾는다 — 킷 원본이든 대상 레포에 복사해 둔
-# .ai-kit/gate/ 든 동일하게 동작한다.
+# .kit/gate/ 든 동일하게 동작한다.
 SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "gate: git 레포가 아님" >&2; exit 1; }
 cd "$REPO_ROOT" || exit 1

@@ -15,13 +15,13 @@
 # 절대 차단하지 않는다. 알 수 없으면 아무것도 출력하지 않고 건너뛴다.
 set -uo pipefail
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
-STAMP=.ai-kit/install-manifest
+STAMP=.kit/install-manifest
 [ -f "$STAMP" ] || exit 0
 
 # 킷 경로는 install.sh 가 이 레포의 로컬 git config 에 적어둔다.
 # 커밋되는 파일에 넣지 않는 이유: 머신마다 경로가 다르고, 남의 절대경로가
 # 레포에 커밋되면 그 사람 환경을 알려주는 것 외에 아무 쓸모가 없다.
-kit=$(git config --get ai-kit.path 2>/dev/null) || exit 0
+kit=$(git config --get kit.path 2>/dev/null) || exit 0
 [ -n "$kit" ] && [ -d "$kit/.git" ] || exit 0
 
 recorded=$(sed -n 's/^kit_rev=//p' "$STAMP" | head -1)
@@ -42,8 +42,8 @@ _when() {
 if git -C "$kit" cat-file -e "${recorded}^{commit}" 2>/dev/null; then
   behind=$(git -C "$kit" rev-list --count "${recorded}..HEAD" 2>/dev/null || echo "")
   [ -n "$behind" ] && [ "$behind" != "0" ] \
-    && echo "ai-kit: 설치된 킷이 ${behind}개 커밋 낡았습니다 — ${recorded}$(_when "$recorded") → ${latest}$(_when "$latest"). 확인: ${kit}/install.sh . --dry-run"
+    && echo "dev-agent-kit:설치된 킷이 ${behind}개 커밋 낡았습니다 — ${recorded}$(_when "$recorded") → ${latest}$(_when "$latest"). 확인: ${kit}/install.sh . --dry-run"
 else
-  echo "ai-kit: 설치된 킷 리비전 ${recorded} 을 로컬 킷에서 찾을 수 없습니다 (현재 ${latest}$(_when "$latest")). 확인: ${kit}/install.sh . --dry-run"
+  echo "dev-agent-kit:설치된 킷 리비전 ${recorded} 을 로컬 킷에서 찾을 수 없습니다 (현재 ${latest}$(_when "$latest")). 확인: ${kit}/install.sh . --dry-run"
 fi
 exit 0

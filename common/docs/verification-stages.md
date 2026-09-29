@@ -604,12 +604,12 @@ hook doesn't block the tool call"*, 스크립트가 없을 때도 *"the action p
 
 ### 6.4 git hooks 의 한계
 
-훅 파일은 `.ai-kit/git-hooks/` 에 커밋되므로 clone 을 따라온다. 그러나 이를 활성화하는
+훅 파일은 `.kit/git-hooks/` 에 커밋되므로 clone 을 따라온다. 그러나 이를 활성화하는
 `core.hooksPath` 는 **로컬 설정이라 clone 되지 않는다** — git 이 보안상 의도한 동작이고
 우회 방법이 없다. 새로 clone 한 사람은 한 줄이 필요하다:
 
 ```bash
-git config core.hooksPath .ai-kit/git-hooks
+git config core.hooksPath .kit/git-hooks
 ```
 
 그리고 `git commit --no-verify` 로도 우회된다.
@@ -619,7 +619,7 @@ git config core.hooksPath .ai-kit/git-hooks
 
 ```
 $ git commit -m ...
-hint: The '.ai-kit/git-hooks/pre-commit' hook was ignored because it's not set as executable.
+hint: The '.kit/git-hooks/pre-commit' hook was ignored because it's not set as executable.
 [main abc1234] ...        ← 훅이 exit 1 인데도 커밋됨
 ```
 
@@ -631,7 +631,7 @@ hint: The '.ai-kit/git-hooks/pre-commit' hook was ignored because it's not set a
 | `core.fileMode=false` 인 레포 | 작업트리는 755 인데 **커밋된 모드는 100644** |
 | 훅을 편집기가 지우고 다시 쓸 때 | 인덱스 모드가 **100644** 로 바뀜 |
 
-훅은 `.ai-kit/` 에 복사돼 레포 안에 있으니 누군가 손대는 것을 전제한 파일이다.
+훅은 `.kit/` 에 복사돼 레포 안에 있으니 누군가 손대는 것을 전제한 파일이다.
 그런데 손대는 순간 강제가 조용히 꺼질 수 있고, 로컬에서는 아무도 눈치채지 못한다.
 
 파일이 *있는지*만 보는 검사는 이것을 통과시킨다. 그래서 CI 가 커밋된 모드까지 본다
@@ -707,7 +707,7 @@ hint: The '.ai-kit/git-hooks/pre-commit' hook was ignored because it's not set a
 이유는 셋이고 전부 확인했다:
 
 1. **중복이다.** git `pre-push` 훅이 이미 **모든** push 에서 게이트를 실행한다
-   (`.ai-kit/git-hooks/pre-push` 가 `gate.sh --base` 를 호출한다). 에이전트 훅을 더하면
+   (`.kit/git-hooks/pre-push` 가 `gate.sh --base` 를 호출한다). 에이전트 훅을 더하면
    같은 검사가 두 번 실행된다.
 2. **비싸다.** 게이트는 실제 모노레포에서 한 번에 수십 초다. 두 번이면 그만큼 두 배다.
 3. **얻는 게 없다.** 에이전트 훅을 두는 유일한 이유는 "에이전트가 결과를 보게" 인데,

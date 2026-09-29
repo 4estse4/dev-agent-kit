@@ -142,7 +142,7 @@
       "Bash(docker compose config*)",
       "Bash(docker compose ps*)",
       "Bash(docker compose logs*)",
-      "Bash(bash .ai-kit/gate/*)",
+      "Bash(bash .kit/gate/*)",
       "Bash(bash .claude/hooks/human_comment.sh *)"
     ]
   },

@@ -110,11 +110,11 @@ git clone <this-repo> ~/git/ai-native-kit        # 킷은 아무 데나 한 번�
 수정 → 다시 푸시)은 로컬에서 30초면 끝날 일을 공용 CI 자원과 사람 시간으로 치르는 것이다.
 
 ```bash
-bash .ai-kit/gate/install-tools.sh              # 이 레포에 필요한 것만
-bash .ai-kit/gate/install-tools.sh --dry-run    # 무엇을 설치할지만
+bash .kit/gate/install-tools.sh              # 이 레포에 필요한 것만
+bash .kit/gate/install-tools.sh --dry-run    # 무엇을 설치할지만
 ```
 
-버전은 **`.ai-kit/gate/tool-versions` 가 단일 출처**다. 로컬 설치 안내·설치 도우미·CI 가
+버전은 **`.kit/gate/tool-versions` 가 단일 출처**다. 로컬 설치 안내·설치 도우미·CI 가
 모두 그 파일을 읽는다 — 어딘가에 숫자를 적어 두면 로컬과 CI 의 버전이 달라진다.
 
 불가피하게 도구를 못 쓰는 상황에서만 도구가 없는 검사를 건너뛰게 한다. 그러면
@@ -158,19 +158,19 @@ CI 가 같은 검사를 다시 실행하는 이유는 **로컬 검사가 실행�
 ```
 지금 설치하면 — 설치 0 · 교체 1 · 보존 1 · 동일 39 · 삭제 1
 
-교체 — .ai-kit, .claude 의 스킬·에이전트·훅, docs/process 는 킷 소유다
-  ~ .ai-kit/gate/secrets.sh
+교체 — .kit, .claude 의 스킬·에이전트·훅, docs/process 는 킷 소유다
+  ~ .kit/gate/secrets.sh
 
-보존 — 이 레포 것을 두고 킷의 것은 <파일>.ai-kit-new 로 옆에 놓는다
+보존 — 이 레포 것을 두고 킷의 것은 <파일>.kit-new 로 옆에 놓는다
   ~ CLAUDE.md
 
 삭제 — 재설치가 지운다
-  - .ai-kit/gate/adapters/extra.sh
+  - .kit/gate/adapters/extra.sh
 
 diff (- 지금 이 레포 / + 킷이 놓을 것)
   ...
 
-병합용 트리: /tmp/ai-kit-dryrun.XXXXXX
+병합용 트리: /tmp/kit-dryrun.XXXXXX
 ```
 
 **병합은 하지 않는다.** 트리가 남으므로 사람이나 에이전트가 그것을 보고 정한다.
@@ -178,8 +178,8 @@ diff 가 길면 `AI_KIT_DIFF_MAX_LINES`·`AI_KIT_DIFF_MAX_TOTAL` 로 조절한�
 
 | 대상 | 갱신 방식 |
 |---|---|
-| `.ai-kit/gate/` · `git-hooks/` | 킷 소유 — 통째로 교체 |
-| `CLAUDE.md` · `.claude/settings.json` · CI · 린터 · 템플릿으로 놓는 `docs/` 문서와 PR 템플릿 | 프로젝트 소유 — 건드리지 않고 킷의 것을 `<파일>.ai-kit-new` 로 옆에 둔다 |
+| `.kit/gate/` · `git-hooks/` | 킷 소유 — 통째로 교체 |
+| `CLAUDE.md` · `.claude/settings.json` · CI · 린터 · 템플릿으로 놓는 `docs/` 문서와 PR 템플릿 | 프로젝트 소유 — 건드리지 않고 킷의 것을 `<파일>.kit-new` 로 옆에 둔다 |
 | `.claude/skills|agents|hooks` · `docs/process` | **킷 소유 — 재설치가 덮어쓴다** |
 
 ### 자동 병합을 하지 않는 이유
@@ -232,7 +232,7 @@ Go 도구는 `go list -m <모듈>@latest`, ruff 는 PyPI, ktlint 는 GitHub rele
 
 | | 소유 | 이유 |
 |---|---|---|
-| `.ai-kit/gate/*` | **킷** (vendor·버전 기록) | 게이트 정의는 한 곳이어야 로컬·CI 가 어긋나지 않는다 |
+| `.kit/gate/*` | **킷** (vendor·버전 기록) | 게이트 정의는 한 곳이어야 로컬·CI 가 어긋나지 않는다 |
 | `.github/workflows/gates.yml` | **프로젝트** (시작 템플릿) | 서비스 컨테이너·시크릿 등 CI 요구는 본질적으로 프로젝트마다 다르다 |
 | `.golangci.yml` · `eslint.config.js` | **프로젝트** (시작 템플릿) | 하드룰이 프로젝트마다 다르다 |
 

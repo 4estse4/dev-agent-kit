@@ -119,10 +119,10 @@ Co-Authored-By: Claude Opus 5 (xhigh) <noreply@anthropic.com>
 | --- | --- |
 | 실행 | |
 | 테스트 | |
-| 게이트 전체 | `bash .ai-kit/gate/gate.sh` |
-| 린트만(빠름) | `bash .ai-kit/gate/gate.sh --lint` — 커밋 훅이 이것을 부른다 |
-| 요구 추적 검사 | `bash .ai-kit/gate/trace.sh` |
-| 게이트 도구 설치 | `bash .ai-kit/gate/install-tools.sh` (버전은 `.ai-kit/gate/tool-versions`) |
+| 게이트 전체 | `bash .kit/gate/gate.sh` |
+| 린트만(빠름) | `bash .kit/gate/gate.sh --lint` — 커밋 훅이 이것을 부른다 |
+| 요구 추적 검사 | `bash .kit/gate/trace.sh` |
+| 게이트 도구 설치 | `bash .kit/gate/install-tools.sh` (버전은 `.kit/gate/tool-versions`) |
 
 > **도구가 없으면 검사는 실패한다** — 로컬도 CI 와 같은 기준이다. 도구 부재는 통과가
 > 아니라 "검사되지 않았다" 이다. 로컬만 도구 없이 통과시키면 로컬에서 통과한 커밋이 CI 에서

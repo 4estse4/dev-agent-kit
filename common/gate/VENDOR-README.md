@@ -1,4 +1,4 @@
-# .ai-kit — 이 레포에 복사해 둔 게이트
+# .kit — 이 레포에 복사해 둔 게이트
 
 이 디렉터리는 [ai-native-kit](https://github.com/4estse4/ai-native-kit) 의 게이트를
 복사해 둔 것이다. **레포와 함께 버전 관리되므로 clone 하면 따라온다.**
@@ -6,7 +6,7 @@
 ## 새로 clone 했다면 — 한 줄이 필요하다
 
 ```bash
-git config core.hooksPath .ai-kit/git-hooks
+git config core.hooksPath .kit/git-hooks
 ```
 
 훅 *파일* 은 clone 을 따라오지만, 그것을 활성화하는 `core.hooksPath` 설정은
@@ -28,10 +28,10 @@ git config core.hooksPath .ai-kit/git-hooks
 ## 직접 실행
 
 ```bash
-bash .ai-kit/gate/gate.sh          # 변경 영역만
-bash .ai-kit/gate/gate.sh --all    # 전체 (CI 와 동일)
-bash .ai-kit/gate/trace.sh         # SPEC ↔ 추적 매트릭스 정합
-bash .ai-kit/gate/secrets.sh       # staged 시크릿 스캔
+bash .kit/gate/gate.sh          # 변경 영역만
+bash .kit/gate/gate.sh --all    # 전체 (CI 와 동일)
+bash .kit/gate/trace.sh         # SPEC ↔ 추적 매트릭스 정합
+bash .kit/gate/secrets.sh       # staged 시크릿 스캔
 ```
 
 위 `gate.sh` 두 명령 모두 도구가 없는 검사를 실패로 처리한다. 불가피하게 건너뛰려면
@@ -45,7 +45,7 @@ bash .ai-kit/gate/secrets.sh       # staged 시크릿 스캔
 
 다만 두 가지를 알고 고쳐라.
 
-1. **`install.sh` 를 다시 실행하면 사라진다.** `.ai-kit/gate`·`git-hooks` 는 킷 소유라
+1. **`install.sh` 를 다시 실행하면 사라진다.** `.kit/gate`·`git-hooks` 는 킷 소유라
    통째로 교체된다. 무엇이 달라졌는지는 다시 설치하기 전에 `--dry-run` 으로 본다.
 2. **킷에 올리지 않으면 다음 프로젝트가 같은 버그를 다시 겪는다.** 실제로 그랬다 —
    한 프로젝트와 킷이 같은 결함을 따로 고쳐 같은 코드가 두 번 나왔다.

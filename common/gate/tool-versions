@@ -1,8 +1,8 @@
 # 게이트가 쓰는 도구의 고정 버전. **단일 출처다.**
 #
 # 이 값을 읽는 곳:
-#   .ai-kit/gate/lib.sh          도구가 없을 때 설치 안내에 버전을 넣는다. CI 가 Go 를 설치하는 go.mod 를 go_min 과 견준다
-#   .ai-kit/gate/install-tools.sh 이 버전대로 설치한다
+#   .kit/gate/lib.sh          도구가 없을 때 설치 안내에 버전을 넣는다. CI 가 Go 를 설치하는 go.mod 를 go_min 과 견준다
+#   .kit/gate/install-tools.sh 이 버전대로 설치한다
 #   .github/workflows/gates.yml         CI 가 이 버전대로 설치한다
 #
 # 런타임은 여기 없다. **프로젝트가 자기 파일에 적고 CI 가 그것을 읽는다:**
