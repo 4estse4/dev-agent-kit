@@ -62,7 +62,7 @@ awk -v out="$T/step." '
   END { flush() }
 ' "$Y"
 
-min=$(sed -n 's/^go_min=//p' "$R/.ai-kit/gate/tool-versions")
+min=$(sed -n 's/^go_min=//p' "$R/.kit/gate/tool-versions")
 [ -n "$min" ] || { echo "  ✗ 설치된 tool-versions 에 go_min 이 없다"; exit 1; }
 IFS=. read -r ma mi _ <<< "$min"; below="$ma.$((mi - 1))"; lower="$ma.$((mi - 2))"; series="$ma.$mi"
 # 버전으로는 낮고 문자열로는 높은 것(go_min 이 1.2x 면 1.3). 문자열로 견주면 이것이 통과한다.
@@ -126,7 +126,7 @@ for job in $steps; do
   # go_min 에 0 이 아닌 패치가 있을 때. 지금 핀으로는 안 생기므로 go_min 을 바꾼 tool-versions 로 본다.
   # 패치가 없는 go 줄은 계열끼리, 패치가 있는 go 줄과 toolchain 줄은 그 버전 그대로 견준다.
   TV="$T/tool-versions.p3"
-  { grep -v '^go_min=' "$R/.ai-kit/gate/tool-versions"; echo "go_min=$series.3"; } > "$TV"
+  { grep -v '^go_min=' "$R/.kit/gate/tool-versions"; echo "go_min=$series.3"; } > "$TV"
   check "$job" "go_min $series.3 · go $series(패치 없음)"            pass ""             "backend:$series"
   check "$job" "go_min $series.3 · go $below(패치 없음)"             fail backend/go.mod "backend:$below"
   check "$job" "go_min $series.3 · go $series.2"                    fail backend/go.mod "backend:$series.2"

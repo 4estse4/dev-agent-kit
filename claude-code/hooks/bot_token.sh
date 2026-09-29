@@ -11,7 +11,7 @@
 # 모두의 세션이 봇 계정으로 쓰고, 사람의 결정은 사람 계정으로 남는다. 개인키는 커밋하지 않고 머신마다
 # `~/.config/<App 이름>/key.pem` 에 둔다.
 #
-# **봇 디렉터리.** `<git 공통 디렉터리>/ai-kit-bot/`. 커밋되지 않는 자리이고, 워크트리들이 같은
+# **봇 디렉터리.** `<git 공통 디렉터리>/kit-bot/`. 커밋되지 않는 자리이고, 워크트리들이 같은
 # 곳을 쓴다. 사람의 gh 설정(`~/.config/gh`)은 건드리지 않는다. `hosts.yml` 은 gh 의 여러 계정
 # 형식으로 봇 계정 이름(`<App 이름>[bot]`)을 적고, `config.yml` 에 `version: "1"` 을 둔다 — 계정
 # 이름이 없으면 gh 가 설정을 옮기려고 계정을 조회하는데, 설치 토큰으로는 그 조회가 안 된다.
@@ -45,7 +45,7 @@ slug=${slug%.git}
 
 gitdir=$(git -C "$root" rev-parse --git-common-dir) || fail "git 디렉터리를 찾지 못했다."
 case "$gitdir" in /*) ;; *) gitdir="$root/$gitdir" ;; esac
-dir="$gitdir/ai-kit-bot"
+dir="$gitdir/kit-bot"
 umask 077
 mkdir -p "$dir/wired" || fail "봇 디렉터리를 만들지 못했다: $dir"
 

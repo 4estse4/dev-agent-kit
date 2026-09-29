@@ -17,12 +17,12 @@
 데 CI 와 사람의 시간이 든다.
 
 ```bash
-bash .ai-kit/gate/install-tools.sh              # 이 레포에 필요한 것만 설치
-bash .ai-kit/gate/gate.sh --lint                # 린트만 (커밋 훅이 부르는 것)
-bash .ai-kit/gate/gate.sh --all                 # 전부 (CI 가 부르는 것)
+bash .kit/gate/install-tools.sh              # 이 레포에 필요한 것만 설치
+bash .kit/gate/gate.sh --lint                # 린트만 (커밋 훅이 부르는 것)
+bash .kit/gate/gate.sh --all                 # 전부 (CI 가 부르는 것)
 ```
 
-불가피할 때만 `AI_KIT_ALLOW_MISSING_TOOLS=1` 로 도구가 없는 검사를 건너뛰게 한다. **무엇이 검사되지 않는지 출력된다.**
+불가피할 때만 `KIT_ALLOW_MISSING_TOOLS=1` 로 도구가 없는 검사를 건너뛰게 한다. **무엇이 검사되지 않는지 출력된다.**
 
 ## 2. 프로젝트가 채워야 하는 것
 
@@ -68,17 +68,17 @@ bash .ai-kit/gate/gate.sh --all                 # 전부 (CI 가 부르는 것)
 | 리뷰 라운드마다 | 세션 · PR 웹 | 세션이 띄운 「N라운드 코멘트」 창에서 다음 할 일을 고른다. 고른 보기가 그대로 사람 계정 코멘트로 올라간다. PR 웹에 쓰려면 그 창에서 「PR 웹에 쓴다」를 고르고, 쓴 뒤 「PR 웹 코멘트」 창에서 「PR 웹에 썼다」를 고른다(6절) | 세션이 다음 단계를 시작하지 않는다 |
 | 머지 전 | PR 웹 · 터미널 · 세션 | 세션이 요청한 head 를 Approve 하고, 세션의 「PR #N 최종 검토」 창에서 「Approve 했다」를 고른다. 세션이 auto-merge 를 켰으면 Approve 하는 순간 GitHub 이 머지하고, 켜지 못했으면 창에서 고른 뒤 세션이 Approve 를 확인해 머지한다(세션의 요청 블록이 어느 쪽인지 적는다). 머지됐으면 세션이 로컬 브랜치를 정리하고 「다음 일」 창으로 묻는다. Approve 뒤에도 브랜치가 뒤처지거나 충돌해 머지되지 못하면 사람이 창에서 고른 뒤 세션이 그 까닭을 알린다. PR 브랜치에 직접 푸시하려면 먼저 세션에 알려 auto-merge 를 끄게 하고, 푸시했으면 세션이 다시 푸시한 뒤에 Approve 한다(6절 6). PR 웹의 「Update branch」 · 「Resolve conflicts」도 PR 브랜치로 가는 사람의 푸시다 | 머지되지 않는다. auto-merge 를 켠 채 사람이 푸시하면 다른 리뷰어의 Approve 로 옛 결정 코멘트대로 머지된다 |
 
-**커밋 신원.** `install.sh` 는 설치 시점의 `git config user.email` 을 `.ai-kit/identity` 에
+**커밋 신원.** `install.sh` 는 설치 시점의 `git config user.email` 을 `.kit/identity` 에
 기록하고, 이후 훅이 그 값을 정답으로 검증한다. **틀린 값이 기록되면 훅이 틀린 값을 지켜준다.**
 
 ```bash
 git config user.email      # 이 레포에서 쓸 이메일이 맞는지 먼저 본다
 ```
 
-다르면 `git config user.email '<쓸 이메일>'` 로 고치고 `.ai-kit/identity` 를 지운 뒤
+다르면 `git config user.email '<쓸 이메일>'` 로 고치고 `.kit/identity` 를 지운 뒤
 `install.sh` 를 다시 실행한다.
 
-**Go 버전.** 킷은 `.ai-kit/gate/tool-versions` 의 `go_min` 보다 낮은 Go 를 지원하지 않는다. 그보다
+**Go 버전.** 킷은 `.kit/gate/tool-versions` 의 `go_min` 보다 낮은 Go 를 지원하지 않는다. 그보다
 낮은 go 로는 킷이 핀한 Go 도구가 설치되지 않거나, golangci-lint 의 gofumpt 가 기준으로 삼는 Go 의
 gofmt 와 포맷이 어긋나 게이트를 통과하지 못하는 코드가 생긴다. `go.mod` 는 레포 어디에 있어도 되고
 여럿이어도 된다. CI 는 설치할 Go(`toolchain` 줄이 있으면 그 버전, 없으면 `go` 줄)가 가장 높은 것으로
@@ -125,10 +125,10 @@ version … used to build golangci-lint is lower than the targeted Go version」
 같은 낱말을 쓰므로 두 출력을 그대로 견줄 수 있다.
 그 트리는 남으므로 **거기서 직접 병합하면 된다.**
 
-`.ai-kit/**` 와 `.claude/skills|agents|hooks/**`, `docs/process/**` 는 킷 소유라
+`.kit/**` 와 `.claude/skills|agents|hooks/**`, `docs/process/**` 는 킷 소유라
 **재설치가 덮어쓴다** — 여기 손댄 것은 다음 설치에서 사라진다. 고칠 것이 있으면 킷 레포에
 이슈나 PR 로 올려라. `CLAUDE.md`·`.claude/settings.json`·CI·린터 설정과 템플릿으로 놓는 `docs/` 문서 · PR
-템플릿은 **프로젝트 소유**라 건드리지 않는다 — 킷의 것과 다르면 킷의 것을 `<파일>.ai-kit-new` 로 옆에 두고,
+템플릿은 **프로젝트 소유**라 건드리지 않는다 — 킷의 것과 다르면 킷의 것을 `<파일>.kit-new` 로 옆에 두고,
 가져올지는 사람이 정한다. **자동 병합은 하지 않는다.**
 
 **킷 파일로 덮어쓰지 마라**: 그 파일들엔 프로젝트 고유 설정이 들어 있다.
@@ -194,7 +194,9 @@ Approve 가 있는지 확인해 머지한다.
    개인키나 토큰이 새면 설치 범위 안의 레포에 브랜치를 푸시하고 PR 을 열 수 있고, 브랜치 보호가 승인
    리뷰를 요구하지 않으면 CI 가 초록인 PR 을 머지할 수 있다. Workflows 쓰기로 그 CI 자체도 바꿀 수 있다.
 4. `.claude/bot.json` 을 커밋한다: `{"app_id": <App ID>, "app": "<App 이름>"}`. App 이름은 App
-   페이지 URL(`github.com/apps/<App 이름>`)의 이름이고, 봇 계정은 `<App 이름>[bot]` 이다.
+   페이지 URL(`github.com/apps/<App 이름>`)의 이름이고, 봇 계정은 `<App 이름>[bot]` 이다. App 이름을
+   `kit-bot` 으로 짓지 않는다 — 막기 훅이 명령 글자의 그 이름을 봇 디렉터리(`<git 공통 디렉터리>/kit-bot/`)로
+   읽어, App 이름이 든 명령(`~/.config/<App 이름>/` 을 보는 명령 등)을 막는다.
 5. 세션을 다시 시작한다. 연결하지 못하면 그 까닭이 세션에 전달된다. 직접 보려면 레포에서
    `bash .claude/hooks/bot_token.sh` 를 실행한다 — 성공하면 봇 디렉터리의 경로를, 실패하면 까닭을
    출력한다.

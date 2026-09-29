@@ -1,5 +1,5 @@
-# ai-kit 게이트 워크플로.
-# 게이트 명령을 여기 다시 적지 않는다 — 레포에 복사해 둔 .ai-kit/gate/gate.sh 를
+# 킷 게이트 워크플로.
+# 게이트 명령을 여기 다시 적지 않는다 — 레포에 복사해 둔 .kit/gate/gate.sh 를
 # 부른다. 로컬 훅과 CI 가 문자 그대로 같은 스크립트를 실행해야 둘의 검사가 어긋나지 않는다.
 name: gates
 
@@ -12,7 +12,7 @@ on:
 # env 블록 없이 `${{ env.X || '기본' }}` 을 쓰면 **항상 기본값**이 되고,
 # "오버라이드 가능" 은 거짓말이 된다. 프로젝트는 이 값을 고쳐서 바꾼다.
 env:
-  AI_KIT_JAVA_VERSION: "21"
+  KIT_JAVA_VERSION: "21"
 
 permissions:
   contents: read
@@ -44,7 +44,7 @@ jobs:
         # 모듈을 게이트는 보고 이 감지는 못 봤다. 아래 스텝들의 find 도 같은 기준이다.
         # 대부분 -print -quit 로 첫 하나에서 멈춘다.
         run: |
-          . .ai-kit/gate/lib.sh
+          . .kit/gate/lib.sh
           find . \( $(gate_prune_expr) \) -prune -o -name go.mod -print > "$RUNNER_TEMP/go.mods"; \
             gomod=$(gate_go_highest < "$RUNNER_TEMP/go.mods"); \
             [ -n "$gomod" ] && echo "gomod=${gomod#./}" >> "$GITHUB_OUTPUT" && echo "go=true" >> "$GITHUB_OUTPUT" || echo "go=false" >> "$GITHUB_OUTPUT"
@@ -65,24 +65,24 @@ jobs:
       - uses: actions/checkout@v7
       # 로컬 훅은 clone 마다 활성화가 필요해 신뢰할 수 없다. 최소한 게이트가
       # 레포에 커밋돼 있는지는 CI 가 확인한다 — 없으면 CI 도 실행할 수 없다.
-      - name: .ai-kit 게이트가 커밋돼 있는지
+      - name: .kit 게이트가 커밋돼 있는지
         run: |
-          for f in .ai-kit/gate/gate.sh .ai-kit/gate/secrets.sh .ai-kit/gate/trace.sh \
-                   .ai-kit/git-hooks/pre-commit .ai-kit/git-hooks/pre-push; do
-            [ -f "$f" ] || { echo "::error::$f 가 없습니다 — 킷의 install.sh 를 실행하고 .ai-kit 를 커밋하세요 (.ai-kit/README.md 참조)"; exit 1; }
+          for f in .kit/gate/gate.sh .kit/gate/secrets.sh .kit/gate/trace.sh \
+                   .kit/git-hooks/pre-commit .kit/git-hooks/pre-push; do
+            [ -f "$f" ] || { echo "::error::$f 가 없습니다 — 킷의 install.sh 를 실행하고 .kit 을 커밋하세요 (.kit/README.md 참조)"; exit 1; }
           done
           # 존재만으로는 부족하다. 실행권한 없는 훅을 git 은 hint 한 줄만 남기고
           # 건너뛴다 — 커밋은 성공하고 강제는 꺼진다. 모드는 커밋되므로 clone 하는
           # 모든 사람에게 꺼진 채로 퍼지고, 로컬에서는 아무도 눈치채지 못한다.
           # 우회할 수 없는 것은 CI 뿐이므로 모드 확인도 여기서 한다.
           # (게이트 스크립트는 훅이 `bash <경로>` 로 부르므로 권한이 필요 없다.)
-          for f in .ai-kit/git-hooks/pre-commit .ai-kit/git-hooks/pre-push; do
+          for f in .kit/git-hooks/pre-commit .kit/git-hooks/pre-push; do
             [ -x "$f" ] || { echo "::error::$f 에 실행권한이 없습니다 — git 이 이 훅을 실행하지 않고 건너뜁니다. git update-index --chmod=+x $f 로 고치고 커밋하세요"; exit 1; }
           done
           # 어느 킷에서 왔는지만 출력한다. **내용이 킷과 같은지는 검사하지 않는다** —
-          # 이 레포에서 게이트를 고치는 것이 정상 작업이기 때문이다(.ai-kit/README.md).
+          # 이 레포에서 게이트를 고치는 것이 정상 작업이기 때문이다(.kit/README.md).
           # 무엇이 달라졌는지 보려면 킷에서 install.sh <경로> --dry-run 을 실행한다.
-          cat .ai-kit/install-manifest 2>/dev/null || echo "install-manifest 없음"
+          cat .kit/install-manifest 2>/dev/null || echo "install-manifest 없음"
 
   gate:
     needs: detect
@@ -92,12 +92,12 @@ jobs:
       - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
 
-      # 도구 버전은 .ai-kit/gate/tool-versions 가 단일 출처다. 여기 숫자를 적어 두면
+      # 도구 버전은 .kit/gate/tool-versions 가 단일 출처다. 여기 숫자를 적어 두면
       # 로컬과 CI 의 버전이 반드시 달라진다 — 실제로 그래서 로컬만 낡은 린터를 쓰고 있었다.
       - id: tv
         name: read pinned tool versions
         run: |
-          f=.ai-kit/gate/tool-versions
+          f=.kit/gate/tool-versions
           [ -f "$f" ] || { echo "::error::$f 가 없습니다 — 킷을 갱신하세요"; exit 1; }
           while IFS='=' read -r k v; do
             case "$k" in ''|\#*) continue ;; esac
@@ -112,7 +112,7 @@ jobs:
       - if: needs.detect.outputs.go == 'true'
         name: require the kit's minimum Go
         run: |
-          . .ai-kit/gate/lib.sh
+          . .kit/gate/lib.sh
           gate_go_min_check
       # detect 의 gomod 는 설치할 Go(toolchain 줄이 있으면 그 버전, 없으면 go 줄)가 가장 높은 go.mod 다.
       # 세 잡의 setup-go 가 그것으로 Go 를 설치한다.
@@ -151,28 +151,28 @@ jobs:
         id: gotools
         uses: actions/cache/restore@v6
         with:
-          path: ~/.cache/ai-kit/go-tools
-          key: ai-kit-go-tools-gate-${{ runner.os }}-${{ runner.arch }}-go${{ steps.go.outputs.go-version }}-goimports-${{ steps.tv.outputs.goimports }}-golangci-lint-${{ steps.tv.outputs.golangci_lint }}
+          path: ~/.cache/kit/go-tools
+          key: kit-go-tools-gate-${{ runner.os }}-${{ runner.arch }}-go${{ steps.go.outputs.go-version }}-goimports-${{ steps.tv.outputs.goimports }}-golangci-lint-${{ steps.tv.outputs.golangci_lint }}
       - if: needs.detect.outputs.go == 'true' && steps.gotools.outputs.cache-hit != 'true'
         run: |
           # 버전을 핀한다. @latest 는 코드가 그대로여도 포맷 규칙이 바뀌어
           # cold cache 에서 게이트가 빨개진다. 같은 코드에서 결과가 달라진다.
-          CGO_ENABLED=0 GOBIN="$HOME/.cache/ai-kit/go-tools" go install golang.org/x/tools/cmd/goimports@${{ steps.tv.outputs.goimports }}
+          CGO_ENABLED=0 GOBIN="$HOME/.cache/kit/go-tools" go install golang.org/x/tools/cmd/goimports@${{ steps.tv.outputs.goimports }}
       # golangci-lint-action 은 스스로 lint 를 실행한다 — 게이트를 gate.sh 한 곳에서만
       # 정의하는 것과 부딪히므로 쓰지 않는다. 바이너리만 버전 핀해 설치하고 실행은 gate.sh 가 한다.
       # curl | sh 대신 go install 을 쓴다(내려받을 때 믿어야 하는 곳을 Go 모듈 프록시 하나로 줄인다).
       - if: needs.detect.outputs.go == 'true' && steps.gotools.outputs.cache-hit != 'true'
         name: install golangci-lint
         run: |
-          CGO_ENABLED=0 GOBIN="$HOME/.cache/ai-kit/go-tools" go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${{ steps.tv.outputs.golangci_lint }}
+          CGO_ENABLED=0 GOBIN="$HOME/.cache/kit/go-tools" go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${{ steps.tv.outputs.golangci_lint }}
       - if: needs.detect.outputs.go == 'true' && steps.gotools.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
-          path: ~/.cache/ai-kit/go-tools
+          path: ~/.cache/kit/go-tools
           key: ${{ steps.gotools.outputs.cache-primary-key }}
       # 복원했든 설치했든 도구는 이 디렉터리에 있다.
       - if: needs.detect.outputs.go == 'true'
-        run: echo "$HOME/.cache/ai-kit/go-tools" >> "$GITHUB_PATH"
+        run: echo "$HOME/.cache/kit/go-tools" >> "$GITHUB_PATH"
 
       # JVM: 빌드는 래퍼가 맡으므로 JDK 만 있으면 된다.
       #
@@ -192,7 +192,7 @@ jobs:
           #
           # 빌드 루트마다 본다. 레포 어딘가에 래퍼가 하나만 있어도 통과시키면,
           # 래퍼 없는 다른 빌드 루트가 시스템 gradle 로 알림 없이 검사된다.
-          . .ai-kit/gate/lib.sh
+          . .kit/gate/lib.sh
           fail=0
           while IFS= read -r m; do
             d=$(dirname "$m")
@@ -238,7 +238,7 @@ jobs:
         uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: ${{ env.AI_KIT_JAVA_VERSION }}
+          java-version: ${{ env.KIT_JAVA_VERSION }}
           cache: gradle
           cache-dependency-path: |
             **/*.gradle*
@@ -295,7 +295,7 @@ jobs:
         name: install project dev dependencies
         run: |
           set -e
-          . .ai-kit/gate/lib.sh
+          . .kit/gate/lib.sh
           # **모든** pyproject 를 순회한다. 게이트는 마커가 있는 모든 디렉터리에서 py
           # 어댑터를 실행하므로(조상-자손 제거는 빌드 도구가 있는 언어에만 적용된다), 첫 하나만 설치하면
           # 나머지는 도구 없이 검사되거나 남의 의존성으로 테스트가 실행된다.
@@ -359,7 +359,7 @@ jobs:
       - if: needs.detect.outputs.node == 'true'
         name: require a root .nvmrc
         run: |
-          . .ai-kit/gate/lib.sh
+          . .kit/gate/lib.sh
           gate_nvmrc_check
       - if: needs.detect.outputs.node == 'true'
         uses: actions/setup-node@v7
@@ -372,14 +372,14 @@ jobs:
       - if: needs.detect.outputs.node == 'true'
         run: |
           # 줄 단위로 읽는다. `for d in $(…)` 는 공백 든 경로에서 낱말이 나뉘어 cd 가 실패했다.
-          . .ai-kit/gate/lib.sh
+          . .kit/gate/lib.sh
           while IFS= read -r f; do
             echo "── $(dirname "$f") ──"
             (cd "$(dirname "$f")" && npm ci --no-audit --no-fund)
           done < <(find . \( $(gate_prune_expr) \) -prune -o -name package.json -print)
 
       # 게이트 본체 — 로컬 pre-push 와 같은 스크립트.
-      - run: bash .ai-kit/gate/gate.sh --all
+      - run: bash .kit/gate/gate.sh --all
 
   coverage:
     needs: detect
@@ -393,7 +393,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: require the kit's minimum Go
         run: |
-          . .ai-kit/gate/lib.sh
+          . .kit/gate/lib.sh
           gate_go_min_check
       # 캐시 키는 gate 잡과 같다(레포 전체의 go.mod 와 go.sum). 세 잡 가운데 먼저 끝난 잡의 캐시가 저장된다.
       - uses: actions/setup-go@v7
@@ -415,7 +415,7 @@ jobs:
         env:
           COVER_MIN: ${{ vars.COVER_MIN }}
         run: |
-          . .ai-kit/gate/lib.sh
+          . .kit/gate/lib.sh
           : > /tmp/cov.txt
           fail=0
           while IFS= read -r mod; do
@@ -449,7 +449,7 @@ jobs:
       - id: tv
         name: read pinned tool versions
         run: |
-          f=.ai-kit/gate/tool-versions
+          f=.kit/gate/tool-versions
           [ -f "$f" ] || { echo "::error::$f 가 없습니다 — 킷을 갱신하세요"; exit 1; }
           while IFS='=' read -r k v; do
             case "$k" in ''|\#*) continue ;; esac
@@ -461,15 +461,15 @@ jobs:
           base='${{ github.event.pull_request.base.sha }}'
           head='${{ github.event.pull_request.head.sha }}'
           if [ -n "$base" ] && [ -n "$head" ]; then
-            bash .ai-kit/gate/secrets.sh --range "${base}..${head}"
+            bash .kit/gate/secrets.sh --range "${base}..${head}"
           else
-            bash .ai-kit/gate/secrets.sh --range "HEAD~1..HEAD"
+            bash .kit/gate/secrets.sh --range "HEAD~1..HEAD"
           fi
 
       - if: needs.detect.outputs.go == 'true'
         name: require the kit's minimum Go
         run: |
-          . .ai-kit/gate/lib.sh
+          . .kit/gate/lib.sh
           gate_go_min_check
       # 캐시 키는 gate 잡과 같다(레포 전체의 go.mod 와 go.sum). 세 잡 가운데 먼저 끝난 잡의 캐시가 저장된다.
       - if: needs.detect.outputs.go == 'true'
@@ -486,26 +486,26 @@ jobs:
         id: gotools
         uses: actions/cache/restore@v6
         with:
-          path: ~/.cache/ai-kit/go-tools
-          key: ai-kit-go-tools-security-${{ runner.os }}-${{ runner.arch }}-go${{ steps.go.outputs.go-version }}-govulncheck-${{ steps.tv.outputs.govulncheck }}
+          path: ~/.cache/kit/go-tools
+          key: kit-go-tools-security-${{ runner.os }}-${{ runner.arch }}-go${{ steps.go.outputs.go-version }}-govulncheck-${{ steps.tv.outputs.govulncheck }}
       - if: needs.detect.outputs.go == 'true' && steps.gotools.outputs.cache-hit != 'true'
         name: install govulncheck
         run: |
           # govulncheck 도 핀한다 — 취약점 DB 는 항상 최신을 받지만
           # 도구 동작 자체가 알림 없이 바뀌는 것은 막는다.
-          CGO_ENABLED=0 GOBIN="$HOME/.cache/ai-kit/go-tools" go install golang.org/x/vuln/cmd/govulncheck@${{ steps.tv.outputs.govulncheck }}
+          CGO_ENABLED=0 GOBIN="$HOME/.cache/kit/go-tools" go install golang.org/x/vuln/cmd/govulncheck@${{ steps.tv.outputs.govulncheck }}
       - if: needs.detect.outputs.go == 'true' && steps.gotools.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
-          path: ~/.cache/ai-kit/go-tools
+          path: ~/.cache/kit/go-tools
           key: ${{ steps.gotools.outputs.cache-primary-key }}
       - if: needs.detect.outputs.go == 'true'
-        run: echo "$HOME/.cache/ai-kit/go-tools" >> "$GITHUB_PATH"
+        run: echo "$HOME/.cache/kit/go-tools" >> "$GITHUB_PATH"
       - if: needs.detect.outputs.go == 'true'
         name: govulncheck
         # go.mod 가 루트에 없을 수 있다(모노레포). 모듈마다 실행한다.
         run: |
-          . .ai-kit/gate/lib.sh
+          . .kit/gate/lib.sh
           fail=0
           while IFS= read -r mod; do
             d=$(dirname "$mod")
@@ -517,7 +517,7 @@ jobs:
       - if: needs.detect.outputs.node == 'true'
         name: require a root .nvmrc
         run: |
-          . .ai-kit/gate/lib.sh
+          . .kit/gate/lib.sh
           gate_nvmrc_check
       - if: needs.detect.outputs.node == 'true'
         uses: actions/setup-node@v7
@@ -528,7 +528,7 @@ jobs:
           # 줄 단위로 읽는다 — 위 npm ci 단계와 같은 이유다.
           # lockfile 은 둘 다 찾는다. npm 은 npm-shrinkwrap.json 도 lockfile 로 읽고, 한때
           # package-lock.json 만 찾아 shrinkwrap 만 둔 패키지를 알리지 않고 건너뛰었다.
-          . .ai-kit/gate/lib.sh
+          . .kit/gate/lib.sh
           while IFS= read -r f; do
             echo "── $(dirname "$f") ──"
             (cd "$(dirname "$f")" && npm audit --audit-level=high)
@@ -540,4 +540,4 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       # SPEC 요구가 추적표에서 알림 없이 사라지는 것을 막는다.
-      - run: bash .ai-kit/gate/trace.sh
+      - run: bash .kit/gate/trace.sh

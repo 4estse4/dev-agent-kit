@@ -65,7 +65,7 @@ CHOSE = '- 1라운드 코멘트: 제안대로 고치고 2라운드\n'           
 OLD = '### 1라운드 코멘트를 읽고 사람이 정한 것\n\n- (사람) "고친다"\n  → 한 일\n'   # 옛 제목 코멘트
 
 
-BOT, ME, OTHER = ('kit-bot', 'NONE'), ('me', 'OWNER'), ('someone', 'CONTRIBUTOR')
+BOT, ME, OTHER = ('helper-bot', 'NONE'), ('me', 'OWNER'), ('someone', 'CONTRIBUTOR')
 
 
 def comment(b):

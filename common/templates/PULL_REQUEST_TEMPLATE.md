@@ -11,7 +11,7 @@
 <게이트 출력을 그대로 붙인다. "테스트 통과함" 같은 요약이 아니라 실제 출력.>
 
 ```
-$ bash .ai-kit/gate/gate.sh
+$ bash .kit/gate/gate.sh
 ```
 
 새 테스트:

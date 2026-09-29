@@ -33,7 +33,7 @@ s = str(json.load(sys.stdin).get("session_id") or "")
 print(s if re.match(r"^[A-Za-z0-9_-]+$", s) else "")' 2>/dev/null)
 gitdir=$(git -C "$root" rev-parse --git-common-dir 2>/dev/null)
 case "$gitdir" in /*) ;; *) gitdir="$root/$gitdir" ;; esac
-[ -n "$sid" ] && rm -f "$gitdir/ai-kit-bot/wired/$sid"
+[ -n "$sid" ] && rm -f "$gitdir/kit-bot/wired/$sid"
 
 if ! out=$(bash "$here/bot_token.sh"); then
   printf '%s\n이 세션의 gh 는 봇 계정에 연결되지 않았다. 읽기는 사람 계정으로 되고, GitHub 에 쓰는 gh 명령과 git push 는 막힌다.\n' "$out"

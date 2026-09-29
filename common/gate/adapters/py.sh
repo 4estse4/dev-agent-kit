@@ -50,7 +50,7 @@ if [ "${GATE_LINT_ONLY:-0}" = 1 ]; then
   :
 elif _p=$(_py pytest); then
   # shellcheck disable=SC2086
-  out=$("$_p" -q ${AI_KIT_PYTEST_FLAGS:-} 2>&1); rc=$?
+  out=$("$_p" -q ${KIT_PYTEST_FLAGS:-} 2>&1); rc=$?
   case "$rc" in
     0) GATE_PASSED+=("pytest") ;;
     5) GATE_PASSED+=("pytest(테스트 없음)") ;;

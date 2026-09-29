@@ -160,7 +160,7 @@ wrapper "kt/ 에 gradlew 없음"                            fail kt/settings.gra
 
 # 게이트: pom.xml 만 있으면 검사할 모듈이 없다.
 layout pom.xml
-out=$(cd "$R" && bash .ai-kit/gate/gate.sh --all 2>&1); rc=$?
+out=$(cd "$R" && bash .kit/gate/gate.sh --all 2>&1); rc=$?
 if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q '검사 대상 없음'; then ok "gate.sh --all · 루트에 pom.xml 만 → 검사 대상 없음"
 else bad "gate.sh --all · 루트에 pom.xml 만 → rc=$rc, 검사 대상 없음이어야 한다:"; printf '%s\n' "$out" | tail -3 | sed 's/^/      /'; fi
 

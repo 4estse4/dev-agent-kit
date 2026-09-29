@@ -17,6 +17,9 @@
 #     남지 않는다. 그 스텝이 남으면 주석도 제자리에 남는다. 킷 사본의 gates.yml 에 그런 주석을 넣고 본다
 #   · 필터가 빼는 스텝 뒤의 6칸 주석은, 뒤에 스텝 머리가 오지 않으면(잡 머리 · 2칸 주석 · 파일 끝)
 #     그 스텝과 함께 지워진다. 그 스텝이 남으면 주석도 남는다. 킷 사본의 gates.yml 에 넣고 본다
+#   · 설치본의 워크플로 env 에 남은 변수는 설치된 gates.yml 이나 설치된 `.kit/` 의 스크립트에서 쓰인다.
+#     게이트 스크립트만 읽는 변수는 쓰이는 것으로 보고, 설치된 문서(`.kit/README.md` 포함)가 이름만 적은 변수는
+#     쓰이는 것으로 보지 않는지 킷 사본으로 본다
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 fail=0
@@ -38,7 +41,7 @@ install_lang() {
 }
 
 cat > "$T/check.py" <<'PY'
-import re, sys, yaml
+import os, re, sys, yaml
 
 src, out, keep = sys.argv[1], sys.argv[2], set(sys.argv[3].split(","))
 drop = {"go", "jvm", "py", "ts"} - keep
@@ -63,6 +66,28 @@ def lang(cond):
 bad = 0
 # detect 밖의 잡마다 스텝을 견준다. detect 는 필터가 탐지문과 출력을 고치는 잡이라 뺀다.
 S, O = yaml.safe_load("\n".join(srcl)), yaml.safe_load("\n".join(outl))
+
+# 설치본의 워크플로 env 에 남은 변수마다 쓰는 곳이 있는지 본다. 설치된 gates.yml 과, 설치된 `.kit/` 의 스크립트(이름이
+# `.sh` 로 끝나거나 첫 줄이 `#!` 인 파일)에서 `env.<이름>` · `$<이름>` 을 찾는다 — 워크플로 env 는 스텝의 환경으로
+# 전달되고, 스텝이 실행하는 `.kit/` 의 게이트 스크립트는 확장점을 환경에서 읽는다. 문서(`.kit/README.md` 포함)와
+# `tool-versions` 처럼 이름을 적기만 하는 파일은 보지 않는다. 필터는 언어 전용 변수를 이름으로 찾으므로(ENVOF),
+# 그 이름이 gates.yml 의 변수 이름과 다르면 빠진 언어의 변수가 쓰는 곳 없이 남는다.
+kit = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(out)))), ".kit")
+scripts = []
+for d, dirs, files in os.walk(kit):
+    for fn in files:
+        try:
+            t = open(os.path.join(d, fn), encoding="utf-8").read()
+        except (UnicodeDecodeError, OSError):
+            continue
+        if fn.endswith(".sh") or t.startswith("#!"):
+            scripts.append(t)
+for k in (O.get("env") or {}):
+    use = rf"(env\.|\$\{{?){re.escape(k)}\b"
+    body = "\n".join(l for l in outl if not re.match(rf"^  {re.escape(k)}:", l))
+    if not re.search(use, body) and not any(re.search(use, t) for t in scripts):
+        print(f"✗ 워크플로 env 에 쓰는 곳이 없는 변수가 남았다: {k}")
+        bad = 1
 for name, job in S["jobs"].items():
     if name == "detect":
         continue
@@ -196,6 +221,34 @@ tail_case() {
 tail_case jobhead "잡 머리 앞" '/^  trace:$/ { print c } { print }'
 tail_case jobnote "2칸 주석 앞" '/^  trace:$/ { print c; print ""; print "  # trace 잡(tests/filter-langs.sh 가 넣었다)" } { print }'
 tail_case eof "파일 끝" '{ print } END { print "      - if: needs.detect.outputs.node == '\''true'\''"; print "        run: echo node"; print c }'
+
+# 워크플로 env 는 스텝의 환경으로 전달되고, 게이트 스크립트는 확장점을 환경에서 읽는다(`KIT_GO_TEST_FLAGS`).
+# 그런 변수는 gates.yml 에 쓰는 곳이 없어도 설치본의 게이트가 쓴다. 킷 사본의 env 에 넣고 go 를 남겨 설치한다.
+K=$(kit_copy extvar '{ print } /^env:$/ { print "  KIT_GO_TEST_FLAGS: \"\"" }')
+y=$(install_lang "$K" "go,py")
+out=$(python3 "$T/check.py" "$K/common/ci/gates.yml" "$y" "go,py" 2>&1); rc=$?
+if [ $rc -eq 0 ] && grep -q '^  KIT_GO_TEST_FLAGS:' "$y" 2>/dev/null; then
+  ok "게이트 스크립트가 환경에서 읽는 워크플로 env 변수는 쓰이는 것으로 본다"
+else
+  bad "게이트 스크립트가 환경에서 읽는 워크플로 env 변수를 쓰는 곳이 없는 것으로 봤거나 설치본에 없다"
+  [ $rc -eq 0 ] || printf '%s\n' "$out" | head -3 | sed 's/^/      /'
+fi
+
+# 설치된 문서가 변수 이름을 적은 것은 쓰는 곳이 아니다. 문서에 `${{ env.<이름> }}` 이나 `$<이름>` 을 적는 것은
+# 평범한 편집이고, 그것까지 세면 필터가 변수를 못 지운 회귀가 드러나지 않는다. 킷 사본에서 Java 변수의 이름을 바꿔
+# 필터(ENVOF 는 원래 이름을 찾는다)가 못 지우게 하고, 설치되는 문서 둘에 바꾼 이름을 두 꼴로 적은 뒤 Java 를 빼고
+# 설치한다. 하나는 `docs/process/` 로, 하나는 `.kit/README.md` 로 설치된다 — `.kit/` 에도 스크립트가 아닌 파일이 있다.
+K=$(kit_copy docmention '{ gsub(/KIT_JAVA_VERSION/, "KIT_JAVA_VER"); print }')
+for doc in common/docs/kit-guide.md common/gate/VENDOR-README.md; do
+  printf '\nJava 버전은 워크플로의 `${{ env.KIT_JAVA_VER }}` 이 정한다. 스텝 안에서는 `$KIT_JAVA_VER` 다.\n' >> "$K/$doc"
+done
+y=$(install_lang "$K" "go,py")
+out=$(python3 "$T/check.py" "$K/common/ci/gates.yml" "$y" "go,py" 2>&1); rc=$?
+if [ $rc -ne 0 ] && printf '%s' "$out" | grep -qF '쓰는 곳이 없는 변수가 남았다: KIT_JAVA_VER'; then
+  ok "설치된 문서에 적힌 변수 이름은 쓰는 곳으로 세지 않는다"
+else
+  bad "설치된 문서에 적힌 변수 이름을 쓰는 곳으로 세어, 필터가 못 지운 변수를 통과시켰다(rc=$rc)"
+fi
 
 rm -rf "$T"
 exit $fail

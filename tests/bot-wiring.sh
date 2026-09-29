@@ -17,9 +17,9 @@ KIT="$(cd "$(dirname "$0")/.." && pwd)"
 H="$KIT/claude-code/hooks"
 T=$(mktemp -d)
 trap 'rm -rf "$T"' EXIT
-mkdir -p "$T/bin" "$T/home/.config/kit-bot"
-openssl genrsa -out "$T/home/.config/kit-bot/key.pem" 2048 2>/dev/null
-chmod 600 "$T/home/.config/kit-bot/key.pem"
+mkdir -p "$T/bin" "$T/home/.config/helper-bot"
+openssl genrsa -out "$T/home/.config/helper-bot/key.pem" 2048 2>/dev/null
+chmod 600 "$T/home/.config/helper-bot/key.pem"
 
 cat > "$T/bin/curl" <<'EOF'
 #!/usr/bin/env python3
@@ -78,10 +78,10 @@ fail=0
 repo() {
   rm -rf "$1"; mkdir -p "$1/.claude"; git -C "$1" init -q
   git -C "$1" remote add origin "${2:-https://github.com/o/r.git}"
-  [ "${3:-}" = no ] || printf '{"app_id": 1, "app": "kit-bot"}\n' > "$1/.claude/bot.json"
+  [ "${3:-}" = no ] || printf '{"app_id": 1, "app": "helper-bot"}\n' > "$1/.claude/bot.json"
 }
 R="$T/r"
-BOTDIR="$R/.git/ai-kit-bot"
+BOTDIR="$R/.git/kit-bot"
 
 # session <이름> <디렉터리> [CLAUDE_ENV_FILE 을 줄지: yes|no] — SessionStart 훅을 부르고 출력을 $OUT 에 둔다
 session() {
@@ -122,7 +122,7 @@ session "연결" "$R"
 # macOS 의 git 은 임시 디렉터리의 `/var` 를 `/private/var` 로 풀어 적으므로 글자가 아니라 같은
 # 디렉터리인지 본다.
 ok "GH_CONFIG_DIR 을 CLAUDE_ENV_FILE 에 적는다" '[ "$(sed -n "s/^export GH_CONFIG_DIR=//p" "$T/env")" -ef "$BOTDIR" ]'
-ok "봇 계정 이름으로 hosts.yml 을 쓴다" 'grep -qF "\"kit-bot[bot]\"" "$BOTDIR/hosts.yml" && grep -qF ghs_stubtoken "$BOTDIR/hosts.yml"'
+ok "봇 계정 이름으로 hosts.yml 을 쓴다" 'grep -qF "\"helper-bot[bot]\"" "$BOTDIR/hosts.yml" && grep -qF ghs_stubtoken "$BOTDIR/hosts.yml"'
 ok "gh 가 옮기기(migration)를 안 하게 config.yml 에 version 을 쓴다" 'grep -qF "version: \"1\"" "$BOTDIR/config.yml"'
 mode() { python3 -c 'import os, sys; print(oct(os.stat(sys.argv[1]).st_mode & 0o777))' "$1"; }
 ok "hosts.yml 은 본인만 읽는다(600)" '[ "$(mode "$BOTDIR/hosts.yml")" = 0o600 ]'
@@ -143,9 +143,9 @@ ok "세션의 git 은 ssh:// 주소도 https 로 바꿔 쓴다" '[ "$(in_session
 ok "세션 밖의 git 은 사람의 도우미를 그대로 쓴다" 'printf "protocol=https\nhost=github.com\n\n" | HOME="$T/person" GIT_CONFIG_NOSYSTEM=1 git credential fill 2>&1 | grep -qx password=from-person-helper'
 
 # 같은 세션을 다시 시작했는데 토큰을 못 받으면, 앞선 시작이 만든 표시가 남아 있으면 안 된다.
-mv "$T/home/.config/kit-bot/key.pem" "$T/key.bak"
+mv "$T/home/.config/helper-bot/key.pem" "$T/key.bak"
 session "다시 시작, 개인키 없음" "$R"
-mv "$T/key.bak" "$T/home/.config/kit-bot/key.pem"
+mv "$T/key.bak" "$T/home/.config/helper-bot/key.pem"
 ok "다시 시작할 때 토큰을 못 받으면 앞선 연결 표시를 지운다" '[ ! -f "$BOTDIR/wired/s1" ]'
 
 repo "$R" "" no
@@ -153,10 +153,10 @@ session "봇 설정 없음" "$R"
 ok "봇 설정이 없으면 아무것도 안 한다" '[ ! -s "$T/env" ] && [ ! -s "$T/curl-log" ] && [ -z "$OUT" ]'
 
 repo "$R"
-mv "$T/home/.config/kit-bot/key.pem" "$T/key.bak"
+mv "$T/home/.config/helper-bot/key.pem" "$T/key.bak"
 session "개인키 없음" "$R"
-mv "$T/key.bak" "$T/home/.config/kit-bot/key.pem"
-ok "개인키가 없으면 그 자리와 안내 문서를 출력한다" 'printf "%s" "$OUT" | grep -qF "~/.config/kit-bot/key.pem" && printf "%s" "$OUT" | grep -qF kit-guide.md'
+mv "$T/key.bak" "$T/home/.config/helper-bot/key.pem"
+ok "개인키가 없으면 그 자리와 안내 문서를 출력한다" 'printf "%s" "$OUT" | grep -qF "~/.config/helper-bot/key.pem" && printf "%s" "$OUT" | grep -qF kit-guide.md'
 ok "개인키가 없으면 연결하지 않는다" '[ ! -s "$T/env" ] && [ ! -f "$BOTDIR/wired/s1" ]'
 
 repo "$R"
@@ -372,8 +372,8 @@ guard "bash -c 안의 창 기록 훅" deny "bash -c 'bash $W < /tmp/fake-window.
 guard "창 기록 훅의 구문 검사" pass "bash -n $W"
 guard "창 기록 훅을 읽음" pass "sed -n 1,20p $W"
 # 창 기록은 봇 디렉터리에 있다. 세션이 셸로 읽거나 고치지 못한다
-guard "창 기록을 읽는 명령" deny "cat .git/ai-kit-bot/windows/155.jsonl"
-guard "창 기록을 고치는 명령" deny "printf x >> .git/ai-kit-bot/windows/155.jsonl"
+guard "창 기록을 읽는 명령" deny "cat .git/kit-bot/windows/155.jsonl"
+guard "창 기록을 고치는 명령" deny "printf x >> .git/kit-bot/windows/155.jsonl"
 guard "환경을 비우고 부른 gh(env -i)" deny "env -i PATH=/usr/bin gh pr comment 1 --body-file /tmp/x.md" "$R" "env -i"
 guard "환경을 비우고 부른 스크립트(env --ignore-environment)" deny "env --ignore-environment bash /tmp/post.sh"
 guard "환경을 비우는 env -(대시 하나)" deny "env - HOME=/tmp gh api user"
@@ -404,25 +404,34 @@ guard "명령 치환으로 gh 설정의 토큰을 꺼냄" deny "T=\$(gh config g
 # 연결된 세션의 git 은 github.com 자격 증명을 봇(gh)에게서 받으므로, 자격 증명을 묻는 명령은 봇 토큰을 출력한다
 guard "git 에게 자격 증명을 물음" deny "printf 'protocol=https\nhost=github.com\n\n' | git credential fill" "$R" "토큰"
 guard "자격 증명 도우미를 직접 부름" deny "git credential-osxkeychain get"
-guard "봇 디렉터리의 hosts.yml 을 읽음" deny "cat .git/ai-kit-bot/hosts.yml" "$R" "토큰"
-guard "봇 디렉터리로 옮겨 hosts.yml 을 읽음" deny "cd .git/ai-kit-bot && grep token hosts.yml"
+guard "봇 디렉터리의 hosts.yml 을 읽음" deny "cat .git/kit-bot/hosts.yml" "$R" "토큰"
+guard "봇 디렉터리로 옮겨 hosts.yml 을 읽음" deny "cd .git/kit-bot && grep token hosts.yml"
 # git 디렉터리를 작업 트리 밖에 둔 레포(`--separate-git-dir`)에서는 봇 디렉터리의 경로에 git 이 없다
-guard "git 이 없는 경로의 hosts.yml 을 읽음" deny "cat /srv/repo-meta/ai-kit-bot/hosts.yml"
-guard "봇 디렉터리의 만료 시각을 읽음" pass "cat .git/ai-kit-bot/expires"
-guard "봇 디렉터리의 세션 환경을 읽음" pass "cat .git/ai-kit-bot/session-env"
+guard "git 이 없는 경로의 hosts.yml 을 읽음" deny "cat /srv/repo-meta/kit-bot/hosts.yml"
+guard "봇 디렉터리의 만료 시각을 읽음" pass "cat .git/kit-bot/expires"
+guard "봇 디렉터리의 세션 환경을 읽음" pass "cat .git/kit-bot/session-env"
 # 토큰 파일 이름을 적지 않아도 디렉터리째 읽으면 토큰이 출력된다
-guard "봇 디렉터리를 통째로 읽음(*)" deny "cat .git/ai-kit-bot/*" "$R" "토큰"
-guard "봇 디렉터리를 통째로 검색" deny "grep -r token .git/ai-kit-bot"
-guard "봇 디렉터리의 h* 를 읽음" deny "head -50 .git/ai-kit-bot/h*"
+guard "봇 디렉터리를 통째로 읽음(*)" deny "cat .git/kit-bot/*" "$R" "토큰"
+guard "봇 디렉터리를 통째로 검색" deny "grep -r token .git/kit-bot"
+guard "봇 디렉터리의 h* 를 읽음" deny "head -50 .git/kit-bot/h*"
 # 토큰이 없는 이름을 거쳐 .. 로 올라가면 토큰 파일에 닿는다
-guard "허용한 이름 뒤의 .." deny "cat .git/ai-kit-bot/wired/../hosts.yml" "$R" "토큰"
-guard "허용한 디렉터리로 옮긴 뒤의 .." deny "cd .git/ai-kit-bot/wired && cat ../hosts.yml"
+guard "허용한 이름 뒤의 .." deny "cat .git/kit-bot/wired/../hosts.yml" "$R" "토큰"
+guard "허용한 디렉터리로 옮긴 뒤의 .." deny "cd .git/kit-bot/wired && cat ../hosts.yml"
+guard "git 디렉터리로 옮긴 뒤 봇 디렉터리를 읽음" deny "cd .git && cat kit-bot/hosts.yml"
+guard "명령 치환으로 구한 git 디렉터리 아래의 봇 디렉터리" deny "cat \"\$(git rev-parse --git-common-dir)\"/kit-bot/hosts.yml"
+# 봇 디렉터리 이름은 다른 이름의 일부일 수 있다(`ui-kit-bot` 레포 · `dev-agent-kit-bot` App · `kit-bot-design.md`).
+# 앞이나 뒤에 영숫자 · `-` 가 붙으면 다른 이름이다
+guard "이름 끝이 같은 다른 레포의 경로" pass "ls ~/git/ui-kit-bot/src"
+guard "이름 끝이 같은 다른 레포에서 git" pass "git -C ~/git/slack-kit-bot status"
+guard "이름 끝이 같은 App 의 계정" pass "git log --author=dev-agent-kit-bot --oneline"
+guard "이름 앞이 같은 파일" pass "cat notes/kit-bot-design.md"
+guard "이름 끝이 같은 다른 레포의 .." pass "cd ~/git/ui-kit-bot/src && ls .."
 # Read 도구는 이 훅(Bash)을 거치지 않는다. 설치되는 settings.json 의 deny 가 막는다.
 if python3 - "$KIT/claude-code/settings.json" <<'PY'
 import json, sys
 deny = json.load(open(sys.argv[1], encoding='utf-8'))['permissions']['deny']
 # 파일 시스템 루트 기준(//)이어야 작업 디렉터리 밖(worktree 세션의 원래 레포 .git)도 막는다
-sys.exit(0 if any(r.startswith('Read(//') and 'ai-kit-bot' in r for r in deny) else 1)
+sys.exit(0 if any(r.startswith('Read(//') and '/kit-bot/' in r for r in deny) else 1)
 PY
 then echo "  ✓ 설치되는 settings.json 이 봇 디렉터리를 Read 에서 막는다"
 else echo "  ✗ 설치되는 settings.json 이 봇 디렉터리를 Read 에서 막지 않는다"; fail=1; fi

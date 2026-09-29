@@ -1,4 +1,4 @@
-# CLAUDE.md — ai-native-kit
+# CLAUDE.md — dev-agent-kit
 
 > **이 레포 자신의 규칙**이다. 프로젝트에 설치되는 규칙 템플릿은
 > `common/templates/CLAUDE.md` 이고, 그것과 이 파일은 **다른 문서**다.
@@ -10,7 +10,7 @@
 문서에 있다. README 가 그 문서를 가리킨다. **이슈 목록은 그 항목의 내용을 볼 때 본다:**
 
 ```bash
-gh issue list -R 4estse4/ai-native-kit
+gh issue list -R 4estse4/dev-agent-kit
 ```
 
 미결의 **내용**은 이 레포의 어느 문서에도 적지 마라. 내용은 이슈에만 있다.
@@ -153,7 +153,7 @@ git log --format='%(trailers:key=Co-Authored-By,valueonly)' | sed -n 's/.*(\([^)
 
 ### 킷 히스토리 재작성 금지
 
-`.ai-kit/install-manifest` 의 `kit_rev` 는 프로젝트가 **어느 시점의 킷으로 설치했는지**를 가리키고,
+`.kit/install-manifest` 의 `kit_rev` 는 프로젝트가 **어느 시점의 킷으로 설치했는지**를 가리키고,
 나중에 그 프로젝트가 킷에서 무엇을 고쳐 썼는지 알려면 그 커밋을 기준으로 diff 를 구한다.
 
 **킷 `main` 을 재작성하면 그 커밋들이 고아가 되고, 설치된 프로젝트가 자신이 어디서

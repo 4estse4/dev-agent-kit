@@ -57,7 +57,7 @@ def run(comments):
 
 # 라운드 코멘트 · 결정 코멘트는 봇이 올리고, 사람의 결정은 창에서 고른 보기로 만든 사람 계정 코멘트나
 # 사람이 PR 웹에서 쓴 코멘트다
-BOT, ME = ('kit-bot', 'NONE'), ('me', 'OWNER')
+BOT, ME = ('helper-bot', 'NONE'), ('me', 'OWNER')
 out = run([(bodies[0], *BOT), (bodies[1], *ME), (bodies[2], *BOT), (bodies[3], *ME),
            ('#88 도 이 PR 로 끝내', *ME), ('좋아 보인다. #99 도 닫자', 'someone', 'CONTRIBUTOR'),
            (OLD, *BOT), (bodies[4], *BOT)])

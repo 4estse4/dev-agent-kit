@@ -17,7 +17,7 @@ if ! out=$(bash "$KIT/install.sh" --hooks --templates --lint --ci --agent "$R" 2
   echo "  ✗ 설치가 실패해 아무것도 검사하지 못했다"; printf '%s\n' "$out" | tail -5 | sed 's/^/      /'
   exit 1
 fi
-[ -d "$R/.ai-kit" ] || { echo "  ✗ 설치 후에도 .ai-kit 이 없다 — 검사할 것이 없다"; exit 1; }
+[ -d "$R/.kit" ] || { echo "  ✗ 설치 후에도 .kit 이 없다 — 검사할 것이 없다"; exit 1; }
 
 # ① 설치본이 가리키는 킷 경로가 그 레포에 실제로 있나
 python3 - "$R" "$KIT" <<'PY' || fail=1
@@ -42,7 +42,7 @@ for f in found:
         text = open(f, encoding='utf-8').read()
     except (UnicodeDecodeError, OSError):
         continue
-    # `common/`·`.ai-kit/` 만 보면 소유 규칙과 상호참조가 실제로 쓰는 어휘
+    # `common/`·`.kit/` 만 보면 소유 규칙과 상호참조가 실제로 쓰는 어휘
     # (`.claude/skills/…`·`docs/process/…`)가 통째로 검사 밖이다 — 15라운드에 거짓이던
     # 자리가 바로 그 어휘였다.
     # **백틱 안만 보면 안 된다.** `settings.json` 이 백틱 없이 적은 옛 경로가 통과했다 —
@@ -52,7 +52,7 @@ for f in found:
     # 가리킨다고 판정했다(실제로 확인함: 그 상태에서 이 검사가 종료코드 1). 백틱 제약을 뺀 대가다 — 백틱이
     # 없으면 「경로 뒤에 공백」이라는 표기 관습도 같이 사라진다.
     # 앞의 `./` · `../` 는 떼고 레포 뿌리에서 본다 — 아래 킷 전용 경로 검사와 같다.
-    for m in re.findall(r'(?a)(?<![\w/-])(?:\.\.?/)*((?:common|\.ai-kit|\.claude|docs/process)/[\w./|-]+)', text):
+    for m in re.findall(r'(?a)(?<![\w/-])(?:\.\.?/)*((?:common|\.kit|\.claude|docs/process)/[\w./|-]+)', text):
         m = m.rstrip('.')            # 문장 끝 마침표가 붙어 온다
         m = m.split('|')[0]          # `.claude/skills|agents|hooks` 같은 표기
         if not os.path.exists(os.path.join(R, m)) and m not in PROJECT:
@@ -74,12 +74,13 @@ for f in found:
             print(f"  ✗ {f[len(R)+1:]} 가 킷에만 있는 경로를 가리킨다 — {m}"); bad = 1
     # **킷 레포 이름.** 파일이든 PR 이든 킷 레포로 보내는 것은 같다(이슈 #61 의 결정).
     # 주소만 보면 `gh api repos/…` · `-R …` · `owner/repo#N` 을 찾지 못한다. 그래서 이름을
-    # 본다. 레포 홈 주소만 둔다 — 설치본이 어디서 왔는지 밝히는 자리(`.ai-kit/README.md`)다.
-    # 대소문자를 가리지 않는다. `gh api repos/4ESTSE4/AI-Native-Kit` 도 킷 레포를 낸다.
+    # 본다. 레포 홈 주소만 둔다 — 설치본이 어디서 왔는지 밝히는 자리(`.kit/README.md`)다.
+    # 대소문자를 가리지 않는다. `gh api repos/4ESTSE4/Dev-Agent-Kit` 도 킷 레포를 낸다.
+    # 옛 이름 `ai-native-kit` 도 본다. 레포 이름을 바꾼 뒤에도 GitHub 이 옛 이름을 새 레포로 이어 준다.
     # 홈 주소 뒤는 막을 글자로 정한다 — 영숫자 · `@` · `#` · `-`, 그리고 `/` · `.` · `:` 뒤에
     # 이어지는 경로. 뒤에 올 글자를 허용 목록으로 보던 때는
     # 쉼표 · 조사 · 끝 슬래시 · 콜론에서 오탐이 생겼다.
-    for mo in re.finditer(r'(?i)4estse4/ai-native-kit', text):
+    for mo in re.finditer(r'(?i)4estse4/(?:dev-agent-kit|ai-native-kit)', text):
         s, e = mo.span()
         home = (text[max(0, s - 19):s].lower() == 'https://github.com/'
                 and not re.match(r'(?a)[\w@#-]|[/.:][\w#-]', text[e:e + 2]))

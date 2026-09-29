@@ -5,7 +5,7 @@ argument-hint: "[선택: 이번에 다룬 요구 ID]"
 ---
 
 현재 검사 결과:
-!`bash .ai-kit/gate/trace.sh 2>&1 || true`
+!`bash .kit/gate/trace.sh 2>&1 || true`
 
 SPEC:
 > `!! SPEC 이 …줄이라` 가 출력되면 **위 본문은 앞부분뿐이다.** 그 줄 아래의 ID 목록이
@@ -50,5 +50,5 @@ $ARGUMENTS
 
 ## 끝
 
-갱신 후 `bash .ai-kit/gate/trace.sh` 를 다시 실행해 통과를 확인하고,
+갱신 후 `bash .kit/gate/trace.sh` 를 다시 실행해 통과를 확인하고,
 상태가 바뀐 요구만 한 줄로 보고한다. **바뀐 것이 없으면 "변경 없음" 한 줄.**

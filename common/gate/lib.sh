@@ -25,7 +25,7 @@ gate_have() { command -v "$1" >/dev/null 2>&1; }
 #   Go 의 vendor/(go mod vendor 산출) go.mod 0개 · .go 23개
 # 그래서 이름으로 거르는 대상은 **마커가 실제로 들어 있는 것과 VCS 내부**로 한정한다.
 # 나머지는 걸러도 얻는 것이 없고 잃을 것만 있다.
-GATE_PRUNE_DIRS="${AI_KIT_PRUNE_DIRS:-.git node_modules .venv .tox __pycache__}"
+GATE_PRUNE_DIRS="${KIT_PRUNE_DIRS:-.git node_modules .venv .tox __pycache__}"
 
 # find 에 전달할 prune 표현식을 조립한다. 게이트와 설치기가 같은 함수를 쓴다.
 gate_prune_expr() { # 출력: -name a -o -name b ...  (호출부가 \( \) 로 감싼다)
@@ -83,7 +83,7 @@ gate_go_highest() {
 gate_go_min_check() {
   local min f v line want what raise
   min=$(gate_tool_version go_min)
-  [ -n "$min" ] || { echo "::error::.ai-kit/gate/tool-versions 에 go_min 이 없습니다 — 킷을 갱신하세요"; return 1; }
+  [ -n "$min" ] || { echo "::error::.kit/gate/tool-versions 에 go_min 이 없습니다 — 킷을 갱신하세요"; return 1; }
   f=$(find . \( $(gate_prune_expr) \) -prune -o -name go.mod -print | gate_go_highest)
   read -r v line <<< "$(gate_go_setup_version "$f")"
   case "$v" in
@@ -96,7 +96,7 @@ gate_go_min_check() {
     go)        what="go 줄이 $v 입니다";          raise="go 줄을 $want 이상으로" ;;
     *)         what="go 줄이 없습니다";           raise="go 줄을 $min 이상으로" ;;
   esac
-  echo "::error file=${f#./}::${f#./} 의 $what. CI 는 레포의 go.mod 가운데 설치할 Go 가 가장 높은 이 파일로 Go 를 설치합니다(toolchain 줄이 있으면 그 버전, 없으면 go 줄. go 줄이 1.27 처럼 패치가 없으면 그 계열의 패치 하나). 킷은 Go $min 이상만 지원합니다 — 그보다 낮은 go 로는 핀한 Go 도구(goimports · golangci-lint · govulncheck)가 설치되지 않거나, golangci-lint 의 gofumpt 가 기준으로 삼는 Go 의 gofmt 와 포맷이 어긋나 게이트를 통과하지 못하는 코드가 생깁니다(.ai-kit/gate/tool-versions 의 go_min 주석). ${raise} 올리세요."
+  echo "::error file=${f#./}::${f#./} 의 $what. CI 는 레포의 go.mod 가운데 설치할 Go 가 가장 높은 이 파일로 Go 를 설치합니다(toolchain 줄이 있으면 그 버전, 없으면 go 줄. go 줄이 1.27 처럼 패치가 없으면 그 계열의 패치 하나). 킷은 Go $min 이상만 지원합니다 — 그보다 낮은 go 로는 핀한 Go 도구(goimports · golangci-lint · govulncheck)가 설치되지 않거나, golangci-lint 의 gofumpt 가 기준으로 삼는 Go 의 gofmt 와 포맷이 어긋나 게이트를 통과하지 못하는 코드가 생깁니다(.kit/gate/tool-versions 의 go_min 주석). ${raise} 올리세요."
   return 1
 }
 
@@ -165,7 +165,7 @@ gate_install_hint() { # $1=도구 이름
         golangci-lint) echo "go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$v" ;;
         govulncheck)   echo "go install golang.org/x/vuln/cmd/govulncheck@$v" ;;
         ruff)          echo "uv tool install ruff==$v  (또는 pipx install ruff==$v)" ;;
-        ktlint)        echo "bash .ai-kit/gate/install-tools.sh  (수동: curl -fsSLo \"\$HOME/.local/bin/ktlint\" https://github.com/ktlint/ktlint/releases/download/$v/ktlint && chmod +x \"\$HOME/.local/bin/ktlint\")" ;;
+        ktlint)        echo "bash .kit/gate/install-tools.sh  (수동: curl -fsSLo \"\$HOME/.local/bin/ktlint\" https://github.com/ktlint/ktlint/releases/download/$v/ktlint && chmod +x \"\$HOME/.local/bin/ktlint\")" ;;
       esac
       ;;
     mypy|pytest)          echo "프로젝트 의존성으로 설치한다(uv sync / pip install -e '.[dev]')" ;;
@@ -232,7 +232,7 @@ gate_run_empty() {
 # gate_absent: 도구는 있는데 **프로젝트가 그 단계를 선언하지 않은** 경우.
 # gate_skip 과 다르다 — 환경이 덜 갖춰진 게 아니라 프로젝트가 그렇게 구성한 것이고,
 # 이걸 실패로 만들면 평범한 JS 프로젝트가 쓰지도 않는 typecheck 스크립트를 억지로
-# 만들어야 한다. 그러면 사람은 AI_KIT_ALLOW_MISSING_TOOLS 를 상시로 켜게 되고,
+# 만들어야 한다. 그러면 사람은 KIT_ALLOW_MISSING_TOOLS 를 상시로 켜게 되고,
 # 그 순간 도구가 정말로 없는 경우를 막는 검사까지 함께 꺼진다. 보고는 하되 막지 않는다.
 gate_absent() { GATE_ABSENT+=("$1"); }
 
@@ -249,7 +249,7 @@ gate_skip() {
     if [ -n "$hint" ]; then
       GATE_FAILOUT+=$'\n'"  설치:  $hint"$'\n'
     fi
-    GATE_FAILOUT+=$'\n'"  전부 설치:  bash .ai-kit/gate/install-tools.sh"$'\n'"  버전은 .ai-kit/gate/tool-versions 가 단일 출처입니다."$'\n'$'\n'"  불가피하게 건너뛰려면(그 검사는 실행되지 않고, 그 때문에 게이트가 실패하지도 않습니다):"$'\n'"    AI_KIT_ALLOW_MISSING_TOOLS=1 <명령>"$'\n'
+    GATE_FAILOUT+=$'\n'"  전부 설치:  bash .kit/gate/install-tools.sh"$'\n'"  버전은 .kit/gate/tool-versions 가 단일 출처입니다."$'\n'$'\n'"  불가피하게 건너뛰려면(그 검사는 실행되지 않고, 그 때문에 게이트가 실패하지도 않습니다):"$'\n'"    KIT_ALLOW_MISSING_TOOLS=1 <명령>"$'\n'
   else
     GATE_SKIPPED+=("$1")
   fi

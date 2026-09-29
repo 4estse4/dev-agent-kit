@@ -14,7 +14,7 @@ argument-hint: "[선택: 맥락·티켓]"
 > 그 사실을 적는다. 목록에 없는 것을 "없다" 로 쓰지 마라.
 
 **게이트 실행 결과 (열어도 되는지 보는 것이다. 본문에는 2절의 `evidence.sh` 로 다시 실행해 덧붙인다):**
-!`bash .ai-kit/gate/gate.sh 2>&1 || true`
+!`bash .kit/gate/gate.sh 2>&1 || true`
 
 새로 추가된 테스트:
 !`git diff main...HEAD -U0 -- '*_test.go' '*.test.ts' '*.test.tsx' '*_test.py' | grep -E '^\+\s*(func Test|it\(|test\(|describe\()' | sed 's/^+[[:space:]]*/  /' | head -40; _t=$(git diff main...HEAD -U0 -- '*_test.go' '*.test.ts' '*.test.tsx' '*_test.py' | grep -cE '^\+\s*(func Test|it\(|test\(|describe\()'); [ "$_t" -gt 40 ] && echo "  !! 새 테스트가 ${_t}개라 위는 앞 40개뿐이다"`
@@ -122,7 +122,7 @@ git 기본값이 한글 같은 비ASCII 파일명을 8진수로 내서 그 파�
    블록째 들어간다:
 
        bash .claude/skills/open-pr/evidence.sh <디렉터리>/20-gate.part <<'CMD'
-       bash .ai-kit/gate/gate.sh
+       bash .kit/gate/gate.sh
        CMD
 
    「자동 검증이 확인하지 않은 것」에 붙이는 출력도 같다. **명령을 두 번 적지 마라** — 보이는 쪽과

@@ -9,10 +9,10 @@
 #
 #   <kit>/install.sh <경로> --dry-run    아무것도 바꾸지 않고 무엇이 달라질지만 본다
 #
-# 킷 소유는 .ai-kit/** 와 .claude/{skills,agents,hooks}/** 와 docs/process/** 다 —
+# 킷 소유는 .kit/** 와 .claude/{skills,agents,hooks}/** 와 docs/process/** 다 —
 # 재설치가 **덮어쓴다.** 프로젝트 소유는 CLAUDE.md · .claude/settings.json · CI · 린터 설정과,
 # 템플릿으로 놓는 docs/ 문서(SPEC · dev-log 등) · PR 템플릿이다. 이미 있으면 건드리지 않고 내용이
-# 다르면 .ai-kit-new 로 옆에 둔다. **자동 병합은 하지 않는다** — 합치는 것은 사람·에이전트가 한다.
+# 다르면 .kit-new 로 옆에 둔다. **자동 병합은 하지 않는다** — 합치는 것은 사람·에이전트가 한다.
 # 무엇을 덮어쓰는지는 --dry-run 이 보여준다.
 set -uo pipefail
 
@@ -72,6 +72,17 @@ TARGET=$(git -C "$TARGET_ARG" rev-parse --show-toplevel 2>/dev/null) \
 echo "install: 대상 $TARGET"
 echo "install: 킷   $KIT_ROOT"
 
+# 킷과 무관한 .kit/ 가 이미 있으면 설치하지 않는다. .kit/ 는 설치할 때마다 통째로 비우고 놓는 자리라
+# (아래 vendor_into), 킷이 놓은 것이 아닌 파일도 지운다. 추적하지 않던 파일은 되돌릴 수 없다.
+# 킷이 놓은 것인지는 install-manifest 로 가린다. dry-run 도 같은 판정을 내야 하므로 임시 트리를 만들기 전에 본다.
+if [ "$DO_HOOKS" = 1 ] && [ ! -f "$TARGET/.kit/install-manifest" ] \
+   && [ -n "$(find "$TARGET/.kit" -type f -print 2>/dev/null | head -1)" ]; then
+  echo "install: $TARGET/.kit 이 이미 있고 킷이 설치한 것이 아닙니다(.kit/install-manifest 없음)." >&2
+  echo "  킷은 설치할 때마다 .kit 을 통째로 비우고 킷의 파일을 새로 놓으므로, 그 안의 파일을 지우지 않고 멈춥니다." >&2
+  echo "  그 디렉터리를 다른 이름으로 옮긴 뒤 다시 실행하세요." >&2
+  exit 1
+fi
+
 PROTECT_SKIPPED=0
 INSTALLED=(); REPLACED=(); DELETED=(); SKIPPED=(); CONFLICTS=(); WARNINGS=()
 # dry-run 은 대상 대신 이 트리에 놓는다. 놓고 나서 대상과 비교하면 무엇이 달라지는지가
@@ -84,7 +95,7 @@ _tmpdir=${TMPDIR:-/tmp}; _tmpdir=${_tmpdir%/}
 # 아무것도 안 바꾸겠다고 약속한 모드가 **파일시스템 루트에 쓰려고 든다.** 실제로 확인했다:
 # 루트가 읽기 전용이라 막혔을 뿐이고, 쓸 수 있는 환경이면 그대로 썼다.
 if [ "$DRY_RUN" = 1 ]; then
-  STAGE=$(mktemp -d "$_tmpdir/ai-kit-dryrun.XXXXXX") || {
+  STAGE=$(mktemp -d "$_tmpdir/kit-dryrun.XXXXXX") || {
     echo "install: 임시 디렉터리를 만들지 못했습니다 — $_tmpdir" >&2
     echo "  dry-run 은 킷이 놓을 파일을 거기에 만들어 이 레포와 대조합니다. 없으면 할 수 없습니다." >&2
     exit 1; }
@@ -92,7 +103,7 @@ fi
 ALL_LANGS="go ts jvm py"
 # --lang 을 안 주면 설치 당시 선택을 이어받는다 — 안 그러면 재설치가 알리지 않고
 # 언어를 도로 넣어, 고르지 않은 언어의 잡이 CI 에 되살아난다.
-STAMP="$TARGET/.ai-kit/install-manifest"
+STAMP="$TARGET/.kit/install-manifest"
 if [ -z "$LANGS" ] && [ -f "$STAMP" ]; then
   LANGS=$(sed -n 's/^langs=//p' "$STAMP" | head -1)
 fi
@@ -119,7 +130,7 @@ place() { # $1=src $2=dst(대상 레포 상대)
   if [ "$DRY_RUN" = 1 ]; then mkdir -p "$STAGE/$(dirname "$2")"; cp "$src" "$STAGE/$2"; fi
   if [ -e "$dst" ]; then
     if cmp -s "$src" "$dst"; then SKIPPED+=("$2 (동일)"); return; fi
-    [ "$DRY_RUN" = 1 ] || cp "$src" "$dst.ai-kit-new"
+    [ "$DRY_RUN" = 1 ] || cp "$src" "$dst.kit-new"
     CONFLICTS+=("$2"); return
   fi
   [ "$DRY_RUN" = 1 ] || { mkdir -p "$(dirname "$dst")"; cp "$src" "$dst"; }
@@ -146,19 +157,19 @@ replace() { # $1=src $2=dst(대상 레포 상대)
   if [ "$had" = 1 ]; then REPLACED+=("$2"); else INSTALLED+=("$2"); fi
 }
 
-# ── 게이트 vendor: 대상 레포에 .ai-kit/ 로 복사한다 ──
+# ── 게이트 vendor: 대상 레포에 .kit/ 로 복사한다 ──
 # 홈 디렉터리 경로를 훅·CI 에 적어 두면 다른 머신과 CI 에서 깨진다.
 # 복사해 레포에 커밋하면 어디서 clone 해도 같은 게이트가 실행된다.
 if [ "$DO_HOOKS" = 1 ]; then
-  vendor="$TARGET/.ai-kit"
-  # .ai-kit/gate 와 git-hooks 는 킷 소유라 통째로 교체한다. identity 는 그 아래
+  vendor="$TARGET/.kit"
+  # .kit/gate 와 git-hooks 는 킷 소유라 통째로 교체한다. identity 는 그 아래
   # 있지만 킷 소유가 아니므로 남긴다.
   kit_rev=$( cd "$KIT_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo unknown )
   # 설치와 dry-run 이 **같은 함수**를 쓴다. 두 벌로 두면 dry-run 이 예고하는 내용과
   # 설치가 놓는 내용이 어긋나고, 어긋났을 때 알아챌 방법이 없다.
-  vendor_into() { # $1=목적지 .ai-kit 디렉터리
+  vendor_into() { # $1=목적지 .kit 디렉터리
     local v="$1"
-    # .ai-kit 은 identity 를 빼면 전부 킷 소유다. 소유한 자리는 **통째로 비우고 놓는다** —
+    # .kit 은 identity 를 빼면 전부 킷 소유다. 소유한 자리는 **통째로 비우고 놓는다** —
     # 이름을 지목해 지우면 그 목록이 킷이 바뀔 때마다 늘어나고, 늘리다가 빠뜨린다.
     # 무엇이 사라지는지는 --dry-run 의 「삭제 — 재설치가 지운다」 목록이 미리 보여준다.
     if [ -d "$v" ]; then
@@ -176,11 +187,11 @@ if [ "$DO_HOOKS" = 1 ]; then
     # identity 는 킷 소유가 아니다. 실제 설치는 위 rm 이 건너뛰어 그대로 두고, dry-run 은
     # 대상의 것을 가져온다. **두 모드가 같은 최종 트리를 만들어야** 삭제 집계가 어긋나지
     # 않는다 — 이 복사가 집계보다 뒤에 있었을 때 dry-run 이 identity 를 삭제로 셌다.
-    [ "$v" = "$TARGET/.ai-kit" ] || [ ! -f "$TARGET/.ai-kit/identity" ] \
-      || cp "$TARGET/.ai-kit/identity" "$v/identity"
+    [ "$v" = "$TARGET/.kit" ] || [ ! -f "$TARGET/.kit/identity" ] \
+      || cp "$TARGET/.kit/identity" "$v/identity"
     # install-manifest 는 **어디서 왔는지**만 적는다 — 킷 커밋과 언어 선택.
     # 내용 체크섬은 두지 않는다. 이 레포에서 게이트를 고치는 것이 정상 작업인데
-    # (.ai-kit/README.md), 체크섬을 두면 그 정상 작업이 CI 를 빨갛게 만들고,
+    # (.kit/README.md), 체크섬을 두면 그 정상 작업이 CI 를 빨갛게 만들고,
     # CI 실패를 푸는 안내(install.sh 재실행)가 그 수정을 말없이 지운다. 실제로 확인했다.
     # 무엇이 달라졌는지는 --dry-run 이 보여준다.
     printf 'kit_rev=%s\nlangs=%s\n' "$kit_rev" "$LANGS" > "$v/install-manifest"
@@ -190,10 +201,10 @@ if [ "$DO_HOOKS" = 1 ]; then
   # 이라고 말한 적이 있다(실제로 확인함). dry-run 은 파일마다 세므로 예고와 실제가 어긋난다.
   # **옮기기 전에** 대상의 현재 상태로 센다.
   while IFS= read -r _s; do
-    _r=".ai-kit/${_s#"$KIT_ROOT"/common/}"
+    _r=".kit/${_s#"$KIT_ROOT"/common/}"
     case "$_r" in
-      .ai-kit/gate/VENDOR-README.md) _r=".ai-kit/README.md" ;;
-      .ai-kit/gate/adapters/*)
+      .kit/gate/VENDOR-README.md) _r=".kit/README.md" ;;
+      .kit/gate/adapters/*)
         _l=$(basename "$_s" .sh)
         case ",$DROP," in *",$_l,"*) continue ;; esac ;;
     esac
@@ -204,28 +215,28 @@ if [ "$DO_HOOKS" = 1 ]; then
   # install-manifest 는 킷 소스에 없고 vendor_into() 가 만든다. 위 루프가 세지 않으므로
   # 여기서 센다 — 안 그러면 **첫 설치에서만** 예고가 실제보다 하나 크다(재설치에서는
   # identity 와 상쇄돼 우연히 맞아 안 드러난다).
-  if [ ! -e "$TARGET/.ai-kit/install-manifest" ]; then INSTALLED+=(".ai-kit/install-manifest")
-  elif [ "$(printf 'kit_rev=%s\nlangs=%s\n' "$kit_rev" "$LANGS")" = "$(cat "$TARGET/.ai-kit/install-manifest" 2>/dev/null)" ]; then
-    SKIPPED+=(".ai-kit/install-manifest (동일)")
-  else REPLACED+=(".ai-kit/install-manifest"); fi
+  if [ ! -e "$TARGET/.kit/install-manifest" ]; then INSTALLED+=(".kit/install-manifest")
+  elif [ "$(printf 'kit_rev=%s\nlangs=%s\n' "$kit_rev" "$LANGS")" = "$(cat "$TARGET/.kit/install-manifest" 2>/dev/null)" ]; then
+    SKIPPED+=(".kit/install-manifest (동일)")
+  else REPLACED+=(".kit/install-manifest"); fi
 
-  # 삭제도 센다. vendor_into() 가 .ai-kit 을 통째로 비우므로 킷이 다시 놓지 않는 파일은
+  # 삭제도 센다. vendor_into() 가 .kit 을 통째로 비우므로 킷이 다시 놓지 않는 파일은
   # 사라지는데, 실제 실행이 그것을 한 줄도 말하지 않은 적이 있다(실제로 확인함: 다섯 칸이 전부
   # 0인데 파일이 사라졌다).
   #
   # **정렬해서 비교하지 않는다.** 설치 전 목록의 각 항목이 최종 트리에 아직 있는지만
   # 본다. sort 와 comm 을 쓰면 정렬 기준이 둘이 되고 — sort 는 LC_ALL=C, comm 은 세션
-  # 로케일 — en_US.UTF-8 은 대소문자를 1차 비교에서 무시하므로 `.ai-kit/README.md` 하나로
+  # 로케일 — en_US.UTF-8 은 대소문자를 1차 비교에서 무시하므로 `.kit/README.md` 하나로
   # 병합이 어긋나 **안 지운 pre-commit·pre-push 를 지웠다고 보고했다**(실제로 확인함).
   # 존재 검사에는 정렬 기준이 없다.
   #
   # **경로 규칙도 다시 적지 않는다.** 한 번은 `common/` 아래 존재 여부로 판정하게 적었다가
   # dry-run 과 어긋났다 — `common/` 에는 복사할 때 가져오지 않는 ci·docs·templates 도 있어서
-  # `.ai-kit/ci/*` 가 "킷이 놓는 것" 으로 오판돼 알림 없이 지워졌다(실제로 확인함: `삭제 0건` 인데
+  # `.kit/ci/*` 가 "킷이 놓는 것" 으로 오판돼 알림 없이 지워졌다(실제로 확인함: `삭제 0건` 인데
   # 셋이 사라졌다). 근거가 하나면 어긋날 수 없다.
-  _before=$( cd "$TARGET" 2>/dev/null && find .ai-kit -type f 2>/dev/null )
+  _before=$( cd "$TARGET" 2>/dev/null && find .kit -type f 2>/dev/null )
 
-  if [ "$DRY_RUN" = 1 ]; then vendor_into "$STAGE/.ai-kit"; _final="$STAGE"
+  if [ "$DRY_RUN" = 1 ]; then vendor_into "$STAGE/.kit"; _final="$STAGE"
   else                        vendor_into "$vendor";        _final="$TARGET"; fi
   while IFS= read -r _g; do
     [ -n "$_g" ] && [ ! -e "$_final/$_g" ] && DELETED+=("$_g")
@@ -236,8 +247,8 @@ if [ "$DO_HOOKS" = 1 ]; then
 
   # 훅은 .git/hooks 에 두지 않는다 — 그 디렉터리는 clone 되지 않으므로
   # 레포를 새로 받은 사람에게는 강제가 통째로 사라진다.
-  # 대신 커밋되는 .ai-kit/git-hooks/ 를 core.hooksPath 로 가리킨다.
-  [ "$DRY_RUN" = 1 ] || git -C "$TARGET" config core.hooksPath .ai-kit/git-hooks
+  # 대신 커밋되는 .kit/git-hooks/ 를 core.hooksPath 로 가리킨다.
+  [ "$DRY_RUN" = 1 ] || git -C "$TARGET" config core.hooksPath .kit/git-hooks
   # core.hooksPath 는 파일이 아니라 설정이다. 파일 건수에 섞으면 dry-run(파일을 센다)과
   # 실제 실행의 숫자가 어긋난다. 아래 "설치기가 한 일" 에서 따로 보고한다.
 
@@ -245,13 +256,13 @@ if [ "$DO_HOOKS" = 1 ]; then
   # SessionStart 훅이 이것으로 "설치된 킷이 낡았나" 를 판정한다. 커밋되는 파일에
   # 넣지 않는 이유: 머신마다 경로가 다르고, 남의 절대경로가 레포에 커밋되면
   # 그 사람 환경을 알려주는 것 말고는 쓸모가 없다.
-  [ "$DRY_RUN" = 1 ] || git -C "$TARGET" config ai-kit.path "$KIT_ROOT" 2>/dev/null
+  [ "$DRY_RUN" = 1 ] || git -C "$TARGET" config kit.path "$KIT_ROOT" 2>/dev/null
 
   # 기존 .git/hooks 에 커스텀 훅이 있으면 알린다 — hooksPath 설정 시 무시된다.
   for h in pre-commit pre-push commit-msg; do
     f="$TARGET/.git/hooks/$h"
-    [ -f "$f" ] && ! grep -q 'ai-kit' "$f" 2>/dev/null \
-      && WARNINGS+=(".git/hooks/$h 가 있지만 core.hooksPath 설정으로 무시됩니다 — 필요하면 .ai-kit/git-hooks 로 옮기세요")
+    [ -f "$f" ] \
+      && WARNINGS+=(".git/hooks/$h 가 있지만 core.hooksPath 설정으로 무시됩니다 — 필요하면 .kit/git-hooks 로 옮기세요")
   done
 
   # ── 신원 고정 파일을 처음 만든다 ──
@@ -262,14 +273,14 @@ if [ "$DO_HOOKS" = 1 ]; then
       # 이미 있으면 건너뛴 것으로 **센다**. 아예 세지 않으면 첫 설치와 재설치의
       # 합계가 달라지고, 읽는 사람은 무엇이 빠졌는지 알 길이 없다.
       # (STAGE 로 옮기는 것은 vendor_into() 가 한다 — 여기서 또 하면 두 벌이 된다.)
-      SKIPPED+=(".ai-kit/identity (이미 있음)")
+      SKIPPED+=(".kit/identity (이미 있음)")
     else
       if [ "$DRY_RUN" = 1 ]; then
-        printf '# 이 레포에서 커밋할 이메일. pre-commit 훅이 검증한다.\n%s\n' "$eff_now" > "$STAGE/.ai-kit/identity"
+        printf '# 이 레포에서 커밋할 이메일. pre-commit 훅이 검증한다.\n%s\n' "$eff_now" > "$STAGE/.kit/identity"
       else
         printf '# 이 레포에서 커밋할 이메일. pre-commit 훅이 검증한다.\n%s\n' "$eff_now" > "$vendor/identity"
       fi
-      INSTALLED+=(".ai-kit/identity ($eff_now)")
+      INSTALLED+=(".kit/identity ($eff_now)")
     fi
   fi
 
@@ -281,8 +292,8 @@ if [ "$DO_HOOKS" = 1 ]; then
   eff=$(git -C "$TARGET" config user.email 2>/dev/null)
   if [ -n "$hist" ] && [ -n "$eff" ] && ! printf '%s\n' "$hist" | grep -qx "$eff"; then
     WARNINGS+=("이 레포에서 커밋할 이메일이 '$eff' 가 맞습니까?")
-    WARNINGS+=("  맞으면 할 일 없습니다 — .ai-kit/identity 에 그 값으로 기록했고 훅이 그것을 검증합니다.")
-    WARNINGS+=("  아니면: git config user.email '<쓸 이메일>' 후 .ai-kit/identity 를 지우고 다시 설치하세요.")
+    WARNINGS+=("  맞으면 할 일 없습니다 — .kit/identity 에 그 값으로 기록했고 훅이 그것을 검증합니다.")
+    WARNINGS+=("  아니면: git config user.email '<쓸 이메일>' 후 .kit/identity 를 지우고 다시 설치하세요.")
     WARNINGS+=("  (참고: 기존 커밋의 저자는 $(printf '%s ' $hist)입니다 — 남이 만든 레포라면 다른 것이 정상입니다.)")
   fi
 fi
@@ -325,7 +336,7 @@ if [ "$DO_LINT" = 1 ]; then
   # services/api/pyproject.toml 같은 구조에서 게이트는 ruff 를 실행하는데 킷 설정이
   # 그 자리에 없어 도구 기본값으로 실행됐다. 찾은 자리마다 설정을 놓으면 이름을 몰라도 된다.
   #
-  # 건너뛸 디렉터리 목록을 여기 다시 적지 않는다 — 두 벌이 되면 AI_KIT_PRUNE_DIRS 를 바꿨을 때
+  # 건너뛸 디렉터리 목록을 여기 다시 적지 않는다 — 두 벌이 되면 KIT_PRUNE_DIRS 를 바꿨을 때
   # 게이트는 찾고 설치기는 못 찾는 상태가 된다. lib.sh 의 정의 하나를 함께 쓴다.
   # shellcheck source=/dev/null
   . "$KIT_ROOT/common/gate/lib.sh"
@@ -403,7 +414,7 @@ if [ "$DO_AGENT" = 1 ]; then
   # **절 이름이 아니라 그 안의 항목을 대조한다.** 이름만 보면 `hooks.PreToolUse` 와
   # `permissions.ask` 를 가진 레포는 언제나 "같다" 로 판정되는데, 위 20라운드 사고가 그 모양이었다.
   #
-  # 판정은 dry-run 이든 아니든 같아야 하므로(위 place() 의 불변식) `.ai-kit-new` 파일
+  # 판정은 dry-run 이든 아니든 같아야 하므로(위 place() 의 불변식) `.kit-new` 파일
   # 존재로 구분하지 않는다. 그 파일은 dry-run 에서 안 생긴다. 대신 이 파일이 **충돌로
   # 분류됐는지**를 본다 — 있고 다르다는 뜻이고, 그것이 이 경고의 조건 그대로다.
   _settings_conflict=0
@@ -503,9 +514,9 @@ PYEOF
       done <<< "$_missing"
       WARNINGS+=("  훅은 등록이 없으면 .claude/hooks/ 에 파일만 놓인 채 실행되지 않고, 킷의 ask · deny 규칙이 없으면 킷이 묻거나 막게 한 명령이 사용자 설정과 이 레포의 다른 규칙대로 처리됩니다.")
       if [ "$DRY_RUN" = 1 ]; then
-        WARNINGS+=("  실제로 설치하면 .claude/settings.json.ai-kit-new 가 옆에 놓입니다. 그것과 비교하세요.")
+        WARNINGS+=("  실제로 설치하면 .claude/settings.json.kit-new 가 옆에 놓입니다. 그것과 비교하세요.")
       else
-        WARNINGS+=("  .claude/settings.json.ai-kit-new 와 비교해 가져오세요.")
+        WARNINGS+=("  .claude/settings.json.kit-new 와 비교해 가져오세요.")
       fi
     fi
   fi
@@ -549,8 +560,8 @@ fi
 # 건수만 세면 "충돌 3건" 까지만 알고 무엇이 왜 다른지는 모른다. 그래서 킷이 놓을
 # 트리(STAGE)를 대상과 대조해 파일별로 분류하고 diff 를 붙인다. 병합은 하지 않는다 —
 # 트리를 남겨두고 사람이나 에이전트가 보고 정한다.
-DIFF_MAX_LINES=${AI_KIT_DIFF_MAX_LINES:-60}   # 파일당
-DIFF_MAX_TOTAL=${AI_KIT_DIFF_MAX_TOTAL:-400}  # 전체
+DIFF_MAX_LINES=${KIT_DIFF_MAX_LINES:-60}   # 파일당
+DIFF_MAX_TOTAL=${KIT_DIFF_MAX_TOTAL:-400}  # 전체
 
 # 사라지는 이유는 둘이고, 한 줄로 뭉뚱그리면 하나가 거짓이 된다. --lang 으로 뺀 언어의
 # 어댑터는 **킷이 배포하는 파일**이라 "킷이 다시 놓지 않는 것" 이 아니다 — 그렇게 적으면
@@ -558,7 +569,7 @@ DIFF_MAX_TOTAL=${AI_KIT_DIFF_MAX_TOTAL:-400}  # 전체
 why_gone() { # $1=경로 → 사라지는 이유를 덧붙여 출력한다
   local _p="$1" _l
   for _l in $(echo "$DROP" | tr ',' ' '); do
-    [ -n "$_l" ] && [ "$_p" = ".ai-kit/gate/adapters/$_l.sh" ] \
+    [ -n "$_l" ] && [ "$_p" = ".kit/gate/adapters/$_l.sh" ] \
       && { printf '%s  (--lang 에서 뺀 언어)\n' "$_p"; return; }
   done
   printf '%s\n' "$_p"
@@ -574,14 +585,14 @@ dryrun_report() {
     elif cmp -s "$f" "$TARGET/$rel"; then
       n_same=$((n_same + 1))
     # 내용이 다를 때 설치가 무엇을 하는지는 자리에 따라 다르다. 킷 소유는 교체되고,
-    # 프로젝트 소유는 place() 가 원본을 남기고 .ai-kit-new 를 옆에 쓴다.
+    # 프로젝트 소유는 place() 가 원본을 남기고 .kit-new 를 옆에 쓴다.
     # 둘을 한 목록에 담으면 "킷이 놓을 것" 이 절반은 거짓이 된다.
     #
     # **여기의 소유 판정은 위 설치 경로와 같아야 한다.** 다르면 dry-run 이 예고한 것과
-    # 실제 설치가 어긋나고, 그러면 예고를 읽을 이유가 없어진다. 킷 소유는 .ai-kit 전체,
+    # 실제 설치가 어긋나고, 그러면 예고를 읽을 이유가 없어진다. 킷 소유는 .kit 전체,
     # .claude 의 스킬·에이전트·훅, docs/process 이고, .claude 안에서는 settings.json 만 프로젝트 소유다.
     elif case "$rel" in
-           .ai-kit/*) true ;;
+           .kit/*) true ;;
            .claude/settings.json) false ;;
            .claude/*) true ;;
            docs/process/*) true ;;
@@ -597,7 +608,7 @@ dryrun_report() {
   # 실제 실행의 `삭제` 칸과 같은 배열이다. 여기서 또 세면 두 벌이 되고, 두 벌은 어긋났다 —
   # 한 번은 예고 3 / 실제 0, 한 번은 예고 1 / 실제 3(그중 둘은 지우지도 않았다).
   #
-  # 삭제가 .ai-kit 에서만 생기는 것도 그 배열이 이미 반영한다. 킷 소유는 그 밖에도 있지만
+  # 삭제가 .kit 에서만 생기는 것도 그 배열이 이미 반영한다. 킷 소유는 그 밖에도 있지만
   # (.claude 의 스킬·에이전트·훅, docs/process) 그 자리들은 **통째로 비우고 놓는 자리가
   # 아니라 파일 단위로 덮어쓰는 자리**라 애초에 사라지는 것이 없다.
   n_gone=${#DELETED[@]}
@@ -606,8 +617,8 @@ dryrun_report() {
   echo "── dry-run: 아무것도 바꾸지 않았습니다 ──"
   echo ""
   echo "지금 설치하면 — 설치 ${n_new} · 교체 ${n_repl} · 보존 ${n_side} · 동일 ${n_same} · 삭제 ${n_gone}"
-  [ -n "$list_repl" ] && { echo ""; echo "교체 — .ai-kit, .claude 의 스킬·에이전트·훅, docs/process 는 킷 소유다"; printf '%s' "$list_repl"; }
-  [ -n "$list_side" ] && { echo ""; echo "보존 — 이 레포 것을 두고 킷의 것은 <파일>.ai-kit-new 로 옆에 놓는다"; printf '%s' "$list_side"; }
+  [ -n "$list_repl" ] && { echo ""; echo "교체 — .kit, .claude 의 스킬·에이전트·훅, docs/process 는 킷 소유다"; printf '%s' "$list_repl"; }
+  [ -n "$list_side" ] && { echo ""; echo "보존 — 이 레포 것을 두고 킷의 것은 <파일>.kit-new 로 옆에 놓는다"; printf '%s' "$list_side"; }
   [ -n "$list_new" ]  && { echo ""; echo "설치"; printf '%s' "$list_new"; }
   [ -n "$list_gone" ] && { echo ""; echo "삭제 — 재설치가 지운다"; printf '%s' "$list_gone"; }
 
@@ -636,7 +647,7 @@ dryrun_report() {
 
   echo ""
   echo "병합용 트리: $STAGE"
-  echo "  킷이 놓을 파일이 들어 있습니다(예고 건수를 맞추려고 .ai-kit/identity 도 넣지만"
+  echo "  킷이 놓을 파일이 들어 있습니다(예고 건수를 맞추려고 .kit/identity 도 넣지만"
   echo "  그것은 킷이 놓는 것이 아니라 보존하는 것입니다). 파일별로 비교하려면:"
   echo "      diff -u <파일> $STAGE/<파일>"
   echo "  임시 디렉터리이므로 시스템이 정리하면 사라질 수 있습니다. 남길 것은 옮겨두세요."
@@ -652,18 +663,18 @@ if [ ${#DELETED[@]} -gt 0 ] && [ "$DRY_RUN" = 0 ]; then
   echo ""
   echo "── 삭제 ──"
   for _d in "${DELETED[@]}"; do printf '  - %s' ""; why_gone "$_d"; done
-  echo "  .ai-kit 은 통째로 교체되는 자리입니다. 남길 것은 그 밖에 두세요."
+  echo "  .kit 은 통째로 교체되는 자리입니다. 남길 것은 그 밖에 두세요."
 fi
 
 if [ "$DO_HOOKS" = 1 ] && [ "$DRY_RUN" = 0 ]; then
   cat <<'MSG'
 
 ── 설치기가 한 일 ──
-  ✓ 게이트·훅을 .ai-kit/ 에 넣었습니다
-  ✓ 훅을 켰습니다 (core.hooksPath → .ai-kit/git-hooks)
+  ✓ 게이트·훅을 .kit/ 에 넣었습니다
+  ✓ 훅을 켰습니다 (core.hooksPath → .kit/git-hooks)
 
 ── 이제 할 일 ──
-  1. .ai-kit/ 을 커밋하세요. 커밋하지 않으면 CI 도, 이 레포를 clone 한 사람도
+  1. .kit/ 을 커밋하세요. 커밋하지 않으면 CI 도, 이 레포를 clone 한 사람도
      게이트를 갖지 못합니다.
   2. docs/process/kit-guide.md 를 읽으세요. 무엇이 자동으로 실행되고, CLAUDE.md 에서
      무엇을 채워야 하고, 킷이 무엇을 안 하는지 적혀 있습니다.
@@ -672,7 +683,7 @@ if [ "$DO_HOOKS" = 1 ] && [ "$DRY_RUN" = 0 ]; then
   core.hooksPath 는 git 이 clone 에 담지 않는 로컬 설정입니다(보안상 의도된 동작).
   나중에 이 레포를 새로 clone 하는 사람은 한 줄이 필요합니다:
 
-      git config core.hooksPath .ai-kit/git-hooks
+      git config core.hooksPath .kit/git-hooks
 
   그래서 로컬 훅은 우회 가능한 '조기 피드백' 이고, 우회할 수 없는 강제는 CI 입니다.
   둘이 같은 gate.sh 를 부르는 이유가 그것입니다.
@@ -701,7 +712,7 @@ fi
 
 if [ ${#CONFLICTS[@]} -gt 0 ] && [ "$DRY_RUN" = 0 ]; then
   echo ""
-  echo "보존 — 이 레포 것을 뒀고 킷의 것은 .ai-kit-new 로 옆에 놓았습니다. 확인 후 병합하세요:"
+  echo "보존 — 이 레포 것을 뒀고 킷의 것은 .kit-new 로 옆에 놓았습니다. 확인 후 병합하세요:"
   printf '  %s\n' "${CONFLICTS[@]}"
 fi
 if [ ${#WARNINGS[@]} -gt 0 ]; then
