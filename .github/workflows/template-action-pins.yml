@@ -2,8 +2,8 @@
 #
 # Dependabot 은 .github/workflows/ 와 루트 action.yml 만 훑는다(공식 문서). 킷의
 # 워크플로 원본은 common/ci/gates.yml 이라 그 범위 밖이고, 그대로 두면 새 프로젝트가
-# 낡은 채로 시작한다. 이 잡이 Dependabot 이 못 가는 자리를 대신 본다.
-# 게이트 도구 핀(common/gate/tool-versions)도 Dependabot 이 생태계로 알아보지 못해서
+# 낡은 채로 시작한다. 이 잡이 Dependabot 이 보지 않는 파일을 대신 본다.
+# 게이트 도구 핀(common/gate/tool-versions)도 Dependabot 이 지원하는 생태계의 파일이 아니어서
 # 같은 잡이 본다(check-tool-pins.sh, 이슈 #110). 최신은 킷이 바뀌지 않아도 바뀌므로 PR 마다
 # 보지 않고 주간으로 본다.
 #
@@ -36,7 +36,7 @@ jobs:
           set +e
           # 자기 자신도 검사 대상에 넣는다. 이 워크플로의 핀은 .github/workflows/ 에
           # 있어 Dependabot 이 볼 수 있지만, 킷에 dependabot 설정을 따로 두는 것보다
-          # 이미 있는 검사기에 파일 하나를 더 전달하는 쪽이 부품이 적다.
+          # 이미 있는 검사기에 파일 하나를 더 전달하는 쪽이 설정할 것이 적다.
           out=$(bash common/ci/check-action-pins.sh \
                   common/ci/gates.yml \
                   .github/workflows/template-action-pins.yml \

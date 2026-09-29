@@ -161,7 +161,7 @@ GitHub auto-merge 를 켠 뒤 Approve 를 요청하고, Approve 가 달리면 Gi
       gh api "repos/{owner}/{repo}" --jq .allow_auto_merge
 
   `reviewDecision` 이 `REVIEW_REQUIRED` 이고 `mergeStateStatus` 가 `BLOCKED` 이고 `allow_auto_merge` 가 `true`
-  면 3절의 「봇 설정이 있을 때」로 간다 — 결정 코멘트를 올리고 auto-merge 를 켠 뒤 Approve 를 요청한다.
+  면 3절의 「봇 설정이 있을 때」를 따른다 — 결정 코멘트를 올리고 auto-merge 를 켠 뒤 Approve 를 요청한다.
   **다른 상태에서 `--auto` 를 주지 마라.** gh 는 바로 머지할 수 있는 PR(`CLEAN` · `HAS_HOOKS` · `UNSTABLE`)에서
   `--auto` 를 무시하고 그 자리에서 머지한다(gh v2.92.0 `pkg/cmd/pr/merge/merge.go` 의 `isImmediatelyMergeable`).
   승인을 요구하지 않는 레포(`reviewDecision` 이 비었다)에서는 검사가 끝나는 순간 Approve 없이 머지된다. 막기
@@ -515,12 +515,12 @@ URL 이다:
    `expectedHeadOid` 로 전달한다(gh v2.92.0 `pkg/cmd/pr/merge/http.go`). GitHub 이 그 값을 머지할 때도 대조하는지는
    확인하지 않았다. 켠 뒤에 오는 새 커밋을 막는 것은 막기 훅뿐이고, 그 훅은 세션의 푸시만 막는다(아래). 사람이
    PR 브랜치에 푸시하면 막는 것이 없다 — 마지막 푸시 승인은 푸시한 사람의 Approve 만 세지 않으므로, 쓰기 권한이
-   있는 다른 사람이 Approve 하는 순간 새 커밋이 켤 때 담긴 옛 제목 · 본문과 옛 결정 코멘트대로 머지된다. 그래서
+   있는 다른 사람이 Approve 하는 순간 새 커밋이 든 채로, 켤 때 담긴 옛 제목 · 본문과 옛 결정 코멘트대로 머지된다. 그래서
    사람은 PR 브랜치에 푸시하기 전에 세션에 알려 auto-merge 를 끄게 한다(`docs/process/kit-guide.md` 3절).
 
    **켜는 명령이 실패하면** 결정 코멘트가 말하는 「Approve 하면 GitHub 이 머지한다」가 거짓이 된다. 결정 코멘트
    뒤에 코멘트로 한 줄 `auto-merge 를 켜지 못했다: <gh 가 낸 오류의 첫 줄>. 사람이 Approve 하면 세션이 확인하고
-   머지한다.` 를 남기고, 2절의 「그 밖이면 세션이 Approve 를 확인한다」로 간다. 요청 블록도 그 절의 것(결과 줄
+   머지한다.` 를 남기고, 2절의 「그 밖이면 세션이 Approve 를 확인한다」를 따른다. 요청 블록도 그 절의 것(결과 줄
    둘을 바꾼 것)이다. 봇이 auto-merge 를 켤 권한이 없거나, 2절과 이 명령 사이에 PR 이 바로 머지할 수 있는 상태가
    되어 막기 훅이 막은 경우다.
 4. 응답을 2절의 Approve 요청 블록과 창으로 끝낸다. 블록 ① 의 결과 줄 「GitHub: 곧바로 머지 (레포 설정

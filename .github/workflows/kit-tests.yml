@@ -5,8 +5,9 @@
 # 사람에게 맡긴 그 자리로, 안 지운 pre-commit·pre-push 를 지웠다고 보고하는 회귀가
 # 한 라운드를 통과했다. 기억이 아니라 검사가 막아야 한다.
 #
-# 이것은 required check 가 아니다 — 브랜치 보호는 아직 없다. 빨간 것을 보고도 머지할 수
-# 있고, 그 사실이 "킷이 자기 자신에게 게이트를 적용할 것인가" 라는 열린 결정에 달려 있다.
+# `tests` 잡은 required check 다 — `main` 룰셋이 이 잡이 실패한 PR 의 머지를 막는다(ADR-0002
+# 「결과」). 게이트와 훅을 킷 자신에게 적용할지는 여전히 "킷이 자기 자신에게 게이트를 적용할 것인가"
+# 라는 열린 결정이다(이슈 #4).
 name: kit tests
 
 on:
@@ -23,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # install.sh 는 대상 레포에 git 신원이 있어야 identity 를 시드한다.
+      # install.sh 는 대상 레포에 git 신원이 있어야 identity 파일을 만든다.
       - name: Configure a git identity for the temporary repos
         run: |
           git config --global user.email ci@example.com
@@ -41,7 +42,7 @@ jobs:
 
       # **한 검사가 빨개도 나머지를 다 실행한다.** 기본값(첫 실패에서 멈춤)이면 그 커밋에서
       # 다른 검사가 무엇을 말했을지 영영 모르고, 고치고 다시 푸시해야 다음 것이 보인다.
-      # 라운드가 열여섯 번 진행된 이 PR 에서 그 왕복은 비용이 크다.
+      # 라운드가 열여섯 번 진행된 PR 이 있었고, 그런 PR 에서 그 왕복은 비용이 크다.
       - name: install.sh says what it actually deletes
         id: deletions
         continue-on-error: true

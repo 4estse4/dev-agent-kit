@@ -24,7 +24,7 @@
 # - 리뷰한 계정의 레포 권한이 write 이상이다(`collaborators/<계정>/permission` 의 admin · write.
 #   maintain 은 write 로 온다). 브랜치 보호가 필요 승인 수로 세는 것도 쓰기 권한자의 Approve 다
 # - 그 계정의 마지막 리뷰(Comment 를 뺀 것)가 Approve 이고, 그 리뷰가 가리키는 커밋이 지금 head 다.
-#   Dismiss 된 리뷰는 없는 것이다
+#   Dismiss 된 리뷰는 세지 않는다
 # 쓰기 권한자 가운데 마지막 리뷰가 Request changes 인 사람이 있으면 Approve 가 있어도 종료 1 이다. GitHub 이
 # 브랜치 보호의 필요 승인 수로 계산한 `reviewDecision` 이 `REVIEW_REQUIRED`(승인이 모자람)나
 # `CHANGES_REQUESTED` 여도 종료 1 이다 — 리뷰하는 사람이 여럿이라 필요 승인 수를 올린 레포에서 한 사람의

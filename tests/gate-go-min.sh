@@ -10,7 +10,7 @@
 # 깨끗한 레포에 킷을 설치하고 그 gates.yml 을 읽는다. 보는 것:
 #   · actions/setup-go 를 쓰는 잡마다, 그보다 앞선 스텝이 gate_go_min_check 를 부른다
 #   · 그 스텝의 run 을 설치한 레포에서 실행하면, setup-go 가 Go 를 설치할 go.mod(설치할 Go 가 가장 높은
-#     것)의 그 버전이 go_min 보다 낮거나 없을 때 그 파일을 이름대며 실패하고, 아니면 통과한다.
+#     것)의 그 버전이 go_min 보다 낮거나 없을 때 그 파일을 오류 줄에 적으며 실패하고, 아니면 통과한다.
 #     설치할 Go 는 toolchain 줄이 있으면 그 버전, 없으면 go 줄이다 — setup-go 가 그렇게 설치한다. 파일을
 #     고를 때도 같은 버전으로 순위를 매긴다. 더 낮은 보조 모듈이 섞여 있어도 통과한다. 도구를 설치할 수 있는지 정하는 것은 실행 중인
 #     go 하나이고, 낮은 go 줄의 모듈도 그 go 로 빌드된다. 러너의 기본 셸처럼 `bash -e` 로 실행된다
@@ -79,18 +79,18 @@ gomods() { # 인자=「경로:go 줄[:toolchain 줄]」. go 줄이 비면 그 �
   done
 }
 
-check() { # $1=잡  $2=설명  $3=기대(fail|pass)  $4=실패할 때 이름대야 할 파일  나머지=gomods 인자
+check() { # $1=잡  $2=설명  $3=기대(fail|pass)  $4=실패할 때 오류 줄에 적어야 할 파일  나머지=gomods 인자
   local job="$1" what="$2" want="$3" names="$4" out rc; shift 4
   gomods "$@"
   # TV 가 비면 CI 스텝처럼 lib.sh 가 제 자리에서 tool-versions 를 찾게 둔다. 설치본 케이스가 그
-  # 기본 경로를 지난다 — 모든 케이스에 전달하면 그 경로가 깨져도 초록이었다(PR #108 3라운드 콜드 리뷰).
+  # 기본 경로를 거친다 — 모든 케이스에 전달하면 그 경로가 깨져도 초록이었다(PR #108 3라운드 콜드 리뷰).
   if [ -n "$TV" ]; then out=$(cd "$R" && GATE_TOOL_VERSIONS="$TV" bash -e "$T/step.$job" 2>&1); rc=$?
   else out=$(cd "$R" && bash -e "$T/step.$job" 2>&1); rc=$?; fi
   if [ "$want" = fail ]; then
     if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -qF "::error file=$names::"; then
-      echo "  ✓ $job · $what → 실패하고 $names 를 이름댄다"
+      echo "  ✓ $job · $what → $names 를 오류 줄에 적으며 실패한다"
     else
-      echo "  ✗ $job · $what → rc=$rc, $names 를 이름대며 실패해야 한다:"; printf '%s\n' "$out" | cut -c1-120 | sed 's/^/      /'; fail=1
+      echo "  ✗ $job · $what → rc=$rc, $names 를 오류 줄에 적으며 실패해야 한다:"; printf '%s\n' "$out" | cut -c1-120 | sed 's/^/      /'; fail=1
     fi
   else
     if [ "$rc" -eq 0 ] && ! printf '%s\n' "$out" | grep -q '::error'; then

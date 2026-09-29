@@ -58,8 +58,8 @@ grep -qxF '$ echo one' "$T/multi.part" 2>/dev/null && grep -qxF '> echo two' "$T
 run "$T/fence.part" "printf '%s\\n' 'a' '\`\`\`' 'b'"
 open=$(head -1 "$T/fence.part" 2>/dev/null); close=$(tail -1 "$T/fence.part" 2>/dev/null)
 [ "$open" = "$close" ] && [ "${#open}" -gt 3 ] && grep -qxF '```' "$T/fence.part" \
-  && ok "출력의 \`\`\` 보다 긴 울타리" || bad "출력의 \`\`\` 보다 긴 울타리 — 여는 줄 '$open'"
-# 출력에만 든 경우와 명령에만 든 경우를 따로 본다. 둘 다 든 위 경우는 한쪽만 보는 울타리도
+  && ok "출력의 \`\`\` 보다 긴 펜스" || bad "출력의 \`\`\` 보다 긴 펜스 — 여는 줄 '$open'"
+# 출력에만 든 경우와 명령에만 든 경우를 따로 본다. 둘 다 든 위 경우는 한쪽만 보는 펜스도
 # 통과시킨다.
 run "$T/fence-out.part" "printf '\\140\\140\\140\\n'"
 open=$(head -1 "$T/fence-out.part" 2>/dev/null); close=$(tail -1 "$T/fence-out.part" 2>/dev/null)
@@ -74,7 +74,7 @@ open=$(head -1 "$T/fence-cmd.part" 2>/dev/null); close=$(tail -1 "$T/fence-cmd.p
 ( cd "$T" && printf '%s\n' 'echo hi' | bash "$S" "$T/no-such-dir/x.part" >/dev/null 2>&1 ); rc=$?
 [ "$rc" != 0 ] && ok "덧붙이지 못하면 0 이 아니다" || bad "덧붙이지 못하면 0 이 아니다 — rc=$rc"
 
-# ── 덧붙인다 ── 앞의 블록을 덮지 않는다
+# ── 덧붙인다 ── 앞의 블록을 덮어쓰지 않는다
 run "$T/twice.part" 'echo first'
 run "$T/twice.part" 'echo second'
 grep -qx 'first' "$T/twice.part" 2>/dev/null && grep -qx 'second' "$T/twice.part" \
@@ -104,7 +104,7 @@ cat > "$R/.claude/settings.local.json" <<'EOF'
 {"permissions": {"deny": ["Bash(rm *)", "Bash(npm run *--prod*)", "Bash(* --help *)"]}}
 EOF
 # 거부된 명령은 **실행되지 않아야** 한다. 명령 앞에 흔적 파일을 만드는 `touch` 를 붙여, 거부했다고
-# 말하면서 먼저 실행한 모양을 찾아낸다. 뒤의 글자는 규칙 글자를 품은 `echo` 라 가드가 빠져
+# 말하면서 먼저 실행한 모양을 찾아낸다. 뒤의 글자는 규칙 글자가 들어 있는 `echo` 라 가드가 막지 못해
 # 실행되어도 아무것도 안 한다.
 refused() {   # refused <이름> <명령> [cwd]
   local f="$T/refuse-$RANDOM.part" m="$T/ran-$RANDOM" rc err
@@ -128,7 +128,7 @@ refused "끝 ' *' 규칙 뒤에 ; 가 붙음" 'echo rm;echo x'
 refused "끝 ' *' 규칙 뒤에 ) 가 붙음" 'echo "$(echo rm)"'
 refused "끝 :* 규칙의 맨 명령" 'echo gh api'
 refused "가운데 ' *' 규칙" 'echo npm run build --prod'
-# 맨 명령 바로 뒤에 올 수 있는 글자마다 하나씩. 빠진 글자가 있으면 그 모양이 지나간다
+# 맨 명령 바로 뒤에 올 수 있는 글자마다 하나씩. 빠진 글자가 있으면 그 모양은 막히지 않는다
 refused "끝 ' *' 규칙 뒤에 && 가 붙음" 'echo rm&&echo x'
 refused "끝 ' *' 규칙 뒤에 | 가 붙음" 'echo rm|cat'
 refused "끝 ' *' 규칙 뒤에 따옴표가 붙음(sh -c 'rm' 모양)" "echo 'rm'"
@@ -186,8 +186,8 @@ done
 grep -qE 'gh pr create .*--body-file' "$OPEN" && ok "open-pr 이 본문을 --body-file 로 전달한다" \
   || bad "open-pr 이 본문을 --body-file 로 전달한다"
 
-# ── 조각을 이을 때 끝 줄바꿈이 없어도 울타리가 앞 줄에 붙지 않는다 ──
-# `Write` 로 쓴 조각이 줄바꿈 없이 끝나면 `cat` 은 다음 조각의 여는 울타리를 그 줄에 붙인다.
+# ── 조각을 이을 때 끝 줄바꿈이 없어도 펜스가 앞 줄에 붙지 않는다 ──
+# `Write` 로 쓴 조각이 줄바꿈 없이 끝나면 `cat` 은 다음 조각의 여는 펜스를 그 줄에 붙인다.
 # 스킬이 적은 잇는 명령을 그대로 꺼내 실행한다.
 J="$T/join"; mkdir -p "$J"
 printf '## 검증' > "$J/10-head.part"
@@ -196,8 +196,8 @@ join=$(grep -oE '(cat|awk 1) <디렉터리>/\*\.part > <디렉터리>/body\.md' 
 if [ -z "$join" ]; then bad "open-pr 에서 조각 잇는 명령을 못 찾았다"
 else
   ( cd "$J" && eval "${join//<디렉터리>/.}" )
-  sed -n 2p "$J/body.md" | grep -qx '```' && ok "잇기 — 줄바꿈 없는 조각 뒤 울타리가 제 줄에 있다" \
-    || bad "잇기 — 줄바꿈 없는 조각 뒤 울타리가 제 줄에 있다: $(head -2 "$J/body.md" | tr '\n' '|')"
+  sed -n 2p "$J/body.md" | grep -qx '```' && ok "잇기 — 줄바꿈 없는 조각 뒤 펜스가 제 줄에 있다" \
+    || bad "잇기 — 줄바꿈 없는 조각 뒤 펜스가 제 줄에 있다: $(head -2 "$J/body.md" | tr '\n' '|')"
 fi
 
 rm -rf "$T"

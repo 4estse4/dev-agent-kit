@@ -16,7 +16,7 @@
 # 빠진다. 답을 비운 질문도 `free` 이고, 창에 보기 대신 쓴 글(`response`)이 있으면 표지가 있는 질문을 모두
 # `free` 로 적는다 — Claude Code 는 그 글만 모델에 주므로 세션은 그 글대로 움직인다. 그대로 올리지 않고 같은
 # 머리말의 창으로 다시 받는다(`open-pr` 3.5). 사람이 자리를 비워 저절로 닫힌 창(`afkTimeoutMs`)과 질문을 더
-# 요청하며 닫은 창(`followUp`)은 사람이 제출한 답이 아니라서 기록하지 않는다.
+# 요청하며 닫은 창(`followUp`)은 사람이 제출한 것이 아니라서 기록하지 않는다.
 #
 # **어디에.** `<git 공통 디렉터리>/ai-kit-bot/windows/<PR>.jsonl` 에 기록 하나를 한 줄로 더한다. git 공통
 # 디렉터리는 절대 경로로 받는다 — 세션의 cwd 가 레포의 하위 디렉터리여도 레포의 것을 가리킨다. 세션은 봇
@@ -93,7 +93,7 @@ marked = [(q, m.group(1)) for q, m in marked if m]
 if not marked:
     sys.exit(0)
 
-# 사람이 자리를 비워 저절로 닫힌 창과 질문을 더 요청하며 닫은 창은 사람이 제출한 답이 아니다 — 게시 동의가 아니다
+# 사람이 자리를 비워 저절로 닫힌 창과 질문을 더 요청하며 닫은 창은 사람이 제출한 것이 아니다 — 게시 동의가 아니다
 if resp.get('afkTimeoutMs') or resp.get('followUp'):
     why = '사람이 자리를 비워 창이 저절로 닫혔다' if resp.get('afkTimeoutMs') else '사람이 질문을 더 요청하며 창을 닫았다'
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext":

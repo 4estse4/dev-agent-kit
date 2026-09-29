@@ -4,11 +4,11 @@
 #
 # 세 훅을 Claude Code 가 부르는 모양으로 부른다 — SessionStart 의 `bot_session.sh` 와 PreToolUse 의
 # `bot_guard.sh` 에는 표준입력에 JSON 을 넣고, `CLAUDE_ENV_FILE` 을 준다. 토큰 스크립트
-# `bot_token.sh` 는 두 훅이 부르는 것을 지나가게 한다.
+# `bot_token.sh` 는 두 훅이 부르는 그대로 실행되게 한다.
 #
 # **네트워크와 진짜 개인키를 안 쓴다.** 개인키는 이 테스트가 만든 버릴 RSA 키이고, PATH 앞에 둔
 # 가짜 `curl` 이 GitHub API 대신 설치 · 토큰을 돌려주고 받은 인자를 적어 둔다. `HOME` 을 임시
-# 디렉터리로 바꿔 개인키의 기본 자리(`~/.config/<App 이름>/key.pem`)를 그대로 지나가게 한다.
+# 디렉터리로 바꿔 개인키의 기본 자리(`~/.config/<App 이름>/key.pem`)를 그대로 쓰게 한다.
 # 토큰 글자(`ghs_stubtoken`)가 훅의 출력에 나오면 실패다 — 훅의 출력은 모델의 맥락에 들어간다.
 set -u
 # 봇에 연결된 세션에서 이 테스트를 실행해도 그 세션의 git 설정이 섞이지 않게 한다
@@ -241,15 +241,15 @@ guard "연결 뒤 heredoc 커밋 메시지 안의 gh auth" pass "git commit -m \
 fix: block gh auth status in the guard
 EOF
 )\""
-# 사람 설정이 없으면 URL 로 준 푸시도 https 로 나간다. 막는 사유는 「주소를 풀지 못해」와 「SSH 주소라서」로
+# 사람 설정이 없으면 원격을 URL 로 준 푸시도 https 주소를 쓴다. 막는 사유는 「주소를 풀지 못해」와 「SSH 주소라서」로
 # 다르다 — 아래 SSH 푸시 테스트는 뒤의 것을 본다.
 guard "사람 설정 없는 URL 푸시" pass "git push https://github.com/o/r.git HEAD"
-# 사람의 git 설정이 github.com 의 https 를 SSH 로 바꾸면 세션의 푸시가 SSH 키로, 곧 사람 계정으로 나간다
+# 사람의 git 설정이 github.com 의 https 를 SSH 로 바꾸면 세션의 푸시에 SSH 키, 곧 사람 계정이 쓰인다
 printf '[url "git@github.com:"]\n\tinsteadOf = https://github.com/\n' > "$T/home/.gitconfig"
 guard "사람 설정이 https 를 SSH 로 바꾼 푸시(insteadOf)" deny "git push -u origin HEAD" "$R" "SSH 주소라서"
 printf '[url "git@github.com:"]\n\tpushInsteadOf = https://github.com/\n' > "$T/home/.gitconfig"
 guard "사람 설정이 https 를 SSH 로 바꾼 푸시(pushInsteadOf)" deny "git push" "$R" "SSH 주소라서"
-# 원격 자리를 리다이렉션이나 플래그의 값으로 읽으면 주소를 못 풀어 지나간다
+# 원격 자리를 리다이렉션이나 플래그의 값으로 읽으면 주소를 잘못 풀어 통과시킨다
 guard "리다이렉션이 붙은 푸시(2>&1)" deny "git push 2>&1" "$R" "SSH 주소라서"
 guard "리다이렉션이 붙은 푸시(>파일)" deny "git push >/tmp/push.log" "$R" "SSH 주소라서"
 guard "리다이렉션 뒤 원격 이름" deny "git push 2>/dev/null origin HEAD" "$R" "SSH 주소라서"
@@ -257,7 +257,7 @@ guard "값을 받는 플래그 뒤의 원격(-o)" deny "git push -o ci.skip orig
 guard "값을 받는 플래그 뒤의 원격(--push-option)" deny "git push --push-option ci.skip origin HEAD" "$R" "SSH 주소라서"
 guard "값을 붙여 쓴 플래그 뒤의 원격(-oci.skip)" deny "git push -oci.skip origin HEAD" "$R" "SSH 주소라서"
 guard "원격을 URL 로 준 푸시" deny "git push https://github.com/o/r.git HEAD" "$R" "SSH 주소라서"
-# kit-guide 6절이 적은 대로 이 레포에만 소유자까지 적은 더 긴 규칙을 두면, 가장 긴 규칙이 이겨 https 로 나간다
+# kit-guide 6절이 적은 대로 이 레포에만 소유자까지 적은 더 긴 규칙을 두면, 가장 긴 규칙이 적용돼 https 주소로 푸시한다
 git -C "$R" config url."https://github.com/o/".pushInsteadOf "https://github.com/o/"
 guard "이 레포에서 SSH 바꾸기를 끈 푸시(더 긴 규칙)" pass "git push origin HEAD"
 git -C "$R" config --unset url."https://github.com/o/".pushInsteadOf
@@ -312,7 +312,7 @@ STUB_PR_VIEW='{"reviewDecision":"REVIEW_REQUIRED","mergeStateStatus":"CLEAN"}' g
 : > "$T/gh-log"
 STUB_GH_LOG="$T/gh-log" STUB_PR_VIEW=$NEED guard "레포와 값 있는 플래그 뒤의 PR" pass "gh pr -R o/r merge --subject 5x --auto 7"
 ok "auto-merge 판정은 명령의 PR 과 레포를 조회한다" 'grep -E "^pr view 7( |$)" "$T/gh-log" | grep -qE -- "-R o/r( |$)"'
-# 켠 뒤에 푸시하면 사람이 새 커밋을 보고 누른 Approve 가 옛 결정 코멘트대로 머지된다. 먼저 끈다.
+# 켠 뒤에 푸시하면 사람이 새 커밋을 보고 누른 Approve 로 옛 결정 코멘트대로 머지된다. 먼저 끈다.
 ON='[{"number":5,"headRefName":"work","autoMergeRequest":{"enabledAt":"2026-09-28T00:00:00Z"}}]'
 OFF='[{"number":5,"headRefName":"work","autoMergeRequest":null}]'
 STUB_PR_LIST=$ON guard "auto-merge 가 켜진 PR 의 브랜치에 푸시" deny "git push" "$R" "--disable-auto"

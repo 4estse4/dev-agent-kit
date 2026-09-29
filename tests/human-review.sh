@@ -6,7 +6,7 @@
 # Claude Code 가 부르는 모양대로 표준입력에 도구 호출 JSON 을 넣는다. `merge-pr` 2절이 부르는 판정
 # 스크립트(`claude-code/hooks/human_review.sh approved`)와 사람 계정으로 올리는 스크립트
 # (`claude-code/hooks/human_comment.sh`)는 스킬에 적힌 모양대로 부른다. 판정 함수만 부르면 훅이 판정을
-# 안 쓰는 결함이 초록으로 지나간다.
+# 안 쓰는 결함이 초록으로 통과한다.
 #
 # **네트워크를 안 쓴다.** PATH 앞에 둔 가짜 `gh` 가 경우마다 만든 JSON 에서 PR 코멘트 · 리뷰 · 레포
 # 권한을 돌려주고, 받은 인자와 환경 변수(`GH_REPO` · `GH_CONFIG_DIR` · `GH_TOKEN`)를 적어 둔다.
@@ -125,7 +125,7 @@ round_body 2 '고치고 2라운드' > "$T/round2.md"
 round_body 2 '고치고 3라운드' > "$T/round2-other.md"
 round_body 2 '1라운드 코멘트: 고치고 2라운드' > "$T/round2-line.md"
 printf '## 리뷰 2라운드 — 셀프 ***`Comment`*** · 콜드 ***`Comment`***\n\n- **해결** (셀프) 고쳤다\n' > "$T/round2-noquote.md"
-# 사람이 PR 웹에서 Quote reply 로 봇의 글을 인용해 넣고 답을 쓴 코멘트
+# 사람이 PR 웹에서 Quote reply 로 봇의 글을 인용해 넣고 정한 것을 쓴 코멘트
 QR='> 결정 필요는 이 코멘트 뒤 질문 창으로 여쭙니다.
 
 그냥 고치고 한 라운드 더'
@@ -210,7 +210,7 @@ hook "봇 계정 코멘트에만 있는 인용" deny botonly round2.md "사람 �
 hook "사람이 PR 웹에서 쓴 코멘트의 한 구절" pass web round2.md
 # Quote reply 의 `> …` 줄은 봇이 쓴 글이다
 hook "Quote reply 로 인용된 봇의 글" deny quote-reply round2-quoted.md "사람 계정"
-hook "Quote reply 뒤에 사람이 쓴 답" pass quote-reply round2-reply.md
+hook "Quote reply 뒤에 사람이 정한 것" pass quote-reply round2-reply.md
 hook "사람 코멘트에 없는 인용" deny web round2-other.md "고치고 3라운드"
 hook "다른 계정이 고친 사람 코멘트" deny edited-other round2.md "고친"
 hook "글쓴이가 스스로 고친 코멘트" pass edited-self round2.md

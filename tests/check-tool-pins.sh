@@ -2,7 +2,7 @@
 # common/ci/check-tool-pins.sh 가 tool-versions 의 도구 핀을 최신과 견주고, 판정하지 못한 것을 최신으로 세지 않는다.
 #
 # 이 테스트가 있는 이유: tool-versions 의 핀이 최신보다 뒤처졌는지 보는 것이 킷에 없었다(이슈 #110). 이슈 #36 은
-# 그 검사가 생겼다는 전제에서 시작했지만 그 PR(#35)은 머지되지 않았다. Dependabot 은 그 파일을 생태계로 알아보지 못한다.
+# 그 검사가 생겼다는 전제에서 시작했지만 그 PR(#35)은 머지되지 않았다. 그 파일은 Dependabot 이 지원하는 생태계의 파일이 아니다.
 #
 # 킷의 스크립트 · gates.yml · tool-versions 를 임시 트리에 두고 네트워크 없이 실행한다. PyPI 와 GitHub 의 응답은
 # file:// 로(AI_KIT_PYPI_URL · AI_KIT_GITHUB_API), go 는 모듈 경로마다 정해 둔 최신을 답하는 가짜로 둔다. 가짜 go 는

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# CI 의 setup-node 는 레포 루트의 .nvmrc 로 node 를 설치하고, 실패를 덮지 않는다.
+# CI 의 setup-node 는 레포 루트의 .nvmrc 로 node 를 설치하고, 실패를 초록으로 끝내지 않는다.
 #
 # 이 테스트가 있는 이유: gates.yml 의 setup-node 둘이 루트의 .nvmrc 와 lockfile 을 가정했고,
-# 둘 다 continue-on-error 라 실패가 초록으로 덮였다(이슈 #95). lockfile 이 하위 디렉터리에만 있는
+# 둘 다 continue-on-error 라 실패가 초록으로 끝났다(이슈 #95). lockfile 이 하위 디렉터리에만 있는
 # 레포에서 gate 잡의 setup-node 가 「Dependencies lock file is not found」로 매번 실패했는데,
 # API 는 그 스텝을 success 로 줬다.
 #
@@ -72,7 +72,7 @@ case "$report" in
   none) bad "setup-node 를 쓰는 스텝을 하나도 찾지 못했다 — gates.yml 이 바뀌었나" ;;
   *)
     while IFS=$'\t' read -r st job msg; do
-      if [ "$st" = ok ]; then ok "$job 잡의 setup-node 는 앞에서 루트 .nvmrc 를 보고, 실패를 덮지 않고, lockfile 을 루트에서만 찾지 않는다"
+      if [ "$st" = ok ]; then ok "$job 잡의 setup-node 는 앞에서 루트 .nvmrc 를 보고, 실패를 초록으로 끝내지 않고, lockfile 을 루트에서만 찾지 않는다"
       else bad "$job 잡의 setup-node:$msg"; fi
     done <<< "$report"
     ;;
@@ -122,7 +122,7 @@ done
 # ── npm audit ──────────────────────────────────────────────────────────
 # security 잡의 npm audit 스텝을 npm 대역으로 실행한다. npm ci · npm audit 는 package-lock.json 과
 # npm-shrinkwrap.json 둘 다 lockfile 로 읽으므로, shrinkwrap 만 둔 패키지도 audit 해야 한다.
-# 한때 package-lock.json 만 찾아 그 패키지를 조용히 건너뛰었다.
+# 한때 package-lock.json 만 찾아 그 패키지를 알리지 않고 건너뛰었다.
 awk '
   function flush() { if (body != "" && hit) { printf "%s", body; done = 1 } body = ""; hit = 0; inrun = 0 }
   /^jobs:$/ { injobs = 1; next }
