@@ -501,7 +501,7 @@ PYEOF
       while IFS= read -r _m; do
         [ -n "$_m" ] && WARNINGS+=("    $_m")
       done <<< "$_missing"
-      WARNINGS+=("  훅은 등록이 없으면 .claude/hooks/ 에 파일만 놓인 채 실행되지 않고, 킷의 ask · deny 규칙이 없으면 킷이 묻거나 막게 한 명령이 이 레포의 다른 권한 설정대로 처리됩니다.")
+      WARNINGS+=("  훅은 등록이 없으면 .claude/hooks/ 에 파일만 놓인 채 실행되지 않고, 킷의 ask · deny 규칙이 없으면 킷이 묻거나 막게 한 명령이 사용자 설정과 이 레포의 다른 규칙대로 처리됩니다.")
       if [ "$DRY_RUN" = 1 ]; then
         WARNINGS+=("  실제로 설치하면 .claude/settings.json.ai-kit-new 가 옆에 놓입니다. 그것과 비교하세요.")
       else

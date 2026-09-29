@@ -32,7 +32,7 @@
 #   자리에서 머지하고, 승인을 요구하지 않는 레포에서는 검사가 끝나면 Approve 없이 머지된다. 승인이 모자라
 #   막힌 PR(`reviewDecision` `REVIEW_REQUIRED` · `mergeStateStatus` `BLOCKED`)에서만 켜게 하고, 조회하지
 #   못하면 막는다(`merge_auto`)
-# - auto-merge 가 켜진 PR 의 브랜치로 가는 푸시. 켠 채 푸시하면 사람이 새 커밋을 보고 누른 Approve 가 옛
+# - auto-merge 가 켜진 PR 의 브랜치로 가는 푸시. 켠 채 푸시하면 사람이 새 커밋을 보고 누른 Approve 로 옛
 #   결정 코멘트대로 머지된다. 푸시가 바꿀 브랜치(`push_branches`)의 열린 PR 을 조회하고, 조회하지 못하면
 #   막는다
 # - 봇 토큰이 끝나 가는데 새로 받지 못한 뒤의 쓰기
@@ -627,7 +627,7 @@ for a in git_calls:
             deny("이 푸시의 주소는 " + u + " 이다. github.com 의 SSH 주소라서 봇이 아니라 SSH 키, 곧 사람 계정으로 "
                  "푸시된다. 세션은 github.com 의 SSH 주소를 https 로 바꿔 쓰지만, 사람의 git 설정(url.….insteadOf · "
                  "pushInsteadOf)이 https 를 SSH 로 다시 바꾼다. 그 설정을 이 레포에서 끄는 법은 " + GUIDE + "에 있다.")
-    # auto-merge 를 켠 뒤 그 브랜치에 푸시하면, 사람이 새 커밋을 보고 누른 Approve 가 옛 결정 코멘트대로
+    # auto-merge 를 켠 뒤 그 브랜치에 푸시하면, 사람이 새 커밋을 보고 누른 Approve 로 옛 결정 코멘트대로
     # 머지된다. 먼저 끄게 한다.
     slugs = {m.group(1) for u in urls
              for m in [re.match(r'^https://github\.com/([^/]+/[^/]+?)(?:\.git)?/?$', u)] if m}
@@ -647,7 +647,7 @@ for a in git_calls:
         for p in prs:
             if p.get('autoMergeRequest') and (targets is None or p.get('headRefName') in targets):
                 deny("PR #%s 에 auto-merge 가 켜져 있어 그 브랜치(%s)에 푸시하는 것을 막는다. 켠 채 푸시하면 "
-                     "사람이 새 커밋을 보고 누른 Approve 가 옛 결정 코멘트대로 머지된다. 먼저 `gh pr merge %s "
+                     "사람이 새 커밋을 보고 누른 Approve 로 옛 결정 코멘트대로 머지된다. 먼저 `gh pr merge %s "
                      "--disable-auto` 로 끄고, 옛 결정 코멘트 뒤에 「auto-merge 를 껐다. 이 결정 코멘트로는 머지하지 "
                      "않는다.」 한 줄을 남긴 뒤 푸시하고, 2절부터 다시 한다 — 2절이 새 커밋을 나열하며 멈추고, "
                      "한 라운드 더 할지는 사람이 정한다(merge-pr 3절 「머지되기 전에 다시 해야 하면 먼저 끈다」)."
