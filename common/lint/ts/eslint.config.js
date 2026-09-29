@@ -12,7 +12,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 
 // 접근성 린트는 선택이다. eslint-plugin-jsx-a11y 6.10.2 는 peer 가 eslint ^9 까지라
 // eslint 10 에서는 --legacy-peer-deps 없이 설치되지 않는다(2026-08 확인).
-// 하드 의존으로 두면 설정 자체가 로드 실패하므로, 있으면 켜고 없으면 조용히 건너뛴다.
+// 하드 의존으로 두면 설정 자체가 로드 실패하므로, 있으면 켜고 없으면 알리지 않고 건너뛴다.
 // peer 범위가 갱신되면 devDependencies 에 추가하기만 하면 자동으로 켜진다.
 let jsxA11y = null;
 try {

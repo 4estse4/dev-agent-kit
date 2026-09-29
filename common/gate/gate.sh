@@ -63,7 +63,7 @@ source "$SELF_DIR/lib.sh"
 # 도구를 찾기 전에 PATH 를 넓힌다 — 어느 환경에서든 같은 검사가 실행되어야 한다.
 gate_extend_path
 
-# ── 변경 영역 판정 (판정 불가면 전체 검사로 폴백 — 조용히 통과시키지 않는다) ──
+# ── 변경 영역 판정 (판정 불가면 전체 검사로 폴백 — 판정 못 한 것을 통과시키지 않는다) ──
 CHANGED=""
 if [ "$ALL" = 0 ]; then
   if [ -z "$BASE" ]; then
@@ -75,7 +75,7 @@ if [ "$ALL" = 0 ]; then
     # quotePath 기본값(true)은 비ASCII 경로를 octal 로 이스케이프해 따옴표째 내보낸다.
     # 그 이름으로는 파일을 못 찾는다 — 한국어 문서가 산출물인 이 킷에서 바로 문제가 된다.
     # 아래 두 줄도 같은 자리다. 한때 이 줄만 고치고 두 줄은 그대로 뒀다(실제로 확인함: 중첩
-    # 모듈의 한글 파일만 바뀌면 "검사 대상 없음" 으로 조용히 통과).
+    # 모듈의 한글 파일만 바뀌면 "검사 대상 없음" 으로 오류 없이 통과).
     CHANGED=$(git -c core.quotePath=false diff --cached --name-only 2>/dev/null || true)
   fi
   [ -z "$CHANGED" ] && [ -n "$BASE" ] && CHANGED=$(git -c core.quotePath=false diff --name-only "$BASE...HEAD" 2>/dev/null || true)
@@ -102,7 +102,7 @@ changed_under() {
 discover() { # $1=마커파일 $2=어댑터명
   local marker dir rel
   # 깊이를 제한하지 않는다. 예전에는 maxdepth 3 이었는데 apps/svc/api/go.mod 같은
-  # 구조에서 마커를 못 찾고 "검사 대상 없음" 으로 **조용히 통과**했다.
+  # 구조에서 마커를 못 찾고 "검사 대상 없음" 으로 **오류 없이 통과**했다.
   # 노이즈는 깊이가 아니라 lib.sh 의 GATE_PRUNE_DIRS 로 막는다.
   # shellcheck disable=SC2046
   while IFS= read -r marker; do
