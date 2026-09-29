@@ -135,8 +135,10 @@ PUSH_VALUED = ('repo', 'receive-pack', 'exec', 'push-option', 'recurse-submodule
 # 명령 자리 앞에 올 수 있는 낱말(래퍼 · 셸 예약어). 그 뒤 첫 낱말이 명령이다.
 WRAPPERS = {'env', 'command', 'exec', 'time', 'nice', 'nohup', 'sudo', 'xargs', 'timeout', 'then',
             'do', 'else', 'if', 'while', 'until', '!', '{', '('}
-# 봇 디렉터리를 가리키는 글자. 토큰이 없는 파일(`expires` · `session-env` · `wired/`)만 뺀다.
-BOTDIR_READ = re.compile(r'kit-bot(?!/(?:expires|session-env|wired)\b)')
+# 봇 디렉터리를 가리키는 글자. 앞이나 뒤에 영숫자 · `-` 가 붙으면 다른 이름이다(`ui-kit-bot` 레포 ·
+# `dev-agent-kit-bot` App · `kit-bot-design.md`). 토큰이 없는 파일(`expires` · `session-env` · `wired/`)만 뺀다.
+BOTDIR = re.compile(r'(?<![\w-])kit-bot(?![\w-])')
+BOTDIR_READ = re.compile(BOTDIR.pattern + r'(?!/(?:expires|session-env|wired)\b)')
 HEREDOC = re.compile(r'<<-?[ \t]*([\'"]?)([A-Za-z_][A-Za-z0-9_]*)\1[^\n]*\n(.*?)^[ \t]*\2[ \t]*$',
                      re.S | re.M)
 
@@ -367,7 +369,7 @@ if any(words(a, 1) == ['auth'] for a in gh_calls):
          "사람 계정으로 쓰고, gh auth status 도 봇 설치 토큰을 거의 다 출력해 토큰이 모델의 맥락에 들어간다. "
          "이 세션의 gh 계정은 세션 시작 때 출력된 줄에 있다. 그 낱말이 검색어나 글이면 파일로 옮겨 전달한다.")
 if any(s == 'credential' or s.startswith('credential-') for s in git_subs) or re.search(
-        BOTDIR_READ, cmd) or ('kit-bot' in cmd and '..' in cmd):
+        BOTDIR_READ, cmd) or (BOTDIR.search(cmd) and '..' in cmd):
     deny("이 레포에는 봇 설정(.claude/bot.json)이 있어, 토큰을 출력하는 명령은 막는다 — git credential 과 "
          "봇 디렉터리(kit-bot)를 가리키는 명령이다. 토큰이 없는 expires · session-env · wired 는 읽을 수 "
          "있지만, 봇 디렉터리 이름과 .. 가 함께 있으면 막는다. 연결된 세션의 git 은 자격 증명을 봇에게서 받으므로 git credential fill 이 봇 토큰 전체를 "

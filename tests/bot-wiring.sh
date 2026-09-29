@@ -417,6 +417,15 @@ guard "봇 디렉터리의 h* 를 읽음" deny "head -50 .git/kit-bot/h*"
 # 토큰이 없는 이름을 거쳐 .. 로 올라가면 토큰 파일에 닿는다
 guard "허용한 이름 뒤의 .." deny "cat .git/kit-bot/wired/../hosts.yml" "$R" "토큰"
 guard "허용한 디렉터리로 옮긴 뒤의 .." deny "cd .git/kit-bot/wired && cat ../hosts.yml"
+guard "git 디렉터리로 옮긴 뒤 봇 디렉터리를 읽음" deny "cd .git && cat kit-bot/hosts.yml"
+guard "명령 치환으로 구한 git 디렉터리 아래의 봇 디렉터리" deny "cat \"\$(git rev-parse --git-common-dir)\"/kit-bot/hosts.yml"
+# 봇 디렉터리 이름은 다른 이름의 일부일 수 있다(`ui-kit-bot` 레포 · `dev-agent-kit-bot` App · `kit-bot-design.md`).
+# 앞이나 뒤에 영숫자 · `-` 가 붙으면 다른 이름이다
+guard "이름 끝이 같은 다른 레포의 경로" pass "ls ~/git/ui-kit-bot/src"
+guard "이름 끝이 같은 다른 레포에서 git" pass "git -C ~/git/slack-kit-bot status"
+guard "이름 끝이 같은 App 의 계정" pass "git log --author=dev-agent-kit-bot --oneline"
+guard "이름 앞이 같은 파일" pass "cat notes/kit-bot-design.md"
+guard "이름 끝이 같은 다른 레포의 .." pass "cd ~/git/ui-kit-bot/src && ls .."
 # Read 도구는 이 훅(Bash)을 거치지 않는다. 설치되는 settings.json 의 deny 가 막는다.
 if python3 - "$KIT/claude-code/settings.json" <<'PY'
 import json, sys

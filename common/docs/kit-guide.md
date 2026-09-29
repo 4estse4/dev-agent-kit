@@ -194,7 +194,9 @@ Approve 가 있는지 확인해 머지한다.
    개인키나 토큰이 새면 설치 범위 안의 레포에 브랜치를 푸시하고 PR 을 열 수 있고, 브랜치 보호가 승인
    리뷰를 요구하지 않으면 CI 가 초록인 PR 을 머지할 수 있다. Workflows 쓰기로 그 CI 자체도 바꿀 수 있다.
 4. `.claude/bot.json` 을 커밋한다: `{"app_id": <App ID>, "app": "<App 이름>"}`. App 이름은 App
-   페이지 URL(`github.com/apps/<App 이름>`)의 이름이고, 봇 계정은 `<App 이름>[bot]` 이다.
+   페이지 URL(`github.com/apps/<App 이름>`)의 이름이고, 봇 계정은 `<App 이름>[bot]` 이다. App 이름을
+   `kit-bot` 으로 짓지 않는다 — 막기 훅이 명령 글자의 그 이름을 봇 디렉터리(`<git 공통 디렉터리>/kit-bot/`)로
+   읽어, App 이름이 든 명령(`~/.config/<App 이름>/` 을 보는 명령 등)을 막는다.
 5. 세션을 다시 시작한다. 연결하지 못하면 그 까닭이 세션에 전달된다. 직접 보려면 레포에서
    `bash .claude/hooks/bot_token.sh` 를 실행한다 — 성공하면 봇 디렉터리의 경로를, 실패하면 까닭을
    출력한다.
