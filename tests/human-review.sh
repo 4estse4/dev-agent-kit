@@ -24,7 +24,7 @@ trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/bin" "$T/bot/.claude" "$T/plain"
 git -C "$T/bot" init -q
 git -C "$T/plain" init -q
-printf '{"app_id": 1, "app": "kit-bot"}\n' > "$T/bot/.claude/bot.json"
+printf '{"app_id": 1, "app": "helper-bot"}\n' > "$T/bot/.claude/bot.json"
 
 cat > "$T/bin/gh" <<'EOF'
 #!/usr/bin/env python3
@@ -192,16 +192,16 @@ post() {
 
 OWNER_A1=$(c "$U1" "$A1" 4estse4 OWNER)
 data person "[$OWNER_A1]"
-data botonly "[$(c "$U1" "$A1" kit-bot NONE)]"
+data botonly "[$(c "$U1" "$A1" helper-bot NONE)]"
 data web "[$(c "$U1" "$W1" 4estse4 OWNER)]"
 data quote-reply "[$(c "$U1" "$QR" 4estse4 OWNER)]"
-data edited-other "[$(c "$U1" "$A1" 4estse4 OWNER kit-bot)]"
+data edited-other "[$(c "$U1" "$A1" 4estse4 OWNER helper-bot)]"
 data edited-self "[$(c "$U1" "$A1" 4estse4 OWNER 4estse4)]"
 data collab "[$(c "$U1" "$A1" writer COLLABORATOR)]"
 data member "[$(c "$U1" "$A1" writer MEMBER)]"
 data member-reader "[$(c "$U1" "$A1" reader MEMBER)]"
 data contrib "[$(c "$U1" "$A1" someone CONTRIBUTOR)]"
-data paged "[$(c "$U2" "## 리뷰 1라운드" kit-bot NONE), $OWNER_A1]" '[]' 1
+data paged "[$(c "$U2" "## 리뷰 1라운드" helper-bot NONE), $OWNER_A1]" '[]' 1
 data none '[]'
 
 echo "── 봇 설정이 있을 때 — (사람) 인용을 확인하는 훅"
@@ -228,7 +228,7 @@ hook "코멘트를 못 읽음" deny person round2.md "실패" "$T/bot" graphql
 # 뿐 원본이 아니다
 printf '%s' "$OLDANS" > "$T/answer.md"
 hook "옛 제목의 글은 따로 막지 않는다" pass person answer.md
-data botold "[$(c "$U1" "$OLDANS" kit-bot NONE)]"
+data botold "[$(c "$U1" "$OLDANS" helper-bot NONE)]"
 hook "봇이 올린 옛 제목 코멘트의 인용" deny botold round2.md "사람 계정"
 
 echo "── 봇 설정이 없을 때 — (사람) 인용의 원본이 없어 막는다(킷은 봇과 함께 쓴다)"
@@ -240,7 +240,7 @@ echo "── merge-pr 2절이 부르는 Approve 판정"
 data ok '[]' "[[\"4estse4\", \"APPROVED\", \"$H\", \"2026-09-27T05:00:00Z\"]]"
 data old '[]' "[[\"4estse4\", \"APPROVED\", \"$OLD\", \"2026-09-27T05:00:00Z\"]]"
 data reader-ok '[]' "[[\"reader\", \"APPROVED\", \"$H\", \"2026-09-27T05:00:00Z\"]]"
-data bot-ok '[]' "[[\"kit-bot[bot]\", \"APPROVED\", \"$H\", \"2026-09-27T05:00:00Z\"]]"
+data bot-ok '[]' "[[\"helper-bot[bot]\", \"APPROVED\", \"$H\", \"2026-09-27T05:00:00Z\"]]"
 data then-changes '[]' "[[\"4estse4\", \"APPROVED\", \"$H\", \"2026-09-27T05:00:00Z\"], [\"4estse4\", \"CHANGES_REQUESTED\", \"$H\", \"2026-09-27T05:10:00Z\"]]"
 data other-changes '[]' "[[\"4estse4\", \"APPROVED\", \"$H\", \"2026-09-27T05:00:00Z\"], [\"writer\", \"CHANGES_REQUESTED\", \"$H\", \"2026-09-27T05:10:00Z\"]]"
 data then-comment '[]' "[[\"4estse4\", \"APPROVED\", \"$H\", \"2026-09-27T05:00:00Z\"], [\"4estse4\", \"COMMENTED\", \"$H\", \"2026-09-27T05:10:00Z\"]]"
@@ -272,7 +272,7 @@ if grep -qF 'GH_REPO=4estse4/other' "$T/gh-args" && ! grep -q '^GH_REPO= ' "$T/g
 else echo "  ✗ Approve: -R 을 GH_REPO 로 전달하지 않은 호출이 있다: $(cat "$T/gh-args")"; fail=1; fi
 
 echo "── 사람 계정으로 올리는 스크립트 — 창 기록 훅이 적은 기록만 올린다"
-WIN="$T/bot/.git/ai-kit-bot/windows"
+WIN="$T/bot/.git/kit-bot/windows"
 # rec <줄…> — PR 89 의 기록 하나를 더한다(창 기록 훅이 쓰는 모양). FREE 가 있으면 그 머리말을 직접 쓴 말로 표시한다
 rec() {
   mkdir -p "$WIN"

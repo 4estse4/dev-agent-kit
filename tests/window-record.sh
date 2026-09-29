@@ -2,7 +2,7 @@
 # 창 기록 훅(`window_record.sh`)이 사람 계정으로 올릴 결정만, 고른 보기 글자 그대로 기록하는가.
 #
 # 사람 계정 코멘트는 세션이 쓰지 않는다. 결정 창에서 사람이 고른 보기로 이 훅이 `- <머리말>: <보기>` 줄을 만들어
-# 봇 디렉터리(`<git 공통 디렉터리>/ai-kit-bot/windows/<PR>.jsonl`)에 적고, `human_comment.sh <PR>` 이 그 기록만
+# 봇 디렉터리(`<git 공통 디렉터리>/kit-bot/windows/<PR>.jsonl`)에 적고, `human_comment.sh <PR>` 이 그 기록만
 # 올린다. 그래서 이 훅이 틀리면 사람이 고르지 않은 글이 사람 계정으로 올라가거나, 고른 결정이 빠진다.
 #
 # 훅을 Claude Code 가 부르는 모양으로 부른다. 표준입력의 `tool_response` 는 세션 기록에 남는 창의 결과
@@ -15,8 +15,8 @@ T=$(mktemp -d)
 trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/bot/.claude" "$T/plain"
 git init -q "$T/bot"; git init -q "$T/plain"
-printf '{"app_id": 1, "app": "kit-bot"}\n' > "$T/bot/.claude/bot.json"
-W="$T/bot/.git/ai-kit-bot/windows"
+printf '{"app_id": 1, "app": "helper-bot"}\n' > "$T/bot/.claude/bot.json"
+W="$T/bot/.git/kit-bot/windows"
 fail=0
 MARK='이 결정은 사람 계정으로 PR #7 에 그대로 올라간다.'
 
@@ -144,7 +144,7 @@ check "질문을 더 요청하며 닫은 창은 기록하지 않는다" "없음"
 rm -rf "$W"; mkdir -p "$T/x/repo/.claude" "$T/x/repo/sub/deep"; git init -q "$T/x/repo"
 cp "$T/bot/.claude/bot.json" "$T/x/repo/.claude/"
 ask "$T/x/repo/sub/deep" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
-check "cwd 가 하위 디렉터리여도 레포의 git 디렉터리에 기록한다" "있음" "$([ -s "$T/x/repo/.git/ai-kit-bot/windows/7.jsonl" ] && echo 있음 || echo 없음)"
+check "cwd 가 하위 디렉터리여도 레포의 git 디렉터리에 기록한다" "있음" "$([ -s "$T/x/repo/.git/kit-bot/windows/7.jsonl" ] && echo 있음 || echo 없음)"
 check "레포 밖에 git 디렉터리를 만들지 않는다" "없음" "$([ -e "$T/.git" ] && echo 있음 || echo 없음)"
 # 막기 훅과 allow 는 레포 루트에서 입력한 게시 명령만 받는다 — 하위 디렉터리면 루트로 옮기라고 안내한다
 REPO_ABS=$(cd "$T/x/repo" && pwd -P)
@@ -163,11 +163,11 @@ check "보기에 없는 말(직접 쓴 말)은 그대로 적지 않고 표시한
 
 rm -rf "$W"
 ask "$T/plain" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
-check "봇 설정이 없으면 기록하지 않는다" "없음" "$([ -d "$T/plain/.git/ai-kit-bot/windows" ] && echo 있음 || echo 없음)"
+check "봇 설정이 없으면 기록하지 않는다" "없음" "$([ -d "$T/plain/.git/kit-bot/windows" ] && echo 있음 || echo 없음)"
 
 # 세션이 기록을 만들거나 고칠 수 없어야 한다. 셸 명령은 막기 훅이 봇 디렉터리 이름으로 막고, Read · Write ·
 # Edit 도구는 설치되는 settings.json 의 deny 가 막는다.
-for rule in 'Read(//**/ai-kit-bot/**)' 'Write(//**/ai-kit-bot/**)' 'Edit(//**/ai-kit-bot/**)'; do
+for rule in 'Read(//**/kit-bot/**)' 'Write(//**/kit-bot/**)' 'Edit(//**/kit-bot/**)'; do
   if python3 -c 'import json, sys; sys.exit(0 if sys.argv[1] in json.load(open(sys.argv[2]))["permissions"]["deny"] else 1)' \
     "$rule" "$KIT/claude-code/settings.json"; then echo "  ✓ settings.json 이 막는다: $rule"
   else echo "  ✗ settings.json 의 deny 에 없다: $rule"; fail=1; fi

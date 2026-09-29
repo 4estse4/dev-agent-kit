@@ -18,7 +18,7 @@
 # 머리말의 창으로 다시 받는다(`open-pr` 3.5). 사람이 자리를 비워 저절로 닫힌 창(`afkTimeoutMs`)과 질문을 더
 # 요청하며 닫은 창(`followUp`)은 사람이 제출한 것이 아니라서 기록하지 않는다.
 #
-# **어디에.** `<git 공통 디렉터리>/ai-kit-bot/windows/<PR>.jsonl` 에 기록 하나를 한 줄로 더한다. git 공통
+# **어디에.** `<git 공통 디렉터리>/kit-bot/windows/<PR>.jsonl` 에 기록 하나를 한 줄로 더한다. git 공통
 # 디렉터리는 절대 경로로 받는다 — 세션의 cwd 가 레포의 하위 디렉터리여도 레포의 것을 가리킨다. 세션은 봇
 # 디렉터리를 읽지도 쓰지도 못한다 — 셸 명령은 막기 훅(`bot_guard.sh`)이, Read · Write · Edit 도구는 설치되는
 # `settings.json` 의 deny 가 막는다. 봇 설정이 있는 레포 안에서 세션이 이 훅을 직접 실행해 지어낸 창 결과로
@@ -131,7 +131,7 @@ common = subprocess.run(['git', 'rev-parse', '--path-format=absolute', '--git-co
                         capture_output=True, text=True)
 if common.returncode or not common.stdout.strip():
     sys.exit(0)
-where = os.path.join(common.stdout.strip(), 'ai-kit-bot', 'windows')
+where = os.path.join(common.stdout.strip(), 'kit-bot', 'windows')
 os.umask(0o077)
 os.makedirs(where, exist_ok=True)
 at = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')

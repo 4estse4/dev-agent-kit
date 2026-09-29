@@ -4,7 +4,7 @@
 #     bash .claude/hooks/human_comment.sh <PR 번호> [-R <owner/repo>]
 #
 # **세션은 글을 쓰지 않는다.** 올리는 글은 창 기록 훅(`window_record.sh`)이 봇 디렉터리
-# (`<git 공통 디렉터리>/ai-kit-bot/windows/<PR>.jsonl`)에 적어 둔 기록뿐이다 — 질문에 「이 결정은 사람 계정으로
+# (`<git 공통 디렉터리>/kit-bot/windows/<PR>.jsonl`)에 적어 둔 기록뿐이다 — 질문에 「이 결정은 사람 계정으로
 # PR #N 에 그대로 올라간다」가 적힌 창에서 사람이 고른 보기로 만든 `- <머리말>: <보기>` 줄이다. 그래서 초안 ·
 # sha256 · 권한 프롬프트가 없다. 창에서 고른 것이 게시 동의다. 세션은 봇 디렉터리를 읽지도 쓰지도 못하고, 봇
 # 설정이 있는 레포 안에서 창 기록 훅을 직접 실행해 기록을 만드는 명령도 막기 훅(`bot_guard.sh`)이 막는다.
@@ -42,7 +42,7 @@ if [ -z "$top" ] || [ ! -f "$top/.claude/bot.json" ]; then
 fi
 # 절대 경로로 받는다 — 상대 경로는 cwd 기준이라, 레포의 하위 디렉터리에서 부르면 루트에 붙였을 때 레포 밖을 가리킨다
 gitdir=$(git rev-parse --path-format=absolute --git-common-dir) || exit 2
-win="$gitdir/ai-kit-bot/windows"
+win="$gitdir/kit-bot/windows"
 body=$(mktemp) || exit 1
 trap 'rm -f "$body"' EXIT
 # 올릴 줄을 $body 에 쓰고, 올린 뒤 적을 기록 수를 출력한다. 올릴 수 없으면 까닭을 내고 1 로 끝난다.

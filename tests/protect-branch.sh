@@ -15,7 +15,7 @@ trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/bin" "$T/bot/.claude" "$T/plain"
 git -C "$T/bot" init -q
 git -C "$T/plain" init -q
-printf '{"app_id": 1, "app": "kit-bot"}\n' > "$T/bot/.claude/bot.json"
+printf '{"app_id": 1, "app": "helper-bot"}\n' > "$T/bot/.claude/bot.json"
 # 브랜치 보호(PUT)의 본문은 STUB_BODY 에, 레포 설정(PATCH)의 경로와 본문은 STUB_REPO 에 적는다.
 # STUB_PATCH_FAIL 이 있으면 레포 설정이 실패한다.
 cat > "$T/bin/gh" <<'EOF'

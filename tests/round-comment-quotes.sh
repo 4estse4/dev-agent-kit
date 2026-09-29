@@ -24,7 +24,7 @@ FX="$KIT/tests/fixtures/round-comment-quotes"
 T=$(mktemp -d)
 mkdir -p "$T/bin" "$T/empty" "$T/odd" "$T/repo/.claude" "$T/plain"
 git init -q "$T/repo"; git init -q "$T/plain"
-printf '{"app_id": 1, "app": "kit-bot"}\n' > "$T/repo/.claude/bot.json"
+printf '{"app_id": 1, "app": "helper-bot"}\n' > "$T/repo/.claude/bot.json"
 cat > "$T/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 printf '%s|%s\n' "${GH_REPO:-}" "$*" >> "$STUB_GH_ARGS"
@@ -34,7 +34,7 @@ import glob, json, os, re, sys
 d, a = sys.argv[1], sys.argv[2:]
 if a[:2] == ['api', 'graphql']:
     nodes = [{'url': 'https://x/%s' % os.path.basename(f), 'body': open(f, encoding='utf-8').read(),
-              'author': {'login': 'kit-bot' if os.path.basename(f).startswith('bot') else '4estse4'},
+              'author': {'login': 'helper-bot' if os.path.basename(f).startswith('bot') else '4estse4'},
               'editor': None}
              for f in sorted(glob.glob(os.path.join(d, 'answer*.md')) + glob.glob(os.path.join(d, 'bot*.md')))]
     print(json.dumps([{'data': {'repository': {'pullRequest': {'comments': {

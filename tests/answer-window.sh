@@ -32,7 +32,7 @@ def bad(m):
     fail = 1
 
 
-BOT, ME, OTHER = ('kit-bot', 'NONE'), ('me', 'OWNER'), ('someone', 'CONTRIBUTOR')
+BOT, ME, OTHER = ('helper-bot', 'NONE'), ('me', 'OWNER'), ('someone', 'CONTRIBUTOR')
 MATE = ('mate', 'COLLABORATOR')          # 동료
 MATE_NOTE = 'LGTM. 나라면 X 도 보겠다'
 ROUND = '## 리뷰 1라운드 — 셀프 ***`Comment`*** · 콜드 ***`Comment`***\n\n리뷰한 head: aaaa\n'
