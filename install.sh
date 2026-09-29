@@ -78,7 +78,7 @@ echo "install: 킷   $KIT_ROOT"
 if [ "$DO_HOOKS" = 1 ] && [ ! -f "$TARGET/.kit/install-manifest" ] \
    && [ -n "$(find "$TARGET/.kit" -type f -print 2>/dev/null | head -1)" ]; then
   echo "install: $TARGET/.kit 이 이미 있고 킷이 설치한 것이 아닙니다(.kit/install-manifest 없음)." >&2
-  echo "  킷은 설치할 때마다 .kit 을 통째로 비우고 놓으므로, 그 안의 파일을 지우지 않고 멈춥니다." >&2
+  echo "  킷은 설치할 때마다 .kit 을 통째로 비우고 킷의 파일을 새로 놓으므로, 그 안의 파일을 지우지 않고 멈춥니다." >&2
   echo "  그 디렉터리를 다른 이름으로 옮긴 뒤 다시 실행하세요." >&2
   exit 1
 fi
