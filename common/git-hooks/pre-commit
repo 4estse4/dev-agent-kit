@@ -7,23 +7,23 @@
 set -uo pipefail
 # 게이트는 대상 레포에 복사해 둔 .kit/ 에서 찾는다 — 다른 머신·CI 에서도 동일 경로.
 REPO=$(git rev-parse --show-toplevel) || exit 1
-KIT="${AI_KIT_DIR:-$REPO/.kit}"
+KIT="${KIT_DIR:-$REPO/.kit}"
 [ -d "$KIT" ] || { echo "$(basename "$0"): .kit 이 없습니다 — install.sh 를 다시 실행하세요" >&2; exit 1; }
 
-PROTECTED="${AI_KIT_PROTECTED_BRANCHES:-main master}"
+PROTECTED="${KIT_PROTECTED_BRANCHES:-main master}"
 branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo "")
 
 for p in $PROTECTED; do
   if [ "$branch" = "$p" ]; then
-    if [ "${AI_KIT_ALLOW_PROTECTED:-0}" = "1" ]; then
-      echo "pre-commit — 보호 브랜치 '$branch' 커밋을 AI_KIT_ALLOW_PROTECTED=1 로 허용" >&2
+    if [ "${KIT_ALLOW_PROTECTED:-0}" = "1" ]; then
+      echo "pre-commit — 보호 브랜치 '$branch' 커밋을 KIT_ALLOW_PROTECTED=1 로 허용" >&2
     else
       cat >&2 <<MSG
 
 '$branch' 는 보호 브랜치입니다 — 직접 커밋할 수 없습니다.
 
   git switch -c feature/<slug>     # 브랜치를 만들고 다시 커밋
-  AI_KIT_ALLOW_PROTECTED=1 git commit ...   # 의도적 예외 (초기 스캐폴드 등)
+  KIT_ALLOW_PROTECTED=1 git commit ...   # 의도적 예외 (초기 스캐폴드 등)
 MSG
       exit 1
     fi

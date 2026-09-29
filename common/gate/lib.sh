@@ -25,7 +25,7 @@ gate_have() { command -v "$1" >/dev/null 2>&1; }
 #   Go 의 vendor/(go mod vendor 산출) go.mod 0개 · .go 23개
 # 그래서 이름으로 거르는 대상은 **마커가 실제로 들어 있는 것과 VCS 내부**로 한정한다.
 # 나머지는 걸러도 얻는 것이 없고 잃을 것만 있다.
-GATE_PRUNE_DIRS="${AI_KIT_PRUNE_DIRS:-.git node_modules .venv .tox __pycache__}"
+GATE_PRUNE_DIRS="${KIT_PRUNE_DIRS:-.git node_modules .venv .tox __pycache__}"
 
 # find 에 전달할 prune 표현식을 조립한다. 게이트와 설치기가 같은 함수를 쓴다.
 gate_prune_expr() { # 출력: -name a -o -name b ...  (호출부가 \( \) 로 감싼다)
@@ -232,7 +232,7 @@ gate_run_empty() {
 # gate_absent: 도구는 있는데 **프로젝트가 그 단계를 선언하지 않은** 경우.
 # gate_skip 과 다르다 — 환경이 덜 갖춰진 게 아니라 프로젝트가 그렇게 구성한 것이고,
 # 이걸 실패로 만들면 평범한 JS 프로젝트가 쓰지도 않는 typecheck 스크립트를 억지로
-# 만들어야 한다. 그러면 사람은 AI_KIT_ALLOW_MISSING_TOOLS 를 상시로 켜게 되고,
+# 만들어야 한다. 그러면 사람은 KIT_ALLOW_MISSING_TOOLS 를 상시로 켜게 되고,
 # 그 순간 도구가 정말로 없는 경우를 막는 검사까지 함께 꺼진다. 보고는 하되 막지 않는다.
 gate_absent() { GATE_ABSENT+=("$1"); }
 
@@ -249,7 +249,7 @@ gate_skip() {
     if [ -n "$hint" ]; then
       GATE_FAILOUT+=$'\n'"  설치:  $hint"$'\n'
     fi
-    GATE_FAILOUT+=$'\n'"  전부 설치:  bash .kit/gate/install-tools.sh"$'\n'"  버전은 .kit/gate/tool-versions 가 단일 출처입니다."$'\n'$'\n'"  불가피하게 건너뛰려면(그 검사는 실행되지 않고, 그 때문에 게이트가 실패하지도 않습니다):"$'\n'"    AI_KIT_ALLOW_MISSING_TOOLS=1 <명령>"$'\n'
+    GATE_FAILOUT+=$'\n'"  전부 설치:  bash .kit/gate/install-tools.sh"$'\n'"  버전은 .kit/gate/tool-versions 가 단일 출처입니다."$'\n'$'\n'"  불가피하게 건너뛰려면(그 검사는 실행되지 않고, 그 때문에 게이트가 실패하지도 않습니다):"$'\n'"    KIT_ALLOW_MISSING_TOOLS=1 <명령>"$'\n'
   else
     GATE_SKIPPED+=("$1")
   fi

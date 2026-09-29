@@ -5,7 +5,7 @@
 # 그 검사가 생겼다는 전제에서 시작했지만 그 PR(#35)은 머지되지 않았다. 그 파일은 Dependabot 이 지원하는 생태계의 파일이 아니다.
 #
 # 킷의 스크립트 · gates.yml · tool-versions 를 임시 트리에 두고 네트워크 없이 실행한다. PyPI 와 GitHub 의 응답은
-# file:// 로(AI_KIT_PYPI_URL · AI_KIT_GITHUB_API), go 는 모듈 경로마다 정해 둔 최신을 답하는 가짜로 둔다. 가짜 go 는
+# file:// 로(KIT_PYPI_URL · KIT_GITHUB_API), go 는 모듈 경로마다 정해 둔 최신을 답하는 가짜로 둔다. 가짜 go 는
 # 모듈 경로가 아니면 진짜 go 처럼 `no matching versions` 로 실패한다. 보는 것:
 #   · 모든 핀이 최신이면 rc=0. go_min 은 도구가 아니라 견주지 않는다
 #   · Go 도구 하나 · ruff · ktlint 가 뒤처지면 rc=1 과 그 줄. 새 값은 tool-versions 의 모양(v 접두 유무)을 따른다
@@ -88,7 +88,7 @@ setup() {
 # GHAPI_T 가 있으면 GitHub 조회를 그 주소로 보낸다(아래 301 경우).
 run() {
   out=$(PATH="$T/bin:$PATH" GOFAKE="$T/goproxy" GOFAKE_LOG="$T/golog" \
-        AI_KIT_PYPI_URL="file://$T/pypi" AI_KIT_GITHUB_API="${GHAPI_T:-file://$T/gh}" GH_TOKEN= \
+        KIT_PYPI_URL="file://$T/pypi" KIT_GITHUB_API="${GHAPI_T:-file://$T/gh}" GH_TOKEN= \
         bash "$T/kit/common/ci/check-tool-pins.sh" 2>&1); rc=$?
 }
 # $1=설명  $2=기대 rc  $3=출력에 있어야 할 글자(비면 안 봄)  $4=출력에 없어야 할 글자(비면 안 봄)  나머지=setup 인자

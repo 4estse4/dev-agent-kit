@@ -78,7 +78,7 @@ for t in "${need[@]}"; do
     ktlint)
       v=$(gate_tool_version ktlint)
       [ -n "$v" ] || { failed+=("$t (고정 버전을 읽지 못했습니다)"); continue; }
-      dest="${AI_KIT_BIN_DIR:-$HOME/.local/bin}"
+      dest="${KIT_BIN_DIR:-$HOME/.local/bin}"
       mkdir -p "$dest" || { failed+=("$t ($dest 를 만들지 못했습니다)"); continue; }
       if curl -fsSL -o "$dest/ktlint" \
            "https://github.com/ktlint/ktlint/releases/download/${v}/ktlint" \

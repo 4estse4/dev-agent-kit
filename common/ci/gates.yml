@@ -12,7 +12,7 @@ on:
 # env 블록 없이 `${{ env.X || '기본' }}` 을 쓰면 **항상 기본값**이 되고,
 # "오버라이드 가능" 은 거짓말이 된다. 프로젝트는 이 값을 고쳐서 바꾼다.
 env:
-  AI_KIT_JAVA_VERSION: "21"
+  KIT_JAVA_VERSION: "21"
 
 permissions:
   contents: read
@@ -238,7 +238,7 @@ jobs:
         uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: ${{ env.AI_KIT_JAVA_VERSION }}
+          java-version: ${{ env.KIT_JAVA_VERSION }}
           cache: gradle
           cache-dependency-path: |
             **/*.gradle*

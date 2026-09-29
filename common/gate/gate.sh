@@ -47,12 +47,12 @@ done
 # 그 왕복(푸시 → 몇 분 대기 → 실패 확인 → 로컬 수정 → 다시 푸시)은 로컬에서
 # 30초면 끝날 일을 공용 자원과 사람 시간으로 치르는 것이다.
 #
-# 불가피할 때만 AI_KIT_ALLOW_MISSING_TOOLS=1 로 도구가 없는 검사를 건너뛰게 한다.
+# 불가피할 때만 KIT_ALLOW_MISSING_TOOLS=1 로 도구가 없는 검사를 건너뛰게 한다.
 # 그러면 무엇이 검사되지 않는지 눈에 띄게 출력한다.
 export GATE_LINT_ONLY
-if [ "${AI_KIT_ALLOW_MISSING_TOOLS:-0}" = "1" ]; then
+if [ "${KIT_ALLOW_MISSING_TOOLS:-0}" = "1" ]; then
   GATE_STRICT=0
-  echo "gate — AI_KIT_ALLOW_MISSING_TOOLS=1: 도구가 없는 검사는 건너뜁니다(통과가 아닙니다)." >&2
+  echo "gate — KIT_ALLOW_MISSING_TOOLS=1: 도구가 없는 검사는 건너뜁니다(통과가 아닙니다)." >&2
 else
   : "${GATE_STRICT:=1}"
 fi

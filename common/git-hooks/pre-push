@@ -6,7 +6,7 @@
 set -uo pipefail
 # 게이트는 대상 레포에 복사해 둔 .kit/ 에서 찾는다 — 다른 머신·CI 에서도 동일 경로.
 REPO=$(git rev-parse --show-toplevel) || exit 1
-KIT="${AI_KIT_DIR:-$REPO/.kit}"
+KIT="${KIT_DIR:-$REPO/.kit}"
 [ -d "$KIT" ] || { echo "$(basename "$0"): .kit 이 없습니다 — install.sh 를 다시 실행하세요" >&2; exit 1; }
 
 ZERO='0000000000000000000000000000000000000000'

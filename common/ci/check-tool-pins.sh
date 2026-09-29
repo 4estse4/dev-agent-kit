@@ -18,7 +18,7 @@
 #            옮겨진 뒤에도 옛 경로에서 받고 있었고, 따라가는 동안에는 그것이 드러나지 않았다(이슈 #131)
 # go_min 은 도구가 아니다 — check-go-min.sh 가 PR 마다 본다.
 #
-#   check-tool-pins.sh     AI_KIT_PYPI_URL(기본 https://pypi.org) · AI_KIT_GITHUB_API(기본 https://api.github.com) ·
+#   check-tool-pins.sh     KIT_PYPI_URL(기본 https://pypi.org) · KIT_GITHUB_API(기본 https://api.github.com) ·
 #                          GOPROXY(go 의 것)로 조회 주소를 바꾼다. GH_TOKEN 이 있으면 GitHub 조회에 쓴다
 #
 # 종료코드: 0 최신 · 1 뒤처짐 · 2 판정 못 함(조회 실패 · 출처가 없는 키 · gates.yml 이 설치하는데 tool-versions 에
@@ -27,8 +27,8 @@ set -uo pipefail
 SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 TV="$SELF_DIR/../gate/tool-versions"
 G="$SELF_DIR/gates.yml"
-PYPI="${AI_KIT_PYPI_URL:-https://pypi.org}"
-GHAPI="${AI_KIT_GITHUB_API:-https://api.github.com}"
+PYPI="${KIT_PYPI_URL:-https://pypi.org}"
+GHAPI="${KIT_GITHUB_API:-https://api.github.com}"
 
 for c in curl go python3; do
   command -v "$c" >/dev/null 2>&1 || { echo "check-tool-pins: $c 가 필요합니다" >&2; exit 2; }

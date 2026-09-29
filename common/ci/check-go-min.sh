@@ -31,7 +31,7 @@
 # mvdan.cc/gofumpt/@v/<버전>.zip 을 받아 unzip 으로 version.txt 만 꺼낸다. proxy 의 그 파일들은 버전마다
 # 바뀌지 않으므로 결과가 달라지는 것은 핀이나 go install 줄이 바뀔 때뿐이다.
 #
-#   check-go-min.sh        AI_KIT_GOPROXY 로 proxy 주소를 바꾼다(기본 https://proxy.golang.org)
+#   check-go-min.sh        KIT_GOPROXY 로 proxy 주소를 바꾼다(기본 https://proxy.golang.org)
 #
 # 종료코드: 0 맞음 · 1 어긋남 · 2 판정 못 함(조회 실패 · 키 없음 · go install 줄 없음 · 못 읽은 go install ·
 # gofumpt 의 zip 이나 version.txt 를 못 읽음).
@@ -40,7 +40,7 @@ set -uo pipefail
 SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 TV="$SELF_DIR/../gate/tool-versions"
 G="$SELF_DIR/gates.yml"
-PROXY="${AI_KIT_GOPROXY:-https://proxy.golang.org}"
+PROXY="${KIT_GOPROXY:-https://proxy.golang.org}"
 
 for c in curl unzip; do
   command -v "$c" >/dev/null 2>&1 || { echo "check-go-min: $c 이 필요합니다" >&2; exit 2; }

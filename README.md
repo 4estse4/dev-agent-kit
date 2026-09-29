@@ -121,7 +121,7 @@ bash .kit/gate/install-tools.sh --dry-run    # 무엇을 설치할지만
 **무엇이 검사되지 않는지 출력한다:**
 
 ```bash
-AI_KIT_ALLOW_MISSING_TOOLS=1 git push
+KIT_ALLOW_MISSING_TOOLS=1 git push
 ```
 
 ### 어느 검사가 언제 실행되나
@@ -174,7 +174,7 @@ diff (- 지금 이 레포 / + 킷이 놓을 것)
 ```
 
 **병합은 하지 않는다.** 트리가 남으므로 사람이나 에이전트가 그것을 보고 정한다.
-diff 가 길면 `AI_KIT_DIFF_MAX_LINES`·`AI_KIT_DIFF_MAX_TOTAL` 로 조절한다.
+diff 가 길면 `KIT_DIFF_MAX_LINES`·`KIT_DIFF_MAX_TOTAL` 로 조절한다.
 
 | 대상 | 갱신 방식 |
 |---|---|
@@ -237,4 +237,4 @@ Go 도구는 `go list -m <모듈>@latest`, ruff 는 PyPI, ktlint 는 GitHub rele
 | `.golangci.yml` · `eslint.config.js` | **프로젝트** (시작 템플릿) | 하드룰이 프로젝트마다 다르다 |
 
 워크플로가 프로젝트 소유여도 **게이트 명령을 워크플로에 다시 적지 않는다** — `gate.sh` 를 부른다.
-프로젝트가 플래그를 더 줘야 하면 확장점(`AI_KIT_GO_TEST_FLAGS` 등)을 쓴다.
+프로젝트가 플래그를 더 줘야 하면 확장점(`KIT_GO_TEST_FLAGS` 등)을 쓴다.

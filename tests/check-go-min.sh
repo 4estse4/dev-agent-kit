@@ -8,7 +8,7 @@
 # 러너에서 실패했다(이슈 #98). 두 값을 맞추는 것이 주석 한 줄뿐이었다.
 #
 # 킷의 gates.yml 과 go_min 을 바꾼 tool-versions 를 임시 트리에 두고, 스크립트를 file:// 가짜
-# proxy(AI_KIT_GOPROXY)로 실행한다. 네트워크를 쓰지 않는다. 보는 것:
+# proxy(KIT_GOPROXY)로 실행한다. 네트워크를 쓰지 않는다. 보는 것:
 #   · go_min 이 도구들의 가장 높은 go 줄과 패치까지 같으면 rc=0, 다르면 rc=1 이고 맞출 값을 출력한다.
 #     낮으면 더 높은 go 를 요구하는 도구의 이름을 판정 줄에 적는다
 #   · 견주는 순서는 Go 의 버전 순서다 — 1.26 < 1.26.0 < 1.26.1 (go.dev/doc/toolchain)
@@ -96,7 +96,7 @@ tv() {
 
 run() { # $1=설명  $2=기대 rc  $3=진행 줄 밖에 있어야 할 글자(비면 안 봄)
   local out rc
-  out=$(AI_KIT_GOPROXY="file://$T/proxy" bash "$T/kit/common/ci/check-go-min.sh" 2>&1); rc=$?
+  out=$(KIT_GOPROXY="file://$T/proxy" bash "$T/kit/common/ci/check-go-min.sh" 2>&1); rc=$?
   if [ "$rc" = "$2" ] && { [ -z "$3" ] || printf '%s\n' "$out" | grep -v '^  [^?]' | grep -qF -- "$3"; }; then ok "$1 → rc=$rc"
   else bad "$1 → rc=$rc, rc=$2${3:+ 에 「$3」} 여야 한다:"; printf '%s\n' "$out" | cut -c1-160 | sed 's/^/      /'; fi
 }

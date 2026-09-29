@@ -20,7 +20,7 @@ BEGIN {
   CI["ts"] = "node"
   n = split(drop, D, ",")
   for (i = 1; i <= n; i++) { X[D[i]] = 1; if (D[i] in CI) X[CI[D[i]]] = 1 }
-  ENVOF["AI_KIT_JAVA_VERSION"] = "jvm"        # 언어 전용 워크플로 변수
+  ENVOF["KIT_JAVA_VERSION"] = "jvm"        # 언어 전용 워크플로 변수
   # 언어 이름이 아닌 detect 출력. 그 언어를 빼면 같이 지운다. 안 지우면 go 를 뺀 설치에
   # gomod 출력 줄이 남는다.
   OUTOF["gomod"] = "go"

@@ -22,7 +22,7 @@ bash .kit/gate/gate.sh --lint                # 린트만 (커밋 훅이 부르�
 bash .kit/gate/gate.sh --all                 # 전부 (CI 가 부르는 것)
 ```
 
-불가피할 때만 `AI_KIT_ALLOW_MISSING_TOOLS=1` 로 도구가 없는 검사를 건너뛰게 한다. **무엇이 검사되지 않는지 출력된다.**
+불가피할 때만 `KIT_ALLOW_MISSING_TOOLS=1` 로 도구가 없는 검사를 건너뛰게 한다. **무엇이 검사되지 않는지 출력된다.**
 
 ## 2. 프로젝트가 채워야 하는 것
 

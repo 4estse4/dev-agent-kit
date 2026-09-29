@@ -17,6 +17,7 @@
 #     남지 않는다. 그 스텝이 남으면 주석도 제자리에 남는다. 킷 사본의 gates.yml 에 그런 주석을 넣고 본다
 #   · 필터가 빼는 스텝 뒤의 6칸 주석은, 뒤에 스텝 머리가 오지 않으면(잡 머리 · 2칸 주석 · 파일 끝)
 #     그 스텝과 함께 지워진다. 그 스텝이 남으면 주석도 남는다. 킷 사본의 gates.yml 에 넣고 본다
+#   · 설치본의 워크플로 env 에 남은 변수는 설치본 어딘가에서 쓰인다
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 fail=0
@@ -63,6 +64,14 @@ def lang(cond):
 bad = 0
 # detect 밖의 잡마다 스텝을 견준다. detect 는 필터가 탐지문과 출력을 고치는 잡이라 뺀다.
 S, O = yaml.safe_load("\n".join(srcl)), yaml.safe_load("\n".join(outl))
+
+# 워크플로 env 의 변수마다 설치본 어딘가에서 쓰인다. 필터는 언어 전용 변수를 이름으로 찾으므로(ENVOF),
+# 그 이름이 gates.yml 의 변수 이름과 다르면 빠진 언어의 변수가 쓰는 곳 없이 남는다.
+for k in (O.get("env") or {}):
+    body = "\n".join(l for l in outl if not re.match(rf"^  {re.escape(k)}:", l))
+    if not re.search(rf"(env\.|\$\{{?){re.escape(k)}\b", body):
+        print(f"✗ 워크플로 env 에 쓰는 곳이 없는 변수가 남았다: {k}")
+        bad = 1
 for name, job in S["jobs"].items():
     if name == "detect":
         continue

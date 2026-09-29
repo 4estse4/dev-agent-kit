@@ -325,7 +325,7 @@ if [ "$DO_LINT" = 1 ]; then
   # services/api/pyproject.toml 같은 구조에서 게이트는 ruff 를 실행하는데 킷 설정이
   # 그 자리에 없어 도구 기본값으로 실행됐다. 찾은 자리마다 설정을 놓으면 이름을 몰라도 된다.
   #
-  # 건너뛸 디렉터리 목록을 여기 다시 적지 않는다 — 두 벌이 되면 AI_KIT_PRUNE_DIRS 를 바꿨을 때
+  # 건너뛸 디렉터리 목록을 여기 다시 적지 않는다 — 두 벌이 되면 KIT_PRUNE_DIRS 를 바꿨을 때
   # 게이트는 찾고 설치기는 못 찾는 상태가 된다. lib.sh 의 정의 하나를 함께 쓴다.
   # shellcheck source=/dev/null
   . "$KIT_ROOT/common/gate/lib.sh"
@@ -549,8 +549,8 @@ fi
 # 건수만 세면 "충돌 3건" 까지만 알고 무엇이 왜 다른지는 모른다. 그래서 킷이 놓을
 # 트리(STAGE)를 대상과 대조해 파일별로 분류하고 diff 를 붙인다. 병합은 하지 않는다 —
 # 트리를 남겨두고 사람이나 에이전트가 보고 정한다.
-DIFF_MAX_LINES=${AI_KIT_DIFF_MAX_LINES:-60}   # 파일당
-DIFF_MAX_TOTAL=${AI_KIT_DIFF_MAX_TOTAL:-400}  # 전체
+DIFF_MAX_LINES=${KIT_DIFF_MAX_LINES:-60}   # 파일당
+DIFF_MAX_TOTAL=${KIT_DIFF_MAX_TOTAL:-400}  # 전체
 
 # 사라지는 이유는 둘이고, 한 줄로 뭉뚱그리면 하나가 거짓이 된다. --lang 으로 뺀 언어의
 # 어댑터는 **킷이 배포하는 파일**이라 "킷이 다시 놓지 않는 것" 이 아니다 — 그렇게 적으면
