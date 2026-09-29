@@ -191,7 +191,7 @@ jobs:
           # 이미 하는 것과 같은 검사를 래퍼에도 한다.
           #
           # 빌드 루트마다 본다. 레포 어딘가에 래퍼가 하나만 있어도 통과시키면,
-          # 래퍼 없는 다른 빌드 루트가 시스템 gradle 로 조용히 검사된다.
+          # 래퍼 없는 다른 빌드 루트가 시스템 gradle 로 알림 없이 검사된다.
           . .ai-kit/gate/lib.sh
           fail=0
           while IFS= read -r m; do
@@ -310,7 +310,7 @@ jobs:
               # 대신 어댑터가 자기 디렉터리의 .venv/bin 을 먼저 본다(adapters/py.sh).
               if [ -f uv.lock ]; then
                 pipx install uv >/dev/null 2>&1 || true
-                # --locked: 락과 pyproject 가 어긋나면 조용히 갱신하지 말고 실패한다.
+                # --locked: 락과 pyproject 가 어긋나면 락을 갱신하지 않고 실패한다.
                 # 커밋된 락과 다르게 고른 의존성 버전으로 CI 가 통과하면 그 차이는 아무도 못 본다.
                 uv sync --locked --all-extras --all-groups   # dev 의존성을 extras 로 선언한 레포도 그 의존성까지 설치한다
               elif [ -f poetry.lock ]; then
@@ -492,7 +492,7 @@ jobs:
         name: install govulncheck
         run: |
           # govulncheck 도 핀한다 — 취약점 DB 는 항상 최신을 받지만
-          # 도구 동작 자체가 조용히 바뀌는 것은 막는다.
+          # 도구 동작 자체가 알림 없이 바뀌는 것은 막는다.
           CGO_ENABLED=0 GOBIN="$HOME/.cache/ai-kit/go-tools" go install golang.org/x/vuln/cmd/govulncheck@${{ steps.tv.outputs.govulncheck }}
       - if: needs.detect.outputs.go == 'true' && steps.gotools.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
@@ -527,7 +527,7 @@ jobs:
         run: |
           # 줄 단위로 읽는다 — 위 npm ci 단계와 같은 이유다.
           # lockfile 은 둘 다 찾는다. npm 은 npm-shrinkwrap.json 도 lockfile 로 읽고, 한때
-          # package-lock.json 만 찾아 shrinkwrap 만 둔 패키지를 조용히 건너뛰었다.
+          # package-lock.json 만 찾아 shrinkwrap 만 둔 패키지를 알리지 않고 건너뛰었다.
           . .ai-kit/gate/lib.sh
           while IFS= read -r f; do
             echo "── $(dirname "$f") ──"
@@ -539,5 +539,5 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
-      # SPEC 요구가 추적표에서 조용히 사라지는 것을 막는다.
+      # SPEC 요구가 추적표에서 알림 없이 사라지는 것을 막는다.
       - run: bash .ai-kit/gate/trace.sh

@@ -15,7 +15,7 @@ FILES=("$@"); [ ${#FILES[@]} -eq 0 ] && FILES=("$SELF_DIR/gates.yml")
 
 command -v gh >/dev/null 2>&1 || { echo "check-action-pins: gh 가 필요합니다" >&2; exit 2; }
 
-# 조회 실패를 통과로 처리하지 않는다 — 검사가 고장 나면 조용히 통과하는 것이
+# 조회 실패를 통과로 처리하지 않는다 — 검사가 고장 나도 알리지 않고 통과하는 것이
 # 이 킷이 반복해서 막아온 부류다.
 behind=0; failed=0; checked=0
 declare -a SEEN=()
