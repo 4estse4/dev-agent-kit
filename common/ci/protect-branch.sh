@@ -11,7 +11,7 @@
 # 요구하지 않는다 — 요구하면 모든 머지가 막힌다.
 #
 # 봇 설정이 있으면 레포 설정 「Allow auto-merge」 · 「Automatically delete head branches」도 켠다. 세션은
-# 결정 코멘트를 올리고 auto-merge 를 켠 뒤 Approve 를 부탁하고(`merge-pr` 3절), 사람이 Approve 하면
+# 결정 코멘트를 올리고 auto-merge 를 켠 뒤 Approve 를 요청하고(`merge-pr` 3절), 사람이 Approve 하면
 # GitHub 이 머지하고 head 브랜치를 지운다.
 set -uo pipefail
 BRANCH="${1:-main}"; shift || true

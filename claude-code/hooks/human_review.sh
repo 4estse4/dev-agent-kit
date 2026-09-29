@@ -9,16 +9,14 @@
 # 사람의 결정과 승인이 구분된다. 봇 설정이 없으면 세션과 사람이 한 계정이라 글쓴이로 구분하지 못한다.
 #
 # **sources** — (사람) 인용을 확인하는 훅(`round_comment_quotes.sh`)이 대조할 원본을 JSON 으로 낸다:
-# `{"bot": true|false, "comments": [{"url", "author", "body"}]}`.
-# - 봇 설정이 있으면 사람 계정 코멘트다. 글쓴이의 레포 권한(`collaborators/<계정>/permission`)이 write
-#   이상이고, 글쓴이가 아닌 계정이 마지막으로 고치지 않은 코멘트다. 봇 계정은 권한 조회가 404(사용자가
-#   아니다)라 빠진다. 두 리뷰가
-#   결정을 고르는 `authorAssociation`(OWNER · MEMBER · COLLABORATOR)으로 거르지 않는 것은, MEMBER 가 레포
-#   권한과 상관없이 조직 구성원이면 붙어서다. 레포에 쓰기 권한이 있는 계정은 남의 코멘트도 고칠 수
-#   있어서(GitHub 문서의 역할 표: "Edit and delete anyone's comments on commits, pull requests, and
-#   issues" 는 write 이상) 봇이 고친 사람 코멘트는 사람의 글이 아니다
-# - 봇 설정이 없으면 3.5 코멘트(제목 `### N라운드 코멘트를 읽고 사람이 정한 것`)다
-# 코멘트의 어느 글자를 원본으로 쓸지는 훅이 정한다(3.5 제목이 있으면 `(사람) "…"` 조각만).
+# `{"bot": true|false, "comments": [{"url", "author", "body"}]}`. 원본은 사람 계정 코멘트다. 글쓴이의 레포
+# 권한(`collaborators/<계정>/permission`)이 write 이상이고, 글쓴이가 아닌 계정이 마지막으로 고치지 않은
+# 코멘트다. 봇 계정은 권한 조회가 404(사용자가 아니다)라 빠진다. 두 리뷰가 결정을 고르는
+# `authorAssociation`(OWNER · MEMBER · COLLABORATOR)으로 거르지 않는 것은, MEMBER 가 레포 권한과 상관없이
+# 조직 구성원이면 붙어서다. 레포에 쓰기 권한이 있는 계정은 남의 코멘트도 고칠 수 있어서(GitHub 문서의 역할
+# 표: "Edit and delete anyone's comments on commits, pull requests, and issues" 는 write 이상) 봇이 고친
+# 사람 코멘트는 사람의 글이 아니다. 코멘트의 어느 글자를 원본으로 쓸지는 훅이 정한다. 봇 설정이 없으면 훅이
+# 이 판정을 부르지 않고 (사람) 인용을 막는다 — 세션과 사람이 한 계정이라 글쓴이로 사람의 글을 가려낼 수 없다.
 #
 # **approved** — 지금 head 에 사람의 Approve 가 있는지 본다. `merge-pr` 2절이 auto-merge 를 켤 수 없을 때
 # 부른다(켤 수 있으면 Approve 가 달릴 때 GitHub 이 머지한다). 있으면 `✓ …` 와
@@ -38,7 +36,6 @@
 exec python3 - "$@" <<'PY'
 import json, os, re, subprocess, sys
 
-ANSWER = re.compile(r'^\s*### .*라운드 코멘트를 읽고 사람이 정한 것')
 QUERY = '''query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
   repository(owner: $owner, name: $name) { pullRequest(number: $number) {
     comments(first: 100, after: $endCursor) {
@@ -113,29 +110,22 @@ def permission(login):
 
 if mode == 'sources':
     try:
-        if not bot:
-            bodies = gh('pr', 'view', pr, *R, '--json', 'comments', '--jq', '[.comments[].body]')
-            if not isinstance(bodies, list):
-                raise TypeError
-            comments = [{"url": None, "author": None, "body": b}
-                        for b in bodies if isinstance(b, str) and ANSWER.match(b)]
-        else:
-            pages = gh('api', 'graphql', '--paginate', '--slurp', '-F', 'owner={owner}', '-F', 'name={repo}',
-                       '-F', 'number=' + pr, '-f', 'query=' + QUERY)
-            comments = []
-            for p in pages:
-                for n in p['data']['repository']['pullRequest']['comments']['nodes']:
-                    who = (n.get('author') or {}).get('login')
-                    editor = (n.get('editor') or {}).get('login')
-                    if not who:
-                        continue
-                    if editor and editor != who:
-                        comments.append({"url": n['url'], "author": who, "body": None,
-                                         "why": "%s 가 고친 코멘트다" % editor})
-                        continue
-                    if permission(who) not in ('admin', 'write'):
-                        continue
-                    comments.append({"url": n['url'], "author": who, "body": n.get('body') or ''})
+        pages = gh('api', 'graphql', '--paginate', '--slurp', '-F', 'owner={owner}', '-F', 'name={repo}',
+                   '-F', 'number=' + pr, '-f', 'query=' + QUERY)
+        comments = []
+        for p in pages:
+            for n in p['data']['repository']['pullRequest']['comments']['nodes']:
+                who = (n.get('author') or {}).get('login')
+                editor = (n.get('editor') or {}).get('login')
+                if not who:
+                    continue
+                if editor and editor != who:
+                    comments.append({"url": n['url'], "author": who, "body": None,
+                                     "why": "%s 가 고친 코멘트다" % editor})
+                    continue
+                if permission(who) not in ('admin', 'write'):
+                    continue
+                comments.append({"url": n['url'], "author": who, "body": n.get('body') or ''})
     except GhError as e:
         stop(2, "판정 못 함: PR 코멘트나 글쓴이의 권한을 읽다가 실패했다(gh: %s)." % e)
     except (KeyError, TypeError):
@@ -145,7 +135,8 @@ if mode == 'sources':
 
 if not bot:
     stop(2, "봇 설정(.claude/bot.json)이 없어 Approve 를 판정하지 않는다. 세션과 사람이 한 계정이라 PR "
-            "작성자인 사람이 자기 PR 을 Approve 할 수 없다. 머지는 결정 코멘트 초안의 승인으로 정한다.")
+            "작성자인 사람이 자기 PR 을 Approve 할 수 없다. 킷은 봇과 함께 쓴다 — 봇을 켜는 법은 "
+            "docs/process/kit-guide.md 의 「봇 계정과 사람의 승인」 절에 있다.")
 
 try:
     view = gh('pr', 'view', pr, *R, '--json', 'headRefOid,reviewDecision')

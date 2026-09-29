@@ -41,6 +41,9 @@ if fail and fail in joined:
     sys.exit(1)
 d = json.load(open(os.environ['STUB_DATA'], encoding='utf-8'))
 if a[:2] == ['pr', 'comment']:
+    if os.environ.get('STUB_BODY') and '--body-file' in a:
+        open(os.environ['STUB_BODY'], 'w', encoding='utf-8').write(
+            open(a[a.index('--body-file') + 1], encoding='utf-8').read())
     print('https://github.com/o/r/pull/89#issuecomment-99')
     sys.exit(0)
 if a[:2] == ['pr', 'view'] and 'headRefOid' in joined:
@@ -79,7 +82,11 @@ EOF
 chmod +x "$T/bin/gh"
 fail=0
 
-A1='### 1라운드 코멘트를 읽고 사람이 정한 것
+# 창에서 고른 보기로 만든 사람 계정 코멘트
+A1='- 1라운드 코멘트: 고치고 2라운드
+'
+# 옛 제목 코멘트. 이제 따로 다루지 않는다
+OLDANS='### 1라운드 코멘트를 읽고 사람이 정한 것
 
 - (사람) "고치고 2라운드"
   → 고친다
@@ -116,8 +123,8 @@ round_body() {
 }
 round_body 2 '고치고 2라운드' > "$T/round2.md"
 round_body 2 '고치고 3라운드' > "$T/round2-other.md"
-# A1 의 `→` 줄(세션이 쓴 글)을 (사람) 인용으로 옮긴 라운드 코멘트
-round_body 2 '고친다' > "$T/round2-arrow.md"
+round_body 2 '1라운드 코멘트: 고치고 2라운드' > "$T/round2-line.md"
+printf '## 리뷰 2라운드 — 셀프 ***`Comment`*** · 콜드 ***`Comment`***\n\n- **해결** (셀프) 고쳤다\n' > "$T/round2-noquote.md"
 # 사람이 PR 웹에서 Quote reply 로 봇의 글을 인용해 넣고 답을 쓴 코멘트
 QR='> 결정 필요는 이 코멘트 뒤 질문 창으로 여쭙니다.
 
@@ -166,15 +173,17 @@ approved() {
   echo "  ✓ Approve: ${name} (종료 ${rc})"
 }
 
-# post <이름> <기대 종료 코드> <sha256> [cwd] [인자…] — 사람 계정으로 올리는 스크립트를 부른다.
-# 세션의 봇 연결(GH_CONFIG_DIR · GH_TOKEN)을 준 채로 부른다 — 스크립트가 그것을 지워야 사람 계정이다.
+# post <이름> <기대 종료 코드> [cwd] [인자…] — 사람 계정으로 올리는 스크립트를 PR 89 로 부른다. 올린 본문은
+# $T/body 에 남는다. 세션의 봇 연결(GH_CONFIG_DIR · GH_TOKEN)을 준 채로 부른다 — 스크립트가 그것을 지워야 사람
+# 계정이다.
 post() {
-  local name=$1 want=$2 sum=$3 dir=${4:-$T/bot} out rc
-  shift 4 2>/dev/null || shift $#
-  : > "$T/gh-args"
-  out=$(cd "$dir" && PATH="$T/bin:$PATH" STUB_DATA="$T/none.json" STUB_GH_ARGS="$T/gh-args" \
-    GH_CONFIG_DIR="$T/botcfg" GH_TOKEN=ghs_stubtoken bash "$POST" 89 "$T/decision.md" "$sum" "$@" 2>&1)
+  local name=$1 want=$2 dir=${3:-$T/bot} out rc
+  shift 3 2>/dev/null || shift $#
+  : > "$T/gh-args"; rm -f "$T/body"
+  out=$(cd "$dir" && PATH="$T/bin:$PATH" STUB_DATA="$T/none.json" STUB_GH_ARGS="$T/gh-args" STUB_BODY="$T/body" \
+    GH_CONFIG_DIR="$T/botcfg" GH_TOKEN=ghs_stubtoken bash "$POST" 89 "$@" 2>&1)
   rc=$?
+  OUT=$out
   if [ "$rc" != "$want" ]; then
     echo "  ✗ 올리기: ${name} — 기대 종료 ${want}, 실제 ${rc}: ${out}"; fail=1; return
   fi
@@ -210,23 +219,22 @@ hook "조직 구성원(MEMBER) 코멘트" pass member round2.md
 # MEMBER 는 레포 권한과 상관없이 붙는다. 원본은 쓰기 권한이 있는 사람의 글이다.
 hook "읽기 권한만 있는 조직 구성원의 코멘트" deny member-reader round2.md "사람 계정"
 hook "원본의 권한을 못 읽음" deny person round2.md "실패" "$T/bot" permission
-# 3.5 코멘트의 `→` 줄은 세션의 판단이다. 사람 계정으로 올렸어도 (사람) 인용의 원본이 아니다.
-hook "사람 계정 3.5 코멘트의 → 줄" deny person round2-arrow.md "사람 계정"
-# 막힌 세션이 까닭을 알 수 있게, 3.5 코멘트에서는 (사람) 조각만 원본이라는 것을 사유에 적는다
-hook "→ 줄을 막는 사유" deny person round2-arrow.md "조각만"
+# 사람 계정 코멘트는 `- 주제: 보기` 줄이다. 줄 전체를 인용해도, 보기 글자만 인용해도 원본에 있다
+hook "사람 계정 코멘트의 줄 전체" pass person round2-line.md
 hook "쓰기 권한 없는 기여자(CONTRIBUTOR) 코멘트" deny contrib round2.md "사람 계정"
 hook "둘째 쪽에 있는 사람 코멘트" pass paged round2.md
 hook "코멘트를 못 읽음" deny person round2.md "실패" "$T/bot" graphql
-printf '%s' "$A1" > "$T/answer.md"
-hook "봇 계정으로 올리는 3.5 코멘트" deny person answer.md "human_comment.sh"
+# 옛 제목(`### N라운드 코멘트를 읽고 사람이 정한 것`)의 글은 이제 따로 다루지 않는다 — 봇이 올리면 봇의 글일
+# 뿐 원본이 아니다
+printf '%s' "$OLDANS" > "$T/answer.md"
+hook "옛 제목의 글은 따로 막지 않는다" pass person answer.md
+data botold "[$(c "$U1" "$OLDANS" kit-bot NONE)]"
+hook "봇이 올린 옛 제목 코멘트의 인용" deny botold round2.md "사람 계정"
 
-echo "── 봇 설정이 없을 때 — 지금처럼 3.5 코멘트의 인용과 대조한다"
-hook "3.5 코멘트의 인용" pass person round2.md "" "$T/plain"
-hook "3.5 코멘트는 사람에게 묻는다" ask person answer.md "" "$T/plain"
-hook "3.5 코멘트가 아닌 사람 글의 구절" deny web round2.md "" "$T/plain"
-# 앞 라운드 코멘트의 (사람) 인용은 원본이 아니다 — 원본으로 쓰면 한 번 잘못 옮긴 인용이 계속 통과한다
-data roundonly "[$(c "$U2" "$(cat "$T/round2-other.md")" 4estse4 OWNER)]"
-hook "앞 라운드 코멘트에만 있는 인용" deny roundonly round2-other.md "" "$T/plain"
+echo "── 봇 설정이 없을 때 — (사람) 인용의 원본이 없어 막는다(킷은 봇과 함께 쓴다)"
+hook "(사람) 인용이 든 라운드 코멘트" deny person round2.md "봇" "$T/plain"
+hook "(사람) 인용이 없는 라운드 코멘트" pass person round2-noquote.md "" "$T/plain"
+hook "옛 제목의 글은 묻지 않는다" pass person answer.md "" "$T/plain"
 
 echo "── merge-pr 2절이 부르는 Approve 판정"
 data ok '[]' "[[\"4estse4\", \"APPROVED\", \"$H\", \"2026-09-27T05:00:00Z\"]]"
@@ -263,20 +271,74 @@ if grep -qF 'GH_REPO=4estse4/other' "$T/gh-args" && ! grep -q '^GH_REPO= ' "$T/g
   echo "  ✓ Approve: -R 을 모든 gh 호출에 GH_REPO 로 전달한다"
 else echo "  ✗ Approve: -R 을 GH_REPO 로 전달하지 않은 호출이 있다: $(cat "$T/gh-args")"; fail=1; fi
 
-echo "── 사람 계정으로 올리는 스크립트"
-printf '%s' "$A1" > "$T/decision.md"
-SUM=$(shasum -a 256 "$T/decision.md" | cut -d' ' -f1)
-post "sha256 이 맞으면 올린다" 0 "$SUM"
-if grep -q "^GH_REPO= GH_CONFIG_DIR= GH_TOKEN= pr comment 89 --body-file $T/decision.md\$" "$T/gh-args"; then
+echo "── 사람 계정으로 올리는 스크립트 — 창 기록 훅이 적은 기록만 올린다"
+WIN="$T/bot/.git/ai-kit-bot/windows"
+# rec <줄…> — PR 89 의 기록 하나를 더한다(창 기록 훅이 쓰는 모양). FREE 가 있으면 그 머리말을 직접 쓴 말로 표시한다
+rec() {
+  mkdir -p "$WIN"
+  python3 -c 'import json, os, sys
+print(json.dumps({"at": "2026-09-29T00:00:00Z", "session": "s1", "lines": sys.argv[1:],
+                  "free": [os.environ["FREE"]] if os.environ.get("FREE") else []}, ensure_ascii=False))' "$@" >> "$WIN/89.jsonl"
+}
+body_is() {
+  if [ "$(cat "$T/body" 2>/dev/null)" = "$2" ]; then echo "  ✓ 올리기: $1"
+  else echo "  ✗ 올리기: $1 — 올린 본문: 「$(cat "$T/body" 2>/dev/null)」"; fail=1; fi
+}
+no_gh() {
+  if [ -s "$T/gh-args" ]; then echo "  ✗ 올리기: $1 — gh 를 불렀다: $(cat "$T/gh-args")"; fail=1
+  else echo "  ✓ 올리기: $1"; fi
+}
+post "기록이 없으면 올리지 않는다" 1
+no_gh "기록이 없으면 gh 를 부르지 않는다"
+rec '- 1라운드 코멘트: 제안대로 고치고 2라운드' '- 끝낼 이슈: #77 도 이 PR 로 끝낸다'
+rec '- 2라운드 코멘트: 머지한다'
+post "올리지 않은 기록을 올린다" 0
+body_is "기록들을 창이 끝난 차례대로 한 코멘트에 모은다" '- 1라운드 코멘트: 제안대로 고치고 2라운드
+- 끝낼 이슈: #77 도 이 PR 로 끝낸다
+- 2라운드 코멘트: 머지한다'
+if grep -q "^GH_REPO= GH_CONFIG_DIR= GH_TOKEN= pr comment 89 --body-file " "$T/gh-args"; then
   echo "  ✓ 올리기: 봇 연결을 지우고 사람의 gh 로 올린다"
 else echo "  ✗ 올리기: 봇 연결을 지우지 않았거나 명령이 다르다: $(cat "$T/gh-args")"; fail=1; fi
-post "sha256 이 다르면 올리지 않는다" 1 "$(printf '0%.0s' $(seq 64))"
-if [ -s "$T/gh-args" ]; then echo "  ✗ 올리기: sha256 이 달랐는데 gh 를 불렀다"; fail=1
-else echo "  ✓ 올리기: sha256 이 다르면 gh 를 부르지 않는다"; fi
-post "봇 설정이 없으면 올리지 않는다" 2 "$SUM" "$T/plain"
-post "-R 로 준 레포에 올린다" 0 "$SUM" "$T/bot" -R 4estse4/other
+post "올린 기록은 다시 올리지 않는다" 1
+no_gh "올릴 것이 없으면 gh 를 부르지 않는다"
+# 기록이 아예 없을 때(창 기록 훅이 실행되지 않았다)와 모두 올렸을 때를 세션이 다르게 다뤄야 한다
+case "$OUT" in *'모두 올렸다'*) echo "  ✓ 올리기: 모두 올린 뒤에는 모두 올렸다고 알린다" ;;
+  *) echo "  ✗ 올리기: 모두 올린 뒤인데 그렇게 알리지 않았다: $OUT"; fail=1 ;; esac
+rec '- 3라운드 코멘트: 고치지 않고 멈춘다'
+post "그 뒤에 더한 기록만 올린다" 0
+body_is "앞서 올린 기록은 빠진다" '- 3라운드 코멘트: 고치지 않고 멈춘다'
+FREE='4라운드 코멘트' rec '- 끝낼 이슈: #78 도 이 PR 로 끝낸다'
+post "직접 쓴 말이 든 기록이 있으면 올리지 않는다" 1
+no_gh "직접 쓴 말이 있으면 gh 를 부르지 않는다"
+case "$OUT" in *'직접 쓴 말'*) echo "  ✓ 올리기: 올리지 않은 까닭을 낸다" ;;
+  *) echo "  ✗ 올리기: 까닭이 없다: $OUT"; fail=1 ;; esac
+# 직접 쓴 말은 같은 머리말로 다시 띄운 창에서 사람이 고르면 정해진 것이다. 다른 머리말의 창은 그것을 정하지 않는다
+rec '- 셀프 발견 1: 고친다'
+post "다른 머리말의 창만 뒤에 있으면 여전히 올리지 않는다" 1
+no_gh "직접 쓴 말이 정해지지 않았으면 gh 를 부르지 않는다"
+rec '- 4라운드 코멘트: 머지한다'
+post "같은 머리말의 창에서 고르면 올린다" 0
+body_is "직접 쓴 말은 빼고 그 뒤의 기록까지 차례대로 올린다" '- 끝낼 이슈: #78 도 이 PR 로 끝낸다
+- 셀프 발견 1: 고친다
+- 4라운드 코멘트: 머지한다'
+rm -f "$WIN/89.jsonl" "$WIN/89.posted"
+rec '- 5라운드 코멘트: 머지한다'
+STUB_FAIL='pr comment' post "gh 가 실패하면 실패로 끝난다" 1
+post "실패한 기록은 다음에 올린다" 0
+body_is "실패한 기록이 남아 있다" '- 5라운드 코멘트: 머지한다'
+rec '- 6라운드 코멘트: 머지한다'
+post "봇 설정이 없으면 올리지 않는다" 2 "$T/plain"
+# 세션의 cwd 는 레포의 하위 디렉터리일 수 있다. 기록은 그래도 레포의 git 디렉터리에서 읽는다
+mkdir -p "$T/bot/sub/deep"
+post "하위 디렉터리에서 불러도 레포의 기록을 올린다" 0 "$T/bot/sub/deep"
+body_is "하위 디렉터리에서 올린 본문" '- 6라운드 코멘트: 머지한다'
+rec '- 7라운드 코멘트: 머지한다'
+post "-R 로 준 레포에 올린다" 0 "$T/bot" -R 4estse4/other
 if grep -qF -- 'pr comment 89 -R 4estse4/other --body-file' "$T/gh-args"; then echo "  ✓ 올리기: -R 을 gh 에 전달한다"
 else echo "  ✗ 올리기: -R 을 전달하지 않았다: $(cat "$T/gh-args")"; fail=1; fi
+post "옛 모양(본문 파일 · sha256)으로 부르면 사용법을 낸다" 2 "$T/bot" /tmp/x.md 0000
+post "PR 번호 뒤에 본문 파일 하나만 주면 사용법을 낸다" 2 "$T/bot" /tmp/x.md
+post "-R 뒤에 인자를 더 주면 사용법을 낸다" 2 "$T/bot" -R 4estse4/other /tmp/x.md
 
 [ "$fail" = 0 ] && echo "  ✓ 봇 설정이 있으면 사람 계정 코멘트와 사람의 Approve 로 사람의 결정을 확인한다"
 exit "$fail"
