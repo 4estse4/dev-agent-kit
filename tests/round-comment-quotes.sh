@@ -91,8 +91,8 @@ post() { printf 'gh pr comment %s --body-file %s' "${2:-89}" "$T/$1"; }
 # ── 통과해야 하는 것 ──
 check "올라간 2라운드 코멘트 그대로" pass "gh pr comment 89 --body-file $FX/pr89/round2.md"
 args_has "gh 에 PR 번호를 전달한다" "number=89 "
-check "레포를 밝힌 호출" pass "gh pr comment 89 -R 4estse4/ai-native-kit --body-file $FX/pr89/round2.md"
-args_has "gh 에 레포를 전달한다" "4estse4/ai-native-kit|"
+check "레포를 밝힌 호출" pass "gh pr comment 89 -R 4estse4/dev-agent-kit --body-file $FX/pr89/round2.md"
+args_has "gh 에 레포를 전달한다" "4estse4/dev-agent-kit|"
 check "올라간 4라운드 코멘트 그대로" pass "gh pr comment 89 --body-file $FX/pr89/round4.md"
 check "\\ 줄넘김은 한 줄로 잇는다" pass "gh pr comment 89 \\
   --body-file $FX/pr89/round2.md"
@@ -103,8 +103,8 @@ check "PR 코멘트를 읽는 명령(comments)" pass "gh pr view 89 --json comme
 check "제목에 comment 가 든 gh pr create" pass \
   "gh pr create --title \"feat(review): round comment quote hook\" --body-file $T/body.md"
 check "gh 를 뺀 글자로 찾는 명령" pass "grep -n 'pr comment' claude-code/skills/merge-pr/SKILL.md"
-check "레포를 붙인 -R=" pass "gh pr comment 89 -R=4estse4/ai-native-kit --body-file $FX/pr89/round2.md"
-args_has "붙인 -R= 의 값을 gh 에 전달한다" "4estse4/ai-native-kit|"
+check "레포를 붙인 -R=" pass "gh pr comment 89 -R=4estse4/dev-agent-kit --body-file $FX/pr89/round2.md"
+args_has "붙인 -R= 의 값을 gh 에 전달한다" "4estse4/dev-agent-kit|"
 mk inner.md "$r4
 - (사람) \"고치고 한 라운드 더. … 홈 주소를 명령 인자로 쓰는 모양은 비추천 그대로 둔다.\""
 check "따옴표 안을 … 로 줄인 진짜 인용" pass "$(post inner.md)"
@@ -288,7 +288,7 @@ check "붙인 -F<경로> 의 옛 제목 글" pass "gh pr comment 89 -F$T/answer.
 check "붙인 -b<값>" deny "gh pr comment 89 -bx" "" "절대 경로 파일 하나로만"
 check "모르는 플래그" deny "gh pr comment 89 -y --body-file $T/onechar.md" "" "모르는 플래그"
 check "하위 명령 앞의 -R" deny \
-  "gh pr -R 4estse4/ai-native-kit comment 89 --body-file $T/onechar.md" "" "정규형"
+  "gh pr -R 4estse4/dev-agent-kit comment 89 --body-file $T/onechar.md" "" "정규형"
 check "따옴표로 감싼 comment" deny "gh pr \"comment\" 89 --body-file $T/onechar.md" "" "약속을 빼먹었다"
 check "하위 명령과 플래그 사이에 끼운 \$(…)" deny \
   "gh pr comment 89 \$(cp $T/onechar.md $T/copy.md;) --body-file $T/copy.md" "" "정규형"
@@ -306,7 +306,7 @@ check "PR 을 URL 로 적음" deny \
   "gh pr comment https://github.com/other/repo/pull/89 --body-file $FX/pr89/round2.md" "" "번호 하나"
 check "eval 래퍼" deny "eval \"$(post onechar.md)\"" "" "정규형"
 check "gh 와 pr 사이의 플래그" deny \
-  "gh --repo 4estse4/ai-native-kit pr comment 89 --body-file $T/onechar.md" "" "정규형"
+  "gh --repo 4estse4/dev-agent-kit pr comment 89 --body-file $T/onechar.md" "" "정규형"
 check "두 번 준 --body-file" deny \
   "gh pr comment 89 --body-file $FX/pr89/round2.md --body-file $T/onechar.md" "" "두 번"
 check "편집기로 쓰는 -e" deny "gh pr comment 89 -e" "" "절대 경로 파일 하나로만"
@@ -322,7 +322,7 @@ check "! 뒤" deny "! $(post onechar.md)" "" "정규형"
 check "{ } 안" deny "{ $(post onechar.md); }" "" "정규형"
 check "timeout 앞붙임" deny "timeout 60 $(post onechar.md)" "" "정규형"
 check "timeout 앞붙임의 옛 제목 글" deny "timeout 60 $(post answer.md)" "" "정규형"
-check "변수 대입 앞붙임" deny "GH_REPO=4estse4/ai-native-kit $(post onechar.md)" "" "정규형"
+check "변수 대입 앞붙임" deny "GH_REPO=4estse4/dev-agent-kit $(post onechar.md)" "" "정규형"
 check "env 앞붙임" deny "env X=1 $(post onechar.md)" "" "정규형"
 check "nice 앞붙임" deny "nice $(post onechar.md)" "" "정규형"
 check "sudo -E 앞붙임" deny "sudo -E $(post onechar.md)" "" "정규형"

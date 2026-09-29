@@ -1,4 +1,4 @@
-# CLAUDE.md — ai-native-kit
+# CLAUDE.md — dev-agent-kit
 
 > **이 레포 자신의 규칙**이다. 프로젝트에 설치되는 규칙 템플릿은
 > `common/templates/CLAUDE.md` 이고, 그것과 이 파일은 **다른 문서**다.
@@ -10,7 +10,7 @@
 문서에 있다. README 가 그 문서를 가리킨다. **이슈 목록은 그 항목의 내용을 볼 때 본다:**
 
 ```bash
-gh issue list -R 4estse4/ai-native-kit
+gh issue list -R 4estse4/dev-agent-kit
 ```
 
 미결의 **내용**은 이 레포의 어느 문서에도 적지 마라. 내용은 이슈에만 있다.

@@ -1,7 +1,7 @@
-# ai-native-kit
+# dev-agent-kit
 
-AI 코딩 에이전트와 함께 개발할 때 쓰는 **절차·검증 체계 킷**.
-새 프로젝트에 clone 해서 `install.sh` 를 한 번 실행하면 게이트·훅·템플릿·스킬이 설치된다.
+코딩 에이전트와 개발 작업 전반을 하는 데 필요한 것 한 벌. 기존 · 신규 프로젝트에 넣으면 바로 쓴다.
+킷을 clone 해서 `install.sh <프로젝트 경로>` 를 한 번 실행하면 게이트·훅·템플릿·스킬이 설치된다.
 
 ## 설계 원칙 세 개
 
@@ -95,8 +95,8 @@ git log --format='%(trailers:key=Co-Authored-By,valueonly)' \
 ## 쓰는 법
 
 ```bash
-git clone <this-repo> ~/git/ai-native-kit        # 킷은 아무 데나 한 번만
-~/git/ai-native-kit/install.sh ~/work/myproj     # 대상 프로젝트에 설치
+git clone <this-repo> ~/git/dev-agent-kit        # 킷은 아무 데나 한 번만
+~/git/dev-agent-kit/install.sh ~/work/myproj     # 대상 프로젝트에 설치
 ```
 
 **대상 경로는 필수다.** 현재 레포에 설치하려면 `.` 를 준다. 이 명령은 파일 수십 개를

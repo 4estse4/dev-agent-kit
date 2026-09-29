@@ -1,6 +1,6 @@
 # .kit — 이 레포에 복사해 둔 게이트
 
-이 디렉터리는 [ai-native-kit](https://github.com/4estse4/ai-native-kit) 의 게이트를
+이 디렉터리는 [dev-agent-kit](https://github.com/4estse4/dev-agent-kit) 의 게이트를
 복사해 둔 것이다. **레포와 함께 버전 관리되므로 clone 하면 따라온다.**
 
 ## 새로 clone 했다면 — 한 줄이 필요하다

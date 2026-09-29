@@ -75,11 +75,11 @@ for f in found:
     # **킷 레포 이름.** 파일이든 PR 이든 킷 레포로 보내는 것은 같다(이슈 #61 의 결정).
     # 주소만 보면 `gh api repos/…` · `-R …` · `owner/repo#N` 을 찾지 못한다. 그래서 이름을
     # 본다. 레포 홈 주소만 둔다 — 설치본이 어디서 왔는지 밝히는 자리(`.kit/README.md`)다.
-    # 대소문자를 가리지 않는다. `gh api repos/4ESTSE4/AI-Native-Kit` 도 킷 레포를 낸다.
+    # 대소문자를 가리지 않는다. `gh api repos/4ESTSE4/Dev-Agent-Kit` 도 킷 레포를 낸다.
     # 홈 주소 뒤는 막을 글자로 정한다 — 영숫자 · `@` · `#` · `-`, 그리고 `/` · `.` · `:` 뒤에
     # 이어지는 경로. 뒤에 올 글자를 허용 목록으로 보던 때는
     # 쉼표 · 조사 · 끝 슬래시 · 콜론에서 오탐이 생겼다.
-    for mo in re.finditer(r'(?i)4estse4/ai-native-kit', text):
+    for mo in re.finditer(r'(?i)4estse4/dev-agent-kit', text):
         s, e = mo.span()
         home = (text[max(0, s - 19):s].lower() == 'https://github.com/'
                 and not re.match(r'(?a)[\w@#-]|[/.:][\w#-]', text[e:e + 2]))
