@@ -42,8 +42,8 @@ _when() {
 if git -C "$kit" cat-file -e "${recorded}^{commit}" 2>/dev/null; then
   behind=$(git -C "$kit" rev-list --count "${recorded}..HEAD" 2>/dev/null || echo "")
   [ -n "$behind" ] && [ "$behind" != "0" ] \
-    && echo "dev-agent-kit:설치된 킷이 ${behind}개 커밋 낡았습니다 — ${recorded}$(_when "$recorded") → ${latest}$(_when "$latest"). 확인: ${kit}/install.sh . --dry-run"
+    && echo "dev-agent-kit: 설치된 킷이 ${behind}개 커밋 낡았습니다 — ${recorded}$(_when "$recorded") → ${latest}$(_when "$latest"). 확인: ${kit}/install.sh . --dry-run"
 else
-  echo "dev-agent-kit:설치된 킷 리비전 ${recorded} 을 로컬 킷에서 찾을 수 없습니다 (현재 ${latest}$(_when "$latest")). 확인: ${kit}/install.sh . --dry-run"
+  echo "dev-agent-kit: 설치된 킷 리비전 ${recorded} 을 로컬 킷에서 찾을 수 없습니다 (현재 ${latest}$(_when "$latest")). 확인: ${kit}/install.sh . --dry-run"
 fi
 exit 0
