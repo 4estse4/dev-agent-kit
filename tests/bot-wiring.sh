@@ -23,13 +23,15 @@ chmod 600 "$T/home/.config/helper-bot/key.pem"
 
 cat > "$T/bin/curl" <<'EOF'
 #!/usr/bin/env python3
-import json, os, sys
+import json, os, sys, time
 a = sys.argv[1:]
 url = next(x for x in a if x.startswith('https://'))
 with open(os.environ['STUB_CURL_LOG'], 'a') as fh:
     fh.write(' '.join(a) + '\n')
 if os.environ.get('STUB_CURL_EXIT'):          # 네트워크가 멈춰 curl 이 기다리다 끝난 것(28)
     sys.exit(int(os.environ['STUB_CURL_EXIT']))
+if os.environ.get('STUB_CURL_SLEEP'):         # 느리지만 `--max-time` 안에 답하는 네트워크
+    time.sleep(float(os.environ['STUB_CURL_SLEEP']))
 auth = ''
 for i, x in enumerate(a):
     if x == '-H' and a[i + 1].startswith('@'):
@@ -52,6 +54,8 @@ chmod +x "$T/bin/curl"
 # git 의 자격 증명 도우미로 불릴 가짜 gh. 세션 환경에서 git 이 봇(gh)에게 자격 증명을 받는지 본다.
 # 막기 훅이 auto-merge 를 판정하려고 부르는 `gh pr view` · `gh pr list` 에는 STUB_PR_VIEW · STUB_PR_LIST 를
 # 돌려준다. STUB_GH_FAIL 이 있으면 그 조회가 실패하고, STUB_GH_LOG 가 있으면 받은 인자를 적는다.
+# STUB_GH_SLEEP 이 있으면 그 초만큼 답하지 않는다(네트워크가 멈춘 조회). `exec` 로 기다려서, 조회를 끝내면
+# 기다리던 프로세스도 함께 끝난다.
 cat > "$T/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 if [ "$1 $2 $3" = "auth git-credential get" ]; then
@@ -60,6 +64,7 @@ if [ "$1 $2 $3" = "auth git-credential get" ]; then
 fi
 [ -n "${STUB_GH_LOG:-}" ] && printf '%s\n' "$*" >> "$STUB_GH_LOG"
 [ -n "${STUB_GH_FAIL:-}" ] && { echo 'stub: 조회 실패' >&2; exit 1; }
+[ -n "${STUB_GH_SLEEP:-}" ] && exec sleep "$STUB_GH_SLEEP"
 need='{"reviewDecision":"REVIEW_REQUIRED","mergeStateStatus":"BLOCKED"}'
 case "$1 $2" in
   "pr view") printf '%s\n' "${STUB_PR_VIEW:-$need}"; exit 0 ;;
@@ -115,6 +120,55 @@ guard() {
 }
 ok() { if eval "$2" 2>/dev/null; then echo "  ✓ $1"; else echo "  ✗ $1"; fail=1; fi; }
 no_token_in_out() { ok "$1 — 출력에 토큰이 없다" '! printf "%s" "$OUT" | grep -qF ghs_stubtoken'; }
+
+# 막기 훅이 부르는 GitHub 조회가 멈추면 훅은 settings 의 timeout 에 닿는다. Claude Code 는 그렇게 취소한 훅의
+# 판정 없이 명령을 진행한다(공식 문서 hooks 「Timeouts」) — `git push` 는 allow 라서 검사 없이 푸시된다.
+# 하네스는 Claude Code 처럼 settings 의 timeout 에서 훅을 끝내고, 그렇게 끝난 것을 판정 없음으로 적는다.
+# 훅이 판정을 낼 때까지 기다리므로 여기서 백그라운드로 시작해 다른 검사와 겹치고, 결과는 끝에서 본다.
+# 레포 · HOME 을 따로 두어 그동안 바뀌는 다른 검사의 git 설정이 섞이지 않게 한다.
+LIMIT=$(python3 -c 'import json, sys
+s = json.load(open(sys.argv[1]))
+print(min(h["timeout"] for g in s["hooks"]["PreToolUse"] for h in g["hooks"] if "bot_guard.sh" in h["command"]))' \
+  "$KIT/claude-code/settings.json" 2>/dev/null)
+[ -n "$LIMIT" ] || { echo "  ✗ settings.json 에서 막기 훅의 timeout 을 읽지 못했다"; exit 1; }
+cat > "$T/slow.py" <<'EOF'
+import json, os, signal, subprocess, sys, time
+limit, hook, d, cmd = float(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4]
+inp = json.dumps({"session_id": "s1", "cwd": d, "hook_event_name": "PreToolUse", "tool_name": "Bash",
+                  "tool_input": {"command": cmd}})
+t0 = time.monotonic()
+p = subprocess.Popen(['bash', hook], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                     cwd=d, text=True, start_new_session=True)
+try:
+    out, _ = p.communicate(inp, timeout=limit)
+    print('done %d' % (time.monotonic() - t0))
+    print(out)
+except subprocess.TimeoutExpired:
+    os.killpg(p.pid, signal.SIGKILL)       # 훅과 그 아래 조회까지 끝낸다
+    p.wait()
+    print('cancel %d' % (time.monotonic() - t0))
+EOF
+mkdir -p "$T/slowhome/.config/helper-bot"
+cp "$T/home/.config/helper-bot/key.pem" "$T/slowhome/.config/helper-bot/key.pem"
+SLOW_PIDS=() SLOW_NAMES=() SLOW_MUST=()
+# slow <이름> <명령> <사유에 들어 있어야 할 글자> [환경 변수=값 …] — 연결된 새 레포에서 훅을 백그라운드로 부른다
+slow() {
+  local n=${#SLOW_NAMES[@]} name=$1 cmd=$2 must=$3; shift 3
+  local d="$T/slow$n"
+  repo "$d"
+  ( cd "$d" && printf '{"session_id": "s1", "cwd": "%s", "hook_event_name": "SessionStart", "source": "startup"}' "$d" \
+    | CLAUDE_ENV_FILE="$d.env" HOME="$T/slowhome" PATH="$T/bin:$PATH" STUB_CURL_LOG="$d.curl" \
+      bash "$H/bot_session.sh" > /dev/null 2>&1 )
+  [ "${1:-}" = expired ] && { printf '2000-01-01T00:00:00Z\n' > "$d/.git/kit-bot/expires"; shift; }
+  env "$@" HOME="$T/slowhome" PATH="$T/bin:$PATH" STUB_CURL_LOG="$d.curl" STUB_GH_SLEEP=300 \
+    python3 "$T/slow.py" "$LIMIT" "$H/bot_guard.sh" "$d" "$cmd" > "$d.out" 2>&1 &
+  SLOW_PIDS+=($!) SLOW_NAMES+=("$name") SLOW_MUST+=("$must")
+}
+slow "auto-merge 판정 조회가 멈춘 gh pr merge --auto" "gh pr merge 5 --auto --squash" "gh pr view"
+slow "푸시 판정 조회가 멈춘 git push" "git push origin HEAD" "gh pr list"
+# 토큰을 새로 받는 데 curl 두 번이 느리게 답해도(호출마다 `--max-time` 안) 판정 조회의 시간과 더해 settings 의
+# timeout 안에 판정해야 한다
+slow "토큰을 느리게 새로 받은 뒤 조회가 멈춘 git push" "git push origin HEAD" "gh pr list" expired STUB_CURL_SLEEP=19
 
 echo "── 세션 시작(bot_session.sh)"
 repo "$R"
@@ -513,13 +567,32 @@ input=$(python3 -c 'import json,sys; print(json.dumps({"session_id": "s1", "cwd"
 : > "$T/curl-log"; rm -f "$T"/par.*
 for n in 1 2 3 4 5; do
   printf '2000-01-01T00:00:00Z\n' > "$BOTDIR/expires"
+  # 멈춘 조회 검사가 백그라운드로 실행 중이므로 이 병렬 실행의 프로세스만 기다린다
+  pids=()
   for k in 1 2 3 4; do
     printf '%s' "$input" | HOME="$T/home" PATH="$T/bin:$PATH" STUB_CURL_LOG="$T/curl-log" \
       bash "$H/bot_guard.sh" > "$T/par.$n.$k" 2>&1 &
+    pids+=($!)
   done
-  wait
+  wait "${pids[@]}"
 done
 ok "동시에 새로 받아도 쓰기가 막히지 않는다" '! grep -lq "\"deny\"" "$T"/par.*'
+
+echo "── 조회가 멈춤(앞에서 백그라운드로 시작한 것)"
+wait "${SLOW_PIDS[@]}"
+for n in "${!SLOW_NAMES[@]}"; do
+  name=${SLOW_NAMES[$n]} out=$(cat "$T/slow$n.out") took=$(head -1 "$T/slow$n.out")
+  case "$out" in
+    cancel*) echo "  ✗ 막기: ${name} — settings 의 timeout(${LIMIT}초)에 닿아 취소됐다. Claude Code 는 판정 없이 명령을 진행한다"; fail=1 ;;
+    *'"permissionDecision": "deny"'*)
+      if ! printf '%s' "$out" | grep -qF -- "${SLOW_MUST[$n]}" || ! printf '%s' "$out" | grep -qF "시간 예산"; then
+        echo "  ✗ 막기: ${name} — 사유에 「${SLOW_MUST[$n]}」나 「시간 예산」이 없다: ${out}"; fail=1
+      else
+        echo "  ✓ 막기: ${name} (deny, ${took#done }초 · settings 의 timeout ${LIMIT}초)"
+      fi ;;
+    *) echo "  ✗ 막기: ${name} — 기대 deny, 실제: ${out}"; fail=1 ;;
+  esac
+done
 
 [ "$fail" = 0 ] && echo "  ✓ 봇 설정이 있으면 세션의 gh 를 봇 계정에 연결하고, 벗어나는 쓰기를 막는다"
 exit "$fail"

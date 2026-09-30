@@ -60,7 +60,8 @@ trap 'rm -f "$auth"' EXIT
 printf 'Authorization: Bearer %s.%s.%s\n' "$hdr" "$pld" "$sig" > "$auth"
 
 # api <URL> [curl 인자…] — 본문 뒤 마지막 줄에 HTTP 상태를 붙여 출력한다.
-# 막기 훅이 명령 앞에서 이 스크립트를 부르므로, 네트워크가 멈춰도 한 호출이 20초를 넘지 않게 한다.
+# 막기 훅이 명령 앞에서 이 스크립트를 부르므로, 네트워크가 멈춰도 한 호출이 20초를 넘지 않게 한다. 두 호출이
+# 막기 훅의 시간 예산(`bot_guard.sh` 의 `BUDGET`) 안에 들어야 훅이 그 뒤의 판정 조회까지 마친다.
 api() {
   local u=$1; shift
   curl -sS --max-time 20 -w '\n%{http_code}' -H 'Accept: application/vnd.github+json' -H @"$auth" \

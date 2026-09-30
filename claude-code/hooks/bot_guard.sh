@@ -43,6 +43,8 @@
 # - auto-merge 가 켜진 PR 의 브랜치로 가는 푸시. 켠 채 푸시하면 사람이 새 커밋을 보고 누른 Approve 로 옛
 #   결정 코멘트대로 머지된다. 푸시가 바꿀 브랜치(`push_branches`)의 열린 PR 을 조회하고, 조회하지 못하면
 #   막는다
+# - 위 두 판정의 조회가 멈춘 쓰기. 훅의 시간 예산(`BUDGET`) 안에 조회가 끝나지 않으면 막는다 — 훅이 settings 의
+#   `timeout` 에 닿아 취소되면 Claude Code 는 판정 없이 명령을 진행한다
 # - 봇 토큰이 끝나 가는데 새로 받지 못한 뒤의 쓰기
 #
 # **사람 계정으로 올리는 명령은 모양만 본다.** 사람의 결정은 사람 계정 코멘트로 남는다. 그 길은
@@ -71,7 +73,8 @@
 # 스크립트(`bot_token.sh`)로 새로 받아 봇 디렉터리의 파일만 바꾼다. `GH_CONFIG_DIR` 은 그대로 그
 # 디렉터리를 가리킨다. 연결된 세션의 git 은 github.com 자격 증명을 gh(봇)에게서 받으므로
 # (`bot_session.sh`) 푸시 앞에서도 새로 받아야 한다. 새로 받는 데 드는 시간은 토큰 스크립트의 curl
-# `--max-time` 이 정한다.
+# `--max-time` 이 정하고, 그 시간은 훅의 시간 예산(`BUDGET`) 안에 든다. 토큰 스크립트에는 예산을 적용하지
+# 않는다 — 도중에 끝내면 그 스크립트의 `trap` 이 실행되지 않아 JWT 를 담은 임시 파일이 봇 디렉터리에 남는다.
 #
 # **무엇을 못 막나.** 명령 글자로 알아보므로, 스크립트 파일 안이나 인라인 인터프리터
 # (`python3 -c` 등) 안의 호출은 못 본다 — 세션이 봇 연결을 지우는 스크립트를 새로 써서 실행하면 사람
@@ -86,7 +89,16 @@ case "$input" in
 esac
 
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)" HOOK_INPUT="$input" python3 - <<'PY'
-import datetime, json, os, re, shlex, subprocess, sys
+import datetime, json, os, re, shlex, subprocess, sys, time
+
+# 훅이 settings 의 `timeout` 에 닿으면 Claude Code 는 훅을 취소하고 판정 없이 명령을 진행한다(공식 문서 hooks
+# 「Timeouts」: "don't count on a stalled hook to act as a gate"). 판정 조회가 멈추면 `git push`(allow)가 검사
+# 없이 푸시된다. 그래서 이 훅은 시작한 때부터 이 시간 안에 판정하고, 조회가 남은 시간을 초과하면 막는다
+# (`session_run`). 토큰 스크립트(curl 두 번, 호출마다 `--max-time 20`)와 판정 조회가 이 안에 든다.
+# **settings 의 이 훅 `timeout` 은 이보다 길어야 한다.** 설치되는 settings.json 은 90 이고, 이 값 아래로 줄이면
+# 판정 전에 취소된다.
+BUDGET = 60
+START = time.monotonic()
 
 GUIDE = "docs/process/kit-guide.md 의 「봇 계정과 사람의 승인」 절"
 
@@ -492,10 +504,18 @@ def push_remote(rest):
 
 def session_run(prog, *a):
     """세션 환경(`<봇 디렉터리>/session-env`)을 적용해 git · gh 를 실행한다. 이 훅은 세션의 Bash 가 받는
-    환경을 받지 않으므로, 세션의 명령이 쓸 설정 · 계정을 보려면 그 파일을 적용해야 한다."""
-    return subprocess.run(
-        ['bash', '-c', '[ -f "$0" ] && { set -a; . "$0"; set +a; }; exec "$@"',
-         os.path.join(botdir, 'session-env'), prog, *a], cwd=cwd, capture_output=True, text=True)
+    환경을 받지 않으므로, 세션의 명령이 쓸 설정 · 계정을 보려면 그 파일을 적용해야 한다.
+
+    쓰기 판정에서만 부른다. 시간 예산(`BUDGET`)에서 남은 시간 안에 끝나지 않으면 그 명령을 적어 막는다."""
+    try:
+        return subprocess.run(
+            ['bash', '-c', '[ -f "$0" ] && { set -a; . "$0"; set +a; }; exec "$@"',
+             os.path.join(botdir, 'session-env'), prog, *a], cwd=cwd, capture_output=True, text=True,
+            timeout=START + BUDGET - time.monotonic())
+    except subprocess.TimeoutExpired:
+        deny("이 명령을 판정하려고 부른 `%s` 가 막기 훅의 시간 예산(%d초) 안에 끝나지 않아 막는다. 훅이 settings 의 "
+             "시간 제한에 닿으면 Claude Code 는 훅을 취소하고 명령을 검사 없이 진행하므로, 그 전에 막는다. "
+             "네트워크를 확인한 뒤 다시 실행한다." % (' '.join((prog,) + a), BUDGET))
 
 
 def push_urls(args):
