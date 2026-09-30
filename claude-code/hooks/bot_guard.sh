@@ -43,8 +43,8 @@
 # - auto-merge 가 켜진 PR 의 브랜치로 가는 푸시. 켠 채 푸시하면 사람이 새 커밋을 보고 누른 Approve 로 옛
 #   결정 코멘트대로 머지된다. 푸시가 바꿀 브랜치(`push_branches`)의 열린 PR 을 조회하고, 조회하지 못하면
 #   막는다
-# - 위 두 판정의 조회가 멈춘 쓰기. 훅의 시간 예산(`BUDGET`) 안에 조회가 끝나지 않으면 막는다 — 훅이 settings 의
-#   `timeout` 에 닿아 취소되면 Claude Code 는 판정 없이 명령을 진행한다
+# - 위 두 판정의 조회가 멈춘 쓰기. 훅이 실행된 뒤 60초(`BUDGET`)가 지나도록 조회가 끝나지 않으면 조회를 끊고
+#   막는다 — settings 의 `timeout` 이 지나 훅이 강제로 끝나면 Claude Code 는 훅이 없었던 것처럼 명령을 처리한다
 # - 봇 토큰이 끝나 가는데 새로 받지 못한 뒤의 쓰기
 #
 # **사람 계정으로 올리는 명령은 모양만 본다.** 사람의 결정은 사람 계정 코멘트로 남는다. 그 길은
@@ -73,9 +73,9 @@
 # 스크립트(`bot_token.sh`)로 새로 받아 봇 디렉터리의 파일만 바꾼다. `GH_CONFIG_DIR` 은 그대로 그
 # 디렉터리를 가리킨다. 연결된 세션의 git 은 github.com 자격 증명을 gh(봇)에게서 받으므로
 # (`bot_session.sh`) 푸시 앞에서도 새로 받아야 한다. 새로 받는 데 드는 시간은 토큰 스크립트의 curl
-# `--max-time` 이 정하고, 그 시간은 훅의 시간 예산(`BUDGET`) 안에 든다. 토큰 스크립트에는 예산을 적용하지
-# 않는다 — 예산의 시간 제한(`subprocess.run` 의 `timeout`)은 SIGKILL 로 끝내므로 그 스크립트의 `trap` 이
-# 실행되지 않고, JWT 를 담은 임시 파일이 봇 디렉터리에 남는다.
+# `--max-time` 이 정하고(최대 40초), 그 시간은 훅의 60초(`BUDGET`) 안에 든다. 토큰 스크립트는 끊지 않는다 —
+# 조회를 끊는 `subprocess.run` 의 `timeout` 은 SIGKILL 로 끝내므로 그 스크립트의 `trap` 이 실행되지 않고, JWT 를
+# 담은 임시 파일이 봇 디렉터리에 남는다.
 #
 # **무엇을 못 막나.** 명령 글자로 알아보므로, 스크립트 파일 안이나 인라인 인터프리터
 # (`python3 -c` 등) 안의 호출은 못 본다 — 세션이 봇 연결을 지우는 스크립트를 새로 써서 실행하면 사람
@@ -92,13 +92,17 @@ esac
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)" HOOK_INPUT="$input" python3 - <<'PY'
 import datetime, json, os, re, shlex, subprocess, sys, time
 
-# 훅이 settings 의 `timeout` 에 닿으면 Claude Code 는 훅을 취소하고 판정 없이 명령을 진행한다(공식 문서 hooks
-# 「Timeouts」: "don't count on a stalled hook to act as a gate"). 판정 조회가 멈추면 `git push`(allow)가 검사
-# 없이 푸시된다. 그래서 이 훅은 시작한 때부터 이 시간 안에 판정하고, 조회가 남은 시간을 초과하면 막는다
-# (`session_run`). 토큰 스크립트(curl 두 번, 호출마다 `--max-time 20`)와 판정 조회가 이 안에 든다.
-# **settings 의 이 훅 `timeout` 은 이보다 길어야 한다.** 조회가 멈추면 이 훅은 예산이 끝난 뒤에 막으므로,
-# `timeout` 이 예산과 같거나 짧으면 Claude Code 가 그보다 먼저 훅을 취소한다. 설치되는 settings.json 의 값은
-# 이보다 길다.
+# Claude Code 는 이 훅을 최대 90초까지 기다린다(`.claude/settings.json` 에 적힌 이 훅의 `timeout` 값). 90초가
+# 지나면 훅을 강제로 끝내고, 훅이 없었던 것처럼 명령을 처리한다. 그런데 `git push` 는 allow 에 있어서, 이렇게
+# 훅이 끝나 버리면 푸시가 검사 없이 실행된다.
+#
+# 그래서 이 훅은 실행된 뒤 60초가 지나면, 끝나지 않은 GitHub 조회를 끊고 명령을 막는다. 끊고 막는 데 드는
+# 시간은 1초도 안 되지만, 넉넉하게 90초보다 30초 짧게 정했다. 토큰을 새로 받는 요청(최대 40초)도 이 60초에
+# 들어간다. 토큰 스크립트는 강제로 끊지 않는다. 끊으면 인증용 임시 파일이 지워지지 않고 남는다.
+#
+# 따라서 `.claude/settings.json` 의 이 훅 `timeout` 은 60초보다 넉넉히 길게 둔다. 60초 이하로 줄이면 조회가
+# 멈췄을 때 훅이 막기 전에 Claude Code 가 훅을 끝내, 푸시가 검사 없이 실행된다. 60초를 바꾸려면 이 파일의
+# `BUDGET` 을 고치고, `timeout` 도 그보다 길게 맞춘다.
 BUDGET = 60
 START = time.monotonic()
 
@@ -508,16 +512,15 @@ def session_run(prog, *a):
     """세션 환경(`<봇 디렉터리>/session-env`)을 적용해 git · gh 를 실행한다. 이 훅은 세션의 Bash 가 받는
     환경을 받지 않으므로, 세션의 명령이 쓸 설정 · 계정을 보려면 그 파일을 적용해야 한다.
 
-    쓰기 판정에서만 부른다. 시간 예산(`BUDGET`)에서 남은 시간 안에 끝나지 않으면 그 명령을 적어 막는다."""
+    쓰기 판정에서만 부른다. 훅이 실행된 뒤 60초(`BUDGET`)가 지나도록 끝나지 않으면 그 명령을 끊고 막는다."""
     try:
         return subprocess.run(
             ['bash', '-c', '[ -f "$0" ] && { set -a; . "$0"; set +a; }; exec "$@"',
              os.path.join(botdir, 'session-env'), prog, *a], cwd=cwd, capture_output=True, text=True,
             timeout=START + BUDGET - time.monotonic())
     except subprocess.TimeoutExpired:
-        deny("이 명령을 판정하려고 부른 `%s` 가 막기 훅의 시간 예산(%d초) 안에 끝나지 않아 막는다. 훅이 settings 의 "
-             "시간 제한에 닿으면 Claude Code 는 훅을 취소하고 명령을 검사 없이 진행하므로, 그 전에 막는다. "
-             "네트워크를 확인한 뒤 다시 실행한다." % (' '.join((prog,) + a), BUDGET))
+        deny("`%s` 이 %d초 안에 끝나지 않아 막았다. GitHub 이 응답하지 않는 것 같으니 잠시 뒤 다시 실행한다."
+             % (' '.join((prog,) + a), BUDGET))
 
 
 def push_urls(args):
