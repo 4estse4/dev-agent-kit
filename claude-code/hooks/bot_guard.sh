@@ -74,7 +74,8 @@
 # 디렉터리를 가리킨다. 연결된 세션의 git 은 github.com 자격 증명을 gh(봇)에게서 받으므로
 # (`bot_session.sh`) 푸시 앞에서도 새로 받아야 한다. 새로 받는 데 드는 시간은 토큰 스크립트의 curl
 # `--max-time` 이 정하고, 그 시간은 훅의 시간 예산(`BUDGET`) 안에 든다. 토큰 스크립트에는 예산을 적용하지
-# 않는다 — 도중에 끝내면 그 스크립트의 `trap` 이 실행되지 않아 JWT 를 담은 임시 파일이 봇 디렉터리에 남는다.
+# 않는다 — 예산의 시간 제한(`subprocess.run` 의 `timeout`)은 SIGKILL 로 끝내므로 그 스크립트의 `trap` 이
+# 실행되지 않고, JWT 를 담은 임시 파일이 봇 디렉터리에 남는다.
 #
 # **무엇을 못 막나.** 명령 글자로 알아보므로, 스크립트 파일 안이나 인라인 인터프리터
 # (`python3 -c` 등) 안의 호출은 못 본다 — 세션이 봇 연결을 지우는 스크립트를 새로 써서 실행하면 사람
@@ -95,8 +96,9 @@ import datetime, json, os, re, shlex, subprocess, sys, time
 # 「Timeouts」: "don't count on a stalled hook to act as a gate"). 판정 조회가 멈추면 `git push`(allow)가 검사
 # 없이 푸시된다. 그래서 이 훅은 시작한 때부터 이 시간 안에 판정하고, 조회가 남은 시간을 초과하면 막는다
 # (`session_run`). 토큰 스크립트(curl 두 번, 호출마다 `--max-time 20`)와 판정 조회가 이 안에 든다.
-# **settings 의 이 훅 `timeout` 은 이보다 길어야 한다.** 설치되는 settings.json 은 90 이고, 이 값 아래로 줄이면
-# 판정 전에 취소된다.
+# **settings 의 이 훅 `timeout` 은 이보다 길어야 한다.** 조회가 멈추면 이 훅은 예산이 끝난 뒤에 막으므로,
+# `timeout` 이 예산과 같거나 짧으면 Claude Code 가 그보다 먼저 훅을 취소한다. 설치되는 settings.json 의 값은
+# 이보다 길다.
 BUDGET = 60
 START = time.monotonic()
 
