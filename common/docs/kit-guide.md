@@ -174,7 +174,7 @@ Approve 가 있는지 확인해 머지한다.
 | 질문 창이 끝날 때 | 질문에 「이 결정은 사람 계정으로 PR #N 에 그대로 올라간다」가 적힌 창에서 사람이 고른 보기를 봇 디렉터리에 기록한다(`window_record.sh`). 직접 쓴 말 · 메모 · 창에 쓴 글이 있는 질문과 답을 비운 질문은 줄로 적지 않고, 저절로 닫힌 창과 질문을 더 요청한 창은 기록하지 않는다. 세션이 봇 디렉터리를 쓰는 것은 설치되는 `settings.json` 의 `deny` 와 `bot_guard.sh` 가, 봇 설정이 있는 레포 안에서 이 훅을 직접 실행하는 것은 `bot_guard.sh` 가 막는다 | 기록만 한다 |
 | 사람 계정으로 올릴 때 | `human_comment.sh <PR 번호>` 는 창 기록만 올린다. 한 줄 정규형이 아니거나, 스크립트 경로가 훅 디렉터리 밖을 가리키거나(하위 디렉터리에서 레포 루트 기준 경로를 입력한 경우도 그렇다 — 경로를 cwd 기준으로 푼다), 셸의 `-c` 인자 안에 두었으면 막는다(`bot_guard.sh`) | 창에서 고른 것만 올라간다 |
 | 라운드 코멘트 게시 | `(사람)` 인용이 사람 계정 코멘트의 불릿 하나나 줄 하나에 글자 그대로 있는지(`round_comment_quotes.sh`) | 막는다 |
-| auto-merge 를 켤 때 | 승인이 모자라 막힌 PR(`reviewDecision` `REVIEW_REQUIRED` · `mergeStateStatus` `BLOCKED`)에서만 켜는지 — gh 는 바로 머지할 수 있는 PR 에서 `--auto` 를 무시하고 그 자리에서 머지한다. auto-merge 가 켜진 PR 의 브랜치로 가는 푸시도 막는다(`bot_guard.sh`). 두 판정의 조회가 60초 안에 끝나지 않을 때도 조회를 끊고 명령을 막는다 — `.claude/settings.json` 의 막기 훅 `timeout` 이 먼저 지나 훅이 강제로 끝나면, 명령이 검사 없이 실행되기 때문이다 | 막는다. 머지는 브랜치 보호가 요구하는 Approve 가 달릴 때 GitHub 이 한다. 조회가 멈춰 막았으면 거절 사유가 멈춘 명령을 알린다 |
+| auto-merge 를 켤 때 | 승인이 모자라 막힌 PR(`reviewDecision` `REVIEW_REQUIRED` · `mergeStateStatus` `BLOCKED`)에서만 켜는지 — gh 는 바로 머지할 수 있는 PR 에서 `--auto` 를 무시하고 그 자리에서 머지한다. auto-merge 가 켜진 PR 의 브랜치로 가는 푸시도 막는다(`bot_guard.sh`) | 막는다. 머지는 브랜치 보호가 요구하는 Approve 가 달릴 때 GitHub 이 한다. 조회가 멈춰 막았으면 거절 사유가 멈춘 명령을 알린다 |
 | auto-merge 를 켤 수 없을 때의 머지 전 | 지금 head 에 사람 계정의 Approve 가 있는지(`merge-pr` 2절) | 멈춘다. 브랜치 보호가 승인을 요구하면(3절) GitHub 도 막는다 |
 
 `(사람)` 인용의 원본은 글쓴이의 레포 권한이 write 이상이고(봇 계정은 권한 조회에서 빠진다), 글쓴이가 아닌 계정이
@@ -248,13 +248,12 @@ GitHub 이 그 수로 계산한 판정(`reviewDecision`)까지 본다.
 같다 — 스크립트 파일 안의 경로와, `key.pem` 을 적지 않고 디렉터리 단위로 읽는 명령(`grep -r PRIVATE ~/.config`)은
 deny 규칙도 막기 훅도 막지 못한다. SSH 설정의 호스트 별칭으로 적은 원격(`git@github-me:me/r.git`)은 github.com 인지
 알 수 없어 그 푸시를 막지 못한다 — 그 푸시에는 SSH 키, 곧 사람 계정이 쓰인다. origin 이 별칭이면 세션이
-봇 계정에 연결되지 않아 푸시가 막히므로, origin 이 아닌 원격에 별칭을 쓴 레포에서만 생긴다. 막기 훅은 GitHub
-조회가 60초 안에 끝나지 않으면 명령을 막는다. 그래서 `.claude/settings.json` 에서 막기 훅의 `timeout` 은 60초보다
-넉넉히 길게 둔다(킷이 넣는 기본값은 90초). 60초 이하로 줄이면 조회가 멈췄을 때 훅이 막기 전에 Claude Code 가
-훅을 끝내, 푸시가 검사 없이 실행된다. 60초는 `bot_guard.sh` 의 `BUDGET` 에 있으니, 바꾸려면 `timeout` 과 함께
-조정한다. 형식대로
+봇 계정에 연결되지 않아 푸시가 막히므로, origin 이 아닌 원격에 별칭을 쓴 레포에서만 생긴다. 형식대로
 입력한 명령의 실수를 막는 것이고, 작정한 우회는 CI 와 브랜치 보호의 몫이다. 권한 프롬프트의 허락은
 사람이 그 글을 읽었다는 것까지 보여 주지 않는다.
+
+막기 훅의 `timeout`(`.claude/settings.json`, 기본값 90초)을 `BUDGET`(`bot_guard.sh`, 기본값 60초) 이하로 줄이면,
+조회가 멈췄을 때 Claude Code 가 막기 훅을 먼저 끝내 푸시가 검사 없이 실행된다.
 
 ## 7. 킷 자체의 미결 항목
 

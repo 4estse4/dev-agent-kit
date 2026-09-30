@@ -585,8 +585,8 @@ for n in "${!SLOW_NAMES[@]}"; do
   case "$out" in
     cancel*) echo "  ✗ 막기: ${name} — settings 의 timeout(${LIMIT}초)에 닿아 취소됐다. Claude Code 는 판정 없이 명령을 진행한다"; fail=1 ;;
     *'"permissionDecision": "deny"'*)
-      if ! printf '%s' "$out" | grep -qF -- "${SLOW_MUST[$n]}" || ! printf '%s' "$out" | grep -qF "안에 끝나지 않아 막았다"; then
-        echo "  ✗ 막기: ${name} — 사유에 「${SLOW_MUST[$n]}」나 「안에 끝나지 않아 막았다」가 없다: ${out}"; fail=1
+      if ! printf '%s' "$out" | grep -qF -- "${SLOW_MUST[$n]}" || ! printf '%s' "$out" | grep -qE "막기 훅이 실행된 지 [0-9]+초가 지나도"; then
+        echo "  ✗ 막기: ${name} — 사유에 「${SLOW_MUST[$n]}」나 「막기 훅이 실행된 지 N초가 지나도」가 없다: ${out}"; fail=1
       else
         echo "  ✓ 막기: ${name} (deny, ${took#done }초 · settings 의 timeout ${LIMIT}초)"
       fi ;;
