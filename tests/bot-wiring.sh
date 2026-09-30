@@ -166,6 +166,17 @@ STUB_INSTALL=404 session "설치 범위 밖" "$R"
 ok "설치에 레포가 없으면 레포 이름과 안내 문서를 출력한다" 'printf "%s" "$OUT" | grep -qF "o/r" && printf "%s" "$OUT" | grep -qF "App 설치" && printf "%s" "$OUT" | grep -qF kit-guide.md'
 ok "설치에 레포가 없으면 연결하지 않는다" '[ ! -s "$T/env" ] && [ ! -f "$BOTDIR/wired/s1" ]'
 
+# 키가 App 과 맞지 않거나(401) PEM 이 아니면(서명 실패) 안내도 키를 다루는 일을 사람에게 요청하게 한다
+repo "$R"
+STUB_INSTALL=401 session "App 과 맞지 않는 키" "$R"
+ok "App 과 맞지 않는 키라는 안내는 키를 다루는 일을 사람에게 요청하게 한다" 'printf "%s" "$OUT" | grep -qF "HTTP 401" && printf "%s" "$OUT" | grep -qF "사람이 터미널에서"'
+mv "$T/home/.config/helper-bot/key.pem" "$T/key.bak"
+printf 'not a pem\n' > "$T/home/.config/helper-bot/key.pem"
+repo "$R"
+session "PEM 이 아닌 키" "$R"
+rm -f "$T/home/.config/helper-bot/key.pem"; mv "$T/key.bak" "$T/home/.config/helper-bot/key.pem"
+ok "서명하지 못했다는 안내는 키를 다루는 일을 사람에게 요청하게 한다" 'printf "%s" "$OUT" | grep -qF "서명하지 못했다" && printf "%s" "$OUT" | grep -qF "사람이 터미널에서"'
+
 repo "$R" "https://gitlab.com/o/r.git"
 session "GitHub 이 아닌 origin" "$R"
 ok "GitHub 이 아닌 origin 이면 안내한다" 'printf "%s" "$OUT" | grep -qF kit-guide.md && [ ! -s "$T/env" ]'

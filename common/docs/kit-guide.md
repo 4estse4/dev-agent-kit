@@ -193,7 +193,7 @@ Approve 가 있는지 확인해 머지한다.
 2. App 의 개인키를 만들어 `~/.config/<App 이름>/key.pem` 에 둔다(권한 600). 커밋하지 않는다. 키를 두고
    확인하는 일은 사람이 터미널에서 한다. 세션이 이 자리를 읽는 명령은 막힌다 — 설치되는 `settings.json` 의 deny
    `Read(~/.config/*/key.pem)` 이 Read 도구와 `cat` 같은 파일 명령을, 막기 훅이 `.config/<App 이름>` 이나
-   `<App 이름>/key.pem` 이 든 명령과 `.config` · `key.pem` 이 함께 든 명령을 막는다. 둘 다 명령 글자로 알아보므로
+   `<App 이름>/key.pem` 이 든 명령과 `.config` · `key.pem` 이 함께 든 명령을 막는다. 둘 다 이름이 적힌 경로로 알아보므로
    디렉터리 단위로 읽는 명령(`grep -r … ~/.config`)과 스크립트 파일 안의 경로는 막지 못한다(아래 「무엇을 못
    막나」). 토큰은 `bot_token.sh` 가 받는다.
 3. App 을 설치하고 저장소 범위를 「Only select repositories」로 두어 킷을 쓰는 레포만 고른다.

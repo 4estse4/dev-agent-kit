@@ -397,7 +397,7 @@ if re.search(r'(?<![\w-])\.config(?![\w-])', cmd) and re.search(r'(?<![\w-])key\
     keyhits.append('.config 와 key.pem')
 if keyhits:
     deny("이 레포에는 봇 설정(.claude/bot.json)이 있어, App 개인키(~/.config/<App 이름>/key.pem)를 가리킬 수 "
-         "있는 명령은 막는다 — 이 명령에는 " + ' · '.join(keyhits) + " 이(가) 있다. 읽은 키는 모델의 맥락에 "
+         "있는 명령은 막는다(이 명령에 든 글자: " + ' · '.join(keyhits) + "). 읽은 키는 모델의 맥락에 "
          "들어가고, 그 키로 봇 토큰을 새로 받을 수 있다. 키를 두거나 확인하는 일은 사람이 터미널에서 한다 — "
          "필요하면 사람에게 요청한다. 그 글자가 검색어나 커밋 메시지 같은 글이면 그 글을 파일로 옮겨 전달한다.")
 if any(clears_env(s) for s in segs):
