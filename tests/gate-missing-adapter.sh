@@ -10,7 +10,7 @@
 # 명령이 나머지 언어를 뺀다.
 #
 # 깨끗한 레포에 `--lang py,ts` 로 설치하고 go.mod 를 더한 뒤 gate.sh 를 실행한다. 보는 것:
-#   · install-manifest 가 설치한 그대로면 실패하고, `--lang py,ts,go` 를 적고, 도구 설치 안내는 적지 않는다
+#   · install-manifest 를 설치된 그대로 두면 실패하고, `--lang py,ts,go` 를 적고, 도구 설치 안내는 적지 않는다
 #   · install-manifest 에 langs 줄이 없거나 파일이 없으면 실패하고, 못 읽었다고 적고, --lang 목록을
 #     짐작해 적지 않는다
 #   · 두 경우 모두 처음 설치할 때 고른 항목 플래그(--hooks 등)도 같이 주라고 적는다
