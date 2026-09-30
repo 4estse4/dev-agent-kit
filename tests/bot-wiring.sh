@@ -426,6 +426,17 @@ guard "이름 끝이 같은 다른 레포에서 git" pass "git -C ~/git/slack-ki
 guard "이름 끝이 같은 App 의 계정" pass "git log --author=dev-agent-kit-bot --oneline"
 guard "이름 앞이 같은 파일" pass "cat notes/kit-bot-design.md"
 guard "이름 끝이 같은 다른 레포의 .." pass "cd ~/git/ui-kit-bot/src && ls .."
+# App 개인키(`~/.config/<App 이름>/key.pem`)를 가리키는 명령. 설치되는 settings.json 의 deny 규칙은 `cat` 같은 파일
+# 명령을 막지만 스크립트가 여는 경우와 파일 명령으로 인식되지 않는 명령은 덮지 않는다(권한 문서). 이 테스트 레포의
+# App 이름은 helper-bot 이다
+guard "App 개인키를 cat" deny "cat ~/.config/helper-bot/key.pem" "$R" "개인키"
+guard "App 개인키를 스크립트가 엶" deny "python3 -c \"print(open('\$HOME/.config/helper-bot/key.pem').read())\""
+guard "App 설정 디렉터리로 옮겨 검색" deny "cd ~/.config/helper-bot && grep -r BEGIN ."
+guard "App 개인키를 openssl 로 읽음" deny "openssl rsa -in ~/.config/helper-bot/key.pem"
+guard "~/.config 로 옮긴 뒤 상대 경로로 읽음" deny "cd ~/.config && cat helper-bot/key.pem"
+guard "다른 App 의 설정 디렉터리" pass "ls ~/.config/other-app"
+guard "이름 끝이 붙은 다른 디렉터리" pass "ls ~/.config/helper-bot-notes"
+guard "토큰 스크립트를 실행" pass "bash .claude/hooks/bot_token.sh"
 # Read 도구는 이 훅(Bash)을 거치지 않는다. 설치되는 settings.json 의 deny 가 막는다.
 if python3 - "$KIT/claude-code/settings.json" <<'PY'
 import json, sys
@@ -435,6 +446,12 @@ sys.exit(0 if any(r.startswith('Read(//') and '/kit-bot/' in r for r in deny) el
 PY
 then echo "  ✓ 설치되는 settings.json 이 봇 디렉터리를 Read 에서 막는다"
 else echo "  ✗ 설치되는 settings.json 이 봇 디렉터리를 Read 에서 막지 않는다"; fail=1; fi
+# App 개인키는 레포 밖(홈)에 있다. `./` 로 시작하는 규칙은 현재 디렉터리 기준이라 덮지 않으므로 `~/` 기준이어야
+# 한다. App 이름은 레포마다 다르므로 한 단계 `*` 로 쓴다. 이 규칙은 `cat` · `head` 같은 파일 명령도 막는다(권한 문서)
+if python3 -c 'import json, sys; sys.exit(0 if "Read(~/.config/*/key.pem)" in json.load(open(sys.argv[1], encoding="utf-8"))["permissions"]["deny"] else 1)' \
+    "$KIT/claude-code/settings.json"
+then echo "  ✓ 설치되는 settings.json 이 App 개인키 자리를 Read 에서 막는다"
+else echo "  ✗ 설치되는 settings.json 이 App 개인키 자리(Read(~/.config/*/key.pem))를 Read 에서 막지 않는다"; fail=1; fi
 guard "토큰을 출력하는 인증 상태(-t)" deny "gh auth status -t"
 guard "토큰을 출력하는 인증 상태(--show-token)" deny "gh auth status --show-token"
 guard "GH_ENTERPRISE_TOKEN 으로 바꿈" deny "GH_ENTERPRISE_TOKEN=x gh api user"

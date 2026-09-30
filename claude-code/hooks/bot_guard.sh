@@ -19,6 +19,10 @@
 #   (`//**/…`) 작업 디렉터리 밖에 있는 worktree 세션의 봇 디렉터리도 막는다. 연결된 세션의 git 은 github.com 자격 증명을
 #   봇(gh)에게서 받으므로 `git credential fill` 이 봇 토큰 전체를 출력한다. 연결되지 않은 세션에서는 사람의
 #   토큰을 출력한다
+# - App 개인키를 가리키는 명령. 명령 글자에 `.config/<App 이름>` 이나 `<App 이름>/key.pem` 이 온전한 이름으로
+#   있으면 막는다. App 이름은 봇 설정에서 읽고, 앞뒤 경계는 봇 디렉터리 이름과 같다. 설치되는 `settings.json` 의
+#   deny `Read(~/.config/*/key.pem)` 은 Read 도구와 `cat` 같은 파일 명령을 막지만, 스크립트가 여는 경우 · 파일
+#   명령으로 인식되지 않는 명령 · `cd` 뒤의 상대 경로는 덮지 않는다(Claude Code 권한 문서)
 # - 연결되지 않은 세션의 쓰기. 세션 시작 훅(`bot_session.sh`)이 이 세션을 봇 계정에 연결하지
 #   못했으면 그 세션의 gh 와 git 은 사람 계정이다. gh 의 읽기 명령이 아닌 것과 `git push` 를 막는다.
 #   읽기로 판정하는 것은 아래 `READ_GROUPS` · `READ_SUBS` 와, 메서드 · 필드로 판정해 쓰지 않는 `gh api` 다.
@@ -73,7 +77,7 @@
 input=$(cat)
 # 모든 Bash 호출마다 실행되므로 관련 글자가 없으면 파이썬을 실행하지 않고 끝낸다.
 case "$input" in
-  *gh*|*git*|*GH_*|*GITHUB_TOKEN*|*GIT_CONFIG*|*credential*|*kit-bot*|*human_comment*|*human_review*|*window_record*|*'env -'*) ;;
+  *gh*|*git*|*GH_*|*GITHUB_TOKEN*|*GIT_CONFIG*|*credential*|*kit-bot*|*human_comment*|*human_review*|*window_record*|*'env -'*|*.config/*|*key.pem*) ;;
   *) exit 0 ;;
 esac
 
@@ -374,6 +378,15 @@ if any(s == 'credential' or s.startswith('credential-') for s in git_subs) or re
          "봇 디렉터리(kit-bot)를 가리키는 명령이다. 토큰이 없는 expires · session-env · wired 는 읽을 수 "
          "있지만, 봇 디렉터리 이름과 .. 가 함께 있으면 막는다. 연결된 세션의 git 은 자격 증명을 봇에게서 받으므로 git credential fill 이 봇 토큰 전체를 "
          "출력하고, 토큰은 모델의 맥락에 들어간다. 그 낱말이 검색어나 글이면 파일로 옮겨 전달한다.")
+try:
+    app = str(json.load(open(os.path.join(top.stdout.strip(), '.claude', 'bot.json'), encoding='utf-8'))['app'])
+except (OSError, ValueError, KeyError, TypeError):
+    app = ''
+if re.match(r'^[A-Za-z0-9-]+$', app) and re.search(
+        r'\.config/' + re.escape(app) + r'(?![\w-])|(?<![\w-])' + re.escape(app) + r'/key\.pem\b', cmd):
+    deny("이 레포에는 봇 설정(.claude/bot.json)이 있어, App 개인키의 자리(~/.config/" + app + "/)를 가리키는 "
+         "명령은 막는다. 그 키로 봇 토큰을 새로 받을 수 있고, 읽은 키는 모델의 맥락에 들어간다. 토큰은 "
+         "bot_token.sh 가 받는다. 그 낱말이 검색어나 글이면 파일로 옮겨 전달한다.")
 if any(clears_env(s) for s in segs):
     deny("이 레포에는 봇 설정(.claude/bot.json)이 있어, 환경을 비우는 env -i(--ignore-environment · -)는 "
          "막는다. 그 뒤의 gh 와 git 은 봇 계정 연결을 잃고 사람 계정으로 쓴다. 사람 계정으로 올릴 결정은 "

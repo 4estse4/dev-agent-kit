@@ -189,7 +189,9 @@ Approve 가 있는지 확인해 머지한다.
    세션 환경에서 git 이 github.com 자격 증명을 gh(봇)에게서만 받고 github.com 의 SSH 주소
    (`git@github.com:` · `ssh://git@github.com/`)도 https 로 바꿔 쓰게 하므로, 푸시도 봇 토큰을 쓴다.
    사용자의 git 설정 파일은 바꾸지 않는다.
-2. App 의 개인키를 만들어 `~/.config/<App 이름>/key.pem` 에 둔다(권한 600). 커밋하지 않는다.
+2. App 의 개인키를 만들어 `~/.config/<App 이름>/key.pem` 에 둔다(권한 600). 커밋하지 않는다. 세션은 이 자리를
+   읽지 못한다 — 설치되는 `settings.json` 의 deny `Read(~/.config/*/key.pem)` 이 Read 도구와 `cat` 같은 파일 명령을,
+   막기 훅이 `.config/<App 이름>` 이나 `<App 이름>/key.pem` 이 든 명령을 막는다. 토큰은 `bot_token.sh` 가 받는다.
 3. App 을 설치하고 저장소 범위를 「Only select repositories」로 두어 킷을 쓰는 레포만 고른다.
    개인키나 토큰이 새면 설치 범위 안의 레포에 브랜치를 푸시하고 PR 을 열 수 있고, 브랜치 보호가 승인
    리뷰를 요구하지 않으면 CI 가 초록인 PR 을 머지할 수 있다. Workflows 쓰기로 그 CI 자체도 바꿀 수 있다.
