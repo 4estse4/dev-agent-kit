@@ -162,7 +162,7 @@ fi
 for t in "${TARGETS[@]}"; do
   adapter=${t%%|*}; dir=${t#*|}
   script="$SELF_DIR/adapters/${adapter}.sh"
-  [ -f "$script" ] || { gate_skip "$adapter(어댑터 없음)"; continue; }
+  [ -f "$script" ] || { gate_skip_adapter "$adapter"; continue; }
   pushd "$dir" >/dev/null || continue
   # shellcheck source=/dev/null
   source "$script"
