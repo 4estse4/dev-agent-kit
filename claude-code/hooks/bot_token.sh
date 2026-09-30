@@ -36,7 +36,7 @@ print(int(d["app_id"]), d["app"])' "$conf" 2>/dev/null) \
   || fail "봇 설정(.claude/bot.json)을 읽지 못했다. {\"app_id\": <숫자>, \"app\": \"<App 이름>\"} 모양이어야 한다."
 
 key="$HOME/.config/$app/key.pem"
-[ -r "$key" ] || fail "개인키가 없다: ~/.config/$app/key.pem. GitHub 의 App 설정에서 개인키를 만들어 그 자리에 둔다(권한 600)."
+[ -r "$key" ] || fail "개인키가 없다: ~/.config/$app/key.pem. GitHub 의 App 설정에서 개인키를 만들어, 사람이 터미널에서 그 자리에 둔다(권한 600). 세션이 그 자리를 보는 명령은 막힌다."
 
 url=$(git -C "$root" remote get-url origin 2>/dev/null) || fail "origin 리모트가 없다."
 slug=$(printf '%s' "$url" | sed -nE 's#^(https://github\.com/|git@github\.com:|ssh://git@github\.com/)([^/]+/[^/]+)$#\2#p')
@@ -54,7 +54,7 @@ now=$(date +%s)
 hdr=$(printf '{"alg":"RS256","typ":"JWT"}' | b64url)
 pld=$(printf '{"iat":%d,"exp":%d,"iss":%d}' $((now - 60)) $((now + 540)) "$app_id" | b64url)
 sig=$(printf '%s.%s' "$hdr" "$pld" | openssl dgst -sha256 -sign "$key" -binary 2>/dev/null | b64url)
-[ -n "$sig" ] || fail "개인키로 서명하지 못했다: ~/.config/$app/key.pem 이 PEM 개인키인지 본다."
+[ -n "$sig" ] || fail "개인키로 서명하지 못했다: 사람이 터미널에서 ~/.config/$app/key.pem 이 PEM 개인키인지 본다. 세션이 그 자리를 보는 명령은 막힌다."
 auth=$(mktemp "$dir/.auth.XXXXXX")
 trap 'rm -f "$auth"' EXIT
 printf 'Authorization: Bearer %s.%s.%s\n' "$hdr" "$pld" "$sig" > "$auth"
@@ -71,7 +71,7 @@ code=${res##*$'\n'}
 case "$code" in
   200) ;;
   404) fail "App($app) 설치에 이 레포($slug)가 없다. GitHub 의 App 설치 설정에서 저장소 목록에 이 레포를 더한다." ;;
-  401) fail "App ID 와 개인키가 맞지 않다(HTTP 401). .claude/bot.json 의 app_id 와 ~/.config/$app/key.pem 을 본다." ;;
+  401) fail "App ID 와 개인키가 맞지 않다(HTTP 401). .claude/bot.json 의 app_id 를 보고, 사람이 터미널에서 ~/.config/$app/key.pem 을 본다." ;;
   *) fail "레포의 App 설치를 찾다가 실패했다(HTTP ${code:-없음}). 네트워크를 본다." ;;
 esac
 iid=$(printf '%s' "${res%$'\n'*}" | python3 -c 'import json, sys; print(int(json.load(sys.stdin)["id"]))' 2>/dev/null) \

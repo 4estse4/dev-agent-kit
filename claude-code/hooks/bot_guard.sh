@@ -21,9 +21,12 @@
 #   토큰을 출력한다
 # - App 개인키를 가리키는 명령. 명령 글자에 `.config/<App 이름>` 이나 `<App 이름>/key.pem` 이 온전한 이름으로
 #   있거나, `.config` 와 `key.pem` 이 함께 있으면(`cat ~/.config/*/key.pem` · `find ~/.config -name key.pem`)
-#   막는다. App 이름은 봇 설정에서 읽고, 앞뒤 경계는 봇 디렉터리 이름과 같다. 설치되는 `settings.json` 의
-#   deny `Read(~/.config/*/key.pem)` 은 Read 도구와 `cat` 같은 파일 명령을 막지만, 스크립트가 여는 경우 · 파일
-#   명령으로 인식되지 않는 명령 · `cd` 뒤의 상대 경로는 덮지 않는다(Claude Code 권한 문서)
+#   막는다. App 이름은 봇 설정에서 읽고, 앞뒤 경계는 봇 디렉터리 이름과 같다. 셋째 꼴은 App 이름 없이 판정한다.
+#   거절 사유는 해당한 꼴과, 키를 다루는 일은 사람이 터미널에서 한다는 것을 적는다. 설치되는 `settings.json` 의
+#   deny `Read(~/.config/*/key.pem)` 은 Read 도구와 `cat` 같은 파일 명령을 막고, 스크립트가 여는 경우와 파일
+#   명령으로 인식되지 않는 명령은 덮지 않는다(Claude Code 권한 문서). `cd` 뒤의 상대 경로와 glob 인자를 덮는지는
+#   문서에 없다. 명령 글자로 알아보므로 디렉터리 단위로 읽는 명령(`grep -r … ~/.config`)과 스크립트 파일 안의
+#   경로는 이 훅도 못 막는다
 # - 연결되지 않은 세션의 쓰기. 세션 시작 훅(`bot_session.sh`)이 이 세션을 봇 계정에 연결하지
 #   못했으면 그 세션의 gh 와 git 은 사람 계정이다. gh 의 읽기 명령이 아닌 것과 `git push` 를 막는다.
 #   읽기로 판정하는 것은 아래 `READ_GROUPS` · `READ_SUBS` 와, 메서드 · 필드로 판정해 쓰지 않는 `gh api` 다.
@@ -383,12 +386,20 @@ try:
     app = str(json.load(open(os.path.join(top.stdout.strip(), '.claude', 'bot.json'), encoding='utf-8'))['app'])
 except (OSError, ValueError, KeyError, TypeError):
     app = ''
-if re.match(r'^[A-Za-z0-9-]+$', app) and (re.search(
-        r'\.config/' + re.escape(app) + r'(?![\w-])|(?<![\w-])' + re.escape(app) + r'/key\.pem\b', cmd) or (
-        re.search(r'(?<![\w-])\.config\b', cmd) and re.search(r'(?<![\w-])key\.pem\b', cmd))):
-    deny("이 레포에는 봇 설정(.claude/bot.json)이 있어, App 개인키의 자리(~/.config/" + app + "/)를 가리키는 "
-         "명령은 막는다. 그 키로 봇 토큰을 새로 받을 수 있고, 읽은 키는 모델의 맥락에 들어간다. 토큰은 "
-         "bot_token.sh 가 받는다. 그 낱말이 검색어나 글이면 파일로 옮겨 전달한다.")
+# 셋째 꼴은 App 이름이 필요 없다 — 봇 설정에 App 이름이 없거나 깨져도 판정한다.
+keyhits = []
+if re.match(r'^[A-Za-z0-9-]+$', app):
+    if re.search(r'\.config/' + re.escape(app) + r'(?![\w-])', cmd):
+        keyhits.append('.config/' + app)
+    if re.search(r'(?<![\w-])' + re.escape(app) + r'/key\.pem\b', cmd):
+        keyhits.append(app + '/key.pem')
+if re.search(r'(?<![\w-])\.config(?![\w-])', cmd) and re.search(r'(?<![\w-])key\.pem\b', cmd):
+    keyhits.append('.config 와 key.pem')
+if keyhits:
+    deny("이 레포에는 봇 설정(.claude/bot.json)이 있어, App 개인키(~/.config/<App 이름>/key.pem)를 가리킬 수 "
+         "있는 명령은 막는다 — 이 명령에는 " + ' · '.join(keyhits) + " 이(가) 있다. 읽은 키는 모델의 맥락에 "
+         "들어가고, 그 키로 봇 토큰을 새로 받을 수 있다. 키를 두거나 확인하는 일은 사람이 터미널에서 한다 — "
+         "필요하면 사람에게 요청한다. 그 글자가 검색어나 커밋 메시지 같은 글이면 그 글을 파일로 옮겨 전달한다.")
 if any(clears_env(s) for s in segs):
     deny("이 레포에는 봇 설정(.claude/bot.json)이 있어, 환경을 비우는 env -i(--ignore-environment · -)는 "
          "막는다. 그 뒤의 gh 와 git 은 봇 계정 연결을 잃고 사람 계정으로 쓴다. 사람 계정으로 올릴 결정은 "

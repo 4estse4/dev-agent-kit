@@ -157,6 +157,8 @@ mv "$T/home/.config/helper-bot/key.pem" "$T/key.bak"
 session "개인키 없음" "$R"
 mv "$T/key.bak" "$T/home/.config/helper-bot/key.pem"
 ok "개인키가 없으면 그 자리와 안내 문서를 출력한다" 'printf "%s" "$OUT" | grep -qF "~/.config/helper-bot/key.pem" && printf "%s" "$OUT" | grep -qF kit-guide.md'
+# 이 안내는 세션의 맥락에 들어간다. 세션이 키를 보려는 명령은 막히므로 사람에게 요청하게 한다
+ok "개인키가 없다는 안내는 키를 다루는 일을 사람에게 요청하게 한다" 'printf "%s" "$OUT" | grep -qF "사람이 터미널에서"'
 ok "개인키가 없으면 연결하지 않는다" '[ ! -s "$T/env" ] && [ ! -f "$BOTDIR/wired/s1" ]'
 
 repo "$R"
@@ -429,19 +431,28 @@ guard "이름 끝이 같은 다른 레포의 .." pass "cd ~/git/ui-kit-bot/src &
 # App 개인키(`~/.config/<App 이름>/key.pem`)를 가리키는 명령. 설치되는 settings.json 의 deny 규칙은 `cat` 같은 파일
 # 명령을 막지만 스크립트가 여는 경우와 파일 명령으로 인식되지 않는 명령은 덮지 않는다(권한 문서). 이 테스트 레포의
 # App 이름은 helper-bot 이다
-guard "App 개인키를 cat" deny "cat ~/.config/helper-bot/key.pem" "$R" "개인키"
+# 거절 사유는 세 꼴 가운데 무엇에 해당했는지와, 키를 다루는 일은 사람에게 요청한다는 것을 적는다
+guard "App 개인키를 cat" deny "cat ~/.config/helper-bot/key.pem" "$R" "사람이 터미널에서"
 guard "App 개인키를 스크립트가 엶" deny "python3 -c \"print(open('\$HOME/.config/helper-bot/key.pem').read())\""
-guard "App 설정 디렉터리로 옮겨 검색" deny "cd ~/.config/helper-bot && grep -r BEGIN ."
+guard "App 설정 디렉터리로 옮겨 검색" deny "cd ~/.config/helper-bot && grep -r BEGIN ." "$R" ".config/helper-bot"
 guard "App 개인키를 openssl 로 읽음" deny "openssl rsa -in ~/.config/helper-bot/key.pem"
 guard "~/.config 로 옮긴 뒤 상대 경로로 읽음" deny "cd ~/.config && cat helper-bot/key.pem"
-guard "설정 디렉터리 변수로 옮긴 뒤 상대 경로로 읽음" deny "cd \"\$XDG_CONFIG_HOME\" && cat helper-bot/key.pem"
-guard "App 설정 디렉터리를 glob 으로 읽음" deny "cat ~/.config/*/key.pem"
+guard "설정 디렉터리 변수로 옮긴 뒤 상대 경로로 읽음" deny "cd \"\$XDG_CONFIG_HOME\" && cat helper-bot/key.pem" "$R" "helper-bot/key.pem"
+guard "App 설정 디렉터리를 glob 으로 읽음" deny "cat ~/.config/*/key.pem" "$R" ".config 와 key.pem"
 guard "~/.config 에서 key.pem 을 찾음" deny "find ~/.config -name key.pem"
 guard "~/.config 의 목록" pass "ls ~/.config"
 guard "프로젝트 안의 key.pem" pass "ls certs/key.pem"
 guard "다른 App 의 설정 디렉터리" pass "ls ~/.config/other-app"
 guard "이름 끝이 붙은 다른 디렉터리" pass "ls ~/.config/helper-bot-notes"
 guard "토큰 스크립트를 실행" pass "bash .claude/hooks/bot_token.sh"
+# 경계마다 통과할 경우다. 앞뒤에 영숫자 · `-` 가 붙으면 다른 이름이다
+guard "App 이름 앞이 붙은 다른 디렉터리의 key.pem" pass "ls certs/old-helper-bot/key.pem"
+guard "다른 도구의 설정 파일과 프로젝트 인증서" pass "npx vite --config vite.config.ts --https.key certs/key.pem"
+guard ".config 뒤가 붙은 다른 디렉터리와 프로젝트 인증서" pass "ls ~/.config-backup && ls certs/key.pem"
+guard "~/.config 와 이름 앞이 붙은 key.pem" pass "ls ~/.config/nvim && cat certs/dev-key.pem"
+# 셋째 꼴은 App 이름이 필요 없다. 봇 설정에 App 이름이 없거나 깨져도 판정한다
+mkdir -p "$T/noapp/.claude"; git -C "$T/noapp" init -q; printf '{"app_id": 1}\n' > "$T/noapp/.claude/bot.json"
+guard "App 이름이 없는 봇 설정에서 glob 으로 읽음" deny "cat ~/.config/*/key.pem" "$T/noapp"
 # Read 도구는 이 훅(Bash)을 거치지 않는다. 설치되는 settings.json 의 deny 가 막는다.
 if python3 - "$KIT/claude-code/settings.json" <<'PY'
 import json, sys
