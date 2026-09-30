@@ -169,7 +169,7 @@ Approve 가 있는지 확인해 머지한다.
 | 시점 | 무엇 | 막나 |
 |---|---|---|
 | 세션 시작 | 설치 토큰을 받아 세션의 gh 를 봇 계정에 연결한다(`bot_session.sh`) | 못 받으면 까닭을 세션에 알린다. 쓰기는 아래 줄이 막는다 |
-| gh 명령 · git 원격 명령마다 | gh 와 git 의 계정 · 자격 증명을 바꾸는 것(환경을 비우는 `env -i` 포함), `gh auth` 명령(`status` 도 봇 토큰을 출력한다), 토큰을 출력하는 `git credential` 과 봇 디렉터리를 가리키는 명령(토큰이 없는 `expires` · `session-env` · `wired` 는 뺀다. Read · Write · Edit 도구는 설치되는 `settings.json` 의 `deny` 가 막는다), App 개인키의 자리(`.config/<App 이름>` · `<App 이름>/key.pem`)를 가리키는 명령(6절 2), 연결되지 않은 세션이 gh 로 쓰거나 `git push` 하는 것, 연결된 세션이 github.com 의 SSH 주소로 푸시하는 것. 명령 치환(`$(…)` · 백틱) 안도 본다(`bot_guard.sh`). 토큰이 끝나 가면 새로 받는다 | 막는다. gh 의 읽기 명령과 `git fetch` · `pull` 은 막지 않는다 |
+| gh 명령 · git 원격 명령마다 | gh 와 git 의 계정 · 자격 증명을 바꾸는 것(환경을 비우는 `env -i` 포함), `gh auth` 명령(`status` 도 봇 토큰을 출력한다), 토큰을 출력하는 `git credential` 과 봇 디렉터리를 가리키는 명령(토큰이 없는 `expires` · `session-env` · `wired` 는 뺀다. Read · Write · Edit 도구는 설치되는 `settings.json` 의 `deny` 가 막는다), App 개인키의 자리(`.config/<App 이름>` · `<App 이름>/key.pem` · `.config` 와 `key.pem` 이 함께 든 것)를 가리키는 명령(6절 2), 연결되지 않은 세션이 gh 로 쓰거나 `git push` 하는 것, 연결된 세션이 github.com 의 SSH 주소로 푸시하는 것. 명령 치환(`$(…)` · 백틱) 안도 본다(`bot_guard.sh`). 토큰이 끝나 가면 새로 받는다 | 막는다. gh 의 읽기 명령과 `git fetch` · `pull` 은 막지 않는다 |
 | 질문 창이 끝날 때 | 질문에 「이 결정은 사람 계정으로 PR #N 에 그대로 올라간다」가 적힌 창에서 사람이 고른 보기를 봇 디렉터리에 기록한다(`window_record.sh`). 직접 쓴 말 · 메모 · 창에 쓴 글이 있는 질문과 답을 비운 질문은 줄로 적지 않고, 저절로 닫힌 창과 질문을 더 요청한 창은 기록하지 않는다. 세션이 봇 디렉터리를 쓰는 것은 설치되는 `settings.json` 의 `deny` 와 `bot_guard.sh` 가, 봇 설정이 있는 레포 안에서 이 훅을 직접 실행하는 것은 `bot_guard.sh` 가 막는다 | 기록만 한다 |
 | 사람 계정으로 올릴 때 | `human_comment.sh <PR 번호>` 는 창 기록만 올린다. 한 줄 정규형이 아니거나, 스크립트 경로가 훅 디렉터리 밖을 가리키거나(하위 디렉터리에서 레포 루트 기준 경로를 입력한 경우도 그렇다 — 경로를 cwd 기준으로 푼다), 셸의 `-c` 인자 안에 두었으면 막는다(`bot_guard.sh`) | 창에서 고른 것만 올라간다 |
 | 라운드 코멘트 게시 | `(사람)` 인용이 사람 계정 코멘트의 불릿 하나나 줄 하나에 글자 그대로 있는지(`round_comment_quotes.sh`) | 막는다 |
@@ -191,7 +191,8 @@ Approve 가 있는지 확인해 머지한다.
    사용자의 git 설정 파일은 바꾸지 않는다.
 2. App 의 개인키를 만들어 `~/.config/<App 이름>/key.pem` 에 둔다(권한 600). 커밋하지 않는다. 세션은 이 자리를
    읽지 못한다 — 설치되는 `settings.json` 의 deny `Read(~/.config/*/key.pem)` 이 Read 도구와 `cat` 같은 파일 명령을,
-   막기 훅이 `.config/<App 이름>` 이나 `<App 이름>/key.pem` 이 든 명령을 막는다. 토큰은 `bot_token.sh` 가 받는다.
+   막기 훅이 `.config/<App 이름>` 이나 `<App 이름>/key.pem` 이 든 명령과 `.config` · `key.pem` 이 함께 든 명령을
+   막는다. 토큰은 `bot_token.sh` 가 받는다.
 3. App 을 설치하고 저장소 범위를 「Only select repositories」로 두어 킷을 쓰는 레포만 고른다.
    개인키나 토큰이 새면 설치 범위 안의 레포에 브랜치를 푸시하고 PR 을 열 수 있고, 브랜치 보호가 승인
    리뷰를 요구하지 않으면 CI 가 초록인 PR 을 머지할 수 있다. Workflows 쓰기로 그 CI 자체도 바꿀 수 있다.

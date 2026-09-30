@@ -20,7 +20,8 @@
 #   봇(gh)에게서 받으므로 `git credential fill` 이 봇 토큰 전체를 출력한다. 연결되지 않은 세션에서는 사람의
 #   토큰을 출력한다
 # - App 개인키를 가리키는 명령. 명령 글자에 `.config/<App 이름>` 이나 `<App 이름>/key.pem` 이 온전한 이름으로
-#   있으면 막는다. App 이름은 봇 설정에서 읽고, 앞뒤 경계는 봇 디렉터리 이름과 같다. 설치되는 `settings.json` 의
+#   있거나, `.config` 와 `key.pem` 이 함께 있으면(`cat ~/.config/*/key.pem` · `find ~/.config -name key.pem`)
+#   막는다. App 이름은 봇 설정에서 읽고, 앞뒤 경계는 봇 디렉터리 이름과 같다. 설치되는 `settings.json` 의
 #   deny `Read(~/.config/*/key.pem)` 은 Read 도구와 `cat` 같은 파일 명령을 막지만, 스크립트가 여는 경우 · 파일
 #   명령으로 인식되지 않는 명령 · `cd` 뒤의 상대 경로는 덮지 않는다(Claude Code 권한 문서)
 # - 연결되지 않은 세션의 쓰기. 세션 시작 훅(`bot_session.sh`)이 이 세션을 봇 계정에 연결하지
@@ -382,8 +383,9 @@ try:
     app = str(json.load(open(os.path.join(top.stdout.strip(), '.claude', 'bot.json'), encoding='utf-8'))['app'])
 except (OSError, ValueError, KeyError, TypeError):
     app = ''
-if re.match(r'^[A-Za-z0-9-]+$', app) and re.search(
-        r'\.config/' + re.escape(app) + r'(?![\w-])|(?<![\w-])' + re.escape(app) + r'/key\.pem\b', cmd):
+if re.match(r'^[A-Za-z0-9-]+$', app) and (re.search(
+        r'\.config/' + re.escape(app) + r'(?![\w-])|(?<![\w-])' + re.escape(app) + r'/key\.pem\b', cmd) or (
+        re.search(r'(?<![\w-])\.config\b', cmd) and re.search(r'(?<![\w-])key\.pem\b', cmd))):
     deny("이 레포에는 봇 설정(.claude/bot.json)이 있어, App 개인키의 자리(~/.config/" + app + "/)를 가리키는 "
          "명령은 막는다. 그 키로 봇 토큰을 새로 받을 수 있고, 읽은 키는 모델의 맥락에 들어간다. 토큰은 "
          "bot_token.sh 가 받는다. 그 낱말이 검색어나 글이면 파일로 옮겨 전달한다.")
