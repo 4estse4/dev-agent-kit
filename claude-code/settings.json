@@ -81,6 +81,7 @@
     "deny": [
       "Read(./secrets/**)",
       "Read(./**/*.pem)",
+      "Read(~/.config/*/key.pem)",
       "Read(./**/*-key.json)",
       "Read(./.env)",
       "Read(./**/.env)",
