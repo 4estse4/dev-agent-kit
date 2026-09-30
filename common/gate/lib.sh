@@ -262,6 +262,9 @@ gate_skip() {
 # **--lang 목록 전체를 적는다.** install.sh 는 --lang 을 주면 install-manifest 의 langs 를 이어받지 않고
 # 고르지 않은 언어의 어댑터를 지운다. 그 언어 하나만 적으면 그 명령이 나머지 언어를 뺀다.
 # langs 를 못 읽으면 못 읽었다고 말한다 — 목록을 짐작하면 같은 일이 생긴다.
+# **처음 고른 항목 플래그도 같이 주라고 적는다.** install-manifest 는 어떤 항목(--hooks · --lint 등)을
+# 설치했는지 적지 않고, install.sh 는 항목 플래그가 없으면 모든 항목을 설치한다. 그래서 목록처럼 채워 줄 수
+# 없고, 말하지 않으면 항목을 골라 설치한 레포에서 안내한 명령이 고르지 않은 항목까지 설치한다.
 gate_skip_adapter() { # $1=언어. 어댑터 이름이 곧 --lang 값이다
   local name="$1(어댑터 없음)" langs want
   if [ "${GATE_STRICT:-0}" != "1" ]; then
@@ -273,10 +276,11 @@ gate_skip_adapter() { # $1=언어. 어댑터 이름이 곧 --lang 값이다
   GATE_FAILOUT+=$'\n'"──── $name ────"$'\n'"이 언어의 어댑터가 설치되지 않아 **검사되지 않았습니다.** 어댑터는 킷을 설치할 때 --lang 으로 고른 언어만 설치됩니다."$'\n'$'\n'
   if [ -n "$langs" ]; then
     case ",$langs," in *",$1,"*) want="$langs" ;; *) want="$langs,$1" ;; esac
-    GATE_FAILOUT+="  킷을 설치할 때 고른 언어:  $langs  (.kit/install-manifest 의 langs)"$'\n'"  킷 레포에서 --lang $want 로 다시 설치하면 $1 어댑터가 설치됩니다. 무엇이 바뀌는지 먼저 봅니다:"$'\n'"    <킷>/install.sh <이 레포> --lang $want --dry-run"$'\n'
+    GATE_FAILOUT+="  킷을 설치할 때 고른 언어:  $langs  (.kit/install-manifest 의 langs)"$'\n'"  --lang $want 로 다시 설치하면 $1 어댑터가 설치됩니다. 무엇이 바뀌는지 먼저 봅니다:"$'\n'"    <킷>/install.sh <이 레포> --lang $want --dry-run"$'\n'
   else
-    GATE_FAILOUT+="  .kit/install-manifest 에서 langs 를 읽지 못했습니다 — 킷을 설치할 때 고른 언어를 알 수 없습니다."$'\n'"  킷 레포에서 install.sh 를 --lang 으로 다시 설치하되, 지금 쓰는 언어를 모두 적고 $1 도 적습니다."$'\n'"  --lang 에 적지 않은 언어의 어댑터는 지워집니다. 지금 설치된 어댑터는 .kit/gate/adapters/ 에 있습니다."$'\n'
+    GATE_FAILOUT+="  .kit/install-manifest 에서 langs 를 읽지 못했습니다 — 킷을 설치할 때 고른 언어를 알 수 없습니다."$'\n'"  <킷>/install.sh 로 다시 설치합니다. --lang 에는 .kit/gate/adapters/ 에 있는 언어를 모두 적고 $1 도 적습니다."$'\n'"  --lang 에 적지 않은 언어의 어댑터는 지워집니다."$'\n'
   fi
+  GATE_FAILOUT+="  처음 설치할 때 항목(--hooks · --lint 등)을 골랐으면 그 플래그도 같이 줍니다. 항목 플래그가 없으면 모든 항목이 설치됩니다."$'\n'
   GATE_FAILOUT+=$'\n'"  불가피하게 건너뛰려면(그 검사는 실행되지 않고, 그 때문에 게이트가 실패하지도 않습니다):"$'\n'"    KIT_ALLOW_MISSING_TOOLS=1 <명령>"$'\n'
 }
 

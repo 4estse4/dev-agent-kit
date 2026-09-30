@@ -104,7 +104,7 @@ jobs:
         continue-on-error: true
         run: bash tests/gate-secrets-ci.sh
 
-      - name: a missing adapter tells to reinstall with the language added to the installed --lang list
+      - name: a missing adapter says to reinstall with the language added to the installed --lang list
         id: missingadapter
         continue-on-error: true
         run: bash tests/gate-missing-adapter.sh

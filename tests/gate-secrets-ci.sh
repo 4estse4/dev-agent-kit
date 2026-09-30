@@ -7,8 +7,11 @@
 #
 # 깨끗한 레포에 킷을 설치하고 그 gates.yml 에서 시크릿 스캔 스텝(run 이 `secrets.sh --range` 를
 # 부르는 스텝)을 뽑는다. `${{ … }}` 는 식의 글자로 찾아 경우마다 값으로 바꾼다. 식이 `env:` 에 있든
-# run 에 있든 같은 테스트가 적용된다. 모르는 식이 있으면 값을 짐작하지 않고 실패한다. 러너의 기본
-# 셸처럼 `bash --noprofile --norc -eo pipefail` 로 실행한다. 보는 것:
+# run 에 있든 같은 테스트가 적용된다. 모르는 식이 있으면 값을 짐작하지 않고 실패한다. 셸은 러너가
+# 고르는 대로 고른다 — GitHub 문서의 shell 표에서 shell 을 적지 않은 Linux 스텝은 `bash -e {0}` 이고,
+# `shell: bash` 를 적어야 `bash --noprofile --norc -eo pipefail {0}` 이다. pipefail 로 실행하면 스텝에
+# 파이프(`secrets.sh … | tee …`)를 더해 러너에서 실패가 초록이 되는 회귀를 이 테스트가 통과시킨다
+# (PR #177 1라운드 콜드 리뷰). 보는 것:
 #   · push 는 before..after 의 커밋을 모두 본다. 앞 커밋이 넣고 뒤 커밋이 지운 것도 찾는다
 #   · before 가 0 뿐이거나(main 을 처음 푸시) 체크아웃에 없으면(강제 푸시로 옛 커밋이 어느 브랜치에서도
 #     닿지 않는다) after 에서 닿는 커밋을 모두 본다
@@ -42,8 +45,16 @@ if len(hits) != 1:
     print(f"  ✗ run 이 secrets.sh --range 를 부르는 스텝이 {len(hits)}개다 — 하나여야 한다")
     sys.exit(1)
 job, step = hits[0]
-json.dump({'job': job, 'env': step.get('env') or {}, 'run': step['run']}, open(sys.argv[2], 'w'))
+# 스텝 → 잡의 defaults → 워크플로의 defaults 순으로 적힌 shell 이 그 스텝의 셸이다.
+shell = (step.get('shell') or ((doc['jobs'][job].get('defaults') or {}).get('run') or {}).get('shell')
+         or ((doc.get('defaults') or {}).get('run') or {}).get('shell') or '')
+json.dump({'job': job, 'env': step.get('env') or {}, 'run': step['run'], 'shell': shell}, open(sys.argv[2], 'w'))
 PY
+case "$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["shell"])' "$T/step.json")" in
+  '')   SHELL_CMD=(bash -e) ;;
+  bash) SHELL_CMD=(bash --noprofile --norc -eo pipefail) ;;
+  *)    echo "  ✗ 시크릿 스캔 스텝의 shell 이 이 테스트가 다루지 않는 것이다 — 러너와 같은 셸로 실행할 수 없다"; exit 1 ;;
+esac
 
 ok() { echo "  ✓ $1"; }
 bad() { echo "  ✗ $1"; fail=1; }
@@ -54,8 +65,10 @@ new_case() { # 설치본을 복제해 그 경우의 레포를 만든다. 훅은 
   git clone -q "$R0" "$C"
   git -C "$C" config user.email t@example.com; git -C "$C" config user.name T
 }
+# `-f` 로 더한다. 전역 gitignore 가 `.env` 를 무시하는 머신에서는 `-f` 없이 `git add` 가 실패해 그 경우의
+# 커밋이 만들어지지 않고, 결함이 없어도 테스트가 빨개졌다(PR #177 1라운드 셀프 리뷰).
 commit() { # $1=add|rm  $2=파일 → 커밋하고 SHA 를 출력한다
-  if [ "$1" = add ]; then echo "$2" > "$C/$2"; git -C "$C" add "$2"; else git -C "$C" rm -q "$2"; fi
+  if [ "$1" = add ]; then echo "$2" > "$C/$2"; git -C "$C" add -f "$2"; else git -C "$C" rm -q "$2"; fi
   git -C "$C" commit -qm "$1 $2" && git -C "$C" rev-parse HEAD
 }
 
@@ -87,7 +100,7 @@ lines = [f"export {k}={shlex.quote(sub(v))}" for k, v in step['env'].items()]
 open(sys.argv[2], 'w').write('\n'.join(lines + [sub(step['run'])]) + '\n')
 PY
   git -C "$C" checkout -q "$( [ "$3" = push ] && echo "$7" || echo "$5" )"
-  out=$(cd "$C" && bash --noprofile --norc -eo pipefail "$T/step.sh" 2>&1); rc=$?
+  out=$(cd "$C" && "${SHELL_CMD[@]}" "$T/step.sh" 2>&1); rc=$?
   [ -n "$out" ] || out="(출력 없음)"
   if [ "$want" = fail ]; then
     # 검사 불능(종료코드 2)은 찾은 것이 아니다. 시크릿 스캔이 .env 를 적으며 실패해야 한다.
