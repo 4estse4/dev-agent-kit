@@ -1,51 +1,75 @@
 #!/usr/bin/env bash
-# 설치기는 eslint 를 쓰는 package.json 옆에만 eslint.config.js 를 놓는다.
+# 설치기는 eslint 를 쓰는 package.json 옆에만, 그 파일이 쓸 eslint 설정이 따로 없을 때만 eslint.config.js 를 놓는다.
 #
 # 이 테스트가 있는 이유: 설치기가 package.json 옆마다 킷의 eslint.config.js 를 놓았다(이슈 #172).
-# oxlint 를 쓰는 앱에는 그 설정을 실행하는 것이 없고, 템플릿 주석은 「어기면 게이트가 실패한다」고 적는다.
-# 더 나쁜 경우도 있다 — ESLint 는 eslint.config.js 를 .mjs · .cjs · .ts 보다 먼저 고르므로, 프로젝트가
-# eslint.config.mjs 를 쓰는데 옆에 킷의 eslint.config.js 를 놓으면 킷의 설정이 프로젝트 설정 대신 읽힌다.
+# oxlint 를 쓰는 앱에서는 그 설정을 읽는 도구가 없고, 템플릿 주석은 「어기면 게이트가 실패한다」고 적는다.
+# 더 나쁜 경우도 있다 — ESLint 는 eslint.config.js 를 .mjs · .cjs · .ts 보다 먼저 고르고, 파일의 디렉터리부터
+# 조상 디렉터리로 올라가며 설정을 찾는다. 그래서 옆에 놓은 킷의 설정이 같은 디렉터리나 워크스페이스 루트의
+# 프로젝트 설정 대신 읽힌다(PR #184 1라운드 콜드 리뷰가 eslint 9 · 8 로 재현했다).
 #
 # 깨끗한 레포에 package.json 의 모양이 다른 디렉터리를 두고 `install.sh --lint` 를 실행한다. 보는 것:
-#   · eslint 를 쓰는 표시(dependencies · devDependencies 의 eslint, eslint 를 부르는 lint 스크립트)가 있으면 놓는다
-#   · 그 표시가 없으면(다른 린터 · 린터 없음) 놓지 않는다
-#   · 다른 이름의 eslint 설정(eslint.config.mjs · .eslintrc.json · package.json 의 eslintConfig)이 있으면 놓지 않는다
+#   · package.json 에 `"eslint":` 키가 있거나(대개 의존성이다) eslint 를 부르는 lint 스크립트가 있으면 놓는다
+#   · 그 표시가 없으면 놓지 않는다 — 다른 린터를 쓰는 앱, 이름에 eslint 가 든 패키지만 남은 앱, 린터가 없는 앱
+#   · 그 디렉터리나 조상 디렉터리(레포 루트까지)에 eslint 설정(eslint.config.* · .eslintrc* · package.json 의
+#     eslintConfig)이 있으면 놓지 않는다. 같은 설치가 얕은 디렉터리에 놓는 eslint.config.js 도 그 설정으로 센다
 #   · `--dry-run` 이 예고하는 자리와 실제로 놓인 자리가 같다
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 fail=0
+T=$(mktemp -d)
 
-T=$(mktemp -d); R="$T/repo"; mkdir -p "$R"
-git init -q -b main "$R"
-git -C "$R" config user.email t@example.com; git -C "$R" config user.name T
-
-# 디렉터리 이름 → 기대(놓음 · 안 놓음)와 package.json · 함께 둘 파일
-mk() { # $1=디렉터리 $2=package.json 내용 $3=함께 둘 파일(선택)
-  mkdir -p "$R/$1"; printf '%s\n' "$2" > "$R/$1/package.json"
+new_repo() { # $1=레포 이름 → 그 경로를 R 에 둔다
+  R="$T/$1"; mkdir -p "$R"; git init -q -b main "$R"
+  git -C "$R" config user.email t@example.com; git -C "$R" config user.name T
+}
+mk() { # $1=디렉터리(레포 루트는 .) $2=package.json 내용 $3=함께 둘 파일(선택)
+  mkdir -p "$R/$1"; [ -z "$2" ] || printf '%s\n' "$2" > "$R/$1/package.json"
   [ -z "${3:-}" ] || : > "$R/$1/$3"
 }
+check() { # $1=놓여야 할 디렉터리들 $2=놓이지 않아야 할 디렉터리들. 레포 루트는 . 로 적는다
+  local dry d want got pred f
+  git -C "$R" add -A && git -C "$R" commit -q -m init
+  dry=$(bash "$KIT/install.sh" "$R" --lint --dry-run 2>&1) || { echo "  ✗ $(basename "$R"): --dry-run 이 실패했다"; fail=1; return; }
+  bash "$KIT/install.sh" "$R" --lint > "$T/install.log" 2>&1 || { echo "  ✗ $(basename "$R"): 설치가 실패했다"; tail -5 "$T/install.log" | sed 's/^/      /'; fail=1; return; }
+  for d in $1 $2; do
+    case " $1 " in *" $d "*) want=놓음 ;; *) want="안 놓음" ;; esac
+    f="eslint.config.js"; [ "$d" = . ] || f="$d/eslint.config.js"
+    [ -f "$R/$f" ] && got=놓음 || got="안 놓음"
+    printf '%s\n' "$dry" | grep -qxE "[[:space:]]*\+ ${f//./\\.}" && pred=놓음 || pred="안 놓음"
+    if [ "$got" = "$want" ] && [ "$pred" = "$want" ]; then echo "  ✓ $(basename "$R") $d → $want (예고도 같다)"
+    else echo "  ✗ $(basename "$R") $d → 실제 $got · 예고 $pred, $want 이어야 한다"; fail=1; fi
+  done
+}
+
+# 한 레포에 서로 무관한 앱들. 레포 루트에는 package.json 이 없다.
+new_repo apps
 mk dep          '{ "name": "a", "devDependencies": { "eslint": "^9.0.0" } }'
 mk script       '{ "name": "b", "scripts": { "lint": "eslint ." } }'
-mk oxlint       '{ "name": "c", "scripts": { "lint": "oxlint src" }, "devDependencies": { "oxlint": "^1.0.0" } }'
+mk oxlint       '{ "name": "c", "scripts": { "lint": "oxlint src" }, "devDependencies": { "oxlint": "^1.0.0", "eslint-plugin-react": "^7.0.0", "@typescript-eslint/parser": "^8.0.0" } }'
 mk none         '{ "name": "d", "scripts": { "build": "tsc" } }'
 mk mjs          '{ "name": "e", "devDependencies": { "eslint": "^9.0.0" } }' eslint.config.mjs
 mk eslintrc     '{ "name": "f", "devDependencies": { "eslint": "^8.57.0" } }' .eslintrc.json
 mk pkgconfig    '{ "name": "g", "devDependencies": { "eslint": "^8.57.0" }, "eslintConfig": { "root": true } }'
-git -C "$R" add -A && git -C "$R" commit -q -m init
+check "dep script" "oxlint none mjs eslintrc pkgconfig"
 
-want_placed="dep script"
-want_absent="oxlint none mjs eslintrc pkgconfig"
+# 워크스페이스: 루트의 eslint.config.mjs 를 패키지가 쓴다(eslint 9).
+new_repo ws-flat
+mk .            '{ "name": "root", "private": true, "workspaces": ["packages/*"], "devDependencies": { "eslint": "^9.0.0" } }' eslint.config.mjs
+mk packages/a   '{ "name": "a", "scripts": { "lint": "eslint ." } }'
+check "" ". packages/a"
 
-dry=$(bash "$KIT/install.sh" "$R" --lint --dry-run 2>&1) || { echo "  ✗ --dry-run 이 실패했다:"; printf '%s\n' "$dry" | tail -5 | sed 's/^/      /'; exit 1; }
-bash "$KIT/install.sh" "$R" --lint > "$T/install.log" 2>&1 || { echo "  ✗ 설치가 실패했다:"; tail -5 "$T/install.log" | sed 's/^/      /'; exit 1; }
+# 워크스페이스: 루트의 .eslintrc.json 을 패키지가 쓴다(eslint 8).
+new_repo ws-legacy
+mk .            '{ "name": "root", "private": true, "workspaces": ["packages/*"], "devDependencies": { "eslint": "^8.57.0" } }' .eslintrc.json
+mk packages/b   '{ "name": "b", "scripts": { "lint": "eslint ." } }'
+check "" ". packages/b"
 
-for d in $want_placed $want_absent; do
-  case " $want_placed " in *" $d "*) want=놓음 ;; *) want="안 놓음" ;; esac
-  [ -f "$R/$d/eslint.config.js" ] && got=놓음 || got="안 놓음"
-  printf '%s\n' "$dry" | grep -qE "^[[:space:]]*\+ $d/eslint\.config\.js$" && pred=놓음 || pred="안 놓음"
-  if [ "$got" = "$want" ] && [ "$pred" = "$want" ]; then echo "  ✓ $d → $want (예고도 같다)"
-  else echo "  ✗ $d → 실제 $got · 예고 $pred, $want 이어야 한다"; fail=1; fi
-done
+# 워크스페이스: 루트에 설정이 없으면 같은 설치가 루트에 놓고, 패키지는 그 설정을 쓴다.
+# 루트가 레포 트리에서 패키지보다 늦게 나와도 같아야 한다 — 이름이 루트 package.json 보다 앞서는 디렉터리에 둔다.
+new_repo ws-kit
+mk .            '{ "name": "root", "private": true, "workspaces": ["a-pkg/*"], "devDependencies": { "eslint": "^9.0.0" } }'
+mk a-pkg/c      '{ "name": "c", "scripts": { "lint": "eslint ." } }'
+check "." "a-pkg/c"
 
 rm -rf "$T"
 exit $fail

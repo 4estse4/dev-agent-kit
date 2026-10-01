@@ -2,11 +2,9 @@
 # settings 의 파일 경로 규칙은 Read · Edit 로만 쓴다.
 #
 # 이 테스트가 있는 이유: 설치되는 settings.json 의 deny 에 `Write(//**/kit-bot/**)` 가 있었다(이슈 #172).
-# Claude Code 는 그 규칙을 받아 두기만 하고 쓰지 않으며, 세션을 열 때마다 경고한다 — 공식 문서
-# (`/docs/en/permissions`): "Claude Code checks file permissions against `Edit(path)` and `Read(path)` rules
-# only. If you write a path rule for `Write`, `NotebookEdit`, `Glob`, or the legacy `MultiEdit` tool instead,
-# Claude Code accepts the rule but never consults it". 그 규칙이 막는다고 믿으면 막는 것이 없는 자리가 생긴다.
-# Write 도구는 같은 경로의 `Edit(...)` 규칙이 막는다.
+# Claude Code 는 파일 경로 규칙을 Read · Edit 로만 보므로 그 규칙은 아무것도 막지 않고, 세션을 열 때마다
+# 경고만 낸다. 문서 원문과 확인한 것은 common/docs/verification-stages.md 6.2 에 있다. 그 규칙이 막는다고
+# 믿으면 막는 것이 없는 자리가 생긴다. Write 도구는 같은 경로의 `Edit(...)` 규칙이 막는다.
 #
 # 보는 것: 깨끗한 레포에 설치한 `.claude/settings.json` 과 이 레포의 `.claude/settings.json` 의 allow · ask ·
 # deny 에 `Write(…)` · `NotebookEdit(…)` · `Glob(…)` · `MultiEdit(…)` 경로 규칙이 없다. 괄호 없이 도구 이름만 쓴

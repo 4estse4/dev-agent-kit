@@ -362,21 +362,31 @@ if [ "$DO_LINT" = 1 ]; then
     done < <(cd "$TARGET" && find . \( $(gate_prune_expr) \) -prune -o -name "$1" -print 2>/dev/null)
   }
 
-  # eslint 는 그 package.json 이 eslint 를 쓸 때만 놓는다 — dependencies · devDependencies 에 eslint 가 있거나
-  # lint 스크립트가 eslint 를 부를 때다. 게이트는 lint 스크립트가 무엇이든 그것을 실행하므로, oxlint 같은 다른
-  # 린터를 쓰는 앱에 놓은 설정은 아무것도 실행하지 않는다. 다른 이름의 eslint 설정이 있으면 놓지 않는다 —
-  # ESLint 는 eslint.config.js 를 .mjs · .cjs · .ts 보다 먼저 고르므로(ESLint 문서 「Configuration File
-  # Precedence」), 옆에 놓으면 킷의 설정이 프로젝트 설정 대신 읽힌다. 같은 이름(eslint.config.js)이 이미 있으면
-  # place() 가 프로젝트 것을 두고 .kit-new 로 옆에 놓는다.
+  # eslint 는 그 package.json 이 eslint 를 쓸 때만 놓는다 — package.json 에 `"eslint":` 키가 있거나(대개
+  # 의존성이다) lint 스크립트가 eslint 를 부를 때다. 게이트는 lint 스크립트가 무엇이든 그것을 실행하므로, oxlint
+  # 같은 다른 린터를 쓰는 앱에서는 놓은 설정을 읽는 도구가 없다.
+  # 그 package.json 이 쓸 eslint 설정이 따로 있으면 놓지 않는다. ESLint 는 파일의 디렉터리부터 조상 디렉터리로
+  # 올라가며 설정을 찾고, 한 디렉터리에서는 eslint.config.js 를 .mjs · .cjs · .ts 보다 먼저 고른다(ESLint 문서
+  # 「Configuration File Resolution」 · 「Configuration File Precedence」). 그래서 옆에 놓으면 킷의 설정이 같은
+  # 디렉터리나 워크스페이스 루트의 프로젝트 설정 대신 읽힌다. 레포 루트까지 올라가며 eslint.config.* ·
+  # .eslintrc* · package.json 의 eslintConfig 를 찾는다. 조상 디렉터리의 package.json 이 이 판단으로 킷의 설정을
+  # 받게 되면 그것도 이 package.json 이 쓸 설정으로 센다 — 같은 설치가 놓을 것이므로, find 가 어느 쪽을 먼저
+  # 내놓든 결과가 같다. 같은 디렉터리의 eslint.config.js 는 세지 않는다 — place() 가 프로젝트 것을 두고
+  # .kit-new 로 옆에 놓는다.
   eslint_wanted() { # $1=package.json 이 있는 디렉터리(끝에 /)
-    local f
+    local d="$1" f
     grep -Eq '"eslint"[[:space:]]*:|"lint"[[:space:]]*:[[:space:]]*"[^"]*eslint' "$1package.json" 2>/dev/null || return 1
-    grep -q '"eslintConfig"[[:space:]]*:' "$1package.json" && return 1
-    for f in eslint.config.mjs eslint.config.cjs eslint.config.ts eslint.config.mts eslint.config.cts \
-             .eslintrc .eslintrc.js .eslintrc.cjs .eslintrc.yaml .eslintrc.yml .eslintrc.json; do
-      [ -e "$1$f" ] && return 1
+    while :; do
+      grep -q '"eslintConfig"[[:space:]]*:' "${d}package.json" 2>/dev/null && return 1
+      for f in eslint.config.js eslint.config.mjs eslint.config.cjs eslint.config.ts eslint.config.mts eslint.config.cts \
+               .eslintrc .eslintrc.js .eslintrc.cjs .eslintrc.yaml .eslintrc.yml .eslintrc.json; do
+        [ "$d" = "$1" ] && [ "$f" = eslint.config.js ] && continue
+        [ -e "$d$f" ] && return 1
+      done
+      [ "$d" != "$1" ] && [ -f "${d}package.json" ] && eslint_wanted "$d" && return 1
+      [ "$d" = "$TARGET/" ] && return 0
+      d="$(dirname "${d%/}")/"
     done
-    return 0
   }
 
   place_beside go.mod         "$KIT_ROOT/common/lint/go/.golangci.yml"    ".golangci.yml"
