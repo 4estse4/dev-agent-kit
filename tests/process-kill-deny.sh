@@ -29,7 +29,7 @@ missing = [r for r in ('Bash(pkill*)', 'Bash(killall*)') if r not in deny]
 if missing:
     print(f"  ✗ {name} 의 deny 에 {' · '.join(missing)} 가 없다")
     sys.exit(1)
-print(f"  ✓ {name} 의 deny 가 pkill · killall 을 막는다")
+print(f"  ✓ {name} 의 deny 에 Bash(pkill*) · Bash(killall*) 가 있다")
 PY
 done
 
