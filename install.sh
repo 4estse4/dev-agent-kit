@@ -341,13 +341,16 @@ if [ "$DO_LINT" = 1 ]; then
   # shellcheck source=/dev/null
   . "$KIT_ROOT/common/gate/lib.sh"
 
-  # $4 는 선택 인자다 — set -u 하에서는 ${4:-} 로 받아야 미설정일 때 오류가 나지 않는다.
-  place_beside() { # $1=마커 $2=킷 설정 파일 $3=놓을 이름 $4=마커에 이 문자열이 있으면 건너뜀(선택)
-    local marker dir rel skip="${4:-}"
+  # $4 · $5 는 선택 인자다 — set -u 하에서는 ${4:-} 로 받아야 미설정일 때 오류가 나지 않는다.
+  place_beside() { # $1=마커 $2=킷 설정 파일 $3=놓을 이름 $4=마커에 이 문자열이 있으면 건너뜀(선택) $5=마커가 있는 디렉터리를 받아 성공할 때만 놓는 함수(선택)
+    local marker dir rel skip="${4:-}" want="${5:-}"
     while IFS= read -r marker; do
       dir=$(dirname "$marker"); rel=${dir#./}; [ "$rel" = "." ] && rel=""
       # 프로젝트가 마커 안에 이미 설정을 갖고 있으면 두 벌을 만들지 않는다.
       if [ -n "$skip" ] && grep -q "$skip" "$TARGET/${rel:+$rel/}$(basename "$marker")" 2>/dev/null; then
+        continue
+      fi
+      if [ -n "$want" ] && ! "$want" "$TARGET/${rel:+$rel/}"; then
         continue
       fi
       local dest="${rel:+$rel/}$3"
@@ -359,8 +362,25 @@ if [ "$DO_LINT" = 1 ]; then
     done < <(cd "$TARGET" && find . \( $(gate_prune_expr) \) -prune -o -name "$1" -print 2>/dev/null)
   }
 
+  # eslint 는 그 package.json 이 eslint 를 쓸 때만 놓는다 — dependencies · devDependencies 에 eslint 가 있거나
+  # lint 스크립트가 eslint 를 부를 때다. 게이트는 lint 스크립트가 무엇이든 그것을 실행하므로, oxlint 같은 다른
+  # 린터를 쓰는 앱에 놓은 설정은 아무것도 실행하지 않는다. 다른 이름의 eslint 설정이 있으면 놓지 않는다 —
+  # ESLint 는 eslint.config.js 를 .mjs · .cjs · .ts 보다 먼저 고르므로(ESLint 문서 「Configuration File
+  # Precedence」), 옆에 놓으면 킷의 설정이 프로젝트 설정 대신 읽힌다. 같은 이름(eslint.config.js)이 이미 있으면
+  # place() 가 프로젝트 것을 두고 .kit-new 로 옆에 놓는다.
+  eslint_wanted() { # $1=package.json 이 있는 디렉터리(끝에 /)
+    local f
+    grep -Eq '"eslint"[[:space:]]*:|"lint"[[:space:]]*:[[:space:]]*"[^"]*eslint' "$1package.json" 2>/dev/null || return 1
+    grep -q '"eslintConfig"[[:space:]]*:' "$1package.json" && return 1
+    for f in eslint.config.mjs eslint.config.cjs eslint.config.ts eslint.config.mts eslint.config.cts \
+             .eslintrc .eslintrc.js .eslintrc.cjs .eslintrc.yaml .eslintrc.yml .eslintrc.json; do
+      [ -e "$1$f" ] && return 1
+    done
+    return 0
+  }
+
   place_beside go.mod         "$KIT_ROOT/common/lint/go/.golangci.yml"    ".golangci.yml"
-  place_beside package.json   "$KIT_ROOT/common/lint/ts/eslint.config.js" "eslint.config.js"
+  place_beside package.json   "$KIT_ROOT/common/lint/ts/eslint.config.js" "eslint.config.js" "" eslint_wanted
   # pyproject 에 [tool.ruff] 가 이미 있으면 그쪽이 설정이다 — 두 벌을 만들지 않는다.
   place_beside pyproject.toml "$KIT_ROOT/common/lint/py/ruff.toml"        "ruff.toml" \
     '^\[tool\.ruff'
