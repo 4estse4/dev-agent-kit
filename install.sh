@@ -365,16 +365,17 @@ if [ "$DO_LINT" = 1 ]; then
   # eslint 는 그 package.json 이 eslint 를 쓸 때만 놓는다 — package.json 에 `"eslint":` 키가 있거나(대개
   # 의존성이다) lint 스크립트가 eslint 를 부를 때다. 게이트는 lint 스크립트가 무엇이든 그것을 실행하므로, oxlint
   # 같은 다른 린터를 쓰는 앱에서는 놓은 설정을 읽는 도구가 없다.
-  # 그 package.json 이 쓸 프로젝트의 eslint 설정이 따로 있으면 놓지 않는다. ESLint 는 파일의 디렉터리부터 조상
-  # 디렉터리로 올라가며 설정을 찾고, 한 디렉터리에서는 eslint.config.js 를 .mjs · .cjs · .ts 보다 먼저 고른다(ESLint
-  # 문서 「Configuration File Resolution」 · 「Configuration File Precedence」). 그래서 옆에 놓으면 킷의 설정이 같은
-  # 디렉터리나 워크스페이스 루트의 프로젝트 설정 대신 읽힌다. 레포 루트까지 올라가며 eslint.config.* ·
-  # .eslintrc* · package.json 의 eslintConfig 를 찾는다.
-  # 조상의 eslint.config.js 가 킷의 것과 내용이 같으면 프로젝트 설정으로 세지 않고 이 package.json 옆에도 놓는다.
-  # 킷 설정의 ignores · files 글롭(dist/** · vite.config.* 등)은 그 설정 파일의 디렉터리를 기준으로 읽히므로,
-  # 워크스페이스 루트에만 있으면 패키지의 파일에 맞지 않아 게이트가 실패한다. 이 실행이 루트에 먼저 쓴 파일도 킷의
-  # 것과 같으므로 find 가 어느 쪽을 먼저 내놓든 예고와 실제가 같다. 같은 디렉터리의 eslint.config.js 는 세지
-  # 않는다 — place() 가 프로젝트 것을 두고 .kit-new 로 옆에 놓는다.
+  # 그 package.json 이 쓸 프로젝트의 eslint 설정이 따로 있으면 놓지 않는다. 킷은 ESLint 10 을 기준으로 한다 — ESLint 9 는
+  # 지원하지 않는다(2026-08-06 지원 종료). ESLint 10 은 파일의 디렉터리부터 조상 디렉터리로 올라가며 설정을 찾아 처음 찾은
+  # 곳에서 멈추고, 한 디렉터리에서는 eslint.config.js 를 .mjs · .cjs · .ts 보다 먼저 고른다(ESLint 문서 「Configuration File
+  # Resolution」 · 「Configuration File Precedence」). 그래서 옆에 놓으면 킷의 설정이 같은 디렉터리나 워크스페이스 루트의
+  # 프로젝트 설정 대신 읽힌다. 그 디렉터리부터 레포 루트까지 올라가며 eslint.config.* · .eslintrc* · package.json 의
+  # eslintConfig 를 찾는다. .eslintrc* · eslintConfig 를 둔 프로젝트는 옛 설정 방식을 쓰므로 건드리지 않는다.
+  # eslint.config.js 를 만나면 ESLint 처럼 거기서 멈추고 놓는다. 같은 디렉터리의 것이면 place() 가 프로젝트 것을 두고
+  # .kit-new 로 옆에 놓는다. 조상의 것은 킷의 것과 내용이 같을 때만 그렇게 하고, 다르면 프로젝트 설정이라 놓지 않는다.
+  # 킷 설정의 ignores · files 글롭(dist/** · vite.config.* 등)은 그 설정 파일의 디렉터리를 기준으로 읽히므로, 조상에만
+  # 있으면 패키지의 파일에 맞지 않아 게이트가 실패한다. 이 실행이 루트에 먼저 쓴 파일도 킷의 것과 같으므로 find 가
+  # 어느 쪽을 먼저 내놓든 예고와 실제가 같다.
   ESLINT_KIT_CONFIG="$KIT_ROOT/common/lint/ts/eslint.config.js"
   eslint_wanted() { # $1=package.json 이 있는 디렉터리(끝에 /)
     local d="$1" f
@@ -385,8 +386,8 @@ if [ "$DO_LINT" = 1 ]; then
                .eslintrc .eslintrc.js .eslintrc.cjs .eslintrc.yaml .eslintrc.yml .eslintrc.json; do
         [ -e "$d$f" ] || continue
         if [ "$f" = eslint.config.js ]; then
-          [ "$d" = "$1" ] && continue
-          cmp -s "$d$f" "$ESLINT_KIT_CONFIG" && continue
+          [ "$d" = "$1" ] && return 0
+          cmp -s "$d$f" "$ESLINT_KIT_CONFIG" && return 0
         fi
         return 1
       done
