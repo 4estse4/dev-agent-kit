@@ -43,6 +43,7 @@
 # - auto-merge 가 켜진 PR 의 브랜치로 가는 푸시. 켠 채 푸시하면 사람이 새 커밋을 보고 누른 Approve 로 옛
 #   결정 코멘트대로 머지된다. 푸시가 바꿀 브랜치(`push_branches`)의 열린 PR 을 조회하고, 조회하지 못하면
 #   막는다
+# - 훅이 실행된 지 `BUDGET` 초가 지나도 위 두 판정을 마치지 못한 명령. GitHub 조회를 끊고 막는다.
 # - 봇 토큰이 끝나 가는데 새로 받지 못한 뒤의 쓰기
 #
 # **사람 계정으로 올리는 명령은 모양만 본다.** 사람의 결정은 사람 계정 코멘트로 남는다. 그 길은
@@ -70,8 +71,9 @@
 # 실행할 때 토큰이 10분 안에 끝나면, 토큰
 # 스크립트(`bot_token.sh`)로 새로 받아 봇 디렉터리의 파일만 바꾼다. `GH_CONFIG_DIR` 은 그대로 그
 # 디렉터리를 가리킨다. 연결된 세션의 git 은 github.com 자격 증명을 gh(봇)에게서 받으므로
-# (`bot_session.sh`) 푸시 앞에서도 새로 받아야 한다. 새로 받는 데 드는 시간은 토큰 스크립트의 curl
-# `--max-time` 이 정한다.
+# (`bot_session.sh`) 푸시 앞에서도 새로 받아야 한다. 새로 받는 시간(토큰 스크립트의 curl `--max-time`)도
+# `BUDGET` 에 포함된다. 토큰 스크립트는 끊지 않는다. 끊으면(SIGKILL) `trap` 이 실행되지 않아 JWT 임시 파일이
+# 남는다.
 #
 # **무엇을 못 막나.** 명령 글자로 알아보므로, 스크립트 파일 안이나 인라인 인터프리터
 # (`python3 -c` 등) 안의 호출은 못 본다 — 세션이 봇 연결을 지우는 스크립트를 새로 써서 실행하면 사람
@@ -86,7 +88,13 @@ case "$input" in
 esac
 
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)" HOOK_INPUT="$input" python3 - <<'PY'
-import datetime, json, os, re, shlex, subprocess, sys
+import datetime, json, os, re, shlex, subprocess, sys, time
+
+# Claude Code 는 이 훅을 `.claude/settings.json` 의 `timeout`(기본값 90초)까지만 기다린다. 그 뒤에는 훅이 없었던
+# 것처럼 명령을 처리해, allow 인 `git push` 가 검사 없이 실행된다. 그래서 이 훅은 실행된 지 `BUDGET` 초(기본값
+# 60)가 지나면 조회를 끊고 명령을 막는다. `timeout` 은 `BUDGET` 보다 넉넉히 길게 둔다.
+BUDGET = 60
+START = time.monotonic()
 
 GUIDE = "docs/process/kit-guide.md 의 「봇 계정과 사람의 승인」 절"
 
@@ -492,10 +500,17 @@ def push_remote(rest):
 
 def session_run(prog, *a):
     """세션 환경(`<봇 디렉터리>/session-env`)을 적용해 git · gh 를 실행한다. 이 훅은 세션의 Bash 가 받는
-    환경을 받지 않으므로, 세션의 명령이 쓸 설정 · 계정을 보려면 그 파일을 적용해야 한다."""
-    return subprocess.run(
-        ['bash', '-c', '[ -f "$0" ] && { set -a; . "$0"; set +a; }; exec "$@"',
-         os.path.join(botdir, 'session-env'), prog, *a], cwd=cwd, capture_output=True, text=True)
+    환경을 받지 않으므로, 세션의 명령이 쓸 설정 · 계정을 보려면 그 파일을 적용해야 한다.
+
+    쓰기 판정에서만 부른다. `BUDGET` 이 지나면 끊고 막는다."""
+    try:
+        return subprocess.run(
+            ['bash', '-c', '[ -f "$0" ] && { set -a; . "$0"; set +a; }; exec "$@"',
+             os.path.join(botdir, 'session-env'), prog, *a], cwd=cwd, capture_output=True, text=True,
+            timeout=START + BUDGET - time.monotonic())
+    except subprocess.TimeoutExpired:
+        deny("막기 훅이 실행된 지 %d초가 지나도 `%s` 이 끝나지 않아 막았다. GitHub 이 응답하지 않는 것 같으니 잠시 "
+             "뒤 다시 실행한다." % (BUDGET, ' '.join((prog,) + a)))
 
 
 def push_urls(args):
