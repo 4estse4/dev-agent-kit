@@ -177,17 +177,33 @@ printf '{"permissions": ' > "$HOME/.claude/settings.json"
 refused "사람 settings 를 못 읽으면 막는다" 'echo hi'
 rm -f "$HOME/.claude/settings.json"
 # 관리 settings 파일은 쓰려면 관리자 권한이 든다. 관리자 권한을 묻지 않고 쓸 수 있는 Linux(CI 러너)에서만
-# 두고 시험한 뒤 지운다. 디렉터리가 이미 있으면 남의 정책이라 건드리지 않는다
+# 두고 시험한 뒤 지운다. 디렉터리가 이미 있으면 남의 정책이라 건드리지 않는다. CI 에서 건너뛰면 실패다 — 이
+# 경우를 실행하는 곳이 CI 뿐이라, 건너뛰고 통과하면 확인이 알림 없이 빠진다
 M=/etc/claude-code
-if [ "$(uname)" = Linux ] && [ ! -e "$M" ] && sudo -n true 2>/dev/null; then
+skip=''
+if [ "$(uname)" != Linux ]; then skip='Linux 가 아니다'
+elif [ -e "$M" ]; then skip="관리 디렉터리가 이미 있다($M). 남의 정책이라 건드리지 않는다"
+elif ! sudo -n true 2>/dev/null; then skip='sudo 가 암호를 묻는다'
+fi
+if [ -z "$skip" ]; then
   sudo mkdir -p "$M/managed-settings.d"
   printf '{"permissions": {"deny": ["Bash(helm uninstall*)"]}}\n' | sudo tee "$M/managed-settings.json" >/dev/null
   printf '{"permissions": {"ask": ["Bash(dropdb *)"]}}\n' | sudo tee "$M/managed-settings.d/10-db.json" >/dev/null
   refused "관리 settings 파일(managed-settings.json)의 규칙" 'echo helm uninstall web'
   refused "관리 settings 조각(managed-settings.d/*.json)의 규칙" 'echo dropdb prod'
+  # 운영체제가 읽기를 막은 관리 settings 는 Claude Code 가 그 출처 없이 시작한다(공식 문서 managed-settings.md:
+  # "If the operating system denied the read, for example on a root-only file, every session starts without
+  # that source's policies"). evidence.sh 도 건너뛰고 실행한다. 읽지 못하는 managed-settings.d 도 같다
+  sudo chmod 600 "$M/managed-settings.json"
+  runs "관리자만 읽는 관리 settings 파일은 건너뛴다" 'echo helm uninstall web'
+  sudo chmod 644 "$M/managed-settings.json"
+  sudo chmod 700 "$M/managed-settings.d"
+  runs "관리자만 여는 managed-settings.d 는 건너뛴다" 'echo dropdb prod'
   sudo rm -rf "$M"
+elif [ -n "${GITHUB_ACTIONS:-}" ]; then
+  bad "CI 에서 관리 settings 경우를 실행하지 못했다 — $skip"
 else
-  echo "  - 관리 settings 파일: 관리자 권한을 묻지 않고 $M 을 쓸 수 있는 Linux 가 아니라 건너뛴다(CI 에서 본다)"
+  echo "  - 관리 settings 경우를 건너뛴다: $skip. CI 에서 실행한다"
 fi
 printf '{"permissions": ' > "$R/.claude/settings.json"
 refused "설정을 못 읽으면 막는다" 'echo hi'
