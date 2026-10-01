@@ -12,6 +12,10 @@ S="$KIT/claude-code/skills/open-pr/evidence.sh"
 OPEN="$KIT/claude-code/skills/open-pr/SKILL.md"
 MERGE="$KIT/claude-code/skills/merge-pr/SKILL.md"
 T=$(mktemp -d)
+# evidence.sh 는 사람 settings 도 대조한다. 이 머신의 사람 규칙이 섞이지 않게 HOME 을 떼어 놓는다
+export HOME="$T/home"
+unset CLAUDE_CONFIG_DIR
+mkdir -p "$HOME"
 fail=0
 ok() { echo "  ✓ $1"; }
 bad() { echo "  ✗ $1"; fail=1; }
@@ -91,7 +95,7 @@ grep -qxF "$(cd "$T" && pwd -P)" "$T/pwd.part" 2>/dev/null && ok "부른 자리�
 # ── ask · deny 규칙 글자가 보이는 명령은 실행하지 않는다 ──
 # evidence.sh 는 받은 글을 `bash -c` 로 실행한다. 권한 규칙은 그 안을 못 본다(공식 문서:
 # "isn't a security boundary"). 누가 evidence.sh 를 허용하면 그 안의 `gh pr merge` 가 프롬프트
-# 없이 실행된다. 그래서 스크립트가 프로젝트 설정의 ask · deny 글자를 보고 거부한다.
+# 없이 실행된다. 그래서 스크립트가 settings 의 ask · deny 글자를 보고 거부한다.
 R="$T/repo"
 mkdir -p "$R/.claude" "$R/sub"
 git -C "$R" init -q
@@ -159,6 +163,32 @@ runs "Bash(gh api:*) 가 gh apix 를 막지 않는다(:* 는 공백 *)" 'echo gh
 runs "Bash(rm *) 가 --rm 을 막지 않는다(앞 경계에 -)" 'echo docker compose run --rm app pytest'
 runs "가운데 ' *' 규칙이 공백 없는 자리를 막지 않는다" 'echo npm runx --prod'
 runs "와일드카드가 둘인 규칙은 맨 명령을 막지 않는다" 'echo npm --help'
+# Claude Code 는 ask · deny 목록을 범위마다 합친다(공식 문서 settings.md: "Claude Code combines the lists
+# instead of picking one"). 사람 settings 는 ~/.claude/settings.json 이고, CLAUDE_CONFIG_DIR 이 있으면 그
+# 디렉터리의 settings.json 이다. 관리 settings 파일은 시스템 디렉터리에 있다.
+mkdir -p "$HOME/.claude" "$T/cfg"
+printf '{"permissions": {"deny": ["Bash(terraform destroy*)"]}}\n' > "$HOME/.claude/settings.json"
+printf '{"permissions": {"ask": ["Bash(kubectl delete*)"]}}\n' > "$T/cfg/settings.json"
+refused "사람 settings(~/.claude/settings.json)의 규칙" 'echo terraform destroy -auto-approve'
+export CLAUDE_CONFIG_DIR="$T/cfg"
+refused "CLAUDE_CONFIG_DIR 의 settings.json 규칙" 'echo kubectl delete ns x'
+unset CLAUDE_CONFIG_DIR
+printf '{"permissions": ' > "$HOME/.claude/settings.json"
+refused "사람 settings 를 못 읽으면 막는다" 'echo hi'
+rm -f "$HOME/.claude/settings.json"
+# 관리 settings 파일은 쓰려면 관리자 권한이 든다. 관리자 권한을 묻지 않고 쓸 수 있는 Linux(CI 러너)에서만
+# 두고 시험한 뒤 지운다. 디렉터리가 이미 있으면 남의 정책이라 건드리지 않는다
+M=/etc/claude-code
+if [ "$(uname)" = Linux ] && [ ! -e "$M" ] && sudo -n true 2>/dev/null; then
+  sudo mkdir -p "$M/managed-settings.d"
+  printf '{"permissions": {"deny": ["Bash(helm uninstall*)"]}}\n' | sudo tee "$M/managed-settings.json" >/dev/null
+  printf '{"permissions": {"ask": ["Bash(dropdb *)"]}}\n' | sudo tee "$M/managed-settings.d/10-db.json" >/dev/null
+  refused "관리 settings 파일(managed-settings.json)의 규칙" 'echo helm uninstall web'
+  refused "관리 settings 조각(managed-settings.d/*.json)의 규칙" 'echo dropdb prod'
+  sudo rm -rf "$M"
+else
+  echo "  - 관리 settings 파일: 관리자 권한을 묻지 않고 $M 을 쓸 수 있는 Linux 가 아니라 건너뛴다(CI 에서 본다)"
+fi
 printf '{"permissions": ' > "$R/.claude/settings.json"
 refused "설정을 못 읽으면 막는다" 'echo hi'
 
