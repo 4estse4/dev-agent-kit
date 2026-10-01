@@ -52,7 +52,8 @@ main=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) && mai
 # 디렉터리의 managed-settings.json 과 managed-settings.d/*.json 이다(공식 문서 managed-settings.md). 관리 출처가
 # 여럿이면 Claude Code 는 기본값(first-wins)에서 하나만 쓰지만 파일은 늘 대조한다 — 쓰이지 않는 규칙까지 보면 더
 # 막을 뿐이다. 운영체제가 읽기를 막은 관리 settings 는 Claude Code 처럼 건너뛴다(같은 문서: "every session starts
-# without that source's policies"). 서버 관리 settings(캐시 ~/.claude/remote-settings.json) · macOS 구성 프로필 ·
+# without that source's policies"). 빈 관리 settings 파일은 Claude Code 처럼 {} 로 본다(같은 문서: "An empty managed
+# settings file counts as {}"). 형식이 틀린 관리 settings 는 막는다 — 그때 Claude Code 는 시작을 거부한다. 서버 관리 settings(캐시 ~/.claude/remote-settings.json) · macOS 구성 프로필 ·
 # 실행할 때 준 --settings · --disallowedTools 의 규칙은 이 스크립트가 대조하지 않는다.
 user=${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json
 case "$(uname)" in
@@ -72,7 +73,9 @@ for path in sys.argv[1:]:
     if not os.path.exists(path):
         continue
     try:
-        perms = json.load(open(path, encoding='utf-8')).get('permissions') or {}
+        text = open(path, encoding='utf-8').read()
+        data = {} if managed and not text.strip() else json.loads(text)
+        perms = data.get('permissions') or {}
         rules = [(k, r) for k in ('ask', 'deny') for r in perms.get(k) or []]
     except (OSError, ValueError, AttributeError, TypeError) as e:
         if managed and isinstance(e, PermissionError):

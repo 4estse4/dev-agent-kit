@@ -175,6 +175,11 @@ refused "CLAUDE_CONFIG_DIR 의 settings.json 규칙" 'echo kubectl delete ns x'
 unset CLAUDE_CONFIG_DIR
 printf '{"permissions": ' > "$HOME/.claude/settings.json"
 refused "사람 settings 를 못 읽으면 막는다" 'echo hi'
+# 운영체제가 읽기를 막은 settings 를 건너뛰는 것은 관리 settings 뿐이다. 사람 settings 는 계속 막는다
+printf '{"permissions": {"deny": ["Bash(terraform destroy*)"]}}\n' > "$HOME/.claude/settings.json"
+chmod 000 "$HOME/.claude/settings.json"
+refused "운영체제가 읽기를 막은 사람 settings 는 막는다" 'echo terraform destroy -auto-approve'
+chmod 600 "$HOME/.claude/settings.json"
 rm -f "$HOME/.claude/settings.json"
 # 관리 settings 파일은 쓰려면 관리자 권한이 든다. 관리자 권한을 묻지 않고 쓸 수 있는 Linux(CI 러너)에서만
 # 두고 시험한 뒤 지운다. 디렉터리가 이미 있으면 남의 정책이라 건드리지 않는다. CI 에서 건너뛰면 실패다 — 이
@@ -199,6 +204,13 @@ if [ -z "$skip" ]; then
   sudo chmod 644 "$M/managed-settings.json"
   sudo chmod 700 "$M/managed-settings.d"
   runs "관리자만 여는 managed-settings.d 는 건너뛴다" 'echo dropdb prod'
+  # 건너뛰는 것은 운영체제가 막은 읽기뿐이다. 형식이 틀린 관리 settings 는 계속 막는다 — 그때 Claude Code 는
+  # 시작을 거부한다. 빈 관리 settings 파일은 Claude Code 가 {} 로 보므로(managed-settings.md: "An empty managed
+  # settings file counts as {}") 막지 않는다
+  printf '{"permissions": ' | sudo tee "$M/managed-settings.json" >/dev/null
+  refused "형식이 틀린 관리 settings 는 막는다" 'echo hi'
+  : | sudo tee "$M/managed-settings.json" >/dev/null
+  runs "빈 관리 settings 파일은 {} 로 본다" 'echo hi'
   sudo rm -rf "$M"
 elif [ -n "${GITHUB_ACTIONS:-}" ]; then
   bad "CI 에서 관리 settings 경우를 실행하지 못했다 — $skip"
