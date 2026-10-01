@@ -92,7 +92,9 @@
       "Bash(git push*--no-verify*)",
       "Bash(git push*--force*)",
       "Bash(git reset*--hard*)",
-      "Bash(git clean*--force*)"
+      "Bash(git clean*--force*)",
+      "Bash(pkill*)",
+      "Bash(killall*)"
     ],
     "ask": [
       "Bash(gh pr create*)",
