@@ -166,8 +166,9 @@ ask "$T/plain" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까
 check "봇 설정이 없으면 기록하지 않는다" "없음" "$([ -d "$T/plain/.git/kit-bot/windows" ] && echo 있음 || echo 없음)"
 
 # 세션이 기록을 만들거나 고칠 수 없어야 한다. 셸 명령은 막기 훅이 봇 디렉터리 이름으로 막고, Read · Write ·
-# Edit 도구는 설치되는 settings.json 의 deny 가 막는다.
-for rule in 'Read(//**/kit-bot/**)' 'Write(//**/kit-bot/**)' 'Edit(//**/kit-bot/**)'; do
+# Edit 도구는 설치되는 settings.json 의 deny 가 막는다. Write 도구는 Edit 규칙이 막는다 — Claude Code 는 파일
+# 경로 규칙을 Read · Edit 로만 본다(tests/settings-path-rules.sh).
+for rule in 'Read(//**/kit-bot/**)' 'Edit(//**/kit-bot/**)'; do
   if python3 -c 'import json, sys; sys.exit(0 if sys.argv[1] in json.load(open(sys.argv[2]))["permissions"]["deny"] else 1)' \
     "$rule" "$KIT/claude-code/settings.json"; then echo "  ✓ settings.json 이 막는다: $rule"
   else echo "  ✗ settings.json 의 deny 에 없다: $rule"; fail=1; fi

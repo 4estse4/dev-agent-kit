@@ -380,6 +380,15 @@ L3 에 남기는 것을 적는다.
 | allow 와의 관계 | *"a matching ask rule prompts even when a more specific allow rule also matches"* |
 | auto mode | *"Content-scoped ask rules … always force a permission prompt, even in auto mode"* · *"The classifier cannot auto-approve a matching action."* |
 
+**파일 경로 규칙은 `Read(…)` · `Edit(…)` 로만 쓴다.**
+
+> *"Claude Code checks file permissions against `Edit(path)` and `Read(path)` rules only. If you write a path
+> rule for `Write`, `NotebookEdit`, `Glob`, or the legacy `MultiEdit` tool instead, Claude Code accepts the rule
+> but never consults it"* — `/docs/en/permissions`
+
+`Write(…)` 로 쓴 규칙은 아무것도 막지 않고 세션을 열 때 경고만 낸다. 헤드리스 세션에서 `Edit(<경로>)` deny 하나로
+Write 도구가 그 경로에 파일을 만들지 못하는 것과, 규칙이 없으면 만드는 것을 확인했다.
+
 **실제로 확인해서 아는 것** — 규칙이 없으면 그대로 실행되는 읽기전용 명령으로 대조군을 만들어 확인했다.
 막히면 그것은 규칙이 막은 것이다:
 

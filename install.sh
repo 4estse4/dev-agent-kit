@@ -341,13 +341,16 @@ if [ "$DO_LINT" = 1 ]; then
   # shellcheck source=/dev/null
   . "$KIT_ROOT/common/gate/lib.sh"
 
-  # $4 는 선택 인자다 — set -u 하에서는 ${4:-} 로 받아야 미설정일 때 오류가 나지 않는다.
-  place_beside() { # $1=마커 $2=킷 설정 파일 $3=놓을 이름 $4=마커에 이 문자열이 있으면 건너뜀(선택)
-    local marker dir rel skip="${4:-}"
+  # $4 · $5 는 선택 인자다 — set -u 하에서는 ${4:-} 로 받아야 미설정일 때 오류가 나지 않는다.
+  place_beside() { # $1=마커 $2=킷 설정 파일 $3=놓을 이름 $4=마커에 이 문자열이 있으면 건너뜀(선택) $5=마커가 있는 디렉터리를 받아 성공할 때만 놓는 함수(선택)
+    local marker dir rel skip="${4:-}" want="${5:-}"
     while IFS= read -r marker; do
       dir=$(dirname "$marker"); rel=${dir#./}; [ "$rel" = "." ] && rel=""
       # 프로젝트가 마커 안에 이미 설정을 갖고 있으면 두 벌을 만들지 않는다.
       if [ -n "$skip" ] && grep -q "$skip" "$TARGET/${rel:+$rel/}$(basename "$marker")" 2>/dev/null; then
+        continue
+      fi
+      if [ -n "$want" ] && ! "$want" "$TARGET/${rel:+$rel/}"; then
         continue
       fi
       local dest="${rel:+$rel/}$3"
@@ -359,8 +362,42 @@ if [ "$DO_LINT" = 1 ]; then
     done < <(cd "$TARGET" && find . \( $(gate_prune_expr) \) -prune -o -name "$1" -print 2>/dev/null)
   }
 
+  # eslint 는 그 package.json 이 eslint 를 쓸 때만 놓는다 — package.json 에 `"eslint":` 키가 있거나(대개
+  # 의존성이다) lint 스크립트가 eslint 를 부를 때다. 게이트는 lint 스크립트가 무엇이든 그것을 실행하므로, oxlint
+  # 같은 다른 린터를 쓰는 앱에서는 놓은 설정을 읽는 도구가 없다.
+  # 그 package.json 이 쓸 프로젝트의 eslint 설정이 따로 있으면 놓지 않는다. 킷은 ESLint 10 을 기준으로 한다 — ESLint 9 는
+  # 지원하지 않는다(2026-08-06 지원 종료). ESLint 10 은 파일의 디렉터리부터 조상 디렉터리로 올라가며 설정을 찾아 처음 찾은
+  # 곳에서 멈추고, 한 디렉터리에서는 eslint.config.js 를 .mjs · .cjs · .ts 보다 먼저 고른다(ESLint 문서 「Configuration File
+  # Resolution」 · 「Configuration File Precedence」). 그래서 옆에 놓으면 킷의 설정이 같은 디렉터리나 워크스페이스 루트의
+  # 프로젝트 설정 대신 읽힌다. 그 디렉터리부터 레포 루트까지 올라가며 eslint.config.* · .eslintrc* · package.json 의
+  # eslintConfig 를 찾는다. .eslintrc* · eslintConfig 를 둔 프로젝트는 옛 설정 방식을 쓰므로 건드리지 않는다.
+  # eslint.config.js 를 만나면 ESLint 처럼 거기서 멈추고 놓는다. 같은 디렉터리의 것이면 place() 가 프로젝트 것을 두고
+  # .kit-new 로 옆에 놓는다. 조상의 것은 킷의 것과 내용이 같을 때만 그렇게 하고, 다르면 프로젝트 설정이라 놓지 않는다.
+  # 킷 설정의 ignores · files 글롭(dist/** · vite.config.* 등)은 그 설정 파일의 디렉터리를 기준으로 읽히므로, 조상에만
+  # 있으면 패키지의 파일에 맞지 않아 게이트가 실패한다. 이 실행이 루트에 먼저 쓴 파일도 킷의 것과 같으므로 find 가
+  # 어느 쪽을 먼저 내놓든 예고와 실제가 같다.
+  ESLINT_KIT_CONFIG="$KIT_ROOT/common/lint/ts/eslint.config.js"
+  eslint_wanted() { # $1=package.json 이 있는 디렉터리(끝에 /)
+    local d="$1" f
+    grep -Eq '"eslint"[[:space:]]*:|"lint"[[:space:]]*:[[:space:]]*"[^"]*eslint' "$1package.json" 2>/dev/null || return 1
+    while :; do
+      grep -q '"eslintConfig"[[:space:]]*:' "${d}package.json" 2>/dev/null && return 1
+      for f in eslint.config.js eslint.config.mjs eslint.config.cjs eslint.config.ts eslint.config.mts eslint.config.cts \
+               .eslintrc .eslintrc.js .eslintrc.cjs .eslintrc.yaml .eslintrc.yml .eslintrc.json; do
+        [ -e "$d$f" ] || continue
+        if [ "$f" = eslint.config.js ]; then
+          [ "$d" = "$1" ] && return 0
+          cmp -s "$d$f" "$ESLINT_KIT_CONFIG" && return 0
+        fi
+        return 1
+      done
+      [ "$d" = "$TARGET/" ] && return 0
+      d="$(dirname "${d%/}")/"
+    done
+  }
+
   place_beside go.mod         "$KIT_ROOT/common/lint/go/.golangci.yml"    ".golangci.yml"
-  place_beside package.json   "$KIT_ROOT/common/lint/ts/eslint.config.js" "eslint.config.js"
+  place_beside package.json   "$ESLINT_KIT_CONFIG"                        "eslint.config.js" "" eslint_wanted
   # pyproject 에 [tool.ruff] 가 이미 있으면 그쪽이 설정이다 — 두 벌을 만들지 않는다.
   place_beside pyproject.toml "$KIT_ROOT/common/lint/py/ruff.toml"        "ruff.toml" \
     '^\[tool\.ruff'
