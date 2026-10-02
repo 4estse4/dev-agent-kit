@@ -12,6 +12,10 @@ S="$KIT/claude-code/skills/open-pr/evidence.sh"
 OPEN="$KIT/claude-code/skills/open-pr/SKILL.md"
 MERGE="$KIT/claude-code/skills/merge-pr/SKILL.md"
 T=$(mktemp -d)
+# evidence.sh 는 사람 settings 도 대조한다. 이 머신의 사람 규칙이 섞이지 않게 HOME 을 떼어 놓는다
+export HOME="$T/home"
+unset CLAUDE_CONFIG_DIR
+mkdir -p "$HOME"
 fail=0
 ok() { echo "  ✓ $1"; }
 bad() { echo "  ✗ $1"; fail=1; }
@@ -91,7 +95,7 @@ grep -qxF "$(cd "$T" && pwd -P)" "$T/pwd.part" 2>/dev/null && ok "부른 자리�
 # ── ask · deny 규칙 글자가 보이는 명령은 실행하지 않는다 ──
 # evidence.sh 는 받은 글을 `bash -c` 로 실행한다. 권한 규칙은 그 안을 못 본다(공식 문서:
 # "isn't a security boundary"). 누가 evidence.sh 를 허용하면 그 안의 `gh pr merge` 가 프롬프트
-# 없이 실행된다. 그래서 스크립트가 프로젝트 설정의 ask · deny 글자를 보고 거부한다.
+# 없이 실행된다. 그래서 스크립트가 settings 의 ask · deny 글자를 보고 거부한다.
 R="$T/repo"
 mkdir -p "$R/.claude" "$R/sub"
 git -C "$R" init -q
@@ -159,6 +163,60 @@ runs "Bash(gh api:*) 가 gh apix 를 막지 않는다(:* 는 공백 *)" 'echo gh
 runs "Bash(rm *) 가 --rm 을 막지 않는다(앞 경계에 -)" 'echo docker compose run --rm app pytest'
 runs "가운데 ' *' 규칙이 공백 없는 자리를 막지 않는다" 'echo npm runx --prod'
 runs "와일드카드가 둘인 규칙은 맨 명령을 막지 않는다" 'echo npm --help'
+# Claude Code 는 ask · deny 목록을 범위마다 합친다(공식 문서 settings.md: "Claude Code combines the lists
+# instead of picking one"). 사람 settings 는 ~/.claude/settings.json 이고, CLAUDE_CONFIG_DIR 이 있으면 그
+# 디렉터리의 settings.json 이다. 관리 settings 파일은 시스템 디렉터리에 있다.
+mkdir -p "$HOME/.claude" "$T/cfg"
+printf '{"permissions": {"deny": ["Bash(terraform destroy*)"]}}\n' > "$HOME/.claude/settings.json"
+printf '{"permissions": {"ask": ["Bash(kubectl delete*)"]}}\n' > "$T/cfg/settings.json"
+refused "사람 settings(~/.claude/settings.json)의 규칙" 'echo terraform destroy -auto-approve'
+export CLAUDE_CONFIG_DIR="$T/cfg"
+refused "CLAUDE_CONFIG_DIR 의 settings.json 규칙" 'echo kubectl delete ns x'
+unset CLAUDE_CONFIG_DIR
+printf '{"permissions": ' > "$HOME/.claude/settings.json"
+refused "사람 settings 를 못 읽으면 막는다" 'echo hi'
+# 운영체제가 읽기를 막은 settings 를 건너뛰는 것은 관리 settings 뿐이다. 사람 settings 는 계속 막는다
+printf '{"permissions": {"deny": ["Bash(terraform destroy*)"]}}\n' > "$HOME/.claude/settings.json"
+chmod 000 "$HOME/.claude/settings.json"
+refused "운영체제가 읽기를 막은 사람 settings 는 막는다" 'echo terraform destroy -auto-approve'
+chmod 600 "$HOME/.claude/settings.json"
+rm -f "$HOME/.claude/settings.json"
+# 관리 settings 파일은 쓰려면 관리자 권한이 든다. 관리자 권한을 묻지 않고 쓸 수 있는 Linux(CI 러너)에서만
+# 두고 시험한 뒤 지운다. 디렉터리가 이미 있으면 남의 정책이라 건드리지 않는다. CI 에서 건너뛰면 실패다 — 이
+# 경우를 실행하는 곳이 CI 뿐이라, 건너뛰고 통과하면 확인이 알림 없이 빠진다
+M=/etc/claude-code
+skip=''
+if [ "$(uname)" != Linux ]; then skip='Linux 가 아니다'
+elif [ -e "$M" ]; then skip="관리 디렉터리가 이미 있다($M). 남의 정책이라 건드리지 않는다"
+elif ! sudo -n true 2>/dev/null; then skip='sudo 가 암호를 묻는다'
+fi
+if [ -z "$skip" ]; then
+  sudo mkdir -p "$M/managed-settings.d"
+  printf '{"permissions": {"deny": ["Bash(helm uninstall*)"]}}\n' | sudo tee "$M/managed-settings.json" >/dev/null
+  printf '{"permissions": {"ask": ["Bash(dropdb *)"]}}\n' | sudo tee "$M/managed-settings.d/10-db.json" >/dev/null
+  refused "관리 settings 파일(managed-settings.json)의 규칙" 'echo helm uninstall web'
+  refused "관리 settings 조각(managed-settings.d/*.json)의 규칙" 'echo dropdb prod'
+  # 운영체제가 읽기를 막은 관리 settings 는 Claude Code 가 그 출처 없이 시작한다(공식 문서 managed-settings.md:
+  # "If the operating system denied the read, for example on a root-only file, every session starts without
+  # that source's policies"). evidence.sh 도 건너뛰고 실행한다. 읽지 못하는 managed-settings.d 도 같다
+  sudo chmod 600 "$M/managed-settings.json"
+  runs "관리자만 읽는 관리 settings 파일은 건너뛴다" 'echo helm uninstall web'
+  sudo chmod 644 "$M/managed-settings.json"
+  sudo chmod 700 "$M/managed-settings.d"
+  runs "관리자만 여는 managed-settings.d 는 건너뛴다" 'echo dropdb prod'
+  # 건너뛰는 것은 운영체제가 막은 읽기뿐이다. 형식이 틀린 관리 settings 는 계속 막는다 — 그때 Claude Code 는
+  # 시작을 거부한다. 빈 관리 settings 파일은 Claude Code 가 {} 로 보므로(managed-settings.md: "An empty managed
+  # settings file counts as {}") 막지 않는다
+  printf '{"permissions": ' | sudo tee "$M/managed-settings.json" >/dev/null
+  refused "형식이 틀린 관리 settings 는 막는다" 'echo hi'
+  : | sudo tee "$M/managed-settings.json" >/dev/null
+  runs "빈 관리 settings 파일은 {} 로 본다" 'echo hi'
+  sudo rm -rf "$M"
+elif [ -n "${GITHUB_ACTIONS:-}" ]; then
+  bad "CI 에서 관리 settings 경우를 실행하지 못했다 — $skip"
+else
+  echo "  - 관리 settings 경우를 건너뛴다: $skip. CI 에서 실행한다"
+fi
 printf '{"permissions": ' > "$R/.claude/settings.json"
 refused "설정을 못 읽으면 막는다" 'echo hi'
 

@@ -34,11 +34,11 @@ fi
 # 실행하므로 권한 규칙이 그 안을 못 본다(공식 문서: a deny or ask rule "isn't a security boundary
 # around the program"). 누가 이 스크립트를 allow 에 넣거나 「다시 묻지 않음」을 누르면 그 안의
 # `gh pr merge` · `git push --force` 가 프롬프트 없이 실행된다. 증거는 읽기만 하는 명령이다.
-# 규칙은 레포의 `.claude/settings.json` · `settings.local.json` 에서 읽고, 글자는 명령 어디에든
-# 보이면 맞는다. `*` 는 아무 글자이고, 규칙의 공백 하나는 명령의 공백 하나 이상에 맞는다. 공식 문서대로 `*` 앞의 공백도 규칙의
+# 규칙은 레포의 `.claude/settings.json` · `settings.local.json` 과 사람 · 관리 settings 파일에서 읽고(아래),
+# 글자는 명령 어디에든 보이면 맞는다. `*` 는 아무 글자이고, 규칙의 공백 하나는 명령의 공백 하나 이상에 맞는다. 공식 문서대로 `*` 앞의 공백도 규칙의
 # 일부라 `Bash(rm *)` 는 `rm ` 을 찾고 `--format` 의 `rm` 은 안 찾는다. 끝의 `:*` 는 ` *` 와 같다.
 # 끝의 ` *` 가 유일한 와일드카드면 인자 없이 쓴 명령(`rm` · `rm;` · `rm>x` · `'rm'`)도 맞는다.
-# 첫 낱말 앞은 낱말 경계라 `farm ` 도 맞지 않는다. 설정을 못 읽으면 막는다. 이름을 꾸민 명령
+# 첫 낱말 앞은 낱말 경계라 `farm ` 도 맞지 않는다. 설정을 못 읽으면 막는다(관리 settings 는 아래). 이름을 꾸민 명령
 # (변수 · 별칭)은 못 알아본다. 거부된 명령의 출력은 증거로 싣지 말고 무엇을 확인했는지 글로
 # 적는다 — 직접 실행해 출력을 손으로 옮기면 이 스크립트가 없애려는 일이 다시 생긴다.
 root=$(git rev-parse --show-toplevel 2>/dev/null) || root=$PWD
@@ -46,18 +46,40 @@ root=$(git rev-parse --show-toplevel 2>/dev/null) || root=$PWD
 # worktree, it uses the file at the main checkout's root."). 그 파일은 worktree 에 없으므로
 # git 공통 디렉터리의 부모, 곧 원래 체크아웃의 것도 읽는다.
 main=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) && main=${main%/.git} || main=$root
+# Claude Code 는 ask · deny 목록을 범위마다 합친다(공식 문서 settings.md: "Claude Code combines the lists
+# instead of picking one"). 그래서 사람 settings 와 관리 settings 파일의 규칙도 대조한다. 사람 settings 는
+# CLAUDE_CONFIG_DIR 이 있으면 그 디렉터리의, 없으면 ~/.claude 의 settings.json 이다. 관리 settings 파일은 시스템
+# 디렉터리의 managed-settings.json 과 managed-settings.d/*.json 이다(공식 문서 managed-settings.md). 관리 출처가
+# 여럿이면 Claude Code 는 기본값(first-wins)에서 하나만 쓰지만 파일은 늘 대조한다 — 쓰이지 않는 규칙까지 보면 더
+# 막을 뿐이다. 운영체제가 읽기를 막은 관리 settings 는 Claude Code 처럼 건너뛴다(같은 문서: "every session starts
+# without that source's policies"). 빈 관리 settings 파일은 Claude Code 처럼 {} 로 본다(같은 문서: "An empty managed
+# settings file counts as {}"). 형식이 틀린 관리 settings 는 막는다 — 그때 Claude Code 는 시작을 거부한다. 서버 관리 settings(캐시 ~/.claude/remote-settings.json) · macOS 구성 프로필 ·
+# 실행할 때 준 --settings · --disallowedTools 의 규칙은 이 스크립트가 대조하지 않는다.
+user=${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json
+case "$(uname)" in
+  Darwin) sys="/Library/Application Support/ClaudeCode" ;;
+  *) sys=/etc/claude-code ;;
+esac
 # 파이썬은 명령 치환 밖의 heredoc 으로 담는다. 명령 치환 안의 heredoc 이면 macOS 기본 bash(3.2)가
 # 짝 없는 따옴표 · 백틱을 세어 스크립트 전체를 구문 오류로 실패하게 한다. CI 의 bash 5 는 그것을 못 본다.
 IFS= read -r -d '' prog <<'PY' || true
 import json, os, re, sys
 cmd = os.environ['EVIDENCE_CMD']
+managed = False
 for path in sys.argv[1:]:
+    if path == '--managed':            # 뒤의 경로는 관리 settings 다
+        managed = True
+        continue
     if not os.path.exists(path):
         continue
     try:
-        perms = json.load(open(path, encoding='utf-8')).get('permissions') or {}
+        text = open(path, encoding='utf-8').read()
+        data = {} if managed and not text.strip() else json.loads(text)
+        perms = data.get('permissions') or {}
         rules = [(k, r) for k in ('ask', 'deny') for r in perms.get(k) or []]
     except (OSError, ValueError, AttributeError, TypeError) as e:
+        if managed and isinstance(e, PermissionError):
+            continue
         print('%s 를 읽지 못했다(%s)' % (path, e))
         sys.exit(1)
     for kind, rule in rules:
@@ -88,7 +110,8 @@ for path in sys.argv[1:]:
             sys.exit(1)
 PY
 why=$(EVIDENCE_CMD="$cmd" python3 -c "$prog" "$root/.claude/settings.json" \
-      "$root/.claude/settings.local.json" "$main/.claude/settings.local.json" 2>&1) || {
+      "$root/.claude/settings.local.json" "$main/.claude/settings.local.json" "$user" \
+      --managed "$sys/managed-settings.json" "$sys"/managed-settings.d/*.json 2>&1) || {
   echo "evidence.sh: 이 명령을 증거로 실행하지 않는다. $why" >&2
   echo "  그 출력은 증거로 싣지 말고 무엇을 확인했는지 글로 적는다. 손으로 옮기지 않는다." >&2
   exit 2
