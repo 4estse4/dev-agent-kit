@@ -7,7 +7,8 @@
 # 여러 PR 의 코멘트로 올라갔다.
 #
 # - 대상은 `open-pr` 과 `merge-pr` 의 ```` ```markdown ```` 블록이다. GitHub 에 올리는 글의 템플릿은
-#   이 표시를 단다. 다른 블록(명령 · 레포에 쓰는 파일)은 보지 않는다
+#   이 표시를 단다. 다른 블록(명령 · 레포에 쓰는 파일)은 보지 않는다. 스킬은 `SKILL.md` 와 보조 파일로
+#   나뉘므로 그 스킬 디렉터리의 `.md` 를 모두 본다
 # - 블록 안에서 앞 줄이 비지 않았는데 이 줄이 새 블록 원소로 시작하지 않으면 줄바꿈 하나로 이어진
 #   줄이다. 새 블록 원소는 목록 · 헤딩 · 표 · 인용 · 펜스 · `---` · 들여쓴 `→` · HTML 태그다.
 #   `→` 줄은 목록 항목의 판단을 둘째 줄에 두는 자리라 일부러 바꾸는 줄이다
@@ -23,9 +24,15 @@ set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$KIT" || exit 1
 python3 - <<'PY'
-import re, sys
+import glob, re, sys
 
-FILES = ['claude-code/skills/open-pr/SKILL.md', 'claude-code/skills/merge-pr/SKILL.md']
+FILES = []
+for skill in ('open-pr', 'merge-pr'):
+    got = sorted(glob.glob('claude-code/skills/%s/*.md' % skill))
+    if not got:
+        print('  ✗ claude-code/skills/%s/ 에 .md 가 없다 — 경로가 바뀌었나' % skill)
+        sys.exit(1)
+    FILES += got
 OPEN = re.compile(r'^```markdown\s*$')
 CLOSE = re.compile(r'^```\s*$')
 # 새 블록 원소로 시작하는 줄. 이 줄은 앞 줄에 이어지지 않는다
