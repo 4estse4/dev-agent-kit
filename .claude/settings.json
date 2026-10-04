@@ -15,9 +15,9 @@
     "계정을 바꾸거나 토큰을 꺼내거나 연결 없이 GitHub 에 쓰는 것을 막는다. 사람 계정으로 올리는",
     "human_comment.sh 는 PostToolUse(AskUserQuestion) 의 window_record.sh 가 봇 디렉터리에 적은 창 기록",
     "(사람이 고른 보기)만 사람 계정으로 올린다. 인용 훅은 사람 계정 코멘트만 원본으로 쓴다.",
-    "review_record.sh 는 첫 줄이 ## Cold review 인 리뷰 에이전트의 보고를 봇 디렉터리에 head 별로 기록하고,",
-    "round_comment_cold.sh 는 라운드 코멘트의 콜드 리뷰 전문을 그 기록과 대조한다. 이 레포는 콜드 리뷰를",
-    "cold-reviewer 정의 대신 general-purpose 에이전트로 실행하므로, 훅이 에이전트 종류가 아니라 보고의 첫 줄로 고른다.",
+    "review_record.sh 는 cold-reviewer 에이전트가 돌려준 보고를 봇 디렉터리에 head 별로 기록하고,",
+    "round_comment_cold.sh 는 라운드 코멘트의 콜드 리뷰 전문을 그 기록과 대조한다. 콜드 리뷰는",
+    ".claude/agents/cold-reviewer.md 로 실행한다 — 원본 claude-code/agents/cold-reviewer.md 로 가는 심링크다.",
     "이 레포의 deny 에는 봇 디렉터리의 Read · Edit 규칙이 없다 —",
     "세션이 도구로 창 기록과 콜드 리뷰 기록을 고치는 것은 이 레포에서 막히지 않는다(이슈 #4).",
     "경로는 설치본(.claude/hooks/)이 아니라 원본(claude-code/hooks/)이다.",
@@ -63,6 +63,7 @@
     ],
     "SubagentStop": [
       {
+        "matcher": "cold-reviewer",
         "hooks": [
           {
             "type": "command",

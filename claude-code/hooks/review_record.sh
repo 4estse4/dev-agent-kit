@@ -7,9 +7,10 @@
 # 돌려준 글을 세션의 손을 거치지 않고 기록하고, 라운드 코멘트 게시 훅(`round_comment_cold.sh`)이 그 기록과
 # 대조한다. 세션은 기록을 `cold_review.sh <head>` 로 꺼내 쓴다.
 #
-# **무엇을 기록하나.** 봇 설정(`.claude/bot.json`)이 있고, 보고의 첫 줄이 `## Cold review` 인 것만이다.
-# 에이전트 종류(`agent_type`)로 고르지 않는다 — 콜드 리뷰를 `cold-reviewer` 정의로 실행하지 않는 레포(킷 자신)도
-# 있다. 보고는 두 자리 가운데 하나로 온다(Claude Code 2.1.286 의 헤드리스 세션으로 확인했다):
+# **무엇을 기록하나.** 봇 설정(`.claude/bot.json`)이 있고, 에이전트 종류(`agent_type`)가 `cold-reviewer` 인
+# 에이전트의 보고만이다. 다른 에이전트가 콜드 리뷰 모양의 글을 돌려줘도 기록하지 않으므로, 리뷰를 다른 에이전트가
+# 대신하면 라운드 코멘트 게시 훅이 기록을 못 찾아 막는다. 보고는 두 자리 가운데 하나로 온다(Claude Code 2.1.286 의
+# 헤드리스 세션으로 확인했다):
 #   · 기본 모드 — `SubagentStop` 의 `last_assistant_message`
 #   · auto 모드 — 에이전트가 `SubagentHandback` 으로 보고한다. 보고는 그 도구의 `tool_input.message` 이고,
 #     그때 `SubagentStop` 의 `last_assistant_message` 는 빈 글이다
@@ -30,7 +31,7 @@
 # 코멘트를 막는다. 킷은 봇과 함께 쓴다.
 input=$(cat)
 case "$input" in
-  *'Cold review'*) ;;
+  *cold-reviewer*) ;;
   *) exit 0 ;;
 esac
 
@@ -42,6 +43,8 @@ try:
 except ValueError:
     sys.exit(0)
 ev = data.get('hook_event_name')
+if data.get('agent_type') != 'cold-reviewer':
+    sys.exit(0)
 if ev in ('PreToolUse', 'PostToolUse'):
     if data.get('tool_name') != 'SubagentHandback':
         sys.exit(0)
@@ -50,7 +53,7 @@ elif ev == 'SubagentStop':
     report = data.get('last_assistant_message')
 else:
     sys.exit(0)
-if not isinstance(report, str) or not re.match(r'\s*## Cold review', report):
+if not isinstance(report, str) or not report.strip():
     sys.exit(0)
 
 cwd = data.get('cwd') or None

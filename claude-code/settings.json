@@ -63,7 +63,7 @@
     "는 그 기록만 사람 계정으로 올린다 — 사람 계정 코멘트는 세션이 쓰지 않는다. 그래서 deny 가",
     "봇 디렉터리의 Read 에 더해 Edit 도 막는다. Edit 규칙이 Write 도구도 막는다 — 파일 경로 규칙은",
     "Read · Edit 로만 쓴다(verification-stages.md 6.2). PreToolUse · PostToolUse(SubagentHandback) 와",
-    "SubagentStop 의 review_record.sh 는 첫 줄이 ## Cold review 인 리뷰 에이전트의 보고를 봇 디렉터리에",
+    "SubagentStop 의 review_record.sh 는 cold-reviewer 에이전트가 돌려준 보고를 봇 디렉터리에",
     "head 별로 기록한다. 보고는 기본 모드에서 SubagentStop 에, auto 모드에서 SubagentHandback 으로 오고,",
     "**Verdict**: 줄이 없는 보고는 한 번 되돌린다. 봇 설정이 없으면 그 훅 넷은 아무것도 안 한다.",
     "allow 의 bash .claude/hooks/human_comment.sh 는 창에서 고른 것이 게시 동의라서 다시 묻지 않는다 —",
@@ -228,6 +228,7 @@
     ],
     "SubagentStop": [
       {
+        "matcher": "cold-reviewer",
         "hooks": [
           {
             "type": "command",

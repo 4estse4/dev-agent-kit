@@ -39,7 +39,7 @@ except OSError:
     pass
 if last is None:
     print("head %s 의 콜드 리뷰 기록이 없다. 콜드 리뷰 에이전트가 이 head 를 리뷰해 보고를 돌려줬는지 본다 — "
-          "기록은 봇 설정이 있는 레포에서 첫 줄이 `## Cold review` 인 보고만 남는다." % head, file=sys.stderr)
+          "기록은 봇 설정이 있는 레포에서 cold-reviewer 에이전트의 보고만 남는다." % head, file=sys.stderr)
     sys.exit(1)
 sys.stdout.write(last.rstrip('\n') + '\n')
 PY

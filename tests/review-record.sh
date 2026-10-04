@@ -11,7 +11,8 @@
 #
 # 보는 것:
 #   · 두 모드의 보고를 「리뷰한 head:」 별 기록 파일에 한 줄씩 남기고, 같은 실행(agent_id)은 한 번만 남긴다
-#   · 콜드 리뷰 보고가 아닌 것, 빈 보고, 봇 설정이 없는 레포는 남기지 않는다
+#   · 에이전트 종류(agent_type)가 cold-reviewer 인 것만 남긴다 — 다른 에이전트가 콜드 리뷰 모양의 글을 돌려줘도
+#     남기지 않는다. 빈 보고와 봇 설정이 없는 레포도 남기지 않는다
 #   · `**Verdict**:` 줄이 없는 보고는 한 번 막고(auto 는 SubagentHandback 거부, 기본은 SubagentStop block),
 #     두 번째에는 막지 않고 남긴다
 #   · `cold_review.sh <head>` 가 기록된 보고를 글자 그대로 출력한다
@@ -35,13 +36,14 @@ report() { # $1=head $2=Verdict 줄을 넣을지(1/0)
   printf '## Cold review\n\n리뷰한 head: %s\n\n### 발견\n1. [낮음] `a.sh:1` — 본문 `백틱` 과 "따옴표" 가 든 줄\n' "$1"
   [ "$2" = 1 ] && printf '\n---\n\n**Verdict**: Comment — 시험용 보고다.'
 }
-# $1=이벤트 $2=agent_id $3=보고 $4=도구 이름(선택) $5=stop_hook_active(선택) $6=cwd(선택)
+# $1=이벤트 $2=agent_id $3=보고 $4=도구 이름(선택) $5=stop_hook_active(선택) $6=cwd(선택) $7=agent_type(선택)
 hook_in() {
   DEFAULT_CWD="$T/repo" python3 - "$@" <<'PY'
 import json, os, sys
-ev, aid, rep, tool, active, cwd = (sys.argv[1:7] + [''] * 6)[:6]
+ev, aid, rep, tool, active, cwd, atype = (sys.argv[1:8] + [''] * 7)[:7]
 cwd = cwd or os.environ['DEFAULT_CWD']
-d = {'session_id': 's', 'cwd': cwd, 'hook_event_name': ev, 'agent_id': aid, 'agent_type': 'cold-reviewer'}
+d = {'session_id': 's', 'cwd': cwd, 'hook_event_name': ev, 'agent_id': aid,
+     'agent_type': atype or 'cold-reviewer'}
 if ev == 'SubagentStop':
     d.update(stop_hook_active=(active == 'true'), last_assistant_message=rep,
              agent_transcript_path='/x/subagents/agent-%s.jsonl' % aid)
@@ -73,10 +75,15 @@ rec SubagentStop a1 "$(report $H1 1)" > /dev/null
 [ "$(count $H1)" = 1 ] && ok "같은 실행(agent_id)의 같은 보고는 한 번만 남긴다" || no "같은 실행을 두 번 남겼다"
 out=$(rec SubagentStop a2 "$(report $H2 1)")
 [ -z "$out" ] && [ "$(count $H2)" = 1 ] && ok "기본 모드: SubagentStop 의 보고를 남긴다" || no "기본 모드 기록 — 출력 「${out}」"
-rec SubagentStop a3 "## 탐색 결과
-리뷰한 head: $H3
-**Verdict**: Approve — 콜드 리뷰가 아니다" > /dev/null
-[ "$(count $H3)" = 0 ] && ok "콜드 리뷰 보고가 아닌 것은 남기지 않는다" || no "콜드 리뷰가 아닌 보고를 남겼다"
+rec SubagentStop a3 "$(report $H3 1)" "" false "" general-purpose > /dev/null
+rec PostToolUse a3 "$(report $H3 1)" SubagentHandback "" "" general-purpose > /dev/null
+[ "$(count $H3)" = 0 ] && ok "cold-reviewer 가 아닌 에이전트가 돌려준 콜드 리뷰 모양의 글은 남기지 않는다" \
+  || no "다른 에이전트의 글을 남겼다 — 줄 $(count $H3)"
+H6=6666666666666666666666666666666666666666
+rec SubagentStop a7 "리뷰한 head: $H6
+머리가 다른 보고
+**Verdict**: Approve — 고르는 기준은 에이전트 종류다" > /dev/null
+[ "$(count $H6)" = 1 ] && ok "cold-reviewer 의 보고는 첫 줄과 상관없이 남긴다" || no "cold-reviewer 의 보고 — 줄 $(count $H6)"
 out=$(printf '%s' "$(hook_in PostToolUse p1 "$(report $H3 1)" SubagentHandback '' "$T/plain")" | bash "$H/review_record.sh")
 [ -z "$out" ] && [ ! -e "$T/plain/.git/kit-bot" ] && ok "봇 설정이 없는 레포에는 남기지 않는다" || no "봇 설정이 없는 레포 — 출력 「${out}」"
 
