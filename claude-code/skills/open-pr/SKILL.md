@@ -4,6 +4,36 @@ description: 현재 feature 브랜치를 푸시하고 PR을 연다. 본문은 �
 argument-hint: "[선택: 맥락·티켓]"
 ---
 
+## 꼭 지킬 것
+
+**단계를 시작하기 전에 아래 「차례」에서 그 단계의 파일을 읽는다.** 이 파일에는 차례와 늘 지킬 것만 있고,
+단계마다 할 일과 그 까닭은 그 파일에 있다.
+
+**컴팩션 뒤에는 진행 중인 단계의 파일을 다시 읽는다.** 컴팩션 뒤에는 이 파일의 앞부분만 다시 붙고,
+읽어 둔 보조 파일은 요약되어 절차가 빠질 수 있다.
+
+**열기 전에 제목과 본문 전문을 사람에게 보이고 승인받는다.** 보인다는 것은 승인을 묻기 바로 전에 세션의
+응답에 그 글의 최종본 전문을 출력하는 것이다 — 파일 경로나 요약으로 대신하지 않는다. 이 스킬에서 승인을
+받는 글은 모두 그렇다.
+
+라운드 중에는 커밋도 푸시도 본문 수정도 하지 않는다 — 두 리뷰가 서로 다른 것을 본다.
+
+다음 라운드를 진행하는 것도, 머지하는 것도 **사람이 정한다.**
+
+**푸시는 3.6 의 5 셈이 `1` 이상일 때만 한다.**
+
+**본문은 손대지 마라.** 라운드가 만든 것은 코멘트에 쌓이고, 최종 정리는 `merge-pr` 이 머지
+직전에 코멘트 하나로 올린다. 근거는 `docs/process/verification-stages.md` 4.
+
+## 차례
+
+- [ripple.md](ripple.md) — 0. 파급을 직접 확인한다
+- [body.md](body.md) — 2. PR 을 연다
+- [round.md](round.md) — 3. 리뷰 한 라운드(3.1 ~ 3.4)
+- [report.md](report.md) — 3.5 멈추고 사람에게 보고한다
+- [next-round.md](next-round.md) — 3.6 다음 라운드
+- [comment-format.md](comment-format.md) — 라운드 코멘트 형식
+
 이 브랜치의 커밋:
 !`git log --oneline main..HEAD`
 
@@ -24,15 +54,6 @@ $ARGUMENTS
 ---
 
 `git log main..HEAD` 가 비면 중단: `Error: 이 브랜치에 커밋이 없습니다.`
-
-## 차례
-
-- [ripple.md](ripple.md) — 0. 파급을 직접 확인한다
-- [body.md](body.md) — 2. PR 을 연다
-- [round.md](round.md) — 3. 리뷰 한 라운드(3.1 ~ 3.4)
-- [report.md](report.md) — 3.5 멈추고 사람에게 보고한다
-- [next-round.md](next-round.md) — 3.6 다음 라운드
-- [comment-format.md](comment-format.md) — 라운드 코멘트 형식
 
 ## 1. 푸시
 
