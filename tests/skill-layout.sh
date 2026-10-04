@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# 스킬이 Claude Code 의 스킬 설계대로 나뉘었는가 — `SKILL.md` 는 짧고, 보조 파일은 모두 `SKILL.md` 가 가리킨다.
+#
+# 이 테스트가 있는 이유: 컴팩션 뒤에는 스킬의 앞부분만 다시 붙는다(공식 문서 skills.md: "keeping the first
+# 5,000 tokens of each"). `SKILL.md` 가 길면 라운드 도중에 뒷부분 절차가 컨텍스트에서 빠진다. 문서는 `SKILL.md` 를
+# 500줄 아래로 두고 상세는 보조 파일로 옮기라고 한다("Keep `SKILL.md` under 500 lines"). 보조 파일은 `SKILL.md` 가
+# 가리켜야 Claude 가 무엇이 들었고 언제 읽을지 안다("Reference supporting files from `SKILL.md` so Claude knows
+# what each file contains and when to load it"). 보는 것:
+#   · 스킬마다 `SKILL.md` 가 500줄 아래다
+#   · `SKILL.md` 의 상대 링크가 가리키는 파일이 있다
+#   · 스킬 디렉터리의 `.md` 가 모두 `SKILL.md` 에서 링크된다
+#
+# 아직 나누지 않은 스킬은 `PENDING` 에 두고 건너뛴다. 목록에 있는 스킬이 위 셋을 이미 지키면 빨갛다 — 목록에서
+# 지운다. 목록이 나눈 스킬까지 덮으면 그 스킬이 다시 길어져도 이 테스트가 알리지 않는다.
+set -u
+KIT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$KIT" || exit 1
+python3 - <<'PY'
+import glob, os, re, sys
+
+LIMIT = 500
+PENDING = {'merge-pr'}
+fail = 0
+
+
+def ok(m):
+    print('  ✓ ' + m)
+
+
+def bad(m):
+    global fail
+    fail = 1
+    print('  ✗ ' + m)
+
+
+def problems(d):
+    out = []
+    text = open(os.path.join(d, 'SKILL.md'), encoding='utf-8').read()
+    n = len(text.splitlines())
+    if n >= LIMIT:
+        out.append('SKILL.md 가 %d줄이다(%d줄 아래여야 한다)' % (n, LIMIT))
+    # 코드 블록과 인라인 코드 안의 `[…](…)` 는 링크가 아니다
+    plain = re.sub(r'(?ms)^```.*?^```', '', text)
+    plain = re.sub(r'`[^`\n]*`', '', plain)
+    links = set()
+    for m in re.finditer(r'\]\(([^)\s]+)\)', plain):
+        target = m.group(1).split('#', 1)[0]
+        if not target or re.match(r'[a-z]+:', target):
+            continue
+        links.add(os.path.normpath(target))
+        if not os.path.isfile(os.path.join(d, target)):
+            out.append('SKILL.md 가 가리키는 %s 가 없다' % target)
+    for f in sorted(glob.glob(os.path.join(d, '**', '*.md'), recursive=True)):
+        rel = os.path.relpath(f, d)
+        if rel != 'SKILL.md' and rel not in links:
+            out.append('%s 를 SKILL.md 가 가리키지 않는다' % rel)
+    return out
+
+
+dirs = sorted(os.path.dirname(p) for p in glob.glob('claude-code/skills/*/SKILL.md'))
+if not dirs:
+    bad('claude-code/skills/*/SKILL.md 에 해당하는 파일이 없다 — 경로가 바뀌었나')
+    sys.exit(1)
+names = {os.path.basename(d) for d in dirs}
+for p in sorted(PENDING - names):
+    bad('PENDING 의 %s 스킬이 없다 — 목록에서 지운다' % p)
+for d in dirs:
+    name = os.path.basename(d)
+    got = problems(d)
+    if name in PENDING:
+        if got:
+            ok('%s 는 아직 나누지 않아 건너뛴다 — %s' % (name, got[0]))
+        else:
+            bad('%s 는 PENDING 에 있는데 이미 지킨다 — 목록에서 지운다' % name)
+    elif got:
+        for g in got:
+            bad('%s: %s' % (name, g))
+    else:
+        ok('%s 의 SKILL.md 가 %d줄 아래이고 보조 파일을 모두 가리킨다' % (name, LIMIT))
+sys.exit(fail)
+PY
