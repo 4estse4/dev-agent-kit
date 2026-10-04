@@ -28,6 +28,7 @@ argument-hint: "[선택: 맥락·티켓]"
 ## 차례
 
 - [ripple.md](ripple.md) — 0. 파급을 직접 확인한다
+- 이 파일 맨 아래 — 1. 푸시
 - [body.md](body.md) — 2. PR 을 연다
 - [round.md](round.md) — 3. 리뷰 한 라운드(3.1 ~ 3.4)
 - [report.md](report.md) — 3.5 멈추고 사람에게 보고한다
