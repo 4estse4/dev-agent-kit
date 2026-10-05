@@ -9,8 +9,11 @@
 #   · 스킬마다 `SKILL.md` 가 500줄 아래다
 #   · `SKILL.md` 의 상대 링크가 가리키는 파일이 있다
 #   · 스킬 디렉터리의 `.md` 가 모두 `SKILL.md` 에서 링크된다
+#   · `SKILL.md` 의 상대 링크가 첫 `!` 주입보다 앞에 있다. 컴팩션 뒤 다시 붙는 내용은 앞에서부터 남고 뒤가
+#     잘린다(나누기 전 `open-pr` 은 헤드리스 세션에서 3.4 한가운데서 잘렸다). 주입 출력은 실행마다 길이가 달라,
+#     링크가 주입 뒤에 있으면 출력이 긴 때에 어느 파일을 읽을지가 잘리는 쪽에 놓인다
 #
-# 아직 나누지 않은 스킬은 `PENDING` 에 두고 건너뛴다. 목록에 있는 스킬이 위 셋을 이미 지키면 빨갛다 — 목록에서
+# 아직 나누지 않은 스킬은 `PENDING` 에 두고 건너뛴다. 목록에 있는 스킬이 위 검사를 이미 지키면 빨갛다 — 목록에서
 # 지운다. 목록이 나눈 스킬까지 덮으면 그 스킬이 다시 길어져도 이 테스트가 알리지 않는다.
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -54,6 +57,20 @@ def problems(d):
         rel = os.path.relpath(f, d)
         if rel != 'SKILL.md' and rel not in links:
             out.append('%s 를 SKILL.md 가 가리키지 않는다' % rel)
+    lines = text.split('\n')
+    inj = next((i for i, l in enumerate(lines) if l.startswith('!`')), None)
+    if inj is not None:
+        fence = False
+        for i, l in enumerate(lines):
+            if l.startswith('```'):
+                fence = not fence
+                continue
+            if fence or i < inj:
+                continue
+            for m in re.finditer(r'\]\(([^)\s]+)\)', re.sub(r'`[^`\n]*`', '', l)):
+                target = m.group(1).split('#', 1)[0]
+                if target and not re.match(r'[a-z]+:', target):
+                    out.append('SKILL.md %d줄의 링크 %s 가 첫 주입(%d줄)보다 뒤에 있다' % (i + 1, target, inj + 1))
     return out
 
 
