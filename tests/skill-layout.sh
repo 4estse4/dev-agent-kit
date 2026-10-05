@@ -11,9 +11,12 @@
 #   · 스킬 디렉터리의 `.md` 가 모두 `SKILL.md` 에서 링크된다
 #   · `SKILL.md` 의 상대 링크가 첫 `!` 주입보다 앞에 있다. 컴팩션 뒤 다시 붙는 내용은 앞에서부터 남고 뒤가
 #     잘린다(나누기 전 `open-pr` 은 헤드리스 세션에서 3.4 한가운데서 잘렸다). 주입 출력은 실행마다 길이가 달라,
-#     링크가 주입 뒤에 있으면 출력이 긴 때에 어느 파일을 읽을지가 잘리는 쪽에 놓인다
+#     링크가 주입 뒤에 있으면 출력이 길 때 어느 파일을 읽을지가 잘리는 쪽에 놓인다
+#   · `SKILL.md` 에 `## 꼭 지킬 것` 제목이 있으면 그 제목이 첫 `!` 주입보다 앞에 있다. 까닭은 바로 위와 같다 —
+#     늘 지킬 것이 잘리는 쪽에 놓이지 않게 한다. 이 제목에는 링크가 없어 위 검사가 지키지 못한다. 제목이 없는
+#     스킬은 건너뛴다
 #
-# 아직 나누지 않은 스킬은 `PENDING` 에 두고 건너뛴다. 목록에 있는 스킬이 위 검사를 이미 지키면 빨갛다 — 목록에서
+# 아직 나누지 않은 스킬은 `PENDING` 에 두고 건너뛴다. 목록에 있는 스킬이 위 검사를 이미 통과하면 빨갛다 — 목록에서
 # 지운다. 목록이 나눈 스킬까지 덮으면 그 스킬이 다시 길어져도 이 테스트가 알리지 않는다.
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -71,6 +74,14 @@ def problems(d):
                 target = m.group(1).split('#', 1)[0]
                 if target and not re.match(r'[a-z]+:', target):
                     out.append('SKILL.md %d줄의 링크 %s 가 첫 주입(%d줄)보다 뒤에 있다' % (i + 1, target, inj + 1))
+        fence = False
+        for i, l in enumerate(lines):
+            if l.startswith('```'):
+                fence = not fence
+            elif not fence and l.rstrip() == '## 꼭 지킬 것':
+                if i > inj:
+                    out.append('SKILL.md %d줄의 「꼭 지킬 것」이 첫 주입(%d줄)보다 뒤에 있다' % (i + 1, inj + 1))
+                break
     return out
 
 
@@ -88,7 +99,7 @@ for d in dirs:
         if got:
             ok('%s 는 아직 나누지 않아 건너뛴다 — %s' % (name, got[0]))
         else:
-            bad('%s 는 PENDING 에 있는데 이미 지킨다 — 목록에서 지운다' % name)
+            bad('%s 는 PENDING 에 있는데 이미 통과한다 — 목록에서 지운다' % name)
     elif got:
         for g in got:
             bad('%s: %s' % (name, g))
