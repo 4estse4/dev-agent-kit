@@ -15,10 +15,13 @@
 # - 그 head 의 기록이 없을 때 — 콜드 리뷰가 그 head 를 리뷰해 보고를 돌려준 적이 없다
 # - 블록 안의 글이 그 head 의 어느 기록과도 글자로 같지 않을 때. 앞뒤 빈 줄만 무시한다
 #
-# **무엇을 못 막나.** 이 에이전트가 형식대로 입력한 `gh pr comment <N> [-R <레포>] --body-file <절대 경로>` 만
-# 본다. 그 밖의 모양은 같은 자리의 `round_comment_quotes.sh` 가 막는다. 사람이 손으로 올리거나 웹으로 올리면
-# 훅이 불리지 않는다. 기록은 에이전트가 실제로 돌려준 글이라는 것까지 보장한다 — 그 에이전트가 무엇을 리뷰했는지는
-# 보장하지 않는다.
+# **어떤 게시 명령을 보나.** 인용 훅(`round_comment_quotes.sh`)과 같은 해석(`round_comment_cmd.py`)으로 읽어
+# 정규형이면 본다 — `-F` · `--body-file=` · 번호를 뒤에 둔 모양 · `--edit-last` 도 정규형이다. 정규형이 아니면
+# 인용 훅이 같은 해석으로 막는다.
+#
+# **무엇을 못 막나.** 이 에이전트가 Bash 로 입력한 게시만 본다. 사람이 손으로 올리거나 웹으로 올리면 훅이 불리지
+# 않는다. 기록은 에이전트가 실제로 돌려준 글이라는 것까지 보장한다 — 그 에이전트가 무엇을 리뷰했는지는 보장하지
+# 않는다.
 #
 # **판정 못 하면 막는다.** 본문 파일을 못 읽으면 `round_comment_quotes.sh` 가 막으므로 여기서는 건너뛴다.
 #
@@ -30,8 +33,13 @@ case "$input" in
   *) exit 0 ;;
 esac
 
-HOOK_INPUT="$input" python3 - <<'PY'
-import json, os, re, shlex, subprocess, sys
+# 공유 파일(round_comment_cmd.py)을 읽어도 훅 디렉터리에 __pycache__ 를 남기지 않는다.
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)" HOOK_INPUT="$input" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+import json, os, re, subprocess, sys
+
+# 명령을 읽는 규칙은 인용 훅(round_comment_quotes.sh)과 같이 쓰는 round_comment_cmd.py 에 있다.
+sys.path.insert(0, os.environ['HOOK_DIR'])
+import round_comment_cmd  # noqa: E402
 
 ROUND = re.compile(r'^\s*## 리뷰 ')
 HEAD = re.compile(r'^리뷰한 head:\s*([0-9a-f]{40})\s*$')
@@ -52,14 +60,11 @@ except ValueError:
     sys.exit(0)
 if data.get('tool_name') != 'Bash':
     sys.exit(0)
-cmd = ((data.get('tool_input') or {}).get('command') or '').replace('\\\n', ' ')
-try:
-    words = shlex.split(cmd)
-except ValueError:
+# 정규형이 아니면(deny) 인용 훅이 같은 해석으로 막으므로 여기서는 건너뛴다.
+kind, got = round_comment_cmd.parse((data.get('tool_input') or {}).get('command') or '')
+if kind != 'ok':
     sys.exit(0)
-if words[:3] != ['gh', 'pr', 'comment'] or len(words) < 6 or words[-2] != '--body-file':
-    sys.exit(0)
-path = words[-1]
+path = got['path']
 try:
     with open(path, encoding='utf-8') as fh:
         body = fh.read()

@@ -6,7 +6,8 @@
 #
 # **Claude Code 가 부르는 모양으로 부른다.** 표준입력에 훅 입력 JSON 을 넣는다. 모양은 Claude Code 2.1.286 의
 # 헤드리스 세션에서 기록한 것이다 — 기본 모드는 보고가 `SubagentStop` 의 `last_assistant_message` 에, auto
-# 모드는 `SubagentHandback` 도구의 `tool_input.message` 에 오고 그때 `SubagentStop` 의 그 칸은 빈 글이다.
+# 모드는 `SubagentHandback` 도구의 `tool_input.message` 에 온다. auto 모드의 `SubagentStop` 의 그 칸은 비었거나
+# 에이전트의 맺음말이다(문서: "the subagent's closing text, if any").
 # 훅은 봇 설정(`.claude/bot.json`)이 있는 임시 레포에서 부른다. 봇 설정이 없는 레포는 따로 본다.
 #
 # 보는 것:
@@ -102,6 +103,21 @@ case "$out" in *'"decision": "block"'*Verdict*) ok "기본 모드: Verdict 없�
   *) no "기본 모드 첫 block — 출력 「${out}」" ;; esac
 out=$(rec SubagentStop a6 "$(report $H3 0)" "" true)
 [ -z "$out" ] && [ "$(count $H3)" = 2 ] && ok "두 번째(stop_hook_active)에는 막지 않고 남긴다" || no "두 번째 — 출력 「${out}」 · 줄 $(count $H3)"
+# auto 모드에서 보고를 낸 뒤의 맺음말. 문서: SubagentStop 의 last_assistant_message 는 "the subagent's closing
+# text, if any, which is not the delivered report" 다. 이미 기록한 실행이면 그 글을 보지 않는다.
+H7=7777777777777777777777777777777777777777
+rec PostToolUse c1 "$(report $H7 1)" > /dev/null
+out=$(rec SubagentStop c1 "PR #7 1라운드 콜드 리뷰를 호출자에게 전달했습니다. 판정은 Comment 입니다." "" false)
+[ -z "$out" ] && [ ! -f "$REC/unknown.jsonl" ] && [ "$(count $H7)" = 1 ] && ok "auto 모드의 맺음말(보고 뒤의 글)은 막지도 남기지도 않는다" \
+  || no "맺음말 — 출력 「${out}」 · unknown $( [ -f "$REC/unknown.jsonl" ] && echo 있음 || echo 없음) · 줄 $(count $H7)"
+# Verdict 는 마지막 줄이다. 앞 라운드의 Verdict 줄을 옮겨 적은 보고는 자기 Verdict 가 없으면 되돌린다.
+H8=8888888888888888888888888888888888888888
+mid=$(printf '## Cold review (2차)\n\n리뷰한 head: %s\n\n### 지난 코멘트 정정\n**Verdict**: Comment — 앞 라운드의 마지막 줄을 옮긴 인용\n\n### 발견\n없음.' $H8)
+out=$(rec PreToolUse a8 "$mid")
+case "$out" in *'"permissionDecision": "deny"'*) ok "마지막 줄이 Verdict 가 아니면 가운데 Verdict 줄이 있어도 되돌린다" ;;
+  *) no "가운데 Verdict 줄 — 출력 「${out}」" ;; esac
+case "$out" in *붙여*) ok "되돌림 사유는 리뷰를 다시 하라가 아니라 Verdict 줄을 붙이라고 한다" ;;
+  *) no "되돌림 사유 — 「${out}」" ;; esac
 
 # ── 기록을 내는 스크립트 ──
 got=$(cd "$T/repo" && bash "$H/cold_review.sh" $H1; echo "rc=$?")
@@ -149,6 +165,21 @@ gate "리뷰한 head 줄이 없는 라운드 코멘트" deny "$T/r-nohead.md" "�
 gate "봇 설정이 없는 레포의 라운드 코멘트" deny "$T/r-ok.md" "봇 설정" "$T/plain"
 printf '## 머지 결정\n\n- 라운드 하나.\n' > "$T/decision.md"
 gate "라운드 코멘트가 아닌 코멘트" pass "$T/decision.md"
+# 인용 훅이 정규형으로 받는 다른 모양도 같은 대조를 받는다. 기록이 없는 head 의 라운드 코멘트로 본다.
+gate_cmd() { # $1=이름 $2=명령
+  local out got
+  out=$(python3 -c 'import json,sys; print(json.dumps({"tool_name": "Bash", "cwd": sys.argv[1],
+    "tool_input": {"command": sys.argv[2]}}))' "$T/repo" "$2" | bash "$H/round_comment_cold.sh")
+  case "$out" in *'"permissionDecision": "deny"'*) got=deny ;; '') got=pass ;; *) got="?:$out" ;; esac
+  [ "$got" = deny ] && ok "$1 (deny)" || no "$1 — 기대 deny, 실제 $got"
+}
+N="$T/r-norec.md"
+gate_cmd "-F <경로> 로 올린 라운드 코멘트" "gh pr comment 7 -F $N"
+gate_cmd "--body-file=<경로> 로 올린 라운드 코멘트" "gh pr comment 7 --body-file=$N"
+gate_cmd "-F<경로> 로 붙여 올린 라운드 코멘트" "gh pr comment 7 -F$N"
+gate_cmd "PR 번호를 맨 뒤에 둔 라운드 코멘트" "gh pr comment --body-file $N 7"
+gate_cmd "--edit-last 로 고친 라운드 코멘트" "gh pr comment 7 --body-file $N --edit-last"
+gate_cmd "경로 뒤에 -R 을 둔 라운드 코멘트" "gh pr comment 7 --body-file $N -R o/r"
 round "$T/r-v0.md" $H3 "$(report $H3 0)"
 gate "Verdict 없이 기록된 보고를 넣은 라운드 코멘트" pass "$T/r-v0.md"
 

@@ -12,17 +12,20 @@
 # 대신하면 라운드 코멘트 게시 훅이 기록을 못 찾아 막는다. 보고는 두 자리 가운데 하나로 온다(Claude Code 2.1.286 의
 # 헤드리스 세션으로 확인했다):
 #   · 기본 모드 — `SubagentStop` 의 `last_assistant_message`
-#   · auto 모드 — 에이전트가 `SubagentHandback` 으로 보고한다. 보고는 그 도구의 `tool_input.message` 이고,
-#     그때 `SubagentStop` 의 `last_assistant_message` 는 빈 글이다
-# 그래서 `PostToolUse(SubagentHandback)` 와 `SubagentStop` 둘에서 기록하고, 같은 실행(`agent_id`)의 같은 보고는
-# 한 번만 남긴다.
+#   · auto 모드 — 에이전트가 `SubagentHandback` 으로 보고한다. 보고는 그 도구의 `tool_input.message` 다.
+#     그 뒤의 `SubagentStop` 의 `last_assistant_message` 는 보고가 아니라 에이전트의 맺음말이다(문서: "the
+#     subagent's closing text, if any, which is not the delivered report"). 맺음말은 흔하다
+# 그래서 `PostToolUse(SubagentHandback)` 와 `SubagentStop` 둘에서 기록하되, 이미 기록한 실행(`agent_id`)의
+# `SubagentStop` 은 맺음말이라 보지 않는다.
 #
 # **어디에.** `<git 공통 디렉터리>/kit-bot/reviews/<리뷰한 head>.jsonl` 에 실행마다 한 줄 — agent_id · agent_type ·
 # head · 시각 · 받은 이벤트 · 보고 전문. head 는 보고의 `리뷰한 head:` 줄에서 읽고, 40자가 아니면 `unknown` 이다.
 # 세션은 봇 디렉터리를 읽지도 쓰지도 못하고(설치되는 settings 의 deny · `bot_guard.sh`), 이 훅을 직접
 # 실행하는 명령도 `bot_guard.sh` 가 막는다. 그래서 기록은 에이전트가 실제로 돌려준 글이다.
 #
-# **`**Verdict**:` 줄이 없으면 한 번 막는다.** 그 줄이 리뷰의 판정이고 라운드 코멘트의 머리가 그 줄을 쓴다.
+# **마지막 줄이 `**Verdict**:` 가 아니면 한 번 막는다.** 그 줄이 리뷰의 판정이고(`cold-reviewer` 정의는 반드시
+# 마지막 줄이라고 한다) 라운드 코멘트의 머리가 그 줄을 쓴다. 가운데 줄은 보지 않는다 — 재리뷰 보고는 앞 라운드의
+# Verdict 줄을 옮겨 적기도 한다.
 # auto 모드는 `PreToolUse(SubagentHandback)` 에서 보고를 거부하고, 기본 모드는 `SubagentStop` 에서 block 해
 # 에이전트가 다시 끝내게 한다. 같은 실행에서 두 번째부터는 막지 않고 기록한다 — 되풀이를 막는다.
 #
@@ -67,13 +70,19 @@ if common.returncode:
 d = os.path.join(common.stdout.strip(), 'kit-bot', 'reviews')
 os.makedirs(d, exist_ok=True)
 agent = str(data.get('agent_id') or '')
+tag = re.sub(r'[^0-9A-Za-z_-]', '_', agent or 'none')
+recorded = os.path.join(d, '.recorded-' + tag)
+if ev == 'SubagentStop' and os.path.exists(recorded):
+    sys.exit(0)                 # 이미 SubagentHandback 으로 받은 실행이다. 이 글은 맺음말이다
 
-if not re.search(r'^\*\*Verdict\*\*:', report, re.M):
-    mark = os.path.join(d, '.no-verdict-' + re.sub(r'[^0-9A-Za-z_-]', '_', agent or 'none'))
+last = next((l for l in reversed(report.splitlines()) if l.strip()), '')
+if not last.startswith('**Verdict**:'):
+    mark = os.path.join(d, '.no-verdict-' + tag)
     if not os.path.exists(mark) and not (ev == 'SubagentStop' and data.get('stop_hook_active')):
         open(mark, 'w').close()
         why = ("콜드 리뷰 보고의 마지막 줄은 `**Verdict**: Request changes | Comment | Approve — <한 문장>` 이다. "
-               "이 보고에는 그 줄이 없다. 리뷰를 끝내고 그 줄로 끝나는 보고 전문을 다시 돌려준다.")
+               "이 보고의 마지막 줄은 그렇지 않다. 그 줄을 붙여 보고 전문을 다시 돌려준다 — 정의대로 리뷰하지 않고 "
+               "멈춘 보고면 그 까닭을 그 줄의 한 문장에 적는다.")
         if ev == 'PreToolUse':
             print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
                                                      "permissionDecision": "deny",
@@ -104,5 +113,6 @@ row = {'agent_id': agent, 'agent_type': data.get('agent_type') or '', 'head': he
        'event': ev, 'report': report}
 with open(path, 'a', encoding='utf-8') as fh:
     fh.write(json.dumps(row, ensure_ascii=False) + '\n')
+open(recorded, 'w').close()
 PY
 exit 0

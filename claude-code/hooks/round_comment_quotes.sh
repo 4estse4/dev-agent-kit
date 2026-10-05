@@ -63,8 +63,9 @@ case "$input" in
   *) exit 0 ;;
 esac
 
-HOOK_DIR="$(cd "$(dirname "$0")" && pwd)" HOOK_INPUT="$input" python3 - <<'PY'
-import json, os, re, shlex, subprocess, sys
+# 공유 파일(round_comment_cmd.py)을 읽어도 훅 디렉터리에 __pycache__ 를 남기지 않는다.
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)" HOOK_INPUT="$input" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+import json, os, re, subprocess, sys
 
 ROUND = re.compile(r'^\s*## 리뷰 ')
 BULLET = re.compile(r'^\s*(?:[-*]|\d+\.)\s')
@@ -73,7 +74,6 @@ BULLET = re.compile(r'^\s*(?:[-*]|\d+\.)\s')
 LABEL = re.compile(r'\(사람(?:\s*,[^)]*)?\)')
 AFTER = re.compile(r'(?:\*\*)?\s*"')          # 라벨 바로 뒤. `**(사람)** "…"` 도 인용이다
 QMASK, LMASK = '＂', '(사​람'       # 백틱 안의 `"` 와 `(사람` 을 가린다
-CANON = "`gh pr comment <N> [-R <레포>] --body-file <절대 경로>`"
 
 
 def out(decision, why):
@@ -165,26 +165,10 @@ def bad_labels(body):
     return bad
 
 
-# 명령 글자 어디에든 `gh` · `pr` · `comment` 가 이 순서로 붙어 있으면(사이에는 플래그만) 게시일
-# 수 있는 명령이다. 앞에 무엇이 오든, 따옴표 · heredoc 안이든 가리지 않는다. 「명령 자리」를
-# 목록으로 정해 알아보던 동안 목록 밖(`if` · `timeout` · `bash -lc` · `find -exec` …)의 게시가
-# 대조 없이 올라갔다. 따옴표로 감싼 낱말과 경로를 붙인 `gh` 도 알아본다.
-_FLAGS = r'(?:-\S+\s+(?:[^-\s;&|]\S*\s+)?)*'
-CAND = re.compile(
-    r'(?<![\w.-])["\']?(?:[^\s"\']*/)?gh["\']?\s+' + _FLAGS + r'["\']?pr["\']?\s+' + _FLAGS
-    + r'["\']?comment["\']?(?![\w-])')
-# 정규형이 받는 플래그. `gh pr comment --help` 의 FLAGS · INHERITED FLAGS 그대로다.
-VALUED = {'-R': 'repo', '--repo': 'repo', '-F': 'file', '--body-file': 'file',
-          '-b': 'body', '--body': 'body'}
-BOOLS = {'--create-if-none', '--delete-last', '--edit-last', '--yes',
-         '-e', '--editor', '-w', '--web', '-h', '--help'}
-
-
-def canon_deny(why):
-    deny("gh pr comment 는 한 줄 정규형으로 따로 입력해라: " + CANON + ". " + why
-         + " 게시가 아니면 그 글자를 명령에서 빼라. 찾을 때는 `pr comment` 로 찾고, "
-         "파일은 Write 도구로 쓴다.")
-
+# 명령을 읽는 규칙은 콜드 대조 훅(round_comment_cold.sh)과 같이 쓰는 round_comment_cmd.py 에 있다.
+# 두 훅이 받는 게시 모양이 한 벌이어야 한쪽이 받는 모양이 다른 쪽의 대조를 피해 가지 않는다.
+sys.path.insert(0, os.environ['HOOK_DIR'])
+import round_comment_cmd  # noqa: E402
 
 try:
     data = json.loads(os.environ['HOOK_INPUT'])
@@ -192,70 +176,12 @@ except ValueError:
     sys.exit(0)
 if data.get('tool_name') != 'Bash':
     sys.exit(0)
-cmd = (data.get('tool_input') or {}).get('command') or ''
-cmd = cmd.replace('\\\n', ' ')
-if not CAND.search(cmd):
+kind, got = round_comment_cmd.parse((data.get('tool_input') or {}).get('command') or '')
+if kind in ('none', 'skip'):
     sys.exit(0)
-
-# ── 게시일 수 있는 명령이다. 정규형이 아니면 게시인지 가리지 않고 막는다 ──
-line = cmd.strip()
-if '\n' in line:
-    canon_deny("줄바꿈으로 다른 명령과 이으면 이 훅이 무엇이 올라가는지 믿을 수 없다.")
-try:
-    lex = shlex.shlex(line, posix=True, punctuation_chars=True)
-    lex.whitespace_split = True
-    lex.commenters = ''
-    toks = list(lex)
-except ValueError:
-    canon_deny("명령을 읽지 못했다.")
-if len(toks) < 3 or os.path.basename(toks[0]) != 'gh' or toks[1:3] != ['pr', 'comment']:
-    canon_deny("앞붙임 · 래퍼 · 하위 명령 앞의 플래그는 받지 않는다.")
-if any(set(t) <= set('();<>|&') or t.startswith('#') for t in toks):
-    canon_deny("다른 명령 · 주석 · 리다이렉트와 이으면 "
-               "이 훅이 무엇이 올라가는지 믿을 수 없다.")
-
-pr, got, bools = [], {}, set()
-args = toks[3:]
-j = 0
-while j < len(args):
-    a = args[j]
-    name, val = a, None
-    if a.startswith('--') and '=' in a:
-        name, val = a.split('=', 1)
-    elif re.match(r'^-[RFb].', a):          # 짧은 플래그에 값을 붙인 `-Fx` · `-F=x`
-        name, val = a[:2], a[2:]
-        if val.startswith('='):
-            val = val[1:]
-    if name in VALUED:
-        if val is None:
-            j += 1
-            if j >= len(args):
-                canon_deny(name + " 에 값이 없다.")
-            val = args[j]
-        if VALUED[name] in got:
-            canon_deny(name + " 가 두 번 나왔다.")
-        got[VALUED[name]] = val
-    elif name in BOOLS and val is None:
-        bools.add(name)
-    elif not a.startswith('-'):
-        pr.append(a)
-    else:
-        canon_deny("모르는 플래그다: " + a)
-    j += 1
-
-if bools & {'-h', '--help'}:
-    sys.exit(0)
-if 'body' in got or bools & {'-e', '--editor', '-w', '--web'}:
-    deny("gh pr comment 의 본문은 절대 경로 파일 하나로만 전달한다: " + CANON
-         + ". 인라인 본문 · 편집기 · 웹은 이 훅이 판정할 수 없다.")
-if 'file' not in got:
-    sys.exit(0)                 # 본문 없이는 새 글을 안 올린다(`--delete-last` 등)
-if len(pr) != 1 or not re.match(r'^\d+$', pr[0]):
-    canon_deny("PR 은 번호 하나로 적는다(URL · 브랜치 이름은 받지 않는다).")
-pr, repo, path = pr[0], got.get('repo'), got['file']
-if not os.path.isabs(path):
-    deny("gh pr comment 의 --body-file 에 상대 경로를 전달했다. 이 훅은 명령 안의 cd 를 못 "
-         "따라가므로 절대 경로만 받는다: " + CANON)
+if kind == 'deny':
+    deny(got)
+pr, repo, path = got['pr'], got['repo'], got['path']
 try:
     with open(path, encoding='utf-8') as fh:
         body = fh.read()

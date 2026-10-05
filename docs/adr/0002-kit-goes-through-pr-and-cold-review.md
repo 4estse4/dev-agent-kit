@@ -78,7 +78,9 @@ $ gh api repos/4estse4/ai-native-kit/rules/branches/main --jq '.[] | select(.typ
 ```
 
 룰셋이 막는 것은 PR 없는 push · `tests` 가 빨간 채로 머지 · 스쿼시 아닌 머지 · 사람의 Approve 없는 머지 ·
-`main` 삭제까지다. **콜드 리뷰를 실행했는지는 룰셋이 안 본다.** 그것은 여전히 `사람`(지금의 `막는 것 없음`) 이다.
+`main` 삭제까지다. **콜드 리뷰를 실행했는지는 룰셋이 안 본다.** 그것은 여전히 `사람`(지금의 `막는 것 없음`) 이었다.
+2026-10-04(PR #193)부터는 라운드 코멘트를 올릴 때 에이전트 훅(`round_comment_cold.sh`)이 그 head 의 `cold-reviewer`
+기록을 요구한다. 룰셋은 여전히 이것을 안 본다.
 
 룰셋 때문에 낡은 자리가 있고, 그 자리는 이슈 #4 에 적었다. `.github/workflows/kit-tests.yml`
 머리는 「이것은 required check 가 아니다」라고 적었다(2026-09-29 PR #166 에서 고침). `merge-pr` 2절에는 보호를 확인하는
