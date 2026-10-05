@@ -15,9 +15,6 @@
 #   · `SKILL.md` 에 `## 꼭 지킬 것` 제목이 있으면 그 제목이 첫 `!` 주입보다 앞에 있다. 까닭은 바로 위와 같다 —
 #     늘 지킬 것이 잘리는 쪽에 놓이지 않게 한다. 이 제목에는 링크가 없어 위 검사가 지키지 못한다. 제목이 없는
 #     스킬은 건너뛴다
-#
-# 아직 나누지 않은 스킬은 `PENDING` 에 두고 건너뛴다. 목록에 있는 스킬이 위 검사를 이미 통과하면 빨갛다 — 목록에서
-# 지운다. 목록이 나눈 스킬까지 덮으면 그 스킬이 다시 길어져도 이 테스트가 알리지 않는다.
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$KIT" || exit 1
@@ -25,7 +22,6 @@ python3 - <<'PY'
 import glob, os, re, sys
 
 LIMIT = 500
-PENDING = {'merge-pr'}
 fail = 0
 
 
@@ -89,18 +85,10 @@ dirs = sorted(os.path.dirname(p) for p in glob.glob('claude-code/skills/*/SKILL.
 if not dirs:
     bad('claude-code/skills/*/SKILL.md 에 해당하는 파일이 없다 — 경로가 바뀌었나')
     sys.exit(1)
-names = {os.path.basename(d) for d in dirs}
-for p in sorted(PENDING - names):
-    bad('PENDING 의 %s 스킬이 없다 — 목록에서 지운다' % p)
 for d in dirs:
     name = os.path.basename(d)
     got = problems(d)
-    if name in PENDING:
-        if got:
-            ok('%s 는 아직 나누지 않아 건너뛴다 — %s' % (name, got[0]))
-        else:
-            bad('%s 는 PENDING 에 있는데 이미 통과한다 — 목록에서 지운다' % name)
-    elif got:
+    if got:
         for g in got:
             bad('%s: %s' % (name, g))
     else:
