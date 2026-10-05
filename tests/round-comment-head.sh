@@ -14,9 +14,10 @@
 #     봇이 올린 글이나, 봇 설정이 없어 라운드 코멘트가 사람 계정인 레포의 글은 세지 않는다
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
-python3 - "$KIT/claude-code/skills/open-pr/SKILL.md" <<'PY'
-import json, re, subprocess, sys
-sk = open(sys.argv[1], encoding='utf-8').read()
+python3 - "$KIT/claude-code/skills/open-pr" <<'PY'
+import glob, json, os, re, subprocess, sys
+# 스킬은 `SKILL.md` 와 보조 파일로 나뉘므로 스킬 디렉터리의 `.md` 를 모두 읽는다
+sk = ''.join(open(p, encoding='utf-8').read() for p in sorted(glob.glob(os.path.join(sys.argv[1], '*.md'))))
 PH = '<3.1 에서 읽은 head>'
 fail = 0
 
