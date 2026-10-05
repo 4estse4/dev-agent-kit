@@ -75,7 +75,7 @@
 
 <summary>콜드 리뷰 전문</summary>
 
-…cold-reviewer 가 돌려준 것 그대로…
+…cold_review.sh <리뷰한 head> 의 출력 그대로…
 
 </details>
 ```

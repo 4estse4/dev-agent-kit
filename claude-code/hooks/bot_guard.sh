@@ -57,7 +57,8 @@
 # 결정이 기록되고, 게시 스크립트는 그 기록을 권한 프롬프트 없이 사람 계정으로 올린다. 사람이 정했다 — 작정한
 # 우회만이 아니라, 훅이 등록되지 않은 세션이 사람이 창에서 고른 것을 되살리려는 실수도 이 모양이다. 구문 검사
 # (`bash -n`)와 읽기는 실행이 아니라 막지 않는다. 이 훅은 cwd 가 봇 설정이 있는 레포 안일 때만 판정하므로, 레포
-# 밖을 cwd 로 두고 실행하는 것은 막지 못한다(작정한 우회다).
+# 밖을 cwd 로 두고 실행하는 것은 막지 못한다(작정한 우회다). 콜드 리뷰 기록 훅(`review_record.sh`)도 같은 까닭으로
+# 막는다 — 지어낸 보고가 기록되면 라운드 코멘트의 대조(`round_comment_cold.sh`)를 통과한다.
 #
 # **명령 치환 안도 본다.** `$(…)` · 백틱 안의 명령을 꺼내 같은 판정을 한다. `url=$(gh pr create …)` ·
 # `-H "Authorization: token $(gh auth token)"` 은 흔한 셸 관용구다. heredoc 의 본문은 명령에 전달하는
@@ -83,7 +84,7 @@
 input=$(cat)
 # 모든 Bash 호출마다 실행되므로 관련 글자가 없으면 파이썬을 실행하지 않고 끝낸다.
 case "$input" in
-  *gh*|*git*|*GH_*|*GITHUB_TOKEN*|*GIT_CONFIG*|*credential*|*kit-bot*|*human_comment*|*human_review*|*window_record*|*'env -'*|*.config/*|*key.pem*) ;;
+  *gh*|*git*|*GH_*|*GITHUB_TOKEN*|*GIT_CONFIG*|*credential*|*kit-bot*|*human_comment*|*human_review*|*window_record*|*review_record*|*'env -'*|*.config/*|*key.pem*) ;;
   *) exit 0 ;;
 esac
 
@@ -417,6 +418,10 @@ if any(runs(s, 'window_record.sh') or wraps(s, 'window_record.sh') for s in segs
          "고르지 않은 결정이 기록돼 사람 계정으로 올라가므로 막는다. 창 뒤에 창 기록 훅의 안내가 오지 않았으면 "
          "open-pr 3.5 대로 한다 — 질문의 게시 표지가 글자 그대로가 아니면 고쳐 같은 창을 다시 띄우고, 표지가 "
          "맞으면 훅이 실행되지 않은 것이라 PR 링크와 쓸 글을 적어 PR 웹에 써 달라고 요청한다.")
+if any(runs(s, 'review_record.sh') or wraps(s, 'review_record.sh') for s in segs):
+    deny("콜드 리뷰 기록 훅(review_record.sh)은 Claude Code 가 리뷰 에이전트가 보고를 돌려줄 때 실행한다. 세션이 "
+         "직접 실행하면 에이전트가 돌려주지 않은 글이 기록돼 라운드 코멘트의 대조를 통과하므로 막는다. 기록이 "
+         "없으면 콜드 리뷰 에이전트를 다시 실행한다.")
 if any(wraps(s, 'human_comment.sh') for s in segs):
     deny("사람 계정으로 올리는 명령을 셸의 -c 인자 안에 두면 이 훅이 그 모양을 보지 못해 막는다. 한 줄 "
          "정규형으로 따로 입력한다: " + HUMAN_CANON)
