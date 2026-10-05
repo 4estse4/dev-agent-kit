@@ -16,15 +16,18 @@ if ! printf '%s' "$head" | grep -qE '^[0-9a-f]{40}$'; then
   echo "쓰는 법: bash .claude/hooks/cold_review.sh <리뷰한 head 40자>" >&2
   exit 2
 fi
-top=$(git rev-parse --show-toplevel 2>/dev/null)
+# 셸의 작업 디렉터리가 아니라 이 스크립트가 놓인 레포에서 읽는다. 두 훅은 세션을 연 프로젝트(훅을 등록한
+# 프로젝트)의 기록을 쓰므로, 프로젝트의 이 스크립트도 셸이 어디로 cd 했든 그 기록을 꺼낸다.
+here=$(cd "$(dirname "$0")" && pwd)
+top=$(git -C "$here" rev-parse --show-toplevel 2>/dev/null)
 if [ -z "$top" ] || [ ! -f "$top/.claude/bot.json" ]; then
   echo "봇 설정(.claude/bot.json)이 없다. 킷은 봇과 함께 쓴다 — 봇 설정이 없으면 콜드 리뷰를 기록하지 않는다." >&2
   exit 2
 fi
-gitdir=$(git rev-parse --path-format=absolute --git-common-dir) || exit 2
-python3 - "$gitdir/kit-bot/reviews/$head.jsonl" "$head" <<'PY'
+gitdir=$(git -C "$here" rev-parse --path-format=absolute --git-common-dir) || exit 2
+python3 - "$gitdir/kit-bot/reviews/$head.jsonl" "$head" "$top" <<'PY'
 import json, sys
-path, head = sys.argv[1:3]
+path, head, top = sys.argv[1:4]
 last = None
 try:
     with open(path, encoding='utf-8') as fh:
@@ -38,8 +41,10 @@ try:
 except OSError:
     pass
 if last is None:
-    print("head %s 의 콜드 리뷰 기록이 없다. 콜드 리뷰 에이전트가 이 head 를 리뷰해 보고를 돌려줬는지 본다 — "
-          "기록은 봇 설정이 있는 레포에서 cold-reviewer 에이전트의 보고만 남는다." % head, file=sys.stderr)
+    print("head %s 의 콜드 리뷰 기록이 %s 에 없다. 콜드 리뷰 에이전트가 이 head 를 리뷰해 보고를 돌려줬는지 본다 — "
+          "기록은 봇 설정이 있는 레포에서 cold-reviewer 에이전트의 보고만 남는다. 기록은 세션을 연 프로젝트에 "
+          "남고 이 스크립트는 자기가 놓인 레포에서 찾으므로, 셸이 다른 레포에 있으면 프로젝트 루트에서 "
+          "실행한다." % (head, top), file=sys.stderr)
     sys.exit(1)
 sys.stdout.write(last.rstrip('\n') + '\n')
 PY

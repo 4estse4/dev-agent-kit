@@ -18,8 +18,9 @@
 # 그래서 `PostToolUse(SubagentHandback)` 와 `SubagentStop` 둘에서 기록하되, 이미 기록한 실행(`agent_id`)의
 # `SubagentStop` 은 맺음말이라 보지 않는다.
 #
-# **어디에.** `<git 공통 디렉터리>/kit-bot/reviews/<리뷰한 head>.jsonl` 에 실행마다 한 줄 — agent_id · agent_type ·
-# head · 시각 · 받은 이벤트 · 보고 전문. head 는 보고의 `리뷰한 head:` 줄에서 읽고, 40자가 아니면 `unknown` 이다.
+# **어디에.** 세션을 연 프로젝트(`CLAUDE_PROJECT_DIR`)의 `<git 공통 디렉터리>/kit-bot/reviews/<리뷰한 head>.jsonl` 에
+# 실행마다 한 줄 — agent_id · agent_type · head · 시각 · 받은 이벤트 · 보고 전문. head 는 보고의 `리뷰한 head:` 줄에서
+# 읽고, 40자가 아니면 `unknown` 이다. 세션의 셸이 어디로 cd 했든 같은 자리다.
 # 세션은 봇 디렉터리를 읽지도 쓰지도 못하고(설치되는 settings 의 deny · `bot_guard.sh`), 이 훅을 직접
 # 실행하는 명령도 `bot_guard.sh` 가 막는다. 그래서 기록은 에이전트가 실제로 돌려준 글이다.
 #
@@ -59,11 +60,13 @@ else:
 if not isinstance(report, str) or not report.strip():
     sys.exit(0)
 
-cwd = data.get('cwd') or None
-top = subprocess.run(['git', 'rev-parse', '--show-toplevel'], cwd=cwd, capture_output=True, text=True)
+# 훅 입력의 cwd 가 아니라 세션을 연 프로젝트다. cwd 는 세션이 cd 한 자리를 따라가서, 프로젝트 안의 다른 레포에
+# cd 해 있으면 기록이 그 레포에 생기고 라운드 코멘트 대조가 기록을 못 찾았다.
+proj = os.environ.get('CLAUDE_PROJECT_DIR') or None
+top = subprocess.run(['git', 'rev-parse', '--show-toplevel'], cwd=proj, capture_output=True, text=True)
 if top.returncode or not os.path.isfile(os.path.join(top.stdout.strip(), '.claude', 'bot.json')):
     sys.exit(0)
-common = subprocess.run(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'], cwd=cwd,
+common = subprocess.run(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'], cwd=proj,
                         capture_output=True, text=True)
 if common.returncode:
     sys.exit(0)

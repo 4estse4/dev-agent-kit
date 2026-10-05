@@ -73,8 +73,10 @@ except (OSError, UnicodeDecodeError):
 if not ROUND.match(body):
     sys.exit(0)
 
-cwd = data.get('cwd') or None
-top = subprocess.run(['git', 'rev-parse', '--show-toplevel'], cwd=cwd, capture_output=True, text=True)
+# 기록 훅(review_record.sh)과 같이 세션을 연 프로젝트에서 기록을 찾는다. 훅 입력의 cwd 는 세션이 cd 한 자리를
+# 따라가서, 프로젝트 안의 다른 레포에 cd 해 있으면 그 레포의 봇 디렉터리를 봤다.
+proj = os.environ.get('CLAUDE_PROJECT_DIR') or None
+top = subprocess.run(['git', 'rev-parse', '--show-toplevel'], cwd=proj, capture_output=True, text=True)
 if top.returncode or not os.path.isfile(os.path.join(top.stdout.strip(), '.claude', 'bot.json')):
     deny("이 레포에는 봇 설정(.claude/bot.json)이 없어, 라운드 코멘트의 콜드 리뷰 전문을 대조할 기록이 없다. "
          "봇 설정이 없으면 세션이 봇 디렉터리에 쓸 수 있어 기록 훅이 기록하지 않는다. 킷은 봇과 함께 쓴다 — "
@@ -102,7 +104,7 @@ if start is None or end is None:
          "`bash .claude/hooks/cold_review.sh %s` 의 출력을 그 블록에 그대로 넣는다." % head)
 cold = '\n'.join(lines[start + 1:end]).strip('\n')
 
-common = subprocess.run(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'], cwd=cwd,
+common = subprocess.run(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'], cwd=proj,
                         capture_output=True, text=True)
 reports = []
 try:

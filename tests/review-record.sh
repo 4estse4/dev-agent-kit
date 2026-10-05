@@ -9,6 +9,9 @@
 # 모드는 `SubagentHandback` 도구의 `tool_input.message` 에 온다. auto 모드의 `SubagentStop` 의 그 칸은 비었거나
 # 에이전트의 맺음말이다(문서: "the subagent's closing text, if any").
 # 훅은 봇 설정(`.claude/bot.json`)이 있는 임시 레포에서 부른다. 봇 설정이 없는 레포는 따로 본다.
+# Claude Code 처럼 세션을 연 프로젝트를 환경의 `CLAUDE_PROJECT_DIR` 로 주고, 훅 입력의 `cwd` 는 세션의 셸이 있는
+# 자리다. 둘이 다른 경우는 따로 본다(이슈 #196). `cold_review.sh` 는 설치된 자리(임시 레포의 `.claude/hooks/`)에
+# 복사해 부른다.
 #
 # 보는 것:
 #   · 두 모드의 보고를 「리뷰한 head:」 별 기록 파일에 한 줄씩 남기고, 같은 실행(agent_id)은 한 번만 남긴다
@@ -20,6 +23,7 @@
 #   · 라운드 코멘트 게시 훅(`round_comment_cold.sh`)이 콜드 리뷰 전문을 같은 head 의 기록과 대조해, 같으면
 #     통과시키고 다르거나 · 기록이 없거나 · 전문이 없거나 · head 줄이 없거나 · 봇 설정이 없으면 막는다
 #   · 기록 훅을 세션이 직접 실행하는 명령을 `bot_guard.sh` 가 막는다
+#   · 세션의 셸이 프로젝트 안의 다른 레포에 있어도 기록 · 대조 · `cold_review.sh` 가 세션을 연 프로젝트의 기록을 쓴다
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 H="$KIT/claude-code/hooks"
@@ -28,6 +32,10 @@ T=$(mktemp -d)
 mkdir -p "$T/repo/.claude" "$T/plain"
 git init -q "$T/repo"; git init -q "$T/plain"
 printf '{"app_id": 1, "app": "helper-bot"}\n' > "$T/repo/.claude/bot.json"
+for r in repo plain; do mkdir -p "$T/$r/.claude/hooks"; cp "$H/cold_review.sh" "$T/$r/.claude/hooks/"; done
+# 프로젝트 안의 다른 레포. 봇 설정은 커밋돼 있어 클론에도 있다.
+IN="$T/repo/scratch/clone-in"
+mkdir -p "$IN/.claude"; git init -q "$IN"; cp "$T/repo/.claude/bot.json" "$IN/.claude/"
 REC="$T/repo/.git/kit-bot/reviews"
 H1=1111111111111111111111111111111111111111
 H2=2222222222222222222222222222222222222222
@@ -53,7 +61,7 @@ else:
 print(json.dumps(d, ensure_ascii=False))
 PY
 }
-rec() { printf '%s' "$(hook_in "$@")" | bash "$H/review_record.sh"; }
+rec() { printf '%s' "$(hook_in "$@")" | CLAUDE_PROJECT_DIR="$T/repo" bash "$H/review_record.sh"; }
 count() { # $1=head → 그 head 의 기록 줄 수
   [ -f "$REC/$1.jsonl" ] && grep -c '' "$REC/$1.jsonl" || echo 0
 }
@@ -85,8 +93,19 @@ rec SubagentStop a7 "리뷰한 head: $H6
 머리가 다른 보고
 **Verdict**: Approve — 고르는 기준은 에이전트 종류다" > /dev/null
 [ "$(count $H6)" = 1 ] && ok "cold-reviewer 의 보고는 첫 줄과 상관없이 남긴다" || no "cold-reviewer 의 보고 — 줄 $(count $H6)"
-out=$(printf '%s' "$(hook_in PostToolUse p1 "$(report $H3 1)" SubagentHandback '' "$T/plain")" | bash "$H/review_record.sh")
+out=$(printf '%s' "$(hook_in PostToolUse p1 "$(report $H3 1)" SubagentHandback '' "$T/plain")" \
+  | CLAUDE_PROJECT_DIR="$T/plain" bash "$H/review_record.sh")
 [ -z "$out" ] && [ ! -e "$T/plain/.git/kit-bot" ] && ok "봇 설정이 없는 레포에는 남기지 않는다" || no "봇 설정이 없는 레포 — 출력 「${out}」"
+# 세션의 셸이 프로젝트 안의 다른 레포에 있다(훅 입력의 cwd). 기록은 세션을 연 프로젝트에 남긴다(이슈 #196).
+H10=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+rec SubagentStop b1 "$(report $H10 1)" "" false "$IN" > /dev/null
+[ "$(count $H10)" = 1 ] && [ ! -e "$IN/.git/kit-bot" ] && ok "셸이 프로젝트 안의 다른 레포에 있어도 프로젝트에 남긴다" \
+  || no "다른 레포의 cwd — 프로젝트 줄 $(count $H10) · 그 레포의 기록 $( [ -e "$IN/.git/kit-bot" ] && echo 있음 || echo 없음)"
+H11=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+printf '%s' "$(hook_in SubagentStop b2 "$(report $H11 1)" "" false "$T/repo")" \
+  | CLAUDE_PROJECT_DIR="$T/plain" bash "$H/review_record.sh" > /dev/null
+[ "$(count $H11)" = 0 ] && [ ! -e "$T/plain/.git/kit-bot" ] && ok "프로젝트에 봇 설정이 없으면 셸이 봇 설정이 있는 레포에 있어도 남기지 않는다" \
+  || no "봇 설정이 없는 프로젝트 · 봇 설정이 있는 cwd — 줄 $(count $H11)"
 
 # ── Verdict 가 없는 보고 ──
 out=$(rec PreToolUse a4 "$(report $H3 0)")
@@ -126,13 +145,21 @@ case "$out" in *붙여*) ok "되돌림 사유는 리뷰를 다시 하라가 아�
   *) no "되돌림 사유 — 「${out}」" ;; esac
 
 # ── 기록을 내는 스크립트 ──
-got=$(cd "$T/repo" && bash "$H/cold_review.sh" $H1; echo "rc=$?")
+CR="$T/repo/.claude/hooks/cold_review.sh"
+got=$(cd "$T/repo" && bash .claude/hooks/cold_review.sh $H1; echo "rc=$?")
 [ "$got" = "$(report $H1 1)
 rc=0" ] && ok "cold_review.sh 가 그 head 의 보고를 글자 그대로 출력한다" || no "cold_review.sh 출력이 다르다: $got"
-(cd "$T/repo" && bash "$H/cold_review.sh" 4444444444444444444444444444444444444444 > /dev/null 2>&1); r=$?
+err=$(cd "$T/repo" && bash .claude/hooks/cold_review.sh 4444444444444444444444444444444444444444 2>&1 > /dev/null); r=$?
 [ "$r" = 1 ] && ok "기록이 없는 head 는 rc=1" || no "기록이 없는 head — rc=$r"
-(cd "$T/plain" && bash "$H/cold_review.sh" $H1 > /dev/null 2>&1); r=$?
+# 셸이 다른 레포에 있으면 상대 경로가 그 레포의 사본을 가리킨다. 어느 레포에서 찾았는지 알린다.
+case "$err" in *"$(git -C "$T/repo" rev-parse --show-toplevel)"*) ok "기록이 없으면 찾은 레포를 알린다" ;;
+  *) no "기록이 없을 때의 안내 — 「${err}」" ;; esac
+(cd "$T/plain" && bash .claude/hooks/cold_review.sh $H1 > /dev/null 2>&1); r=$?
 [ "$r" = 2 ] && ok "봇 설정이 없으면 rc=2" || no "봇 설정이 없을 때 — rc=$r"
+got=$(cd "$IN" && bash "$CR" $H1; echo "rc=$?")
+[ "$got" = "$(report $H1 1)
+rc=0" ] && ok "프로젝트의 cold_review.sh 는 셸이 다른 레포에 있어도 프로젝트의 기록을 출력한다" \
+  || no "다른 레포에서 실행한 cold_review.sh: $got"
 
 # ── 라운드 코멘트 게시 훅 ──
 round() { # $1=파일 $2=head 줄(빈 글이면 없음) $3=콜드 전문(빈 글이면 블록 없음)
@@ -148,18 +175,20 @@ if cold:
 open(path, 'w', encoding='utf-8').write(s)
 PY
 }
-gate() { # $1=이름 $2=기대(pass/deny) $3=본문 파일 $4=사유에 있어야 할 글자 $5=cwd(선택)
-  local out got
+gate() { # $1=이름 $2=기대(pass/deny) $3=본문 파일 $4=사유에 있어야 할 글자 $5=프로젝트(선택) $6=cwd(선택, 기본은 프로젝트)
+  local out got proj="${5:-$T/repo}"
   out=$(python3 -c 'import json,sys; print(json.dumps({"tool_name": "Bash", "cwd": sys.argv[1],
-    "tool_input": {"command": sys.argv[2]}}))' "${5:-$T/repo}" "gh pr comment 7 --body-file $3" | bash "$H/round_comment_cold.sh")
+    "tool_input": {"command": sys.argv[2]}}))' "${6:-$proj}" "gh pr comment 7 --body-file $3" \
+    | CLAUDE_PROJECT_DIR="$proj" bash "$H/round_comment_cold.sh")
   case "$out" in *'"permissionDecision": "deny"'*) got=deny ;; '') got=pass ;; *) got="?:$out" ;; esac
   if [ "$got" != "$2" ]; then no "$1 — 기대 $2, 실제 $got $out"; return; fi
   if [ -n "${4:-}" ] && ! printf '%s' "$out" | grep -qF -- "$4"; then no "$1 — 사유에 「$4」가 없다: $out"; return; fi
   ok "$1 ($got)"
 }
-(cd "$T/repo" && bash "$H/cold_review.sh" $H1 > "$T/cold1.md")
+(cd "$T/repo" && bash .claude/hooks/cold_review.sh $H1 > "$T/cold1.md")
 round "$T/r-ok.md" $H1 "$(cat "$T/cold1.md")"
 gate "cold_review.sh 의 출력을 넣은 라운드 코멘트" pass "$T/r-ok.md"
+gate "셸이 프로젝트 안의 다른 레포에 있을 때 올린 라운드 코멘트" pass "$T/r-ok.md" "" "$T/repo" "$IN"
 round "$T/r-edit.md" $H1 "$(sed 's/시험용/손으로 고친/' "$T/cold1.md")"
 gate "콜드 전문을 한 낱말 고친 라운드 코멘트" deny "$T/r-edit.md" "기록과 다르다"
 round "$T/r-nocold.md" $H1 ""
@@ -169,13 +198,14 @@ gate "기록이 없는 head 의 라운드 코멘트" deny "$T/r-norec.md" "기�
 round "$T/r-nohead.md" "" "$(cat "$T/cold1.md")"
 gate "리뷰한 head 줄이 없는 라운드 코멘트" deny "$T/r-nohead.md" "리뷰한 head"
 gate "봇 설정이 없는 레포의 라운드 코멘트" deny "$T/r-ok.md" "봇 설정" "$T/plain"
+gate "프로젝트에 봇 설정이 없을 때 봇 설정이 있는 레포에서 올린 라운드 코멘트" deny "$T/r-ok.md" "봇 설정" "$T/plain" "$T/repo"
 printf '## 머지 결정\n\n- 라운드 하나.\n' > "$T/decision.md"
 gate "라운드 코멘트가 아닌 코멘트" pass "$T/decision.md"
 # 인용 훅이 정규형으로 받는 다른 모양도 같은 대조를 받는다. 기록이 없는 head 의 라운드 코멘트로 본다.
 gate_cmd() { # $1=이름 $2=명령
   local out got
   out=$(python3 -c 'import json,sys; print(json.dumps({"tool_name": "Bash", "cwd": sys.argv[1],
-    "tool_input": {"command": sys.argv[2]}}))' "$T/repo" "$2" | bash "$H/round_comment_cold.sh")
+    "tool_input": {"command": sys.argv[2]}}))' "$T/repo" "$2" | CLAUDE_PROJECT_DIR="$T/repo" bash "$H/round_comment_cold.sh")
   case "$out" in *'"permissionDecision": "deny"'*) got=deny ;; '') got=pass ;; *) got="?:$out" ;; esac
   [ "$got" = deny ] && ok "$1 (deny)" || no "$1 — 기대 deny, 실제 $got"
 }
