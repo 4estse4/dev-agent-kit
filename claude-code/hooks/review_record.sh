@@ -81,8 +81,8 @@ if not last.startswith('**Verdict**:'):
     if not os.path.exists(mark) and not (ev == 'SubagentStop' and data.get('stop_hook_active')):
         open(mark, 'w').close()
         why = ("콜드 리뷰 보고의 마지막 줄은 `**Verdict**: Request changes | Comment | Approve — <한 문장>` 이다. "
-               "이 보고의 마지막 줄은 그렇지 않다. 그 줄을 붙여 보고 전문을 다시 돌려준다 — 정의대로 리뷰하지 않고 "
-               "멈춘 보고면 그 까닭을 그 줄의 한 문장에 적는다.")
+               "이 보고의 마지막 줄은 그렇지 않다. 그 줄을 붙여 보고 전문을 다시 돌려준다 — 직전 라운드 코멘트를 "
+               "못 찾아 정의대로 리뷰하지 않고 멈춘 보고면 그 까닭을 그 줄의 한 문장에 적는다.")
         if ev == 'PreToolUse':
             print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
                                                      "permissionDecision": "deny",
@@ -113,6 +113,9 @@ row = {'agent_id': agent, 'agent_type': data.get('agent_type') or '', 'head': he
        'event': ev, 'report': report}
 with open(path, 'a', encoding='utf-8') as fh:
     fh.write(json.dumps(row, ensure_ascii=False) + '\n')
-open(recorded, 'w').close()
+# 맺음말은 SubagentHandback 으로 보고한 실행에만 생긴다. 기본 모드의 실행에 표시를 남기면, 그 실행을 이어
+# 실행(같은 agent_id)한 뒤의 보고를 맺음말로 보고 기록하지 않는다.
+if ev == 'PostToolUse':
+    open(recorded, 'w').close()
 PY
 exit 0

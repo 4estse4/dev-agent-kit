@@ -14,7 +14,7 @@
 #   · 두 모드의 보고를 「리뷰한 head:」 별 기록 파일에 한 줄씩 남기고, 같은 실행(agent_id)은 한 번만 남긴다
 #   · 에이전트 종류(agent_type)가 cold-reviewer 인 것만 남긴다 — 다른 에이전트가 콜드 리뷰 모양의 글을 돌려줘도
 #     남기지 않는다. 빈 보고와 봇 설정이 없는 레포도 남기지 않는다
-#   · `**Verdict**:` 줄이 없는 보고는 한 번 막고(auto 는 SubagentHandback 거부, 기본은 SubagentStop block),
+#   · 마지막 줄이 `**Verdict**:` 가 아닌 보고는 한 번 막고(auto 는 SubagentHandback 거부, 기본은 SubagentStop block),
 #     두 번째에는 막지 않고 남긴다
 #   · `cold_review.sh <head>` 가 기록된 보고를 글자 그대로 출력한다
 #   · 라운드 코멘트 게시 훅(`round_comment_cold.sh`)이 콜드 리뷰 전문을 같은 head 의 기록과 대조해, 같으면
@@ -110,6 +110,12 @@ rec PostToolUse c1 "$(report $H7 1)" > /dev/null
 out=$(rec SubagentStop c1 "PR #7 1라운드 콜드 리뷰를 호출자에게 전달했습니다. 판정은 Comment 입니다." "" false)
 [ -z "$out" ] && [ ! -f "$REC/unknown.jsonl" ] && [ "$(count $H7)" = 1 ] && ok "auto 모드의 맺음말(보고 뒤의 글)은 막지도 남기지도 않는다" \
   || no "맺음말 — 출력 「${out}」 · unknown $( [ -f "$REC/unknown.jsonl" ] && echo 있음 || echo 없음) · 줄 $(count $H7)"
+# 기본 모드에서 같은 실행을 이어 실행하면(SendMessage — 같은 agent_id) 보고가 SubagentStop 으로 다시 온다.
+# 맺음말을 건너뛰는 표시는 SubagentHandback 으로 받은 실행에만 남으므로 이 보고는 남긴다.
+H9=9999999999999999999999999999999999999999
+rec SubagentStop r1 "$(report $H2 1)" "" false > /dev/null
+rec SubagentStop r1 "$(report $H9 1)" "" false > /dev/null
+[ "$(count $H9)" = 1 ] && ok "기본 모드에서 이어 실행한 같은 실행의 다음 보고도 남긴다" || no "이어 실행한 보고 — 줄 $(count $H9)"
 # Verdict 는 마지막 줄이다. 앞 라운드의 Verdict 줄을 옮겨 적은 보고는 자기 Verdict 가 없으면 되돌린다.
 H8=8888888888888888888888888888888888888888
 mid=$(printf '## Cold review (2차)\n\n리뷰한 head: %s\n\n### 지난 코멘트 정정\n**Verdict**: Comment — 앞 라운드의 마지막 줄을 옮긴 인용\n\n### 발견\n없음.' $H8)
