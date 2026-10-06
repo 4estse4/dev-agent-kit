@@ -160,6 +160,13 @@ got=$(cd "$IN" && bash "$CR" $H1; echo "rc=$?")
 [ "$got" = "$(report $H1 1)
 rc=0" ] && ok "프로젝트의 cold_review.sh 는 셸이 다른 레포에 있어도 프로젝트의 기록을 출력한다" \
   || no "다른 레포에서 실행한 cold_review.sh: $got"
+# 봇 설정이 없는 다른 레포에 셸이 있어도 봇 설정은 프로젝트에서 본다.
+NB="$T/repo/scratch/no-bot"
+mkdir -p "$NB"; git init -q "$NB"
+got=$(cd "$NB" && bash "$CR" $H1 2>&1; echo "rc=$?")
+[ "$got" = "$(report $H1 1)
+rc=0" ] && ok "셸이 봇 설정이 없는 레포에 있어도 프로젝트의 봇 설정을 보고 기록을 출력한다" \
+  || no "봇 설정이 없는 레포에서 실행한 cold_review.sh: $got"
 
 # ── 라운드 코멘트 게시 훅 ──
 round() { # $1=파일 $2=head 줄(빈 글이면 없음) $3=콜드 전문(빈 글이면 블록 없음)

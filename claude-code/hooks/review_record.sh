@@ -60,8 +60,8 @@ else:
 if not isinstance(report, str) or not report.strip():
     sys.exit(0)
 
-# 훅 입력의 cwd 가 아니라 세션을 연 프로젝트다. cwd 는 세션이 cd 한 자리를 따라가서, 프로젝트 안의 다른 레포에
-# cd 해 있으면 기록이 그 레포에 생기고 라운드 코멘트 대조가 기록을 못 찾았다.
+# 봇 설정과 기록 자리는 훅 입력의 cwd 가 아니라 세션을 연 프로젝트에서 구한다. cwd 는 세션이 cd 한 자리를
+# 따라가서, 프로젝트 안의 다른 레포에 cd 해 있으면 기록이 그 레포에 생기고 라운드 코멘트 대조가 기록을 못 찾았다.
 proj = os.environ.get('CLAUDE_PROJECT_DIR') or None
 top = subprocess.run(['git', 'rev-parse', '--show-toplevel'], cwd=proj, capture_output=True, text=True)
 if top.returncode or not os.path.isfile(os.path.join(top.stdout.strip(), '.claude', 'bot.json')):
