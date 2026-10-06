@@ -146,5 +146,42 @@ for f in files:
             fail = 1; bad = 1
     if not bad:
         print(f"  ✓ {f.split('/')[-2] if 'skills' in f else f.split('/')[-1]}: 내는 문자열 {len(emitted)}개 전부 설명됨")
+
+# **gh 가 실패해도 주입이 0 으로 끝나는가.** 주입이 0 이 아닌 값으로 끝나면 스킬 호출 전체가 멈춘다(공식 문서
+# skills 「When an injected command fails」: "A failed command aborts the entire skill invocation"). 지금 브랜치에
+# PR 이 없으면 `gh pr view` 는 `rc=1` 이라, `merge-pr` 의 PR 번호 주입이 그대로 끝날 때 `main` 에서 번호로 머지하면
+# `/merge-pr` 가 펼쳐지지 않았다. gh 를 부르는 스킬 주입을, 늘 1 로 끝나는 gh 대역을 PATH 앞에 둔 스크래치 레포에서
+# 실행한다. 진짜 gh 는 부르지 않는다 — 결과가 네트워크와 계정 상태에 따라 달라진다. `$ARGUMENTS` 는 Claude Code 처럼
+# 글자로 바꾸고, 빈 값과 번호 둘로 본다. gh 밖의 명령이 실패하는 경우는 보지 않는다.
+import os, shutil, subprocess, tempfile
+tmp = tempfile.mkdtemp()
+stub = os.path.join(tmp, 'bin')
+os.mkdir(stub)
+with open(os.path.join(stub, 'gh'), 'w') as fh:
+    fh.write('#!/bin/sh\nexit 1\n')
+os.chmod(os.path.join(stub, 'gh'), 0o755)
+repo = os.path.join(tmp, 'repo')
+subprocess.run(['git', 'init', '-q', '-b', 'main', repo], check=True)
+subprocess.run(['git', '-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'init'], check=True)
+env = dict(os.environ, PATH=stub + os.pathsep + os.environ['PATH'])
+ran = 0
+for f in sorted(glob.glob('claude-code/skills/*/SKILL.md')):
+    for n, line in enumerate(open(f, encoding='utf-8').read().split('\n'), 1):
+        m = re.match(r'^\s*!`(.*)`\s*$', line)
+        if not m or not re.search(r'(?:^|[\s;&|(])gh\s', m.group(1)):
+            continue
+        for arg in ('', '7'):
+            r = subprocess.run(['bash', '-c', m.group(1).replace('$ARGUMENTS', arg)], cwd=repo, env=env,
+                               capture_output=True, text=True)
+            ran += 1
+            if r.returncode != 0:
+                print(f"  ✗ {f}:{n}: gh 가 실패하면 주입이 rc={r.returncode} 로 끝난다(`$ARGUMENTS` 가 {arg!r}) — 스킬 호출 전체가 멈춘다")
+                fail = 1
+shutil.rmtree(tmp)
+if ran == 0:
+    print("  ✗ gh 를 부르는 스킬 주입을 하나도 못 찾았다 — 찾는 식이나 경로가 바뀌었나")
+    fail = 1
+else:
+    print(f"  ✓ gh 를 부르는 스킬 주입을 {ran}번 실행했다(`$ARGUMENTS` 빈 값 · 번호) — 실패한 것만 위에 적는다")
 sys.exit(fail)
 PY
