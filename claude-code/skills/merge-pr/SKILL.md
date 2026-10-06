@@ -33,7 +33,7 @@ GitHub auto-merge 를 켠 뒤 Approve 를 요청하고, Approve 가 달리면 Gi
 !`git status --porcelain`
 
 현재 브랜치의 PR:
-!`gh pr view --json number -q .number 2>/dev/null`
+!`gh pr view --json number -q .number 2>/dev/null || true`
 
 $ARGUMENTS
 
