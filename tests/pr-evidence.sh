@@ -9,13 +9,16 @@
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 S="$KIT/claude-code/skills/open-pr/evidence.sh"
-OPEN="$KIT/claude-code/skills/open-pr/SKILL.md"
-MERGE="$KIT/claude-code/skills/merge-pr/SKILL.md"
 T=$(mktemp -d)
 # evidence.sh 는 사람 settings 도 대조한다. 이 머신의 사람 규칙이 섞이지 않게 HOME 을 떼어 놓는다
 export HOME="$T/home"
 unset CLAUDE_CONFIG_DIR
 mkdir -p "$HOME"
+# 스킬은 `SKILL.md` 와 보조 파일로 나뉘므로, 스킬 디렉터리의 `.md` 를 이어 붙인 글을 본다
+OPEN="$T/open-pr.md"
+MERGE="$T/merge-pr.md"
+awk 1 "$KIT"/claude-code/skills/open-pr/*.md > "$OPEN"
+awk 1 "$KIT"/claude-code/skills/merge-pr/*.md > "$MERGE"
 fail=0
 ok() { echo "  ✓ $1"; }
 bad() { echo "  ✗ $1"; fail=1; }
@@ -231,7 +234,7 @@ bash -n "$S" && ok "이 셸($BASH_VERSION)로 구문 검사를 통과한다" || 
 
 # ── 스킬이 손으로 붙이라고 시키지 않는다 ──
 for f in "$OPEN" "$MERGE"; do
-  name=$(basename "$(dirname "$f")")
+  name=$(basename "$f" .md)
   if tr '\n' ' ' < "$f" | grep -qE '출력을? *그대로 *붙인다|게이트 *출력을 *붙인다|출력은 *(\*\*)?그대로(\*\*)? *옮긴다'; then
     bad "$name 이 출력을 손으로 붙이라고 시킨다"
   else ok "$name 이 출력을 손으로 붙이라고 시키지 않는다"; fi
