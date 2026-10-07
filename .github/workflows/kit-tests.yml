@@ -48,7 +48,7 @@ jobs:
         continue-on-error: true
         run: bash tests/install-deletions.sh
 
-      - name: every injected string is explained
+      - name: every injected string is explained and gh injections exit 0 when gh fails
         id: injections
         continue-on-error: true
         run: bash tests/skill-injections.sh
