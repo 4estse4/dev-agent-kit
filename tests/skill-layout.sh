@@ -17,6 +17,11 @@
 #     건너뛰면, 그 절이 주입 뒤로 옮겨져도 아래 검사가 알리지 않는다
 #   · `## 꼭 지킬 것` 제목이 첫 `!` 주입보다 앞에 있다. 까닭은 링크와 같다 — 늘 지킬 것이 잘리는 쪽에 놓이지
 #     않게 한다. 이 제목에는 링크가 없어 링크 검사가 지키지 못한다
+#   · frontmatter 에 `description` 이 있고, `description` 과 `when_to_use` 를 합친 길이가 1,536자 아래다. 스킬
+#     목록에는 그 둘이 이어 붙어 실리고 1,536자에서 잘린다(공식 문서 skills.md: "the combined `description` and
+#     `when_to_use` text is truncated at 1,536 characters in the skill listing"). 잘리면 언제 부르는지가 사라진다
+#   · 보조 파일이 있는 스킬은 `when_to_use` 를 둔다. 긴 절차를 단계마다 나눈 스킬이라, 무엇을 하는지만 적은
+#     `description` 으로는 Claude 가 언제 불러야 하는지를 알 수 없다(이슈 #188 기준 6)
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$KIT" || exit 1
@@ -24,6 +29,7 @@ python3 - <<'PY'
 import glob, os, re, sys
 
 LIMIT = 500
+LISTING = 1536
 fail = 0
 
 
@@ -37,9 +43,36 @@ def bad(m):
     print('  ✗ ' + m)
 
 
+def frontmatter(text):
+    """첫 줄의 `---` 부터 다음 `---` 까지를 `키: 값` 으로 읽는다. 따옴표는 벗긴다. 없으면 None."""
+    lines = text.split('\n')
+    if not lines or lines[0].strip() != '---':
+        return None
+    out = {}
+    for l in lines[1:]:
+        if l.strip() == '---':
+            return out
+        m = re.match(r'([A-Za-z_-]+):\s*(.*)$', l)
+        if m:
+            v = m.group(2).strip()
+            if len(v) >= 2 and v[0] == v[-1] and v[0] in '"\'':
+                v = v[1:-1]
+            out[m.group(1)] = v
+    return None
+
+
 def problems(d):
     out = []
     text = open(os.path.join(d, 'SKILL.md'), encoding='utf-8').read()
+    fm = frontmatter(text)
+    if fm is None:
+        out.append('SKILL.md 의 frontmatter(`---` 로 감싼 첫 블록)를 읽지 못했다')
+        fm = {}
+    if not fm.get('description'):
+        out.append('frontmatter 에 description 이 없다')
+    listed = len(fm.get('description', '')) + len(fm.get('when_to_use', ''))
+    if listed >= LISTING:
+        out.append('description 과 when_to_use 를 합쳐 %d자다(%d자 아래여야 스킬 목록에서 잘리지 않는다)' % (listed, LISTING))
     n = len(text.splitlines())
     if n >= LIMIT:
         out.append('SKILL.md 가 %d줄이다(%d줄 아래여야 한다)' % (n, LIMIT))
@@ -70,6 +103,8 @@ def problems(d):
             break
     if support and head is None:
         out.append('보조 파일이 있는데 SKILL.md 에 「## 꼭 지킬 것」 제목이 없다')
+    if support and not fm.get('when_to_use'):
+        out.append('보조 파일이 있는데 frontmatter 에 when_to_use 가 없다 — 언제 부르는지를 적는다')
     if inj is not None and head is not None and head > inj:
         out.append('SKILL.md %d줄의 「꼭 지킬 것」이 첫 주입(%d줄)보다 뒤에 있다' % (head + 1, inj + 1))
     if inj is not None:
@@ -98,6 +133,7 @@ for d in dirs:
         for g in got:
             bad('%s: %s' % (name, g))
     else:
-        ok('%s 의 SKILL.md 가 %d줄 아래이고 보조 파일을 모두 가리킨다' % (name, LIMIT))
+        ok('%s 의 SKILL.md 가 %d줄 아래이고 보조 파일을 모두 가리키며, 스킬 목록에 실릴 글이 %d자 아래다'
+           % (name, LIMIT, LISTING))
 sys.exit(fail)
 PY
