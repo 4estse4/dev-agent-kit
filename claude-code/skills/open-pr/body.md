@@ -50,9 +50,9 @@
 2. 글은 `Write` 로 조각 파일에 쓴다. 출력은 `evidence.sh` 가 그다음 조각에 덧붙인다. 조각
    이름은 잇는 순서다(`10-head.part` · `20-gate.part` · `30-rest.part` …). 명령은 따옴표 heredoc
    으로 **한 번만** 전달한다. 보이는 명령과 실행되는 명령이 같다. `$ 명령` · 출력 · `rc=N` 이 코드
-   블록째 들어간다:
+   블록째 들어간다. `<스킬 디렉터리>` 는 `SKILL.md` 의 「꼭 지킬 것」이 적은 경로다:
 
-       bash .claude/skills/open-pr/evidence.sh <디렉터리>/20-gate.part <<'CMD'
+       bash <스킬 디렉터리>/evidence.sh <디렉터리>/20-gate.part <<'CMD'
        bash .kit/gate/gate.sh
        CMD
 
