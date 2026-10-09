@@ -1,6 +1,7 @@
 ---
 name: merge-pr
-description: 리뷰 반영과 CI 통과를 확인한 뒤 PR을 squash 머지하고 main으로 돌아온다. 머지는 이 스킬로만 한다.
+description: 리뷰 반영과 CI 통과를 확인하고 결정 코멘트를 올린 뒤 PR을 squash 머지하고 main으로 돌아온다(봇 설정이 있으면 auto-merge 를 켜고 사람의 Approve 를 요청한다). 머지는 이 스킬로만 한다.
+when_to_use: "사람이 질문 창이나 대화에서 머지를 지시했을 때만 부른다 — 두 리뷰의 Approve 나 CI 통과만으로는 부르지 않는다. 지시 없이 부르는 예외는 하나다: 다음 작업을 시작하기 전에 머지된 PR 의 로컬 정리가 남아 있으면 merge-pr <번호> 로 부른다."
 argument-hint: "[PR 번호 | 비우면 현재 브랜치의 PR]"
 ---
 
