@@ -14,9 +14,9 @@ cd "$KIT" || exit 1
 python3 - <<'PY'
 import re, glob, sys
 fail = 0
-# 훑을 것이 없으면 통과가 아니다 — 디렉터리 구조가 바뀌는 날 아무 표시 없이 초록이 된다.
+# 훑을 것이 없으면 통과가 아니다 — 디렉터리 구조가 바뀌는 날 아무 표시 없이 이 테스트가 통과한다.
 # **glob 마다 따로 본다.** 합쳐서 보면 한쪽이 통째로 사라져도 다른 쪽 때문에 안 비어
-# 그대로 통과한다(실제로 확인함: skills/ 를 옮겨도 agents/ 하나로 초록이었다).
+# 그대로 통과한다(실제로 확인함: skills/ 를 옮겨도 agents/ 하나로 이 테스트가 통과했다).
 files = []
 for pat in ('claude-code/skills/*/SKILL.md', 'claude-code/agents/*.md'):
     got = sorted(glob.glob(pat))
@@ -59,9 +59,9 @@ for f in files:
     bad = 0
     body = re.sub(r'^!`.*`$', '', s, flags=re.M)          # 주입 줄 자체는 설명이 아니다
     # **뽑는 자리에 예외를 두지 않는다.** `echo "…"` 만 보던 탓에 `echo '…'` 와
-    # `printf "…"` 로 쓴 메시지가 통째로 안 보였다(실제로 확인함: 셋 다 초록).
+    # `printf "…"` 로 쓴 메시지가 통째로 안 보였다(실제로 확인함: 셋 다 이 테스트가 통과했다).
     # `printf "%s\\n" "…"` 은 첫 인용문이 서식이라, 명령 하나에서 **인용문을 다 본다.**
-    # 첫 것만 보면 진짜 메시지가 통째로 안 보인다(실제로 확인함: printf 로 쓴 새 메시지가 초록).
+    # 첫 것만 보면 진짜 메시지가 통째로 안 보인다(실제로 확인함: printf 로 쓴 새 메시지가 있어도 이 테스트가 통과했다).
     CALL = re.compile(r'\b(?:echo|printf)\b((?:\s+(?:-[a-zA-Z]+|"[^"]*"|\'[^\']*\'|[^\s;|&)]+))*)')
     QUOTED = re.compile(r'"([^"]*)"|\'([^\']*)\'')
     def msgs(line):
@@ -138,7 +138,7 @@ for f in files:
 
     # 사각지대 검사 — 뽑는 쪽이 그 줄을 아예 못 봤나
     for line in inj:
-        # **수로 견준다.** 진위값으로 보면 한 줄에 둘이고 하나만 뽑혀도 초록이다(실제로 확인함).
+        # **수로 견준다.** 진위값으로 보면 한 줄에 둘이고 하나만 뽑혀도 이 검사가 통과한다(실제로 확인함).
         if crude(line) > len(msgs(line)):
             print(f"  ✗ {f}: echo/printf {crude(line)}개인데 메시지는 {len(msgs(line))}개만 뽑았다 — {line[:50]}")
             fail = 1; bad = 1

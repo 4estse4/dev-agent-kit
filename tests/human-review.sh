@@ -6,7 +6,7 @@
 # Claude Code 가 부르는 모양대로 표준입력에 도구 호출 JSON 을 넣는다. `merge-pr` 2절이 부르는 판정
 # 스크립트(`claude-code/hooks/human_review.sh approved`)와 사람 계정으로 올리는 스크립트
 # (`claude-code/hooks/human_comment.sh`)는 스킬에 적힌 모양대로 부른다. 판정 함수만 부르면 훅이 판정을
-# 안 쓰는 결함이 초록으로 통과한다.
+# 안 쓰는 결함이 있어도 이 테스트가 통과한다.
 #
 # **네트워크를 안 쓴다.** PATH 앞에 둔 가짜 `gh` 가 경우마다 만든 JSON 에서 PR 코멘트 · 리뷰 · 레포
 # 권한을 돌려주고, 받은 인자와 환경 변수(`GH_REPO` · `GH_CONFIG_DIR` · `GH_TOKEN`)를 적어 둔다.
