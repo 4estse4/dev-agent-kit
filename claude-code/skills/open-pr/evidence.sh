@@ -2,7 +2,7 @@
 # 명령을 실행해 그 명령 · 출력 · 종료 코드를 코드 블록째 파일에 덧붙인다. PR 본문과 머지
 # 결정 코멘트의 증거를 손으로 옮기지 않게 한다.
 #
-#     bash .claude/skills/open-pr/evidence.sh <조각 파일> <<'CMD'
+#     bash <open-pr 스킬 디렉터리>/evidence.sh <조각 파일> <<'CMD'
 #     <명령>
 #     CMD
 #
