@@ -9,16 +9,16 @@
 # 제목으로 고르던 옛 규칙은 없다. 제목이 맞아도 봇이 올린 글은 사람의 결정이 아니다.
 # 위치로만 고르면 봇의 결정 코멘트와 제3자 코멘트가 사람이 정한 것과 같은 자리로 실린다.
 #
-# 세 파일의 글에서 jq 식을 꺼내 PR 코멘트 모양의 JSON 에 실행한다. `gh pr view --json comments` 는
+# 세 자리의 글에서 jq 식을 꺼내 PR 코멘트 모양의 JSON 에 실행한다. `gh pr view --json comments` 는
 # 코멘트마다 `author.login` 과 `authorAssociation` 을 준다.
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$KIT" || exit 1
 python3 - <<'PY'
-import json, re, subprocess, sys
+import glob, json, os, re, subprocess, sys
 
 SITES = ['claude-code/agents/cold-reviewer.md', 'claude-code/skills/self-review/SKILL.md',
-         'claude-code/skills/merge-pr/SKILL.md']
+         'claude-code/skills/merge-pr']
 fail = 0
 
 
@@ -54,7 +54,11 @@ cases = [
 ]
 
 for path in SITES:
-    text = open(path, encoding='utf-8').read()
+    # 스킬은 `SKILL.md` 와 보조 파일로 나뉘므로 디렉터리면 그 안의 `.md` 를 모두 읽는다
+    if os.path.isdir(path):
+        text = ''.join(open(p, encoding='utf-8').read() for p in sorted(glob.glob(os.path.join(path, '*.md'))))
+    else:
+        text = open(path, encoding='utf-8').read()
     fs = [f for f in re.findall(r"(?:--jq |_q=)'([^']*)'", text) if 'authorAssociation' in f and '$i' in f]
     if len(fs) != 1:
         bad(f'{path} 에서 라운드 코멘트 뒤의 사람의 결정을 고르는 식이 하나여야 하는데 {len(fs)}개다')
@@ -70,7 +74,7 @@ for path in SITES:
         if miss:
             bad(f'{path} · {name} — 「{miss[0]}」 때문에 틀렸다: {r.stdout.strip()[:120]}')
         else:
-            ok(f'{path.split("/")[-2]} · {name}')
+            ok(f'{os.path.basename(path) if os.path.isdir(path) else path.split("/")[-2]} · {name}')
 
 if not fail:
     print('  ✓ 세 자리가 라운드 코멘트 뒤에서 사람의 결정만 고른다')
