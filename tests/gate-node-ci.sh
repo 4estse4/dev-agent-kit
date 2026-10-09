@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# CI 의 setup-node 는 레포 루트의 .nvmrc 로 node 를 설치하고, 실패를 초록으로 끝내지 않는다.
+# CI 의 setup-node 는 레포 루트의 .nvmrc 로 node 를 설치하고, setup-node 가 실패하면 그 잡도 실패한다.
 #
 # 이 테스트가 있는 이유: gates.yml 의 setup-node 둘이 루트의 .nvmrc 와 lockfile 을 가정했고,
-# 둘 다 continue-on-error 라 실패가 초록으로 끝났다(이슈 #95). lockfile 이 하위 디렉터리에만 있는
+# 둘 다 continue-on-error 라 setup-node 가 실패해도 잡은 통과했다(이슈 #95). lockfile 이 하위 디렉터리에만 있는
 # 레포에서 gate 잡의 setup-node 가 「Dependencies lock file is not found」로 매번 실패했는데,
 # API 는 그 스텝을 success 로 줬다.
 #
@@ -72,7 +72,7 @@ case "$report" in
   none) bad "setup-node 를 쓰는 스텝을 하나도 찾지 못했다 — gates.yml 이 바뀌었나" ;;
   *)
     while IFS=$'\t' read -r st job msg; do
-      if [ "$st" = ok ]; then ok "$job 잡의 setup-node 는 앞에서 루트 .nvmrc 를 보고, 실패를 초록으로 끝내지 않고, lockfile 을 루트에서만 찾지 않는다"
+      if [ "$st" = ok ]; then ok "$job 잡의 setup-node 는 앞에서 루트 .nvmrc 를 보고, 실패하면 잡도 실패하고, lockfile 을 루트에서만 찾지 않는다"
       else bad "$job 잡의 setup-node:$msg"; fi
     done <<< "$report"
     ;;

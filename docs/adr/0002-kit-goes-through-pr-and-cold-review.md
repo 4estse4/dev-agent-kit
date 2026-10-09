@@ -77,7 +77,7 @@ $ gh api repos/4estse4/ai-native-kit/rules/branches/main --jq '.[] | select(.typ
 {"dismiss_stale_reviews_on_push":true,"require_last_push_approval":true,"required_approving_review_count":1}
 ```
 
-룰셋이 막는 것은 PR 없는 push · `tests` 가 빨간 채로 머지 · 스쿼시 아닌 머지 · 사람의 Approve 없는 머지 ·
+룰셋이 막는 것은 PR 없는 push · `tests` 검사가 실패한 채로 머지 · 스쿼시 아닌 머지 · 사람의 Approve 없는 머지 ·
 `main` 삭제까지다. **콜드 리뷰를 실행했는지는 룰셋이 안 본다.** 그것은 여전히 `사람`(지금의 `막는 것 없음`) 이었다.
 2026-10-04(PR #193)부터는 라운드 코멘트를 올릴 때 에이전트 훅(`round_comment_cold.sh`)이 그 head 의 `cold-reviewer`
 기록을 요구한다. 룰셋은 여전히 이것을 안 본다.
