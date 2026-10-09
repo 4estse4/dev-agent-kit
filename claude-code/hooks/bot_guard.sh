@@ -363,11 +363,17 @@ def human_comment():
     mine = os.path.realpath(os.path.join(os.environ['HOOK_DIR'], 'human_comment.sh'))
     if os.path.realpath(os.path.join(cwd or os.getcwd(), m.group(1))) != mine:
         # 알려 주는 경로는 레포 루트에서 이 훅의 스크립트까지다 — 설치된 레포는 `.claude/hooks/…` 이고, 훅을
-        # 다른 곳에서 등록한 레포(킷 레포)는 그 자리다
-        rel = os.path.relpath(mine, os.path.realpath(top.stdout.strip()))
-        deny("사람 계정으로 올리는 스크립트는 이 훅과 같은 디렉터리의 것만 받는다: " + mine + ". 레포 루트에서 "
-             "`bash " + rel + " <PR 번호> [-R <owner/repo>]` 로 입력한다 — 세션이 하위 디렉터리에 있으면 먼저 "
-             "cd 로 레포 루트로 옮긴다(한 줄로 잇지 않는다). 설치되는 settings.json 의 allow 도 그 모양만 받는다.")
+        # 다른 곳에서 등록한 레포(킷 레포)는 그 자리다. 그 루트는 셸이 있는 레포가 아니라 세션을 연 프로젝트의
+        # 것이다 — 셸이 프로젝트 안의 다른 레포에 있으면 그 레포의 루트 기준 경로는 allow 에 맞지 않고, 게시
+        # 스크립트는 셸이 있는 레포에서 기록을 읽는다
+        ptop = subprocess.run(['git', 'rev-parse', '--show-toplevel'], cwd=os.environ.get('CLAUDE_PROJECT_DIR') or None,
+                              capture_output=True, text=True)
+        root = os.path.realpath(ptop.stdout.strip())
+        rel = os.path.relpath(mine, root)
+        deny("사람 계정으로 올리는 스크립트는 이 훅과 같은 디렉터리의 것만 받는다: " + mine + ". 세션을 연 프로젝트의 "
+             "레포 루트(" + root + ")에서 `bash " + rel + " <PR 번호> [-R <owner/repo>]` 로 입력한다 — 셸이 다른 "
+             "자리에 있으면 먼저 `cd " + root + "` 로 옮긴다(한 줄로 잇지 않는다). 설치되는 settings.json 의 allow 도 "
+             "그 모양만 받는다.")
 
 
 body = strip_heredocs(cmd)

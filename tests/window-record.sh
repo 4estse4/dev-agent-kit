@@ -8,6 +8,8 @@
 # 훅을 Claude Code 가 부르는 모양으로 부른다. 표준입력의 `tool_response` 는 세션 기록에 남는 창의 결과
 # (`toolUseResult`: `questions` · `answers` · `annotations`, `answers` 는 질문 → 고른 보기)와 같은 모양으로 둔다.
 # 훅이 받는 실제 입력도 이 모양이다(백그라운드 세션에서 기록해 확인했다, 2026-09-29).
+# Claude Code 처럼 세션을 연 프로젝트를 환경의 `CLAUDE_PROJECT_DIR` 로 주고, 입력의 `cwd` 는 세션의 셸이 있는 자리다.
+# 둘이 다른 경우는 따로 본다(이슈 #199).
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 HOOK="$KIT/claude-code/hooks/window_record.sh"
@@ -21,7 +23,8 @@ fail=0
 MARK='이 결정은 사람 계정으로 PR #7 에 그대로 올라간다.'
 
 # ask <디렉터리> <questions JSON> <answers JSON> [tool_response 에 더할 JSON] — 훅을 부르고 출력을 $OUT 에 둔다.
-# 넷째 인자는 창 결과의 다른 필드다(`annotations` 의 메모 · `afkTimeoutMs` · `followUp`)
+# 넷째 인자는 창 결과의 다른 필드다(`annotations` 의 메모 · `afkTimeoutMs` · `followUp`). 디렉터리는 입력의 `cwd`
+# 이고, 세션을 연 프로젝트는 PROJ(없으면 그 디렉터리), 부르는 훅은 HOOK_AT(없으면 $HOOK)이다
 ask() {
   OUT=$(python3 -c 'import json, sys
 qs, ans = json.loads(sys.argv[2]), json.loads(sys.argv[3])
@@ -30,7 +33,7 @@ resp.update(json.loads(sys.argv[4]) if len(sys.argv) > 4 else {})
 print(json.dumps({"session_id": "s1", "cwd": sys.argv[1], "hook_event_name": "PostToolUse",
                   "tool_name": "AskUserQuestion", "tool_input": {"questions": qs},
                   "tool_response": resp}, ensure_ascii=False))' \
-    "$@" | (cd "$1" && bash "$HOOK") 2>&1)
+    "$@" | (cd "$1" && CLAUDE_PROJECT_DIR="${PROJ:-$1}" bash "${HOOK_AT:-$HOOK}") 2>&1)
 }
 # q <머리말> <질문> <보기…> — 질문 하나의 JSON
 q() {
@@ -143,7 +146,7 @@ check "질문을 더 요청하며 닫은 창은 기록하지 않는다" "없음"
 # 레포를 $T 에서 두 단계 아래에 두어, cwd 기준 상대 경로를 레포 루트에 붙이는 잘못이 기록을 $T/.git 에 두게 한다
 rm -rf "$W"; mkdir -p "$T/x/repo/.claude" "$T/x/repo/sub/deep"; git init -q "$T/x/repo"
 cp "$T/bot/.claude/bot.json" "$T/x/repo/.claude/"
-ask "$T/x/repo/sub/deep" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
+PROJ="$T/x/repo" ask "$T/x/repo/sub/deep" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
 check "cwd 가 하위 디렉터리여도 레포의 git 디렉터리에 기록한다" "있음" "$([ -s "$T/x/repo/.git/kit-bot/windows/7.jsonl" ] && echo 있음 || echo 없음)"
 check "레포 밖에 git 디렉터리를 만들지 않는다" "없음" "$([ -e "$T/.git" ] && echo 있음 || echo 없음)"
 # 막기 훅과 allow 는 레포 루트에서 입력한 게시 명령만 받는다 — 하위 디렉터리면 루트로 옮기라고 안내한다
@@ -156,6 +159,24 @@ case "$OUT" in *'cd '*) echo "  ✗ 레포 루트에서도 옮기라고 안내�
 # 라운드 도중에 정한 결정은 나중에 올리므로, 그때의 cwd 를 이 훅이 모른다 — 루트에서 올리라고 늘 적는다
 case "$OUT" in *'라운드 코멘트를 올린 뒤 레포 루트에서'*) echo "  ✓ 라운드 도중의 결정도 레포 루트에서 올리라고 안내한다" ;;
   *) echo "  ✗ 라운드 도중의 결정을 레포 루트에서 올리라는 안내가 없다: $OUT"; fail=1 ;; esac
+
+# 셸이 프로젝트 안의 다른 레포(따로 clone 한 것)에 있다. 그 레포에도 봇 설정이 있다(커밋돼 있어 클론에도 있다).
+# 기록은 세션을 연 프로젝트에 두고, 프로젝트 루트로 옮겨 그 자리의 스크립트로 올리라고 안내한다(이슈 #199).
+# 훅은 설치된 자리(프로젝트의 `.claude/hooks/`)에 복사해 부른다 — 안내의 스크립트 경로가 그 자리에서 나온다
+rm -rf "$W"; IN="$T/bot/scratch/clone-in"
+mkdir -p "$IN/.claude" "$T/bot/.claude/hooks"; git init -q "$IN"; cp "$T/bot/.claude/bot.json" "$IN/.claude/"
+cp "$HOOK" "$T/bot/.claude/hooks/"
+BOT_ABS=$(cd "$T/bot" && pwd -P)
+PROJ="$T/bot" HOOK_AT="$T/bot/.claude/hooks/window_record.sh" \
+  ask "$IN" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
+check "셸이 프로젝트 안의 다른 레포에 있어도 프로젝트에 기록한다" "- 1라운드 코멘트: 제안대로 고치고 2라운드 · 그 레포의 기록 없음" \
+  "$(lines 7) · 그 레포의 기록 $([ -e "$IN/.git/kit-bot" ] && echo 있음 || echo 없음)"
+case "$OUT" in *"cd $BOT_ABS"*'`bash .claude/hooks/human_comment.sh 7`'*) echo "  ✓ 셸이 다른 레포에 있으면 프로젝트 루트로 옮겨 올리라고 안내한다" ;;
+  *) echo "  ✗ 다른 레포에서의 안내가 프로젝트 루트를 가리키지 않는다: $OUT"; fail=1 ;; esac
+# 프로젝트에는 봇 설정이 없고 셸만 봇 설정이 있는 레포에 있다. 봇 설정은 프로젝트에서 본다
+rm -rf "$W"
+PROJ="$T/plain" ask "$T/bot" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
+check "프로젝트에 봇 설정이 없으면 셸이 봇 설정이 있는 레포에 있어도 기록하지 않는다" "없음" "$(lines 7)"
 
 rm -rf "$W"
 ask "$T/bot" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"필수 하나만 고치고 머지하자\"}"

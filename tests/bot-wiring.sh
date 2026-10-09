@@ -105,7 +105,7 @@ guard() {
     "hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": sys.argv[2]}}))' "$dir" "$cmd")
   : > "$T/curl-log"
   out=$(printf '%s' "$input" | HOME="$T/home" PATH="$T/bin:$PATH" STUB_CURL_LOG="$T/curl-log" \
-    bash "$H/bot_guard.sh" 2>&1)
+    CLAUDE_PROJECT_DIR="${GUARD_PROJ:-$R}" bash "$H/bot_guard.sh" 2>&1)
   case "$out" in
     *'"permissionDecision": "deny"'*) got=deny ;;
     *'"permissionDecision": "ask"'*) got=ask ;;
@@ -427,6 +427,13 @@ guard "하위 디렉터리에서 입력한 사람 계정 게시" deny "bash .cla
 # `.claude/hooks/` 밖에 둔 레포에서 설치 경로를 알려 주면 그대로 입력해도 다시 막힌다
 REL=$(python3 -c 'import os, sys; print(os.path.relpath(os.path.realpath(sys.argv[1]), os.path.realpath(sys.argv[2])))' "$H/human_comment.sh" "$R")
 guard "거절 사유가 레포 루트에서의 실제 경로를 알려 준다" deny "bash .claude/hooks/human_comment.sh 155" "$R/sub" "bash $REL <PR 번호>"
+# 셸이 프로젝트 안의 다른 레포(따로 clone 한 것)에 있다. 그 레포에도 봇 설정이 있다. 거절 사유는 그 레포가 아니라
+# 세션을 연 프로젝트의 루트로 옮겨 입력하라고 알린다 — 그 레포의 루트 기준 경로(`../../…`)는 allow 에 맞지 않고, 게시
+# 스크립트는 셸이 있는 레포에서 기록을 읽는다(이슈 #199)
+CIN="$R/scratch/clone-in"; mkdir -p "$CIN/.claude"; git init -q "$CIN"; cp "$R/.claude/bot.json" "$CIN/.claude/"
+R_ABS=$(cd "$R" && pwd -P)
+guard "프로젝트 안의 다른 레포에서 입력한 사람 계정 게시" deny "bash .claude/hooks/human_comment.sh 155" "$CIN" "bash $REL <PR 번호>"
+guard "그 거절 사유가 프로젝트 루트로 옮기라고 알린다" deny "bash .claude/hooks/human_comment.sh 155" "$CIN" "cd $R_ABS"
 # 창 기록은 창 기록 훅이 사람이 고른 창에서만 만든다. 세션이 그 훅을 직접 실행하면 지어낸 창 결과로 기록이 생겨
 # 사람이 고르지 않은 결정이 사람 계정으로 올라간다
 W="$H/window_record.sh"
