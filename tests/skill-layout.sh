@@ -47,7 +47,8 @@ def bad(m):
 def frontmatter(text):
     """첫 줄의 `---` 부터 다음 `---` 까지를 `키: 값` 으로 읽는다. 따옴표는 벗긴다. 읽지 못하면 None.
     들여쓴 줄은 앞 키의 값에 이어 붙인다 — 건너뛰면 여러 줄로 쓴 값(`>` · `|` 블록, 이어지는 plain 줄)의 길이를
-    세지 못한다. 들여쓰지 않은 `#` 줄은 주석이라 건너뛴다. 그 밖에 `키: 값` 이 아닌 줄이 있으면 닫는 줄이 빠진 것으로
+    세지 못한다. `- ` 로 시작하는 줄도 앞 키의 목록 항목이라 이어 붙인다(YAML 은 목록 항목을 들여쓰지 않아도
+    받는다). 들여쓰지 않은 `#` 줄은 주석이라 건너뛴다. 그 밖에 `키: 값` 이 아닌 줄이 있으면 닫는 줄이 빠진 것으로
     본다 — 그대로 읽으면 본문의 `---` 까지가 frontmatter 가 되어 검사가 통과한다(닫는 줄을 지워 확인했다)"""
     lines = text.split('\n')
     if not lines or lines[0].strip() != '---':
@@ -58,7 +59,7 @@ def frontmatter(text):
             return {k: unquote(v) for k, v in out.items()}
         if not l.strip() or l.startswith('#'):
             continue
-        if l[0] in ' \t':
+        if l[0] in ' \t' or re.match(r'-(\s|$)', l):
             if key is not None:
                 out[key] = (out[key] + ' ' + l.strip()).strip()
             continue
@@ -82,14 +83,15 @@ def problems(d):
     out = []
     text = open(os.path.join(d, 'SKILL.md'), encoding='utf-8').read()
     fm = frontmatter(text)
+    # 읽지 못했으면 그 한 줄만 낸다. 필드 검사까지 하면 있는 description · when_to_use 도 없다고 출력한다
     if fm is None:
         out.append('SKILL.md 의 frontmatter(`---` 로 감싼 첫 블록)를 읽지 못했다')
-        fm = {}
-    if not fm.get('description'):
-        out.append('frontmatter 에 description 이 없다')
-    listed = len(' - '.join(v for v in (fm.get('description'), fm.get('when_to_use')) if v))
-    if listed >= LISTING:
-        out.append('description 과 when_to_use 를 이어 %d자다(%d자 아래여야 스킬 목록에서 잘리지 않는다)' % (listed, LISTING))
+    else:
+        if not fm.get('description'):
+            out.append('frontmatter 에 description 이 없다')
+        listed = len(' - '.join(v for v in (fm.get('description'), fm.get('when_to_use')) if v))
+        if listed >= LISTING:
+            out.append('description 과 when_to_use 를 이어 %d자다(%d자 아래여야 스킬 목록에서 잘리지 않는다)' % (listed, LISTING))
     n = len(text.splitlines())
     if n >= LIMIT:
         out.append('SKILL.md 가 %d줄이다(%d줄 아래여야 한다)' % (n, LIMIT))
@@ -120,7 +122,7 @@ def problems(d):
             break
     if support and head is None:
         out.append('보조 파일이 있는데 SKILL.md 에 「## 꼭 지킬 것」 제목이 없다')
-    if support and not fm.get('when_to_use'):
+    if support and fm is not None and not fm.get('when_to_use'):
         out.append('보조 파일이 있는데 frontmatter 에 when_to_use 가 없다 — 언제 부르는지를 적는다')
     if inj is not None and head is not None and head > inj:
         out.append('SKILL.md %d줄의 「꼭 지킬 것」이 첫 주입(%d줄)보다 뒤에 있다' % (head + 1, inj + 1))
