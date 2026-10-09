@@ -171,7 +171,8 @@ PROJ="$T/bot" HOOK_AT="$T/bot/.claude/hooks/window_record.sh" \
   ask "$IN" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
 check "셸이 프로젝트 안의 다른 레포에 있어도 프로젝트에 기록한다" "- 1라운드 코멘트: 제안대로 고치고 2라운드 · 그 레포의 기록 없음" \
   "$(lines 7) · 그 레포의 기록 $([ -e "$IN/.git/kit-bot" ] && echo 있음 || echo 없음)"
-case "$OUT" in *"cd $BOT_ABS"*'`bash .claude/hooks/human_comment.sh 7`'*) echo "  ✓ 셸이 다른 레포에 있으면 프로젝트 루트로 옮겨 올리라고 안내한다" ;;
+# 옮길 자리는 닫는 백틱까지 맞춰 본다 — 클론은 프로젝트 안에 있어 `cd <클론>` 의 앞부분이 곧 `cd <프로젝트 루트>` 다
+case "$OUT" in *"cd $BOT_ABS\`"*'`bash .claude/hooks/human_comment.sh 7`'*) echo "  ✓ 셸이 다른 레포에 있으면 프로젝트 루트로 옮겨 올리라고 안내한다" ;;
   *) echo "  ✗ 다른 레포에서의 안내가 프로젝트 루트를 가리키지 않는다: $OUT"; fail=1 ;; esac
 case "$OUT" in *"라운드 코멘트를 올린 뒤 \`$BOT_ABS\` 에서"*) echo "  ✓ 셸이 다른 레포에 있어도 라운드 도중의 결정은 프로젝트 루트에서 올리라고 안내한다" ;;
   *) echo "  ✗ 다른 레포에서 라운드 도중의 결정을 올릴 자리가 프로젝트 루트가 아니다: $OUT"; fail=1 ;; esac
@@ -208,11 +209,23 @@ case "$OUT" in *'cd '*) echo "  ✗ worktree 에서 원래 체크아웃으로 �
 case "$OUT" in *"라운드 코멘트를 올린 뒤 \`$WT_ABS\` 에서"*) echo "  ✓ worktree 에서는 라운드 도중의 결정도 worktree 루트에서 올리라고 안내한다" ;;
   *) echo "  ✗ worktree 에서 라운드 도중의 결정을 올릴 자리가 worktree 루트가 아니다: $OUT"; fail=1 ;; esac
 # 안내하는 명령이 설치되는 settings.json 의 allow 에 맞는지 본다. 맞지 않으면 그 사실을 안내에 적어야 한다
-ALLOW_RULE=$(python3 -c 'import json, sys; print(next(r for r in json.load(open(sys.argv[1]))["permissions"]["allow"] if "human_comment" in r))' "$KIT/claude-code/settings.json")
-case "bash $WREL 7" in .claude/hooks/human_comment.sh*|"bash .claude/hooks/human_comment.sh "*) echo "  ✗ worktree 의 명령이 allow($ALLOW_RULE)에 맞는다 — 이 검사의 전제가 틀렸다"; fail=1 ;;
-  *) echo "  ✓ worktree 의 명령 bash $WREL 7 은 allow($ALLOW_RULE)의 모양이 아니다" ;; esac
+# allow 의 Bash 규칙 하나하나를 그 명령에 맞춰 본다(규칙의 `*` 는 아무 글자와 맞는다)
+MATCHED=$(python3 -c 'import fnmatch, json, sys
+rules = [r[5:-1] for r in json.load(open(sys.argv[1]))["permissions"]["allow"] if r.startswith("Bash(") and r.endswith(")")]
+print(" · ".join(r for r in rules if fnmatch.fnmatchcase(sys.argv[2], r)))' "$KIT/claude-code/settings.json" "bash $WREL 7")
+if [ -n "$MATCHED" ]; then echo "  ✗ worktree 의 명령 bash $WREL 7 이 allow 에 맞는다($MATCHED) — 권한 프롬프트가 표시된다는 안내가 틀렸다"; fail=1
+else echo "  ✓ worktree 의 명령 bash $WREL 7 은 settings.json 의 allow 어느 규칙에도 맞지 않는다"; fi
 case "$OUT" in *'권한 프롬프트'*) echo "  ✓ worktree 에서는 그 명령에 권한 프롬프트가 표시된다고 안내한다" ;;
   *) echo "  ✗ worktree 에서 권한 프롬프트가 표시된다는 안내가 없다: $OUT"; fail=1 ;; esac
+case "$OUT" in *'사본이 아니'*) echo "  ✗ worktree 의 훅 디렉터리를 「사본이 아니다」로 적는다 — 내용이 다른 파일로도 읽힌다: $OUT"; fail=1 ;;
+  *'이 훅이 실행되는 디렉터리가 아니'*) echo "  ✓ worktree 의 훅 디렉터리를 이 훅이 실행되는 디렉터리가 아닌 것으로 적는다" ;;
+  *) echo "  ✗ worktree 의 훅 디렉터리가 왜 안 되는지 적지 않는다: $OUT"; fail=1 ;; esac
+# 같은 레포의 체크아웃이라도 프로젝트 밖에 있으면 worktree 로 보지 않는다 — 프로젝트 루트로 옮기라고 안내한다
+git -C "$WP" worktree add -q "$T/wp-sib"; WP_ABS=$(cd "$WP" && pwd -P)
+PROJ="$WP" HOOK_AT="$WP/.claude/hooks/window_record.sh" \
+  ask "$T/wp-sib" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
+case "$OUT" in *"cd $WP_ABS\`"*'`bash .claude/hooks/human_comment.sh 7`'*) echo "  ✓ 프로젝트 밖의 같은 레포 체크아웃이면 프로젝트 루트로 옮겨 올리라고 안내한다" ;;
+  *) echo "  ✗ 프로젝트 밖의 같은 레포 체크아웃에서의 안내가 프로젝트 루트를 가리키지 않는다: $OUT"; fail=1 ;; esac
 
 rm -rf "$W"
 ask "$T/bot" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"필수 하나만 고치고 머지하자\"}"
