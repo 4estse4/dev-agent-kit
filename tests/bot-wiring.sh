@@ -434,6 +434,16 @@ CIN="$R/scratch/clone-in"; mkdir -p "$CIN/.claude"; git init -q "$CIN"; cp "$R/.
 R_ABS=$(cd "$R" && pwd -P)
 guard "프로젝트 안의 다른 레포에서 입력한 사람 계정 게시" deny "bash .claude/hooks/human_comment.sh 155" "$CIN" "bash $REL <PR 번호>"
 guard "그 거절 사유가 프로젝트 루트로 옮기라고 알린다" deny "bash .claude/hooks/human_comment.sh 155" "$CIN" "cd $R_ABS"
+# 세션 도중 worktree 에 들어간 세션(EnterWorktree). 프로젝트는 원래 체크아웃이고 셸은 그 worktree 에 있다. git 공통
+# 디렉터리가 같아 그 자리에서 이 훅의 스크립트를 부르면 같은 기록을 올리므로, 거절 사유는 원래 체크아웃으로 옮기라고
+# 하지 않고 worktree 루트에서의 경로를 알린다. 그 명령은 allow 의 모양과 달라 권한 프롬프트가 표시된다고 적는다
+RW="$T/rw"; repo "$RW"; git -C "$RW" add .claude/bot.json
+git -C "$RW" -c user.name=t -c user.email=t@example.com commit -q -m init; git -C "$RW" worktree add -q "$RW/.claude/worktrees/w"
+RWT="$RW/.claude/worktrees/w"
+WREL=$(python3 -c 'import os, sys; print(os.path.relpath(os.path.realpath(sys.argv[1]), os.path.realpath(sys.argv[2])))' "$H/human_comment.sh" "$RWT")
+GUARD_PROJ="$RW" guard "worktree 에서 입력한 사람 계정 게시는 worktree 루트에서의 경로를 알린다" deny "bash .claude/hooks/human_comment.sh 155" "$RWT" "bash $WREL <PR 번호>"
+GUARD_PROJ="$RW" guard "그 거절 사유가 권한 프롬프트가 표시된다고 알린다" deny "bash .claude/hooks/human_comment.sh 155" "$RWT" "권한 프롬프트"
+GUARD_PROJ="$RW" guard "worktree 루트에서 이 훅의 스크립트를 부른 사람 계정 게시" pass "bash $WREL 155" "$RWT"
 # 창 기록은 창 기록 훅이 사람이 고른 창에서만 만든다. 세션이 그 훅을 직접 실행하면 지어낸 창 결과로 기록이 생겨
 # 사람이 고르지 않은 결정이 사람 계정으로 올라간다
 W="$H/window_record.sh"

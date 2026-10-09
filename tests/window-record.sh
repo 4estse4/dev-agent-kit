@@ -156,9 +156,10 @@ case "$OUT" in *"cd $REPO_ABS"*) echo "  ✓ 하위 디렉터리면 레포 루�
 ask "$T/bot" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
 case "$OUT" in *'cd '*) echo "  ✗ 레포 루트에서도 옮기라고 안내한다: $OUT"; fail=1 ;;
   *) echo "  ✓ 레포 루트에서는 옮기라는 안내가 없다" ;; esac
-# 라운드 도중에 정한 결정은 나중에 올리므로, 그때의 cwd 를 이 훅이 모른다 — 루트에서 올리라고 늘 적는다
-case "$OUT" in *'라운드 코멘트를 올린 뒤 레포 루트에서'*) echo "  ✓ 라운드 도중의 결정도 레포 루트에서 올리라고 안내한다" ;;
-  *) echo "  ✗ 라운드 도중의 결정을 레포 루트에서 올리라는 안내가 없다: $OUT"; fail=1 ;; esac
+# 라운드 도중에 정한 결정은 나중에 올리므로, 그때의 cwd 를 이 훅이 모른다 — 올릴 자리를 경로로 늘 적는다
+BOT_ABS=$(cd "$T/bot" && pwd -P)
+case "$OUT" in *"라운드 코멘트를 올린 뒤 \`$BOT_ABS\` 에서"*) echo "  ✓ 라운드 도중의 결정도 올릴 자리(레포 루트)를 경로로 안내한다" ;;
+  *) echo "  ✗ 라운드 도중의 결정을 올릴 자리를 경로로 안내하지 않는다: $OUT"; fail=1 ;; esac
 
 # 셸이 프로젝트 안의 다른 레포(따로 clone 한 것)에 있다. 그 레포에도 봇 설정이 있다(커밋돼 있어 클론에도 있다).
 # 기록은 세션을 연 프로젝트에 두고, 프로젝트 루트로 옮겨 그 자리의 스크립트로 올리라고 안내한다(이슈 #199).
@@ -166,17 +167,52 @@ case "$OUT" in *'라운드 코멘트를 올린 뒤 레포 루트에서'*) echo "
 rm -rf "$W"; IN="$T/bot/scratch/clone-in"
 mkdir -p "$IN/.claude" "$T/bot/.claude/hooks"; git init -q "$IN"; cp "$T/bot/.claude/bot.json" "$IN/.claude/"
 cp "$HOOK" "$T/bot/.claude/hooks/"
-BOT_ABS=$(cd "$T/bot" && pwd -P)
 PROJ="$T/bot" HOOK_AT="$T/bot/.claude/hooks/window_record.sh" \
   ask "$IN" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
 check "셸이 프로젝트 안의 다른 레포에 있어도 프로젝트에 기록한다" "- 1라운드 코멘트: 제안대로 고치고 2라운드 · 그 레포의 기록 없음" \
   "$(lines 7) · 그 레포의 기록 $([ -e "$IN/.git/kit-bot" ] && echo 있음 || echo 없음)"
 case "$OUT" in *"cd $BOT_ABS"*'`bash .claude/hooks/human_comment.sh 7`'*) echo "  ✓ 셸이 다른 레포에 있으면 프로젝트 루트로 옮겨 올리라고 안내한다" ;;
   *) echo "  ✗ 다른 레포에서의 안내가 프로젝트 루트를 가리키지 않는다: $OUT"; fail=1 ;; esac
-# 프로젝트에는 봇 설정이 없고 셸만 봇 설정이 있는 레포에 있다. 봇 설정은 프로젝트에서 본다
+case "$OUT" in *"라운드 코멘트를 올린 뒤 \`$BOT_ABS\` 에서"*) echo "  ✓ 셸이 다른 레포에 있어도 라운드 도중의 결정은 프로젝트 루트에서 올리라고 안내한다" ;;
+  *) echo "  ✗ 다른 레포에서 라운드 도중의 결정을 올릴 자리가 프로젝트 루트가 아니다: $OUT"; fail=1 ;; esac
+# 프로젝트에는 봇 설정이 없고 셸만 봇 설정이 있는 레포에 있다. 봇 설정은 프로젝트에서 본다 — 셸 쪽에도
+# 프로젝트 쪽에도 기록이 없어야 한다
 rm -rf "$W"
 PROJ="$T/plain" ask "$T/bot" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
-check "프로젝트에 봇 설정이 없으면 셸이 봇 설정이 있는 레포에 있어도 기록하지 않는다" "없음" "$(lines 7)"
+check "프로젝트에 봇 설정이 없으면 셸이 봇 설정이 있는 레포에 있어도 어디에도 기록하지 않는다" "없음 · 프로젝트 쪽 없음" \
+  "$(lines 7) · 프로젝트 쪽 $([ -e "$T/plain/.git/kit-bot" ] && echo 있음 || echo 없음)"
+
+# 프로젝트를 심링크 경로로 연 세션. 훅의 자리는 논리 경로(링크)이고 git 이 내는 루트는 실제 경로라, 둘을 그대로
+# 견주면 스크립트 경로가 레포 밖을 돌아온다. 링크를 직접 만들어 macOS 의 /var 와 상관없이 본다
+rm -rf "$W"; ln -s "$T/bot" "$T/bot-link"
+PROJ="$T/bot-link" HOOK_AT="$T/bot-link/.claude/hooks/window_record.sh" \
+  ask "$T/bot-link" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
+case "$OUT" in *'지금 `bash .claude/hooks/human_comment.sh 7`'*) echo "  ✓ 프로젝트를 심링크 경로로 열어도 레포 루트 기준 스크립트 경로를 안내한다" ;;
+  *) echo "  ✗ 심링크 경로로 연 프로젝트에서 스크립트 경로가 다르다: $OUT"; fail=1 ;; esac
+
+# 세션 도중 worktree 에 들어간 세션(EnterWorktree). CLAUDE_PROJECT_DIR 은 원래 체크아웃에 남고 셸은 worktree 에
+# 있다. 두 레포의 git 공통 디렉터리가 같아 기록은 같은 자리이므로, 원래 체크아웃으로 옮기라고 하지 않고 worktree
+# 루트에서 프로젝트의 스크립트까지의 경로를 알린다. 그 명령은 allow 의 모양과 달라 권한 프롬프트가 표시된다고 적는다
+WP="$T/wp"; WT="$WP/.claude/worktrees/w"
+mkdir -p "$WP/.claude/hooks"; git init -q "$WP"; cp "$T/bot/.claude/bot.json" "$WP/.claude/"; cp "$HOOK" "$WP/.claude/hooks/"
+git -C "$WP" add .claude/bot.json .claude/hooks; git -C "$WP" -c user.name=t -c user.email=t@example.com commit -q -m init
+git -C "$WP" worktree add -q "$WT"
+WT_ABS=$(cd "$WT" && pwd -P)
+WREL=$(python3 -c 'import os, sys; print(os.path.relpath(os.path.realpath(sys.argv[1]), os.path.realpath(sys.argv[2])))' "$WP/.claude/hooks/human_comment.sh" "$WT")
+PROJ="$WP" HOOK_AT="$WP/.claude/hooks/window_record.sh" \
+  ask "$WT" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
+check "worktree 에 있어도 프로젝트의 git 공통 디렉터리에 기록한다" "있음" "$([ -s "$WP/.git/kit-bot/windows/7.jsonl" ] && echo 있음 || echo 없음)"
+case "$OUT" in *'cd '*) echo "  ✗ worktree 에서 원래 체크아웃으로 옮기라고 안내한다: $OUT"; fail=1 ;;
+  *"지금 \`bash $WREL 7\`"*) echo "  ✓ worktree 에서는 그 자리에서 프로젝트의 스크립트까지의 경로를 안내한다: bash $WREL 7" ;;
+  *) echo "  ✗ worktree 에서의 안내가 프로젝트의 스크립트를 가리키지 않는다: $OUT"; fail=1 ;; esac
+case "$OUT" in *"라운드 코멘트를 올린 뒤 \`$WT_ABS\` 에서"*) echo "  ✓ worktree 에서는 라운드 도중의 결정도 worktree 루트에서 올리라고 안내한다" ;;
+  *) echo "  ✗ worktree 에서 라운드 도중의 결정을 올릴 자리가 worktree 루트가 아니다: $OUT"; fail=1 ;; esac
+# 안내하는 명령이 설치되는 settings.json 의 allow 에 맞는지 본다. 맞지 않으면 그 사실을 안내에 적어야 한다
+ALLOW_RULE=$(python3 -c 'import json, sys; print(next(r for r in json.load(open(sys.argv[1]))["permissions"]["allow"] if "human_comment" in r))' "$KIT/claude-code/settings.json")
+case "bash $WREL 7" in .claude/hooks/human_comment.sh*|"bash .claude/hooks/human_comment.sh "*) echo "  ✗ worktree 의 명령이 allow($ALLOW_RULE)에 맞는다 — 이 검사의 전제가 틀렸다"; fail=1 ;;
+  *) echo "  ✓ worktree 의 명령 bash $WREL 7 은 allow($ALLOW_RULE)의 모양이 아니다" ;; esac
+case "$OUT" in *'권한 프롬프트'*) echo "  ✓ worktree 에서는 그 명령에 권한 프롬프트가 표시된다고 안내한다" ;;
+  *) echo "  ✗ worktree 에서 권한 프롬프트가 표시된다는 안내가 없다: $OUT"; fail=1 ;; esac
 
 rm -rf "$W"
 ask "$T/bot" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"필수 하나만 고치고 머지하자\"}"

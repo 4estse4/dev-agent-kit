@@ -51,7 +51,9 @@
 # 적은 기록뿐이다 — 사람이 창에서 고른 보기다. 세션은 그 기록을 읽지도 쓰지도 못하고(위의 봇 디렉터리 막음),
 # 창에서 고른 것이 게시 동의라서 권한 프롬프트를 내지 않는다. 한 줄 정규형이 아니거나, 스크립트가 이 훅과
 # 같은 디렉터리의 것이 아니거나(세션이 레포의 하위 디렉터리에서 입력한 경우도 여기 든다 — 경로를 cwd 기준으로
-# 푼다), 셸의 `-c` 인자 안에 두었으면(`wraps`) 막는다(`human_comment`).
+# 푼다), 셸의 `-c` 인자 안에 두었으면(`wraps`) 막는다(`human_comment`). 세션 도중 worktree 에 들어간 세션은 그
+# worktree 의 `.claude/hooks/` 가 이 훅의 사본이 아니라서, worktree 루트에서 이 훅의 스크립트까지의 경로로 부른다.
+# 이 훅은 그 명령을 받지만 설치되는 settings.json 의 allow 와 모양이 달라 그때는 권한 프롬프트가 한 번 표시된다.
 #
 # **창 기록 훅을 세션이 직접 실행하면 막는다.** 그 훅에 지어낸 창 결과를 표준입력으로 주면 사람이 고르지 않은
 # 결정이 기록되고, 게시 스크립트는 그 기록을 권한 프롬프트 없이 사람 계정으로 올린다. 사람이 정했다 — 작정한
@@ -366,10 +368,25 @@ def human_comment():
         # 다른 곳에서 등록한 레포(킷 레포)는 그 자리다. 그 루트는 셸이 있는 레포가 아니라 세션을 연 프로젝트의
         # 것이다 — 셸이 프로젝트 안의 다른 레포에 있으면 그 레포의 루트 기준 경로는 allow 에 맞지 않고, 게시
         # 스크립트는 셸이 있는 레포에서 기록을 읽는다
-        ptop = subprocess.run(['git', 'rev-parse', '--show-toplevel'], cwd=os.environ.get('CLAUDE_PROJECT_DIR') or None,
-                              capture_output=True, text=True)
+        proj = os.environ.get('CLAUDE_PROJECT_DIR') or None
+        ptop = subprocess.run(['git', 'rev-parse', '--show-toplevel'], cwd=proj, capture_output=True, text=True)
         root = os.path.realpath(ptop.stdout.strip())
+        # 셸이 있는 레포가 프로젝트의 worktree(git 공통 디렉터리가 같다)면 그 worktree 의 루트에서 입력하게 한다 —
+        # 게시 스크립트가 같은 기록을 보고, 원래 체크아웃으로 옮기면 셸이 worktree 밖으로 나간다
+        def common_of(d):
+            r = subprocess.run(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'], cwd=d,
+                               capture_output=True, text=True)
+            return os.path.realpath(r.stdout.strip()) if r.returncode == 0 else None
+        ctop = os.path.realpath(top.stdout.strip())
+        worktree = ctop != root and common_of(cwd) is not None and common_of(cwd) == common_of(proj)
+        if worktree:
+            root = ctop
         rel = os.path.relpath(mine, root)
+        if worktree:
+            deny("사람 계정으로 올리는 스크립트는 이 훅과 같은 디렉터리의 것만 받는다: " + mine + ". 셸이 있는 "
+                 "worktree 의 `.claude/hooks/` 는 그 사본이 아니다. worktree 루트(" + root + ")에서 `bash " + rel +
+                 " <PR 번호> [-R <owner/repo>]` 로 입력한다(한 줄로 잇지 않는다). 이 명령은 설치되는 settings.json 의 "
+                 "allow(`bash .claude/hooks/human_comment.sh <PR>`)와 모양이 달라 권한 프롬프트가 한 번 표시된다.")
         deny("사람 계정으로 올리는 스크립트는 이 훅과 같은 디렉터리의 것만 받는다: " + mine + ". 세션을 연 프로젝트의 "
              "레포 루트(" + root + ")에서 `bash " + rel + " <PR 번호> [-R <owner/repo>]` 로 입력한다 — 셸이 다른 "
              "자리에 있으면 먼저 `cd " + root + "` 로 옮긴다(한 줄로 잇지 않는다). 설치되는 settings.json 의 allow 도 "
