@@ -105,7 +105,7 @@ guard() {
     "hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": sys.argv[2]}}))' "$dir" "$cmd")
   : > "$T/curl-log"
   out=$(printf '%s' "$input" | HOME="$T/home" PATH="$T/bin:$PATH" STUB_CURL_LOG="$T/curl-log" \
-    bash "$H/bot_guard.sh" 2>&1)
+    CLAUDE_PROJECT_DIR="${GUARD_PROJ:-$R}" bash "${GUARD_HOOKS:-$H}/bot_guard.sh" 2>&1)
   case "$out" in
     *'"permissionDecision": "deny"'*) got=deny ;;
     *'"permissionDecision": "ask"'*) got=ask ;;
@@ -427,6 +427,43 @@ guard "하위 디렉터리에서 입력한 사람 계정 게시" deny "bash .cla
 # `.claude/hooks/` 밖에 둔 레포에서 설치 경로를 알려 주면 그대로 입력해도 다시 막힌다
 REL=$(python3 -c 'import os, sys; print(os.path.relpath(os.path.realpath(sys.argv[1]), os.path.realpath(sys.argv[2])))' "$H/human_comment.sh" "$R")
 guard "거절 사유가 레포 루트에서의 실제 경로를 알려 준다" deny "bash .claude/hooks/human_comment.sh 155" "$R/sub" "bash $REL <PR 번호>"
+# 셸이 프로젝트 안의 다른 레포(따로 clone 한 것)에 있다. 그 레포에도 봇 설정이 있다. 거절 사유는 그 레포가 아니라
+# 세션을 연 프로젝트의 루트로 옮겨 입력하라고 알린다 — 그 레포의 루트 기준 경로(`../../…`)는 allow 에 맞지 않고, 게시
+# 스크립트는 셸이 있는 레포에서 기록을 읽는다(이슈 #199)
+CIN="$R/scratch/clone-in"; mkdir -p "$CIN/.claude"; git init -q "$CIN"; cp "$R/.claude/bot.json" "$CIN/.claude/"
+R_ABS=$(cd "$R" && pwd -P)
+guard "프로젝트 안의 다른 레포에서 입력한 사람 계정 게시" deny "bash .claude/hooks/human_comment.sh 155" "$CIN" "bash $REL <PR 번호>"
+# 옮길 자리는 닫는 백틱까지 맞춰 본다 — 클론은 프로젝트 안에 있어 `cd <클론>` 의 앞부분이 곧 `cd <프로젝트 루트>` 다
+guard "그 거절 사유가 프로젝트 루트로 옮기라고 알린다" deny "bash .claude/hooks/human_comment.sh 155" "$CIN" "cd $R_ABS\`"
+# 세션 도중 worktree 에 들어간 세션(EnterWorktree). 프로젝트는 원래 체크아웃이고 셸은 그 worktree 에 있다. git 공통
+# 디렉터리가 같아 그 자리에서 이 훅의 스크립트를 부르면 같은 기록을 올리므로, 거절 사유는 원래 체크아웃으로 옮기라고
+# 하지 않고 worktree 루트에서의 경로를 알린다. 그 명령은 allow 의 모양과 달라 권한 프롬프트가 표시된다고 적는다
+RW="$T/rw"; repo "$RW"; git -C "$RW" add .claude/bot.json
+git -C "$RW" -c user.name=t -c user.email=t@example.com commit -q -m init; git -C "$RW" worktree add -q "$RW/.claude/worktrees/w"
+RWT="$RW/.claude/worktrees/w"
+WREL=$(python3 -c 'import os, sys; print(os.path.relpath(os.path.realpath(sys.argv[1]), os.path.realpath(sys.argv[2])))' "$H/human_comment.sh" "$RWT")
+GUARD_PROJ="$RW" guard "worktree 에서 입력한 사람 계정 게시는 worktree 루트에서의 경로를 알린다" deny "bash .claude/hooks/human_comment.sh 155" "$RWT" "bash $WREL <PR 번호>"
+GUARD_PROJ="$RW" guard "그 거절 사유가 권한 프롬프트가 표시된다고 알린다" deny "bash .claude/hooks/human_comment.sh 155" "$RWT" "권한 프롬프트"
+GUARD_PROJ="$RW" guard "worktree 루트에서 이 훅의 스크립트를 부른 사람 계정 게시" pass "bash $WREL 155" "$RWT"
+GUARD_PROJ="$RW" guard "그 거절 사유는 worktree 의 훅 디렉터리를 사본이 아니라 이 훅이 실행되는 디렉터리가 아닌 것으로 적는다" deny "bash .claude/hooks/human_comment.sh 155" "$RWT" "이 훅이 실행되는 디렉터리가 아니"
+# 셸이 worktree 의 하위 디렉터리에 있으면 worktree 루트로 옮긴 뒤 입력하라고 알린다
+mkdir -p "$RWT/sub"; RWT_ABS=$(cd "$RWT" && pwd -P)
+GUARD_PROJ="$RW" guard "worktree 의 하위 디렉터리에서 입력한 사람 계정 게시는 worktree 루트로 옮기라고 알린다" deny "bash .claude/hooks/human_comment.sh 155" "$RWT/sub" "cd $RWT_ABS\`"
+# 같은 레포의 체크아웃이라도 프로젝트 밖에 있으면 worktree 로 보지 않는다 — 프로젝트 루트로 옮기라고 알린다
+git -C "$RW" worktree add -q "$T/rw-sib"; RW_ABS=$(cd "$RW" && pwd -P)
+GUARD_PROJ="$RW" guard "프로젝트 밖의 같은 레포 체크아웃에서 입력한 사람 계정 게시는 프로젝트 루트로 옮기라고 알린다" deny "bash .claude/hooks/human_comment.sh 155" "$T/rw-sib" "cd $RW_ABS\`"
+# 권한 프롬프트는 권한 모드에 따라 다르다 — auto 모드에서는 분류기가 정한다고 알린다
+GUARD_PROJ="$RW" guard "worktree 거절 사유가 auto 모드에서는 분류기를 거친다고 알린다" deny "bash .claude/hooks/human_comment.sh 155" "$RWT" "분류기"
+# 세션을 linked worktree(위 $T/rw-sib)에서 연 경우. Claude Code 는 세션 도중 들어간 worktree 를 원래 체크아웃($RW)의
+# `.claude/worktrees/` 에 둔다 — 프로젝트 루트 밖이다. 그 worktree 도 worktree 로 보고 그 자리에서의 경로를 알린다
+GUARD_PROJ="$T/rw-sib" guard "linked worktree 세션이 원래 체크아웃에 만든 worktree 에서 입력한 사람 계정 게시는 그 자리에서의 경로를 알린다" deny "bash .claude/hooks/human_comment.sh 155" "$RWT" "worktree 루트("
+# 세션을 `claude -w` 로 연 경우. 프로젝트 루트 자체가 원래 체크아웃의 `.claude/worktrees/<이름>` 이고 훅도 그 자리의 것이다.
+# 그 프로젝트 루트에서 입력한 allow 의 명령은 통과하고, 하위 디렉터리에서 입력하면 worktree 가 아니라 프로젝트 루트의
+# 사유(옮길 자리와 allow 의 모양)를 낸다
+RWT3="$RW/.claude/worktrees/w3"; git -C "$RW" worktree add -q "$RWT3"
+mkdir -p "$RWT3/.claude/hooks" "$RWT3/sub"; cp "$H"/*.sh "$H"/*.py "$RWT3/.claude/hooks/"
+GUARD_PROJ="$RWT3" GUARD_HOOKS="$RWT3/.claude/hooks" guard "claude -w 세션의 프로젝트 루트에서 입력한 사람 계정 게시" pass "bash .claude/hooks/human_comment.sh 155" "$RWT3"
+GUARD_PROJ="$RWT3" GUARD_HOOKS="$RWT3/.claude/hooks" guard "claude -w 세션의 하위 디렉터리에서 입력한 사람 계정 게시는 프로젝트 루트의 사유를 낸다" deny "bash .claude/hooks/human_comment.sh 155" "$RWT3/sub" "세션을 연 프로젝트의 레포 루트("
 # 창 기록은 창 기록 훅이 사람이 고른 창에서만 만든다. 세션이 그 훅을 직접 실행하면 지어낸 창 결과로 기록이 생겨
 # 사람이 고르지 않은 결정이 사람 계정으로 올라간다
 W="$H/window_record.sh"

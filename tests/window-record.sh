@@ -8,6 +8,8 @@
 # 훅을 Claude Code 가 부르는 모양으로 부른다. 표준입력의 `tool_response` 는 세션 기록에 남는 창의 결과
 # (`toolUseResult`: `questions` · `answers` · `annotations`, `answers` 는 질문 → 고른 보기)와 같은 모양으로 둔다.
 # 훅이 받는 실제 입력도 이 모양이다(백그라운드 세션에서 기록해 확인했다, 2026-09-29).
+# Claude Code 처럼 세션을 연 프로젝트를 환경의 `CLAUDE_PROJECT_DIR` 로 주고, 입력의 `cwd` 는 세션의 셸이 있는 자리다.
+# 둘이 다른 경우는 따로 본다(이슈 #199).
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 HOOK="$KIT/claude-code/hooks/window_record.sh"
@@ -21,7 +23,8 @@ fail=0
 MARK='이 결정은 사람 계정으로 PR #7 에 그대로 올라간다.'
 
 # ask <디렉터리> <questions JSON> <answers JSON> [tool_response 에 더할 JSON] — 훅을 부르고 출력을 $OUT 에 둔다.
-# 넷째 인자는 창 결과의 다른 필드다(`annotations` 의 메모 · `afkTimeoutMs` · `followUp`)
+# 넷째 인자는 창 결과의 다른 필드다(`annotations` 의 메모 · `afkTimeoutMs` · `followUp`). 디렉터리는 입력의 `cwd`
+# 이고, 세션을 연 프로젝트는 PROJ(없으면 그 디렉터리), 부르는 훅은 HOOK_AT(없으면 $HOOK)이다
 ask() {
   OUT=$(python3 -c 'import json, sys
 qs, ans = json.loads(sys.argv[2]), json.loads(sys.argv[3])
@@ -30,7 +33,7 @@ resp.update(json.loads(sys.argv[4]) if len(sys.argv) > 4 else {})
 print(json.dumps({"session_id": "s1", "cwd": sys.argv[1], "hook_event_name": "PostToolUse",
                   "tool_name": "AskUserQuestion", "tool_input": {"questions": qs},
                   "tool_response": resp}, ensure_ascii=False))' \
-    "$@" | (cd "$1" && bash "$HOOK") 2>&1)
+    "$@" | (cd "$1" && CLAUDE_PROJECT_DIR="${PROJ:-$1}" bash "${HOOK_AT:-$HOOK}") 2>&1)
 }
 # q <머리말> <질문> <보기…> — 질문 하나의 JSON
 q() {
@@ -143,7 +146,7 @@ check "질문을 더 요청하며 닫은 창은 기록하지 않는다" "없음"
 # 레포를 $T 에서 두 단계 아래에 두어, cwd 기준 상대 경로를 레포 루트에 붙이는 잘못이 기록을 $T/.git 에 두게 한다
 rm -rf "$W"; mkdir -p "$T/x/repo/.claude" "$T/x/repo/sub/deep"; git init -q "$T/x/repo"
 cp "$T/bot/.claude/bot.json" "$T/x/repo/.claude/"
-ask "$T/x/repo/sub/deep" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
+PROJ="$T/x/repo" ask "$T/x/repo/sub/deep" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
 check "cwd 가 하위 디렉터리여도 레포의 git 디렉터리에 기록한다" "있음" "$([ -s "$T/x/repo/.git/kit-bot/windows/7.jsonl" ] && echo 있음 || echo 없음)"
 check "레포 밖에 git 디렉터리를 만들지 않는다" "없음" "$([ -e "$T/.git" ] && echo 있음 || echo 없음)"
 # 막기 훅과 allow 는 레포 루트에서 입력한 게시 명령만 받는다 — 하위 디렉터리면 루트로 옮기라고 안내한다
@@ -153,9 +156,97 @@ case "$OUT" in *"cd $REPO_ABS"*) echo "  ✓ 하위 디렉터리면 레포 루�
 ask "$T/bot" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
 case "$OUT" in *'cd '*) echo "  ✗ 레포 루트에서도 옮기라고 안내한다: $OUT"; fail=1 ;;
   *) echo "  ✓ 레포 루트에서는 옮기라는 안내가 없다" ;; esac
-# 라운드 도중에 정한 결정은 나중에 올리므로, 그때의 cwd 를 이 훅이 모른다 — 루트에서 올리라고 늘 적는다
-case "$OUT" in *'라운드 코멘트를 올린 뒤 레포 루트에서'*) echo "  ✓ 라운드 도중의 결정도 레포 루트에서 올리라고 안내한다" ;;
-  *) echo "  ✗ 라운드 도중의 결정을 레포 루트에서 올리라는 안내가 없다: $OUT"; fail=1 ;; esac
+# 라운드 도중에 정한 결정은 나중에 올리므로, 그때의 cwd 를 이 훅이 모른다 — 올릴 자리를 경로로 늘 적는다
+BOT_ABS=$(cd "$T/bot" && pwd -P)
+case "$OUT" in *"라운드 코멘트를 올린 뒤 \`$BOT_ABS\` 에서"*) echo "  ✓ 라운드 도중의 결정도 올릴 자리(레포 루트)를 경로로 안내한다" ;;
+  *) echo "  ✗ 라운드 도중의 결정을 올릴 자리를 경로로 안내하지 않는다: $OUT"; fail=1 ;; esac
+
+# 셸이 프로젝트 안의 다른 레포(따로 clone 한 것)에 있다. 그 레포에도 봇 설정이 있다(커밋돼 있어 클론에도 있다).
+# 기록은 세션을 연 프로젝트에 두고, 프로젝트 루트로 옮겨 그 자리의 스크립트로 올리라고 안내한다(이슈 #199).
+# 훅은 설치된 자리(프로젝트의 `.claude/hooks/`)에 복사해 부른다 — 안내의 스크립트 경로가 그 자리에서 나온다
+rm -rf "$W"; IN="$T/bot/scratch/clone-in"
+mkdir -p "$IN/.claude" "$T/bot/.claude/hooks"; git init -q "$IN"; cp "$T/bot/.claude/bot.json" "$IN/.claude/"
+cp "$HOOK" "$T/bot/.claude/hooks/"
+PROJ="$T/bot" HOOK_AT="$T/bot/.claude/hooks/window_record.sh" \
+  ask "$IN" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
+check "셸이 프로젝트 안의 다른 레포에 있어도 프로젝트에 기록한다" "- 1라운드 코멘트: 제안대로 고치고 2라운드 · 그 레포의 기록 없음" \
+  "$(lines 7) · 그 레포의 기록 $([ -e "$IN/.git/kit-bot" ] && echo 있음 || echo 없음)"
+# 옮길 자리는 닫는 백틱까지 맞춰 본다 — 클론은 프로젝트 안에 있어 `cd <클론>` 의 앞부분이 곧 `cd <프로젝트 루트>` 다
+case "$OUT" in *"cd $BOT_ABS\`"*'`bash .claude/hooks/human_comment.sh 7`'*) echo "  ✓ 셸이 다른 레포에 있으면 프로젝트 루트로 옮겨 올리라고 안내한다" ;;
+  *) echo "  ✗ 다른 레포에서의 안내가 프로젝트 루트를 가리키지 않는다: $OUT"; fail=1 ;; esac
+case "$OUT" in *"라운드 코멘트를 올린 뒤 \`$BOT_ABS\` 에서"*) echo "  ✓ 셸이 다른 레포에 있어도 라운드 도중의 결정은 프로젝트 루트에서 올리라고 안내한다" ;;
+  *) echo "  ✗ 다른 레포에서 라운드 도중의 결정을 올릴 자리가 프로젝트 루트가 아니다: $OUT"; fail=1 ;; esac
+# 프로젝트에는 봇 설정이 없고 셸만 봇 설정이 있는 레포에 있다. 봇 설정은 프로젝트에서 본다 — 셸 쪽에도
+# 프로젝트 쪽에도 기록이 없어야 한다
+rm -rf "$W"
+PROJ="$T/plain" ask "$T/bot" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
+check "프로젝트에 봇 설정이 없으면 셸이 봇 설정이 있는 레포에 있어도 어디에도 기록하지 않는다" "없음 · 프로젝트 쪽 없음" \
+  "$(lines 7) · 프로젝트 쪽 $([ -e "$T/plain/.git/kit-bot" ] && echo 있음 || echo 없음)"
+
+# 프로젝트를 심링크 경로로 연 세션. 훅의 자리는 논리 경로(링크)이고 git 이 내는 루트는 실제 경로라, 둘을 그대로
+# 견주면 스크립트 경로가 레포 밖을 돌아온다. 링크를 직접 만들어 macOS 의 /var 와 상관없이 본다
+rm -rf "$W"; ln -s "$T/bot" "$T/bot-link"
+PROJ="$T/bot-link" HOOK_AT="$T/bot-link/.claude/hooks/window_record.sh" \
+  ask "$T/bot-link" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
+case "$OUT" in *'지금 `bash .claude/hooks/human_comment.sh 7`'*) echo "  ✓ 프로젝트를 심링크 경로로 열어도 레포 루트 기준 스크립트 경로를 안내한다" ;;
+  *) echo "  ✗ 심링크 경로로 연 프로젝트에서 스크립트 경로가 다르다: $OUT"; fail=1 ;; esac
+
+# 세션 도중 worktree 에 들어간 세션(EnterWorktree). CLAUDE_PROJECT_DIR 은 원래 체크아웃에 남고 셸은 worktree 에
+# 있다. 두 레포의 git 공통 디렉터리가 같아 기록은 같은 자리이므로, 원래 체크아웃으로 옮기라고 하지 않고 worktree
+# 루트에서 프로젝트의 스크립트까지의 경로를 알린다. 그 명령은 allow 의 모양과 달라 권한 프롬프트가 표시된다고 적는다
+WP="$T/wp"; WT="$WP/.claude/worktrees/w"
+mkdir -p "$WP/.claude/hooks"; git init -q "$WP"; cp "$T/bot/.claude/bot.json" "$WP/.claude/"; cp "$HOOK" "$WP/.claude/hooks/"
+git -C "$WP" add .claude/bot.json .claude/hooks; git -C "$WP" -c user.name=t -c user.email=t@example.com commit -q -m init
+git -C "$WP" worktree add -q "$WT"
+WT_ABS=$(cd "$WT" && pwd -P)
+WREL=$(python3 -c 'import os, sys; print(os.path.relpath(os.path.realpath(sys.argv[1]), os.path.realpath(sys.argv[2])))' "$WP/.claude/hooks/human_comment.sh" "$WT")
+PROJ="$WP" HOOK_AT="$WP/.claude/hooks/window_record.sh" \
+  ask "$WT" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
+check "worktree 에 있어도 프로젝트의 git 공통 디렉터리에 기록한다" "있음" "$([ -s "$WP/.git/kit-bot/windows/7.jsonl" ] && echo 있음 || echo 없음)"
+case "$OUT" in *'cd '*) echo "  ✗ worktree 에서 원래 체크아웃으로 옮기라고 안내한다: $OUT"; fail=1 ;;
+  *"지금 \`bash $WREL 7\`"*) echo "  ✓ worktree 에서는 그 자리에서 프로젝트의 스크립트까지의 경로를 안내한다: bash $WREL 7" ;;
+  *) echo "  ✗ worktree 에서의 안내가 프로젝트의 스크립트를 가리키지 않는다: $OUT"; fail=1 ;; esac
+case "$OUT" in *"라운드 코멘트를 올린 뒤 \`$WT_ABS\` 에서"*) echo "  ✓ worktree 에서는 라운드 도중의 결정도 worktree 루트에서 올리라고 안내한다" ;;
+  *) echo "  ✗ worktree 에서 라운드 도중의 결정을 올릴 자리가 worktree 루트가 아니다: $OUT"; fail=1 ;; esac
+# 안내하는 명령이 설치되는 settings.json 의 allow 에 맞는지 본다. 맞지 않으면 그 사실을 안내에 적어야 한다
+# allow 의 Bash 규칙 하나하나를 그 명령에 맞춰 본다(규칙의 `*` 는 아무 글자와 맞는다)
+MATCHED=$(python3 -c 'import fnmatch, json, sys
+rules = [r[5:-1] for r in json.load(open(sys.argv[1]))["permissions"]["allow"] if r.startswith("Bash(") and r.endswith(")")]
+print(" · ".join(r for r in rules if fnmatch.fnmatchcase(sys.argv[2], r)))' "$KIT/claude-code/settings.json" "bash $WREL 7")
+if [ -n "$MATCHED" ]; then echo "  ✗ worktree 의 명령 bash $WREL 7 이 allow 에 맞는다($MATCHED) — 권한 프롬프트가 표시된다는 안내가 틀렸다"; fail=1
+else echo "  ✓ worktree 의 명령 bash $WREL 7 은 settings.json 의 allow 어느 규칙에도 맞지 않는다"; fi
+case "$OUT" in *'권한 프롬프트'*) echo "  ✓ worktree 에서는 그 명령에 권한 프롬프트가 표시된다고 안내한다" ;;
+  *) echo "  ✗ worktree 에서 권한 프롬프트가 표시된다는 안내가 없다: $OUT"; fail=1 ;; esac
+# 권한 프롬프트는 권한 모드에 따라 다르다 — auto 모드에서는 사람에게 묻지 않고 분류기가 정한다
+case "$OUT" in *auto*분류기*) echo "  ✓ worktree 의 명령이 auto 모드에서는 분류기를 거친다고 안내한다" ;;
+  *) echo "  ✗ worktree 의 안내가 권한 프롬프트를 모드와 상관없이 단정한다: $OUT"; fail=1 ;; esac
+case "$OUT" in *'사본이 아니'*) echo "  ✗ worktree 의 훅 디렉터리를 「사본이 아니다」로 적는다 — 내용이 다른 파일로도 읽힌다: $OUT"; fail=1 ;;
+  *'이 훅이 실행되는 디렉터리가 아니'*) echo "  ✓ worktree 의 훅 디렉터리를 이 훅이 실행되는 디렉터리가 아닌 것으로 적는다" ;;
+  *) echo "  ✗ worktree 의 훅 디렉터리가 왜 안 되는지 적지 않는다: $OUT"; fail=1 ;; esac
+# 같은 레포의 체크아웃이라도 프로젝트 밖에 있으면 worktree 로 보지 않는다 — 프로젝트 루트로 옮기라고 안내한다
+git -C "$WP" worktree add -q "$T/wp-sib"; WP_ABS=$(cd "$WP" && pwd -P)
+PROJ="$WP" HOOK_AT="$WP/.claude/hooks/window_record.sh" \
+  ask "$T/wp-sib" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
+case "$OUT" in *"cd $WP_ABS\`"*'`bash .claude/hooks/human_comment.sh 7`'*) echo "  ✓ 프로젝트 밖의 같은 레포 체크아웃이면 프로젝트 루트로 옮겨 올리라고 안내한다" ;;
+  *) echo "  ✗ 프로젝트 밖의 같은 레포 체크아웃에서의 안내가 프로젝트 루트를 가리키지 않는다: $OUT"; fail=1 ;; esac
+# 세션을 linked worktree(위 $T/wp-sib)에서 연 경우. Claude Code 는 세션 도중 들어간 worktree 를 원래 체크아웃($WP)의
+# `.claude/worktrees/` 에 둔다 — 프로젝트 루트 밖이다. 셸이 그 worktree 에 있으면 프로젝트 루트로 옮겨도 Claude Code 가
+# cwd 를 되돌리므로, 그 worktree 를 worktree 로 보고 그 자리에서의 경로를 알린다
+WT2="$WP/.claude/worktrees/w2"; git -C "$WP" worktree add -q "$WT2"
+WREL2=$(python3 -c 'import os, sys; print(os.path.relpath(os.path.realpath(sys.argv[1]), os.path.realpath(sys.argv[2])))' "$T/wp-sib/.claude/hooks/human_comment.sh" "$WT2")
+PROJ="$T/wp-sib" HOOK_AT="$T/wp-sib/.claude/hooks/window_record.sh" \
+  ask "$WT2" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
+case "$OUT" in *'cd '*) echo "  ✗ linked worktree 세션의 worktree 에서 프로젝트 루트로 옮기라고 안내한다: $OUT"; fail=1 ;;
+  *"지금 \`bash $WREL2 7\`"*) echo "  ✓ linked worktree 세션이 원래 체크아웃에 만든 worktree 에서도 그 자리에서의 경로를 안내한다: bash $WREL2 7" ;;
+  *) echo "  ✗ linked worktree 세션의 worktree 에서의 안내가 프로젝트의 스크립트를 가리키지 않는다: $OUT"; fail=1 ;; esac
+# 세션을 `claude -w` 로 연 경우. 프로젝트 루트 자체가 원래 체크아웃의 `.claude/worktrees/<이름>` 이다. 셸이 그 프로젝트
+# 루트에 있으면 worktree 가 아니라 프로젝트 루트다 — allow 와 같은 명령을 알리고 권한 검사 문구를 붙이지 않는다
+WT3="$WP/.claude/worktrees/w3"; git -C "$WP" worktree add -q "$WT3"
+PROJ="$WT3" HOOK_AT="$WT3/.claude/hooks/window_record.sh" \
+  ask "$WT3" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
+case "$OUT" in *'권한 검사'*|*'분류기'*) echo "  ✗ claude -w 세션의 프로젝트 루트에서 allow 의 명령에 권한 검사 문구를 붙인다: $OUT"; fail=1 ;;
+  *'지금 `bash .claude/hooks/human_comment.sh 7`'*) echo "  ✓ claude -w 세션의 프로젝트 루트에서는 allow 의 명령을 권한 검사 문구 없이 안내한다" ;;
+  *) echo "  ✗ claude -w 세션의 프로젝트 루트에서의 안내가 allow 의 명령이 아니다: $OUT"; fail=1 ;; esac
 
 rm -rf "$W"
 ask "$T/bot" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"필수 하나만 고치고 머지하자\"}"

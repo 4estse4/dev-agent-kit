@@ -18,8 +18,9 @@
 # 머리말의 창으로 다시 받는다(`open-pr` 3.5). 사람이 자리를 비워 저절로 닫힌 창(`afkTimeoutMs`)과 질문을 더
 # 요청하며 닫은 창(`followUp`)은 사람이 제출한 것이 아니라서 기록하지 않는다.
 #
-# **어디에.** `<git 공통 디렉터리>/kit-bot/windows/<PR>.jsonl` 에 기록 하나를 한 줄로 더한다. git 공통
-# 디렉터리는 절대 경로로 받는다 — 세션의 cwd 가 레포의 하위 디렉터리여도 레포의 것을 가리킨다. 세션은 봇
+# **어디에.** 세션을 연 프로젝트(`CLAUDE_PROJECT_DIR`)의 `<git 공통 디렉터리>/kit-bot/windows/<PR>.jsonl` 에 기록
+# 하나를 한 줄로 더한다. 훅 입력의 `cwd` 는 세션의 셸이 `cd` 한 자리를 따라가서, 그것으로 정하면 프로젝트 안의
+# 다른 레포에 `cd` 해 있을 때 기록이 그 레포에 생긴다. git 공통 디렉터리는 절대 경로로 받는다. 세션은 봇
 # 디렉터리를 읽지도 쓰지도 못한다 — 셸 명령은 막기 훅(`bot_guard.sh`)이, Read · Write · Edit 도구는 설치되는
 # `settings.json` 의 deny 가 막는다. 봇 설정이 있는 레포 안에서 세션이 이 훅을 직접 실행해 지어낸 창 결과로
 # 기록을 만드는 명령도 막기 훅이 막는다.
@@ -30,7 +31,11 @@
 # 2.1.283 · 2.1.284 의 코드에서 읽었다.
 #
 # **올리는 명령의 안내.** 막기 훅과 설치되는 `settings.json` 의 allow 는 레포 루트에서 입력한
-# `bash .claude/hooks/human_comment.sh <PR>` 만 받으므로, 세션의 cwd 가 루트가 아니면 먼저 루트로 옮기라고 적는다.
+# `bash .claude/hooks/human_comment.sh <PR>` 만 받고, 게시 스크립트는 셸이 있는 레포에서 기록을 읽는다. 그래서
+# 세션의 셸(`cwd`)이 프로젝트의 레포 루트가 아니면 먼저 그 루트로 옮기라고 적는다. 셸이 세션 도중 들어간
+# worktree 에 있으면(아래 「올릴 자리」) 옮기라고 하지 않고, 그 worktree 루트에서 이 훅의 스크립트까지의 경로를
+# 적는다. 그 명령은 allow 와 모양이 달라 권한 검사를 거치고(default 모드는 권한 프롬프트, auto 모드는 분류기),
+# 안내에 그것을 적는다.
 input=$(cat)
 case "$input" in
   *AskUserQuestion*) ;;
@@ -47,7 +52,9 @@ except ValueError:
 if data.get('tool_name') != 'AskUserQuestion':
     sys.exit(0)
 cwd = data.get('cwd') or None
-top = subprocess.run(['git', 'rev-parse', '--show-toplevel'], cwd=cwd, capture_output=True, text=True)
+# 봇 설정 · 레포 루트 · 기록 자리는 셸이 있는 자리(cwd)가 아니라 세션을 연 프로젝트에서 구한다
+proj = os.environ.get('CLAUDE_PROJECT_DIR') or None
+top = subprocess.run(['git', 'rev-parse', '--show-toplevel'], cwd=proj, capture_output=True, text=True)
 root = top.stdout.strip()
 if top.returncode or not os.path.isfile(os.path.join(root, '.claude', 'bot.json')):
     sys.exit(0)
@@ -126,8 +133,8 @@ for q, pr in marked:
     else:
         rec['why'].append('「%s」 — 직접 쓴 말이나 메모가 있다' % header)
 
-# 절대 경로로 받는다 — 상대 경로는 cwd 기준이라, 세션의 cwd 가 레포의 하위 디렉터리면 루트에 붙였을 때 레포 밖을 가리킨다
-common = subprocess.run(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'], cwd=cwd,
+# 절대 경로로 받는다 — 상대 경로는 git 을 실행한 자리 기준이라 루트에 붙이면 레포 밖을 가리킬 수 있다
+common = subprocess.run(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'], cwd=proj,
                         capture_output=True, text=True)
 if common.returncode or not common.stdout.strip():
     sys.exit(0)
@@ -135,10 +142,37 @@ where = os.path.join(common.stdout.strip(), 'kit-bot', 'windows')
 os.umask(0o077)
 os.makedirs(where, exist_ok=True)
 at = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-script = os.path.relpath(os.path.join(here, 'human_comment.sh'), root)
-# 막기 훅과 allow 는 레포 루트에서 입력한 게시 명령만 받는다(경로를 cwd 기준으로 푼다)
-move = '' if os.path.realpath(cwd or os.getcwd()) == os.path.realpath(root) else \
-    '먼저 `cd %s` 로 레포 루트로 옮긴 뒤(한 줄로 잇지 않는다) ' % os.path.realpath(root)
+# 올릴 자리는 프로젝트의 레포 루트다. 다만 셸이 세션 도중 들어간 worktree 에 있으면 그 worktree 의 루트다.
+# 게시 스크립트는 셸이 있는 레포에서 기록을 읽는데 worktree 는 같은 기록을 보고, 옮기라고 하면 셸이 worktree
+# 밖으로 나가 그 뒤의 명령이 다른 체크아웃에서 실행되거나 Claude Code 가 cwd 를 되돌려 같은 안내가 되풀이된다.
+# 그런 worktree 는 git 공통 디렉터리가 프로젝트와 같고, 루트가 Claude Code 가 worktree 를 만드는 두 자리 가운데
+# 하나에 있다 — 프로젝트 루트 안, 또는 원래 체크아웃(공통 디렉터리의 상위)의 `.claude` 아래 `worktrees`. 세션을
+# linked worktree 에서 열면 Claude Code 는 뒤쪽에 만든다. 그 밖의 같은 레포 체크아웃은 worktree 로 보지 않는다
+post = os.path.realpath(root)
+pcommon = os.path.realpath(common.stdout.strip())
+ctop = subprocess.run(['git', 'rev-parse', '--show-toplevel'], cwd=cwd, capture_output=True, text=True)
+ccommon = subprocess.run(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'], cwd=cwd,
+                         capture_output=True, text=True)
+cpath = os.path.realpath(ctop.stdout.strip())
+# 프로젝트 루트 자체는 worktree 가 아니다 — `claude -w` 로 연 세션은 프로젝트 루트가 원래 체크아웃의 그 자리에 있다
+worktree = (ctop.returncode == 0 and ccommon.returncode == 0
+            and os.path.realpath(ccommon.stdout.strip()) == pcommon and cpath != post
+            and (cpath.startswith(post + os.sep)
+                 or cpath.startswith(os.path.join(os.path.dirname(pcommon), '.claude', 'worktrees') + os.sep)))
+if worktree:
+    post = cpath
+# 둘 다 실제 경로로 바꿔 견준다 — 훅의 자리는 논리 경로이고 git 이 낸 루트는 실제 경로라, 레포 경로에 심링크가
+# 있으면 그대로 견준 상대 경로가 레포 밖을 돌아온다
+script = os.path.relpath(os.path.realpath(os.path.join(here, 'human_comment.sh')), post)
+# 막기 훅은 게시 명령의 경로를 cwd 기준으로 푼다
+move = '' if os.path.realpath(cwd or os.getcwd()) == post else '먼저 `cd %s` 로 옮긴 뒤(한 줄로 잇지 않는다) ' % post
+# worktree 의 `.claude/hooks/` 는 이 훅이 실행되는 디렉터리가 아니라 막기 훅이 받지 않으므로 이 훅의 스크립트까지
+# 경로로 부른다. 그 명령은 설치되는 settings.json 의 allow 와 모양이 달라 권한 검사를 거친다 — default 모드에서는
+# 권한 프롬프트가 표시되고 auto 모드에서는 분류기가 정한다
+prompt = (' 이 명령은 설치되는 settings.json 의 allow(`bash .claude/hooks/human_comment.sh <PR>`)와 모양이 달라 '
+          '권한 검사를 거친다 — default 모드에서는 권한 프롬프트가 한 번 표시되고 auto 모드에서는 분류기가 정한다. '
+          '셸이 있는 worktree 의 `.claude/hooks/` 는 이 훅이 실행되는 디렉터리가 아니라 막기 훅이 받지 않는다.'
+          ) if worktree else ''
 notes = []
 for pr, rec in got.items():
     with open(os.path.join(where, pr + '.jsonl'), 'a', encoding='utf-8') as fh:
@@ -151,8 +185,9 @@ for pr, rec in got.items():
                      % (pr, ', '.join(rec['why'])))
     else:
         notes.append("PR #%s: 사람 계정으로 올릴 결정 %d줄을 기록했다. 이번 head 의 라운드 코멘트가 이미 올라가 있으면 "
-                     "지금 %s`bash %s %s` 로 올리고, 라운드 도중에 정한 것이면 라운드 코멘트를 올린 뒤 레포 루트에서 "
-                     "같은 명령으로 올린다(open-pr 3.1 · 3.5)." % (pr, len(rec['lines']), move, script, pr))
+                     "지금 %s`bash %s %s` 로 올리고, 라운드 도중에 정한 것이면 라운드 코멘트를 올린 뒤 `%s` 에서 "
+                     "같은 명령으로 올린다(open-pr 3.1 · 3.5).%s"
+                     % (pr, len(rec['lines']), move, script, pr, post, prompt))
 print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse",
                                          "additionalContext": " ".join(notes)}}, ensure_ascii=False))
 PY
