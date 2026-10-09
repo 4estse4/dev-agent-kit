@@ -79,7 +79,7 @@ gate_go_highest() {
 # sort -V 는 이 형태들을 Go 의 순서대로 놓는다(1.27 < 1.27.0 < 1.27.1, go.dev/doc/toolchain).
 # CI 에서 setup-go 를 쓰는 잡이 모두 그 앞에서 부른다. 잡은 저마다 Go 를 설치해서, 한 잡에만 두면
 # security 는 govulncheck 설치에서 「requires go >= …」라는 다른 오류로 실패하고(실제로 확인함), 도구를
-# 설치하지 않는 coverage 는 킷이 지원하지 않는 Go 로 초록을 낸다(실제로 확인함).
+# 설치하지 않는 coverage 잡은 킷이 지원하지 않는 Go 로 실행되고도 통과한다(실제로 확인함).
 gate_go_min_check() {
   local min f v line want what raise
   min=$(gate_tool_version go_min)
@@ -103,7 +103,7 @@ gate_go_min_check() {
 # 레포 루트에 .nvmrc 가 있는지 본다. 없으면 GitHub 주석(::error)으로 이유를 말하고 실패한다.
 # CI 의 setup-node 가 그 파일로 node 를 설치한다. node 는 잡 하나에 하나라 py 의 .python-version 처럼
 # 루트에 둔다. setup-node 를 쓰는 잡이 모두 그 앞에서 부른다. 한때 setup-node 가 루트의 .nvmrc 와
-# lockfile 을 가정하고, continue-on-error 때문에 그 실패가 초록으로 끝났다.
+# lockfile 을 가정하고, continue-on-error 때문에 setup-node 스텝이 실패해도 잡은 통과했다.
 gate_nvmrc_check() {
   local found
   [ -f .nvmrc ] && return 0

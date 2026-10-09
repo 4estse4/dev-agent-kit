@@ -191,7 +191,7 @@ if [ "$DO_HOOKS" = 1 ]; then
       || cp "$TARGET/.kit/identity" "$v/identity"
     # install-manifest 는 **어디서 왔는지**만 적는다 — 킷 커밋과 언어 선택.
     # 내용 체크섬은 두지 않는다. 이 레포에서 게이트를 고치는 것이 정상 작업인데
-    # (.kit/README.md), 체크섬을 두면 그 정상 작업이 CI 를 빨갛게 만들고,
+    # (.kit/README.md), 체크섬을 두면 그 정상 작업 때문에 CI 의 vendored 잡이 체크섬 대조에서 실패하고,
     # CI 실패를 푸는 안내(install.sh 재실행)가 그 수정을 말없이 지운다. 실제로 확인했다.
     # 무엇이 달라졌는지는 --dry-run 이 보여준다.
     printf 'kit_rev=%s\nlangs=%s\n' "$kit_rev" "$LANGS" > "$v/install-manifest"

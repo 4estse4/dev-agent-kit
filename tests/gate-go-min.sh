@@ -4,8 +4,8 @@
 # 이 테스트가 있는 이유: 킷은 tool-versions 의 go_min 보다 낮은 Go 를 지원하지 않는다(그 이유는
 # tool-versions 의 go_min 주석). gates.yml 의 잡은 저마다 setup-go 로 Go 를 설치하는데, go 1.24 로
 # Go 를 설치한 security 잡은 govulncheck 설치에서 「requires go >= 1.25.0」으로 실패했다(이슈 #93).
-# 검사가 한 잡에만 있으면 security 는 그렇게 다른 오류를 내며 실패하고, 도구를 설치하지 않는 coverage 는
-# 킷이 지원하지 않는 Go 로 초록을 낸다(같은 실행에서 coverage 가 go 1.24.13 으로 실행됐다).
+# 검사가 한 잡에만 있으면 security 는 그렇게 다른 오류를 내며 실패하고, 도구를 설치하지 않는 coverage 잡은
+# 킷이 지원하지 않는 Go 로 실행되고도 통과한다(같은 실행에서 coverage 가 go 1.24.13 으로 실행됐다).
 #
 # 깨끗한 레포에 킷을 설치하고 그 gates.yml 을 읽는다. 보는 것:
 #   · actions/setup-go 를 쓰는 잡마다, 그보다 앞선 스텝이 gate_go_min_check 를 부른다
@@ -83,7 +83,7 @@ check() { # $1=잡  $2=설명  $3=기대(fail|pass)  $4=실패할 때 오류 줄
   local job="$1" what="$2" want="$3" names="$4" out rc; shift 4
   gomods "$@"
   # TV 가 비면 CI 스텝처럼 lib.sh 가 제 자리에서 tool-versions 를 찾게 둔다. 설치본 케이스가 그
-  # 기본 경로를 거친다 — 모든 케이스에 전달하면 그 경로가 깨져도 초록이었다(PR #108 3라운드 콜드 리뷰).
+  # 기본 경로를 거친다 — 모든 케이스에 전달하면 그 경로가 깨져도 이 테스트가 통과했다(PR #108 3라운드 콜드 리뷰).
   if [ -n "$TV" ]; then out=$(cd "$R" && GATE_TOOL_VERSIONS="$TV" bash -e "$T/step.$job" 2>&1); rc=$?
   else out=$(cd "$R" && bash -e "$T/step.$job" 2>&1); rc=$?; fi
   if [ "$want" = fail ]; then

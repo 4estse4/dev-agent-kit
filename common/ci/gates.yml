@@ -35,8 +35,8 @@ jobs:
       - id: d
         # 여기서 감지하지 못한 언어는 도구와 의존성을 설치하지 않는다.
         # gate 잡의 마지막 스텝(gate.sh --all)은 그래도 그 모듈을 찾는다. 러너에 도구가
-        # 없으면 빨갛게 끝나지만, 러너 이미지에 이미 있는 도구로 실행되면 버전을 핀하지 않은
-        # 채 초록으로 끝난다. security 잡은 어느 쪽이든 그 언어의 취약점 검사를
+        # 없으면 그 스텝이 실패하지만, 러너 이미지에 이미 있는 도구로 실행되면 버전을 핀하지 않은
+        # 채 통과한다. security 잡은 어느 쪽이든 그 언어의 취약점 검사를
         # 알리지 않고 건너뛴다. 어댑터를 추가하면 반드시 여기도 같이 추가해야 한다.
         #
         # 마커를 찾는 기준은 게이트(gate.sh)와 같다. 깊이를 제한하지 않고, 건너뛸 디렉터리는
@@ -156,7 +156,7 @@ jobs:
       - if: needs.detect.outputs.go == 'true' && steps.gotools.outputs.cache-hit != 'true'
         run: |
           # 버전을 핀한다. @latest 는 코드가 그대로여도 포맷 규칙이 바뀌어
-          # cold cache 에서 게이트가 빨개진다. 같은 코드에서 결과가 달라진다.
+          # cold cache 에서 게이트(`gate.sh`)가 실패한다. 같은 코드에서 결과가 달라진다.
           CGO_ENABLED=0 GOBIN="$HOME/.cache/kit/go-tools" go install golang.org/x/tools/cmd/goimports@${{ steps.tv.outputs.goimports }}
       # golangci-lint-action 은 스스로 lint 를 실행한다 — 게이트를 gate.sh 한 곳에서만
       # 정의하는 것과 부딪히므로 쓰지 않는다. 바이너리만 버전 핀해 설치하고 실행은 gate.sh 가 한다.
@@ -179,7 +179,7 @@ jobs:
       # 래퍼가 없으면 **여기서 실패시킨다.** ubuntu 러너 이미지에는 gradle 이 들어
       # 있어서 래퍼 없이도 CI 는 통과하는데, 그러면 (a) gradle 버전이 러너 이미지에
       # 묶여 고정되지 않고 — 린터 버전을 핀한 이유와 정면으로
-      # 어긋난다 — (b) gradle 이 없는 개발자 머신에서는 로컬이 빨갛고 CI 만 초록이 된다.
+      # 어긋난다 — (b) gradle 이 없는 개발자 머신에서는 로컬의 게이트는 실패하고 CI 의 게이트만 통과한다.
       # 로컬과 CI 의 결과가 이렇게 달라지는 것을 막는 것이 이 워크플로가 있는 이유다.
       - if: needs.detect.outputs.jvm == 'true'
         name: require an executable wrapper at every build root
@@ -187,7 +187,7 @@ jobs:
           # 어댑터(adapters/jvm.sh)의 판정과 **같은 기준**으로 본다.
           # 존재만 확인하면 두 판정이 어긋난다 — 실행권한 없는 gradlew 는 어댑터가
           # `[ -x ./gradlew ]` 에서 거짓으로 판정하고 시스템에 설치된 gradle 을 쓰는데,
-          # 러너 이미지에는 gradle 이 있어서 초록으로 끝난다. 훅에 대해 vendored 잡이
+          # 러너 이미지에는 gradle 이 있어서 CI 의 게이트가 통과한다. 훅에 대해 vendored 잡이
           # 이미 하는 것과 같은 검사를 래퍼에도 한다.
           #
           # 빌드 루트마다 본다. 레포 어딘가에 래퍼가 하나만 있어도 통과시키면,
@@ -251,7 +251,7 @@ jobs:
       - if: needs.detect.outputs.jvm == 'true'
         name: install ktlint
         # 린트는 빌드 도구를 거치지 않고 직접 실행된다 — golangci-lint 와 같은 모양이다.
-        # 버전을 핀한다. @latest 는 코드 변경 없이 규칙이 바뀌어 게이트가 빨개진다.
+        # 버전을 핀한다. @latest 는 코드 변경 없이 규칙이 바뀌어 게이트(`gate.sh`)가 실패한다.
         run: |
           curl -fsSL -o /tmp/ktlint \
             https://github.com/ktlint/ktlint/releases/download/${{ steps.tv.outputs.ktlint }}/ktlint
@@ -353,7 +353,7 @@ jobs:
 
       # node 버전은 **레포 루트의 `.nvmrc`** 가 정한다. 없으면 여기서 이유를 말하며 멈춘다
       # (lib.sh 의 gate_nvmrc_check). 한때 setup-node 가 루트의 `.nvmrc` 와 lockfile 을 가정했고,
-      # continue-on-error 때문에 그 실패가 초록으로 끝났다(실제로 확인함). lockfile 은 모듈마다 있을 수 있어
+      # continue-on-error 때문에 setup-node 스텝이 실패해도 잡은 통과했다(실제로 확인함). lockfile 은 모듈마다 있을 수 있어
       # cache 키를 레포 어디의 lockfile 로든 만든다. 이 값을 주면 setup-node 는 기본 패턴 대신
       # 이것만 보고, 하나도 안 맞으면 멈추므로 npm ci 가 읽는 둘을 다 적는다.
       - if: needs.detect.outputs.node == 'true'
@@ -408,7 +408,7 @@ jobs:
       #
       # 모듈마다 실행한다. go.mod 가 루트에 없을 수 있고 여럿일 수 있다.
       # go test 가 실패하면 이 잡도 실패한다. 한때 `go test | tee` 에 pipefail 이 없어 테스트가
-      # 실패해도 「보고만 합니다」로 초록이었다(실제로 확인함). 틀린 숫자를 초록으로 내지 않는다.
+      # 실패해도 「보고만 합니다」를 출력하고 잡이 통과했다(실제로 확인함). 틀린 숫자를 낸 잡을 통과시키지 않는다.
       # pipefail 을 스텝 전체에 설정하지 않고 go test 의 종료 코드만 본다. 설정하면 아래 COVER_MIN 판정의
       # grep 이 커버리지 숫자를 못 찾을 때 그 대입이 스텝을 말없이 끝낸다.
       - name: 패키지별 커버리지

@@ -10,7 +10,7 @@
 # run 에 있든 같은 테스트가 적용된다. 모르는 식이 있으면 값을 짐작하지 않고 실패한다. 셸은 러너가
 # 고르는 대로 고른다 — GitHub 문서의 shell 표에서 shell 을 적지 않은 Linux 스텝은 `bash -e {0}` 이고,
 # `shell: bash` 를 적어야 `bash --noprofile --norc -eo pipefail {0}` 이다. pipefail 로 실행하면 스텝에
-# 파이프(`secrets.sh … | tee …`)를 더해 러너에서 실패가 초록이 되는 회귀를 이 테스트가 통과시킨다
+# 파이프(`secrets.sh … | tee …`)를 더해 러너에서 secrets.sh 가 실패해도 스텝이 통과하는 회귀를 이 테스트가 통과시킨다
 # (PR #177 1라운드 콜드 리뷰). 보는 것:
 #   · push 는 before..after 의 커밋을 모두 본다. 앞 커밋이 넣고 뒤 커밋이 지운 것도 찾는다
 #   · before 가 0 뿐이거나(main 을 처음 푸시) 체크아웃에 없으면(강제 푸시로 옛 커밋이 어느 브랜치에서도
@@ -66,7 +66,7 @@ new_case() { # 설치본을 복제해 그 경우의 레포를 만든다. 훅은 
   git -C "$C" config user.email t@example.com; git -C "$C" config user.name T
 }
 # `-f` 로 더한다. 전역 gitignore 가 `.env` 를 무시하는 머신에서는 `-f` 없이 `git add` 가 실패해 그 경우의
-# 커밋이 만들어지지 않고, 결함이 없어도 테스트가 빨개졌다(PR #177 1라운드 셀프 리뷰).
+# 커밋이 만들어지지 않고, 결함이 없어도 이 테스트가 실패했다(PR #177 1라운드 셀프 리뷰).
 commit() { # $1=add|rm  $2=파일 → 커밋하고 SHA 를 출력한다
   if [ "$1" = add ]; then echo "$2" > "$C/$2"; git -C "$C" add -f "$2"; else git -C "$C" rm -q "$2"; fi
   git -C "$C" commit -qm "$1 $2" && git -C "$C" rev-parse HEAD
