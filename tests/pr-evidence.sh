@@ -241,7 +241,8 @@ for f in "$OPEN" "$MERGE"; do
   # 스킬 디렉터리를 `<스킬 디렉터리>` 로 가리키므로 경로가 아니라 부르는 모양(`bash … evidence.sh <조각>`)을 찾는다
   grep -qE 'bash .*evidence\.sh <' "$f" && ok "$name 이 evidence.sh 를 부른다" || bad "$name 이 evidence.sh 를 부른다"
   # 부르는 모양만 보면 없는 디렉터리의 evidence.sh 를 불러도 통과한다. `<스킬 디렉터리>` 는 그 스킬의 디렉터리이므로
-  # 킷의 스킬 디렉터리로 바꿔 그 경로에 파일이 있는지 본다. `.claude/…` 로 적지 않은 이 줄은 installed-docs 가 보지 않는다
+  # 킷의 스킬 디렉터리로 바꿔 그 경로에 파일이 있는지 본다. 스킬이 부르는 줄은 `.claude/…` 경로로 적지 않아
+  # installed-docs 가 보지 않는다
   dir="$KIT/claude-code/skills/$name"
   paths=$(grep -ohE 'bash <스킬 디렉터리>/[^ ]*evidence\.sh' "$dir"/*.md | sed 's/^bash <스킬 디렉터리>//' | sort -u)
   if [ -z "$paths" ]; then bad "$name 이 <스킬 디렉터리> 아래의 evidence.sh 를 부르지 않는다"
