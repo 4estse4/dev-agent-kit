@@ -238,7 +238,8 @@ for f in "$OPEN" "$MERGE"; do
   if tr '\n' ' ' < "$f" | grep -qE '출력을? *그대로 *붙인다|게이트 *출력을 *붙인다|출력은 *(\*\*)?그대로(\*\*)? *옮긴다'; then
     bad "$name 이 출력을 손으로 붙이라고 시킨다"
   else ok "$name 이 출력을 손으로 붙이라고 시키지 않는다"; fi
-  grep -q 'open-pr/evidence\.sh' "$f" && ok "$name 이 evidence.sh 를 부른다" || bad "$name 이 evidence.sh 를 부른다"
+  # 스킬 디렉터리를 `<스킬 디렉터리>` 로 가리키므로 경로가 아니라 부르는 모양(`bash … evidence.sh <조각>`)을 찾는다
+  grep -qE 'bash .*evidence\.sh <' "$f" && ok "$name 이 evidence.sh 를 부른다" || bad "$name 이 evidence.sh 를 부른다"
   # 거부된 뒤 할 일을 스킬이 말한다. 없으면 세션은 직접 실행해 손으로 옮긴다
   tr '\n' ' ' < "$f" | grep -qE '(글로 *적는다|글로 적는다)' && ok "$name 이 거부된 명령 뒤에 할 일을 말한다" \
     || bad "$name 이 거부된 명령 뒤에 할 일을 말한다"

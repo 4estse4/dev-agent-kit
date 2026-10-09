@@ -47,9 +47,9 @@ delete head branches」가 지우고, 4절은 머지 뒤 다음 작업을 시작
 **이 코멘트도 `open-pr` 2절의 본문처럼 조각 파일로 만든다.** 글은 `Write` 로 쓰고, 명령
 출력(2절의 커밋 나열 · 아래 닫히는 이슈 줄 · 본문 검증을 다시 실행한 값)은 `evidence.sh` 가
 덧붙인다. 조각을 `awk 1` 로 이은 파일이 위 `--body-file` 의 경로다. 거부된 명령은 `open-pr`
-2절대로 출력 대신 확인한 것을 글로 적는다:
+2절대로 출력 대신 확인한 것을 글로 적는다. `<스킬 디렉터리>` 는 `SKILL.md` 의 「꼭 지킬 것」이 적은 경로다:
 
-    bash .claude/skills/open-pr/evidence.sh <디렉터리>/<NN-이름>.part <<'CMD'
+    bash <스킬 디렉터리>/../open-pr/evidence.sh <디렉터리>/<NN-이름>.part <<'CMD'
     <명령>
     CMD
 
