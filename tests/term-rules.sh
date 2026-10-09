@@ -5,7 +5,8 @@
 # **바꿀 말은 검사가 정하지 않는다.** 한 낱말도 자리마다 뜻이 다르므로 찾아서 알리기만 한다.
 #
 # - 대상은 추적 파일 전부다. `docs/dev-log.md` 와 `tests/fixtures/` 는 그때의 기록이라 빼고,
-#   이 파일은 찾는 말을 적어 두므로 뺀다
+#   이 파일은 찾는 말을 검색식 · 목록에 글자로 적어 두므로 주석만 본다. 설명 주석에는 금지 낱말을 예로
+#   적지 않고 꼴로 쓴다(이슈 #201)
 # - 줄바꿈과 줄 머리의 `>` · `#` 를 공백으로 바꿔 한 줄로 이은 뒤 찾는다. 낱말 사이에서 줄이
 #   바뀐 자리도 검색 결과에 나온다. 찾은 자리는 원래 파일의 줄 번호로 모두 출력한다
 # - `ALLOW` 의 글자를 먼저 지운 뒤 찾는다. 글자 그대로 일치하는 것만 허용한다. 「」 안에 쓴
@@ -301,7 +302,21 @@ MUST_PASS = [
     # 바꿀 말로 쓰는 말
     '알리지 않고 건너뛴다', '알림 없이 빠진다', '우회 변수', '다시 적지 않는다', '고치지 않는다', '무시한다',
 ]
-SKIP = {'docs/dev-log.md', 'tests/term-rules.sh'}
+SKIP = {'docs/dev-log.md'}
+SELF = 'tests/term-rules.sh'
+
+
+def comments(s):
+    """줄 전체가 주석인 줄과 줄 끝 주석(`  # ` 뒤)만 남기고 나머지 줄은 비운다. 줄 수는 그대로 둔다."""
+    out = []
+    for l in s.split('\n'):
+        if l.lstrip().startswith('#'):
+            out.append(l)
+        elif '  # ' in l:
+            out.append(l[l.index('  # '):])
+        else:
+            out.append('')
+    return '\n'.join(out)
 
 
 def flatten(s):
@@ -364,7 +379,8 @@ if not files:
 
 found = []
 for f in files:
-    flat, lines = masked(open(f, encoding='utf-8', errors='replace').read())
+    s = open(f, encoding='utf-8', errors='replace').read()
+    flat, lines = masked(comments(s) if f == SELF else s)
     for name, at, word in find(flat):
         found.append((name, '%s:%d' % (f, lines[at]), word))
 
