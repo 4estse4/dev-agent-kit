@@ -44,7 +44,9 @@ def bad(m):
 
 
 def frontmatter(text):
-    """첫 줄의 `---` 부터 다음 `---` 까지를 `키: 값` 으로 읽는다. 따옴표는 벗긴다. 없으면 None."""
+    """첫 줄의 `---` 부터 다음 `---` 까지를 `키: 값` 으로 읽는다. 따옴표는 벗긴다. 읽지 못하면 None.
+    그 사이에 `키: 값` 도 들여쓴 이어짐도 아닌 줄이 있으면 닫는 줄이 빠진 것으로 본다 — 그대로 읽으면 본문의 `---` 까지가
+    frontmatter 가 되어 검사가 통과한다(닫는 줄을 지워 확인했다)"""
     lines = text.split('\n')
     if not lines or lines[0].strip() != '---':
         return None
@@ -52,12 +54,15 @@ def frontmatter(text):
     for l in lines[1:]:
         if l.strip() == '---':
             return out
+        if not l.strip() or l[0] in ' \t':
+            continue
         m = re.match(r'([A-Za-z_-]+):\s*(.*)$', l)
-        if m:
-            v = m.group(2).strip()
-            if len(v) >= 2 and v[0] == v[-1] and v[0] in '"\'':
-                v = v[1:-1]
-            out[m.group(1)] = v
+        if not m:
+            return None
+        v = m.group(2).strip()
+        if len(v) >= 2 and v[0] == v[-1] and v[0] in '"\'':
+            v = v[1:-1]
+        out[m.group(1)] = v
     return None
 
 
