@@ -217,6 +217,9 @@ if [ -n "$MATCHED" ]; then echo "  ✗ worktree 의 명령 bash $WREL 7 이 allo
 else echo "  ✓ worktree 의 명령 bash $WREL 7 은 settings.json 의 allow 어느 규칙에도 맞지 않는다"; fi
 case "$OUT" in *'권한 프롬프트'*) echo "  ✓ worktree 에서는 그 명령에 권한 프롬프트가 표시된다고 안내한다" ;;
   *) echo "  ✗ worktree 에서 권한 프롬프트가 표시된다는 안내가 없다: $OUT"; fail=1 ;; esac
+# 권한 프롬프트는 권한 모드에 따라 다르다 — auto 모드에서는 사람에게 묻지 않고 분류기가 정한다
+case "$OUT" in *auto*분류기*) echo "  ✓ worktree 의 명령이 auto 모드에서는 분류기를 거친다고 안내한다" ;;
+  *) echo "  ✗ worktree 의 안내가 권한 프롬프트를 모드와 상관없이 단정한다: $OUT"; fail=1 ;; esac
 case "$OUT" in *'사본이 아니'*) echo "  ✗ worktree 의 훅 디렉터리를 「사본이 아니다」로 적는다 — 내용이 다른 파일로도 읽힌다: $OUT"; fail=1 ;;
   *'이 훅이 실행되는 디렉터리가 아니'*) echo "  ✓ worktree 의 훅 디렉터리를 이 훅이 실행되는 디렉터리가 아닌 것으로 적는다" ;;
   *) echo "  ✗ worktree 의 훅 디렉터리가 왜 안 되는지 적지 않는다: $OUT"; fail=1 ;; esac
@@ -226,6 +229,16 @@ PROJ="$WP" HOOK_AT="$WP/.claude/hooks/window_record.sh" \
   ask "$T/wp-sib" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
 case "$OUT" in *"cd $WP_ABS\`"*'`bash .claude/hooks/human_comment.sh 7`'*) echo "  ✓ 프로젝트 밖의 같은 레포 체크아웃이면 프로젝트 루트로 옮겨 올리라고 안내한다" ;;
   *) echo "  ✗ 프로젝트 밖의 같은 레포 체크아웃에서의 안내가 프로젝트 루트를 가리키지 않는다: $OUT"; fail=1 ;; esac
+# 세션을 linked worktree(위 $T/wp-sib)에서 연 경우. Claude Code 는 세션 도중 들어간 worktree 를 원래 체크아웃($WP)의
+# `.claude/worktrees/` 에 둔다 — 프로젝트 루트 밖이다. 셸이 그 worktree 에 있으면 프로젝트 루트로 옮겨도 Claude Code 가
+# cwd 를 되돌리므로, 그 worktree 를 worktree 로 보고 그 자리에서의 경로를 알린다
+WT2="$WP/.claude/worktrees/w2"; git -C "$WP" worktree add -q "$WT2"
+WREL2=$(python3 -c 'import os, sys; print(os.path.relpath(os.path.realpath(sys.argv[1]), os.path.realpath(sys.argv[2])))' "$T/wp-sib/.claude/hooks/human_comment.sh" "$WT2")
+PROJ="$T/wp-sib" HOOK_AT="$T/wp-sib/.claude/hooks/window_record.sh" \
+  ask "$WT2" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
+case "$OUT" in *'cd '*) echo "  ✗ linked worktree 세션의 worktree 에서 프로젝트 루트로 옮기라고 안내한다: $OUT"; fail=1 ;;
+  *"지금 \`bash $WREL2 7\`"*) echo "  ✓ linked worktree 세션이 원래 체크아웃에 만든 worktree 에서도 그 자리에서의 경로를 안내한다: bash $WREL2 7" ;;
+  *) echo "  ✗ linked worktree 세션의 worktree 에서의 안내가 프로젝트의 스크립트를 가리키지 않는다: $OUT"; fail=1 ;; esac
 
 rm -rf "$W"
 ask "$T/bot" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"필수 하나만 고치고 머지하자\"}"

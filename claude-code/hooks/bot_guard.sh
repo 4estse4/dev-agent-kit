@@ -53,8 +53,9 @@
 # 같은 디렉터리의 것이 아니거나(세션이 레포의 하위 디렉터리에서 입력한 경우도 여기 든다 — 경로를 cwd 기준으로
 # 푼다), 셸의 `-c` 인자 안에 두었으면(`wraps`) 막는다(`human_comment`). 세션 도중 worktree 에 들어간 세션은 그
 # worktree 의 `.claude/hooks/` 가 이 훅이 실행되는 디렉터리가 아니라서, worktree 루트에서 이 훅의 스크립트까지의
-# 경로로 부른다. 이 훅은 그 명령을 받지만 설치되는 settings.json 의 allow 와 모양이 달라 그때는 권한 프롬프트가
-# 한 번 표시된다. worktree 로 보는 것은 프로젝트 루트 안에 있고 git 공통 디렉터리가 같은 체크아웃뿐이다.
+# 경로로 부른다. 이 훅은 그 명령을 받지만 설치되는 settings.json 의 allow 와 모양이 달라 그때는 권한 검사를
+# 거친다(default 모드는 권한 프롬프트, auto 모드는 분류기). worktree 로 보는 것은 git 공통 디렉터리가 같고 루트가
+# 프로젝트 루트 안이나 원래 체크아웃의 `.claude` 아래 `worktrees` 에 있는 체크아웃뿐이다.
 #
 # **창 기록 훅을 세션이 직접 실행하면 막는다.** 그 훅에 지어낸 창 결과를 표준입력으로 주면 사람이 고르지 않은
 # 결정이 기록되고, 게시 스크립트는 그 기록을 권한 프롬프트 없이 사람 계정으로 올린다. 사람이 정했다 — 작정한
@@ -372,17 +373,19 @@ def human_comment():
         proj = os.environ.get('CLAUDE_PROJECT_DIR') or None
         ptop = subprocess.run(['git', 'rev-parse', '--show-toplevel'], cwd=proj, capture_output=True, text=True)
         root = os.path.realpath(ptop.stdout.strip())
-        # 셸이 있는 레포가 프로젝트 루트 안의 worktree(git 공통 디렉터리가 같다 — Claude Code 는 세션 도중 들어간
-        # worktree 를 프로젝트의 `.claude` 아래 `worktrees` 에 둔다)면 그 worktree 의 루트에서 입력하게 한다 — 게시
-        # 스크립트가 같은 기록을 보고, 원래 체크아웃으로 옮기면 셸이 worktree 밖으로 나간다. 프로젝트 밖의 체크아웃은
-        # 같은 레포라도 worktree 로 보지 않는다
+        # 셸이 세션 도중 들어간 worktree 에 있으면 그 worktree 의 루트에서 입력하게 한다 — 게시 스크립트가 같은 기록을
+        # 보고, 옮기라고 하면 셸이 worktree 밖으로 나가거나 Claude Code 가 cwd 를 되돌린다. 그런 worktree 는 git 공통
+        # 디렉터리가 프로젝트와 같고, 루트가 프로젝트 루트 안이나 원래 체크아웃(공통 디렉터리의 상위)의 `.claude` 아래
+        # `worktrees` 에 있다 — Claude Code 가 worktree 를 만드는 두 자리다. 그 밖의 같은 레포 체크아웃은 아니다
         def common_of(d):
             r = subprocess.run(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'], cwd=d,
                                capture_output=True, text=True)
             return os.path.realpath(r.stdout.strip()) if r.returncode == 0 else None
         ctop = os.path.realpath(top.stdout.strip())
-        worktree = (ctop.startswith(root + os.sep) and common_of(cwd) is not None
-                    and common_of(cwd) == common_of(proj))
+        pcommon = common_of(proj)
+        worktree = (pcommon is not None and common_of(cwd) == pcommon
+                    and (ctop.startswith(root + os.sep)
+                         or ctop.startswith(os.path.join(os.path.dirname(pcommon), '.claude', 'worktrees') + os.sep)))
         if worktree:
             root = ctop
         rel = os.path.relpath(mine, root)
@@ -391,7 +394,8 @@ def human_comment():
                  "worktree 의 `.claude/hooks/` 는 이 훅이 실행되는 디렉터리가 아니다. worktree 루트(" + root + ")에서 "
                  "`bash " + rel + " <PR 번호> [-R <owner/repo>]` 로 입력한다 — 셸이 그 하위 디렉터리에 있으면 먼저 "
                  "`cd " + root + "` 로 옮긴다(한 줄로 잇지 않는다). 이 명령은 설치되는 settings.json 의 "
-                 "allow(`bash .claude/hooks/human_comment.sh <PR>`)와 모양이 달라 권한 프롬프트가 한 번 표시된다.")
+                 "allow(`bash .claude/hooks/human_comment.sh <PR>`)와 모양이 달라 권한 검사를 거친다 — default "
+                 "모드에서는 권한 프롬프트가 한 번 표시되고 auto 모드에서는 분류기가 정한다.")
         deny("사람 계정으로 올리는 스크립트는 이 훅과 같은 디렉터리의 것만 받는다: " + mine + ". 세션을 연 프로젝트의 "
              "레포 루트(" + root + ")에서 `bash " + rel + " <PR 번호> [-R <owner/repo>]` 로 입력한다 — 셸이 다른 "
              "자리에 있으면 먼저 `cd " + root + "` 로 옮긴다(한 줄로 잇지 않는다). 설치되는 settings.json 의 allow 도 "

@@ -32,10 +32,10 @@
 #
 # **올리는 명령의 안내.** 막기 훅과 설치되는 `settings.json` 의 allow 는 레포 루트에서 입력한
 # `bash .claude/hooks/human_comment.sh <PR>` 만 받고, 게시 스크립트는 셸이 있는 레포에서 기록을 읽는다. 그래서
-# 세션의 셸(`cwd`)이 프로젝트의 레포 루트가 아니면 먼저 그 루트로 옮기라고 적는다. 셸이 있는 레포가 프로젝트의
-# worktree(세션 도중 들어간 worktree — git 공통 디렉터리가 같고 그 루트가 프로젝트 루트 안에 있다)면 옮기라고
-# 하지 않고, 그 worktree 루트에서 이 훅의 스크립트까지의 경로를 적는다. 그 명령은 allow 와 모양이 달라 권한
-# 프롬프트가 한 번 표시되고, 안내에 그것을 적는다.
+# 세션의 셸(`cwd`)이 프로젝트의 레포 루트가 아니면 먼저 그 루트로 옮기라고 적는다. 셸이 세션 도중 들어간
+# worktree 에 있으면(아래 「올릴 자리」) 옮기라고 하지 않고, 그 worktree 루트에서 이 훅의 스크립트까지의 경로를
+# 적는다. 그 명령은 allow 와 모양이 달라 권한 검사를 거치고(default 모드는 권한 프롬프트, auto 모드는 분류기),
+# 안내에 그것을 적는다.
 input=$(cat)
 case "$input" in
   *AskUserQuestion*) ;;
@@ -142,31 +142,36 @@ where = os.path.join(common.stdout.strip(), 'kit-bot', 'windows')
 os.umask(0o077)
 os.makedirs(where, exist_ok=True)
 at = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-# 올릴 자리는 프로젝트의 레포 루트다. 다만 셸이 있는 레포가 프로젝트 루트 안의 worktree(git 공통 디렉터리가
-# 같다 — Claude Code 는 세션 도중 들어간 worktree 를 프로젝트의 `.claude` 아래 `worktrees` 에 둔다)면 그 worktree 의
-# 루트다. 게시 스크립트는 셸이 있는 레포에서 기록을 읽는데 worktree 는 같은 기록을 보고, 원래 체크아웃으로
-# 옮기면 셸이 worktree 밖으로 나가 그 뒤의 명령이 원래 체크아웃에서 실행된다. 프로젝트 밖의 체크아웃은 같은
-# 레포라도 worktree 로 보지 않는다
+# 올릴 자리는 프로젝트의 레포 루트다. 다만 셸이 세션 도중 들어간 worktree 에 있으면 그 worktree 의 루트다.
+# 게시 스크립트는 셸이 있는 레포에서 기록을 읽는데 worktree 는 같은 기록을 보고, 옮기라고 하면 셸이 worktree
+# 밖으로 나가 그 뒤의 명령이 다른 체크아웃에서 실행되거나 Claude Code 가 cwd 를 되돌려 같은 안내가 되풀이된다.
+# 그런 worktree 는 git 공통 디렉터리가 프로젝트와 같고, 루트가 Claude Code 가 worktree 를 만드는 두 자리 가운데
+# 하나에 있다 — 프로젝트 루트 안, 또는 원래 체크아웃(공통 디렉터리의 상위)의 `.claude` 아래 `worktrees`. 세션을
+# linked worktree 에서 열면 Claude Code 는 뒤쪽에 만든다. 그 밖의 같은 레포 체크아웃은 worktree 로 보지 않는다
 post = os.path.realpath(root)
+pcommon = os.path.realpath(common.stdout.strip())
 ctop = subprocess.run(['git', 'rev-parse', '--show-toplevel'], cwd=cwd, capture_output=True, text=True)
 ccommon = subprocess.run(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'], cwd=cwd,
                          capture_output=True, text=True)
+cpath = os.path.realpath(ctop.stdout.strip())
 worktree = (ctop.returncode == 0 and ccommon.returncode == 0
-            and os.path.realpath(ccommon.stdout.strip()) == os.path.realpath(common.stdout.strip())
-            and os.path.realpath(ctop.stdout.strip()).startswith(post + os.sep))
+            and os.path.realpath(ccommon.stdout.strip()) == pcommon
+            and (cpath.startswith(post + os.sep)
+                 or cpath.startswith(os.path.join(os.path.dirname(pcommon), '.claude', 'worktrees') + os.sep)))
 if worktree:
-    post = os.path.realpath(ctop.stdout.strip())
+    post = cpath
 # 둘 다 실제 경로로 바꿔 견준다 — 훅의 자리는 논리 경로이고 git 이 낸 루트는 실제 경로라, 레포 경로에 심링크가
 # 있으면 그대로 견준 상대 경로가 레포 밖을 돌아온다
 script = os.path.relpath(os.path.realpath(os.path.join(here, 'human_comment.sh')), post)
 # 막기 훅은 게시 명령의 경로를 cwd 기준으로 푼다
 move = '' if os.path.realpath(cwd or os.getcwd()) == post else '먼저 `cd %s` 로 옮긴 뒤(한 줄로 잇지 않는다) ' % post
 # worktree 의 `.claude/hooks/` 는 이 훅이 실행되는 디렉터리가 아니라 막기 훅이 받지 않으므로 이 훅의 스크립트까지
-# 경로로 부른다.
-# 그 명령은 설치되는 settings.json 의 allow 와 모양이 달라 권한 프롬프트가 한 번 표시된다
+# 경로로 부른다. 그 명령은 설치되는 settings.json 의 allow 와 모양이 달라 권한 검사를 거친다 — default 모드에서는
+# 권한 프롬프트가 표시되고 auto 모드에서는 분류기가 정한다
 prompt = (' 이 명령은 설치되는 settings.json 의 allow(`bash .claude/hooks/human_comment.sh <PR>`)와 모양이 달라 '
-          '권한 프롬프트가 한 번 표시된다 — 셸이 있는 worktree 의 `.claude/hooks/` 는 이 훅이 실행되는 디렉터리가 '
-          '아니라 막기 훅이 받지 않는다.') if worktree else ''
+          '권한 검사를 거친다 — default 모드에서는 권한 프롬프트가 한 번 표시되고 auto 모드에서는 분류기가 정한다. '
+          '셸이 있는 worktree 의 `.claude/hooks/` 는 이 훅이 실행되는 디렉터리가 아니라 막기 훅이 받지 않는다.'
+          ) if worktree else ''
 notes = []
 for pr, rec in got.items():
     with open(os.path.join(where, pr + '.jsonl'), 'a', encoding='utf-8') as fh:

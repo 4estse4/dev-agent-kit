@@ -452,6 +452,11 @@ GUARD_PROJ="$RW" guard "worktree 의 하위 디렉터리에서 입력한 사람 
 # 같은 레포의 체크아웃이라도 프로젝트 밖에 있으면 worktree 로 보지 않는다 — 프로젝트 루트로 옮기라고 알린다
 git -C "$RW" worktree add -q "$T/rw-sib"; RW_ABS=$(cd "$RW" && pwd -P)
 GUARD_PROJ="$RW" guard "프로젝트 밖의 같은 레포 체크아웃에서 입력한 사람 계정 게시는 프로젝트 루트로 옮기라고 알린다" deny "bash .claude/hooks/human_comment.sh 155" "$T/rw-sib" "cd $RW_ABS\`"
+# 권한 프롬프트는 권한 모드에 따라 다르다 — auto 모드에서는 분류기가 정한다고 알린다
+GUARD_PROJ="$RW" guard "worktree 거절 사유가 auto 모드에서는 분류기를 거친다고 알린다" deny "bash .claude/hooks/human_comment.sh 155" "$RWT" "분류기"
+# 세션을 linked worktree(위 $T/rw-sib)에서 연 경우. Claude Code 는 세션 도중 들어간 worktree 를 원래 체크아웃($RW)의
+# `.claude/worktrees/` 에 둔다 — 프로젝트 루트 밖이다. 그 worktree 도 worktree 로 보고 그 자리에서의 경로를 알린다
+GUARD_PROJ="$T/rw-sib" guard "linked worktree 세션이 원래 체크아웃에 만든 worktree 에서 입력한 사람 계정 게시는 그 자리에서의 경로를 알린다" deny "bash .claude/hooks/human_comment.sh 155" "$RWT" "worktree 루트("
 # 창 기록은 창 기록 훅이 사람이 고른 창에서만 만든다. 세션이 그 훅을 직접 실행하면 지어낸 창 결과로 기록이 생겨
 # 사람이 고르지 않은 결정이 사람 계정으로 올라간다
 W="$H/window_record.sh"
