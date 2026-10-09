@@ -17,9 +17,10 @@
 #     건너뛰면, 그 절이 주입 뒤로 옮겨져도 아래 검사가 알리지 않는다
 #   · `## 꼭 지킬 것` 제목이 첫 `!` 주입보다 앞에 있다. 까닭은 링크와 같다 — 늘 지킬 것이 잘리는 쪽에 놓이지
 #     않게 한다. 이 제목에는 링크가 없어 링크 검사가 지키지 못한다
-#   · frontmatter 에 `description` 이 있고, `description` 과 `when_to_use` 를 합친 길이가 1,536자 아래다. 스킬
+#   · frontmatter 에 `description` 이 있고, `description` 과 `when_to_use` 를 이은 길이가 1,536자 아래다. 스킬
 #     목록에는 그 둘이 이어 붙어 실리고 1,536자에서 잘린다(공식 문서 skills.md: "the combined `description` and
-#     `when_to_use` text is truncated at 1,536 characters in the skill listing"). 잘리면 언제 부르는지가 사라진다
+#     `when_to_use` text is truncated at 1,536 characters in the skill listing"). 잘리면 언제 부르는지가 사라진다.
+#     헤드리스 세션 기록의 스킬 목록은 둘을 ` - ` 로 이었으므로 그 세 글자도 센다
 #   · 보조 파일이 있는 스킬은 `when_to_use` 를 둔다. 긴 절차를 단계마다 나눈 스킬이라, 무엇을 하는지만 적은
 #     `description` 으로는 Claude 가 언제 불러야 하는지를 알 수 없다(이슈 #188 기준 6)
 set -u
@@ -45,25 +46,36 @@ def bad(m):
 
 def frontmatter(text):
     """첫 줄의 `---` 부터 다음 `---` 까지를 `키: 값` 으로 읽는다. 따옴표는 벗긴다. 읽지 못하면 None.
-    그 사이에 `키: 값` 도 들여쓴 이어짐도 아닌 줄이 있으면 닫는 줄이 빠진 것으로 본다 — 그대로 읽으면 본문의 `---` 까지가
-    frontmatter 가 되어 검사가 통과한다(닫는 줄을 지워 확인했다)"""
+    들여쓴 줄은 앞 키의 값에 이어 붙인다 — 건너뛰면 여러 줄로 쓴 값(`>` · `|` 블록, 이어지는 plain 줄)의 길이를
+    세지 못한다. 들여쓰지 않은 `#` 줄은 주석이라 건너뛴다. 그 밖에 `키: 값` 이 아닌 줄이 있으면 닫는 줄이 빠진 것으로
+    본다 — 그대로 읽으면 본문의 `---` 까지가 frontmatter 가 되어 검사가 통과한다(닫는 줄을 지워 확인했다)"""
     lines = text.split('\n')
     if not lines or lines[0].strip() != '---':
         return None
-    out = {}
+    out, key = {}, None
     for l in lines[1:]:
         if l.strip() == '---':
-            return out
-        if not l.strip() or l[0] in ' \t':
+            return {k: unquote(v) for k, v in out.items()}
+        if not l.strip() or l.startswith('#'):
+            continue
+        if l[0] in ' \t':
+            if key is not None:
+                out[key] = (out[key] + ' ' + l.strip()).strip()
             continue
         m = re.match(r'([A-Za-z_-]+):\s*(.*)$', l)
         if not m:
             return None
+        key = m.group(1)
         v = m.group(2).strip()
-        if len(v) >= 2 and v[0] == v[-1] and v[0] in '"\'':
-            v = v[1:-1]
-        out[m.group(1)] = v
+        # 블록 표시(`>` · `|` · `>-` …)는 값이 아니다
+        out[key] = '' if re.fullmatch(r'[>|][-+]?', v) else v
     return None
+
+
+def unquote(v):
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in '"\'':
+        return v[1:-1]
+    return v
 
 
 def problems(d):
@@ -75,9 +87,9 @@ def problems(d):
         fm = {}
     if not fm.get('description'):
         out.append('frontmatter 에 description 이 없다')
-    listed = len(fm.get('description', '')) + len(fm.get('when_to_use', ''))
+    listed = len(' - '.join(v for v in (fm.get('description'), fm.get('when_to_use')) if v))
     if listed >= LISTING:
-        out.append('description 과 when_to_use 를 합쳐 %d자다(%d자 아래여야 스킬 목록에서 잘리지 않는다)' % (listed, LISTING))
+        out.append('description 과 when_to_use 를 이어 %d자다(%d자 아래여야 스킬 목록에서 잘리지 않는다)' % (listed, LISTING))
     n = len(text.splitlines())
     if n >= LIMIT:
         out.append('SKILL.md 가 %d줄이다(%d줄 아래여야 한다)' % (n, LIMIT))
