@@ -11,8 +11,8 @@
 #   가리키는 말로 쓴다(이슈 #201 · PR #202)
 # - 줄바꿈과 줄 머리의 `>` · `#` 를 공백으로 바꿔 한 줄로 이은 뒤 찾는다. 낱말 사이에서 줄이
 #   바뀐 자리도 검색 결과에 나온다. 찾은 자리는 원래 파일의 줄 번호로 모두 출력한다
-# - `ALLOW` 의 글자를 먼저 지운 뒤 찾는다. 글자 그대로 일치하는 것만 허용한다. 「」 안에 쓴
-#   낱말은 규칙에 적은 이름 그대로인 꼴만 허용하고, 같은 낱말이라도 활용한 꼴은 허용하지 않는다
+# - `ALLOW` 의 글자를 먼저 지운 뒤 찾는다. 글자 그대로 일치하는 것만 허용한다. 「」 안에 쓴 규칙 이름(`NAMES`)은
+#   킷 `CLAUDE.md` 에서만 지운다. 규칙에 적은 이름 그대로인 꼴만 허용하고, 같은 낱말이라도 활용한 꼴은 허용하지 않는다
 #
 # 찾는 방식이 둘이다.
 #
@@ -49,7 +49,8 @@
 # `MISSED` 에 문장으로 있다.
 #
 # **검색식을 먼저 검사한다.** `MUST_FIND` 는 찾아야 하는 문장, `MUST_PASS` 는 찾으면 안 되는 문장,
-# `MISSED` 는 못 찾는 꼴의 문장이다. 검색식이 지금까지 놓친 꼴은 전부 `MUST_FIND` 에 넣는다. 셋 중 하나라도
+# `MISSED` 는 못 찾는 꼴의 문장, `NAMED_ELSEWHERE` 는 킷 `CLAUDE.md` 밖의 파일에서 찾아야 하는 규칙 이름이다.
+# 검색식이 지금까지 놓친 꼴은 전부 `MUST_FIND` 에 넣는다. 넷 중 하나라도
 # 맞지 않으면 파일을 훑지 않고 실패한다 — 검색식이 틀렸으면 파일에서 찾은 결과를 믿을 수 없다. 검색식을 고쳐
 # `MISSED` 의 문장을 찾게 되면 그 문장을 `MUST_FIND` 로 옮긴다 — `MISSED` 에는 검사가 실제로 못 찾는 꼴만
 # 둔다.
@@ -144,7 +145,11 @@ ALLOW = [
     '「고르라고 미는 보기」',
     # 옛 기록의 제목을 옮긴 인용이다(ADR-0003)
     '「vendor 체크섬 드리프트 검출」',
-    # 규칙을 설명하려고 「」 안에 쓴 낱말 자체
+]
+# 킷 `CLAUDE.md` 「언어」 절의 금지 목록이 규칙을 가리키려고 「」 안에 쓴 낱말 자체. 그 파일에서만 지운다 — 다른 파일은
+# 규칙 이름을 쓰지 않고 가리키는 말로 쓴다(PR #202)
+NAMES_FILE = 'CLAUDE.md'
+NAMES = [
     '「지적」', '「서다」', '「세우다」', '「받치다」', '「재다」', '「실측」',
     '「깔다」', '「뚫리다」', '「돌다 · 돌리다」', '「치다」', '「뜨다」', '「권하다」', '「권고」',
     '「넘기다」', '「넘어가다」', '「잡다」', '「걸다 · 걸리다」',
@@ -332,6 +337,11 @@ MISSED = [
     # 앞에 한글이 붙은 꼴 — 앞에 한글이 오면 다른 낱말의 가운데로 보고 찾지 않는다
     '새빨간 결과',
 ]
+# 킷 `CLAUDE.md` 밖의 파일에 「」로 적은 규칙 이름. 규칙 이름은 그 파일의 금지 목록에서만 허용하므로 다른 파일에서는
+# 찾는다(PR #202 4라운드)
+NAMED_ELSEWHERE = [
+    ('깔다', '검사에 「깔다」를 더했다'), ('빨갛다 · 초록', '「빨갛다 · 초록」을 찾는다'), ('권하다', '「권고」 대신 쓴다'),
+]
 SKIP = {'docs/dev-log.md'}
 SELF = 'tests/term-rules.sh'
 
@@ -379,9 +389,9 @@ def find(flat):
     return hits
 
 
-def masked(s):
+def masked(s, f):
     flat, lines = flatten(s)
-    for a in ALLOW:
+    for a in ALLOW + (NAMES if f == NAMES_FILE else []):
         flat = flat.replace(a, ' ' * len(a))
     return flat, lines
 
@@ -391,14 +401,17 @@ for name, text in MUST_FIND:
     if not any(n == name for n, _, _ in find(flatten(text)[0])):
         bad.append('「%s」 검색식이 이 문장을 못 찾는다: %r' % (name, text))
 for text in MUST_PASS:
-    got = find(masked(text)[0])
+    got = find(masked(text, NAMES_FILE)[0])
     if got:
         bad.append('이 문장은 찾으면 안 되는데 「%s」 검색식이 「%s」를 찾았다: %r' % (got[0][0], got[0][2], text))
 for text in MISSED:
-    got = find(masked(text)[0])
+    got = find(masked(text, NAMES_FILE)[0])
     if got:
         bad.append('「%s」 검색식이 이제 이 문장의 「%s」를 찾는다 — `MISSED` 에서 빼고 `MUST_FIND` 로 옮긴다: %r'
                    % (got[0][0], got[0][2], text))
+for name, text in NAMED_ELSEWHERE:
+    if not any(n == name for n, _, _ in find(masked(text, 'docs/adr/0000-example.md')[0])):
+        bad.append('「%s」 규칙 이름을 킷 `CLAUDE.md` 밖의 파일에서 허용했다: %r' % (name, text))
 if bad:
     for b in bad:
         print('  ✗ ' + b)
@@ -416,7 +429,7 @@ found = []
 for f in files:
     s = open(f, encoding='utf-8', errors='replace').read()
     # 이 파일의 주석에는 `ALLOW` 를 적용하지 않는다. 규칙 이름(「」)으로도 금지 낱말을 쓰지 않는다
-    flat, lines = flatten(comments(s)) if f == SELF else masked(s)
+    flat, lines = flatten(comments(s)) if f == SELF else masked(s, f)
     for name, at, word in find(flat):
         found.append((name, '%s:%d' % (f, lines[at]), word))
 
@@ -428,5 +441,5 @@ if found:
     print('    %d자리. 바꿀 말은 자리마다 뜻대로 정한다. 규칙은 CLAUDE.md 의 「언어」 절에 있다' % len(found))
     sys.exit(1)
 print('  ✓ 쓰지 않기로 한 낱말이 없다(검색식 %d개 · 자체 검사 %d문장 · 파일 %d개)'
-      % (len(names), len(MUST_FIND) + len(MUST_PASS) + len(MISSED), len(files)))
+      % (len(names), len(MUST_FIND) + len(MUST_PASS) + len(MISSED) + len(NAMED_ELSEWHERE), len(files)))
 PY
