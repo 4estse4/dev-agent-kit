@@ -12,12 +12,11 @@
 #   · `SKILL.md` 의 상대 링크가 첫 `!` 주입보다 앞에 있다. 컴팩션 뒤 다시 붙는 내용은 앞에서부터 남고 뒤가
 #     잘린다(나누기 전 `open-pr` 은 헤드리스 세션에서 3.4 한가운데서 잘렸다). 주입 출력은 실행마다 길이가 달라,
 #     링크가 주입 뒤에 있으면 출력이 길 때 어느 파일을 읽을지가 잘리는 쪽에 놓인다
-#   · `SKILL.md` 에 `## 꼭 지킬 것` 제목이 있으면 그 제목이 첫 `!` 주입보다 앞에 있다. 까닭은 바로 위와 같다 —
-#     늘 지킬 것이 잘리는 쪽에 놓이지 않게 한다. 이 제목에는 링크가 없어 위 검사가 지키지 못한다. 제목이 없는
-#     스킬은 건너뛴다
-#
-# 아직 나누지 않은 스킬은 `PENDING` 에 두고 건너뛴다. 목록에 있는 스킬이 위 검사를 이미 통과하면 빨갛다 — 목록에서
-# 지운다. 목록이 나눈 스킬까지 덮으면 그 스킬이 다시 길어져도 이 테스트가 알리지 않는다.
+#   · 보조 파일이 있는 스킬은 `SKILL.md` 에 `## 꼭 지킬 것` 제목을 둔다. 보조 파일이 없는 짧은 스킬은 이 검사를
+#     건너뛴다. 제목을 글자로 찾으므로 이름이나 수준을 바꾸면 빨갛다 — 바꾼 제목을 「제목이 없는 스킬」로 보고
+#     건너뛰면, 그 절이 주입 뒤로 옮겨져도 아래 검사가 알리지 않는다
+#   · `## 꼭 지킬 것` 제목이 첫 `!` 주입보다 앞에 있다. 까닭은 링크와 같다 — 늘 지킬 것이 잘리는 쪽에 놓이지
+#     않게 한다. 이 제목에는 링크가 없어 링크 검사가 지키지 못한다
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$KIT" || exit 1
@@ -25,7 +24,6 @@ python3 - <<'PY'
 import glob, os, re, sys
 
 LIMIT = 500
-PENDING = {'merge-pr'}
 fail = 0
 
 
@@ -56,12 +54,24 @@ def problems(d):
         links.add(os.path.normpath(target))
         if not os.path.isfile(os.path.join(d, target)):
             out.append('SKILL.md 가 가리키는 %s 가 없다' % target)
-    for f in sorted(glob.glob(os.path.join(d, '**', '*.md'), recursive=True)):
-        rel = os.path.relpath(f, d)
-        if rel != 'SKILL.md' and rel not in links:
+    support = [os.path.relpath(f, d) for f in sorted(glob.glob(os.path.join(d, '**', '*.md'), recursive=True))]
+    support = [rel for rel in support if rel != 'SKILL.md']
+    for rel in support:
+        if rel not in links:
             out.append('%s 를 SKILL.md 가 가리키지 않는다' % rel)
     lines = text.split('\n')
     inj = next((i for i, l in enumerate(lines) if l.startswith('!`')), None)
+    head, fence = None, False
+    for i, l in enumerate(lines):
+        if l.startswith('```'):
+            fence = not fence
+        elif not fence and l.rstrip() == '## 꼭 지킬 것':
+            head = i
+            break
+    if support and head is None:
+        out.append('보조 파일이 있는데 SKILL.md 에 「## 꼭 지킬 것」 제목이 없다')
+    if inj is not None and head is not None and head > inj:
+        out.append('SKILL.md %d줄의 「꼭 지킬 것」이 첫 주입(%d줄)보다 뒤에 있다' % (head + 1, inj + 1))
     if inj is not None:
         fence = False
         for i, l in enumerate(lines):
@@ -74,14 +84,6 @@ def problems(d):
                 target = m.group(1).split('#', 1)[0]
                 if target and not re.match(r'[a-z]+:', target):
                     out.append('SKILL.md %d줄의 링크 %s 가 첫 주입(%d줄)보다 뒤에 있다' % (i + 1, target, inj + 1))
-        fence = False
-        for i, l in enumerate(lines):
-            if l.startswith('```'):
-                fence = not fence
-            elif not fence and l.rstrip() == '## 꼭 지킬 것':
-                if i > inj:
-                    out.append('SKILL.md %d줄의 「꼭 지킬 것」이 첫 주입(%d줄)보다 뒤에 있다' % (i + 1, inj + 1))
-                break
     return out
 
 
@@ -89,18 +91,10 @@ dirs = sorted(os.path.dirname(p) for p in glob.glob('claude-code/skills/*/SKILL.
 if not dirs:
     bad('claude-code/skills/*/SKILL.md 에 해당하는 파일이 없다 — 경로가 바뀌었나')
     sys.exit(1)
-names = {os.path.basename(d) for d in dirs}
-for p in sorted(PENDING - names):
-    bad('PENDING 의 %s 스킬이 없다 — 목록에서 지운다' % p)
 for d in dirs:
     name = os.path.basename(d)
     got = problems(d)
-    if name in PENDING:
-        if got:
-            ok('%s 는 아직 나누지 않아 건너뛴다 — %s' % (name, got[0]))
-        else:
-            bad('%s 는 PENDING 에 있는데 이미 통과한다 — 목록에서 지운다' % name)
-    elif got:
+    if got:
         for g in got:
             bad('%s: %s' % (name, g))
     else:

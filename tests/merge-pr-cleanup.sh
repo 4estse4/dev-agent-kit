@@ -27,9 +27,11 @@
 # 스킬의 결함이 아니라 setup 실패로 보고한다.
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
-SK="$KIT/claude-code/skills/merge-pr/SKILL.md"
-SET="$KIT/claude-code/settings.json"
 T=$(mktemp -d)
+# 스킬은 `SKILL.md` 와 보조 파일로 나뉘므로 스킬 디렉터리의 `.md` 를 모두 이어 읽는다
+SK="$T/merge-pr.md"
+awk 1 "$KIT"/claude-code/skills/merge-pr/*.md > "$SK"
+SET="$KIT/claude-code/settings.json"
 fail=0
 ok() { echo "  ✓ $1"; }
 bad() { echo "  ✗ $1"; fail=1; }
