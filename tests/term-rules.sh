@@ -49,7 +49,7 @@
 # `MISSED` 에 문장으로 있다.
 #
 # **검색식을 먼저 검사한다.** `MUST_FIND` 는 찾아야 하는 문장, `MUST_PASS` 는 찾으면 안 되는 문장,
-# `MISSED` 는 못 찾는 꼴의 문장, `NAMED_ELSEWHERE` 는 킷 `CLAUDE.md` 밖의 파일에서 찾아야 하는 규칙 이름이다.
+# `MISSED` 는 못 찾는 꼴의 문장이고, `NAMES` 의 규칙 이름은 킷 `CLAUDE.md` 밖의 파일에서 모두 찾아야 한다.
 # 검색식이 지금까지 놓친 꼴은 전부 `MUST_FIND` 에 넣는다. 넷 중 하나라도
 # 맞지 않으면 파일을 훑지 않고 실패한다 — 검색식이 틀렸으면 파일에서 찾은 결과를 믿을 수 없다. 검색식을 고쳐
 # `MISSED` 의 문장을 찾게 되면 그 문장을 `MUST_FIND` 로 옮긴다 — `MISSED` 에는 검사가 실제로 못 찾는 꼴만
@@ -337,11 +337,6 @@ MISSED = [
     # 앞에 한글이 붙은 꼴 — 앞에 한글이 오면 다른 낱말의 가운데로 보고 찾지 않는다
     '새빨간 결과',
 ]
-# 킷 `CLAUDE.md` 밖의 파일에 「」로 적은 규칙 이름. 규칙 이름은 그 파일의 금지 목록에서만 허용하므로 다른 파일에서는
-# 찾는다(PR #202 4라운드)
-NAMED_ELSEWHERE = [
-    ('깔다', '검사에 「깔다」를 더했다'), ('빨갛다 · 초록', '「빨갛다 · 초록」을 찾는다'), ('권하다', '「권고」 대신 쓴다'),
-]
 SKIP = {'docs/dev-log.md'}
 SELF = 'tests/term-rules.sh'
 
@@ -409,9 +404,19 @@ for text in MISSED:
     if got:
         bad.append('「%s」 검색식이 이제 이 문장의 「%s」를 찾는다 — `MISSED` 에서 빼고 `MUST_FIND` 로 옮긴다: %r'
                    % (got[0][0], got[0][2], text))
-for name, text in NAMED_ELSEWHERE:
-    if not any(n == name for n, _, _ in find(masked(text, 'docs/adr/0000-example.md')[0])):
-        bad.append('「%s」 규칙 이름을 킷 `CLAUDE.md` 밖의 파일에서 허용했다: %r' % (name, text))
+# 규칙 이름은 킷 `CLAUDE.md` 밖의 파일에서 모두 찾아야 한다. 손으로 고른 몇 개가 아니라 `NAMES` 의 항목마다 본다.
+# 규칙 이름을 `ALLOW` 에 두면 모든 파일에서 지워지므로, `ALLOW` 에 「」 하나로 된 규칙 이름이 있으면 실패한다
+# (PR #202 4 · 5라운드). 「」 안이 규칙 이름이나 그 이름을 ` · ` 로 나눈 낱말과 같거나, 검사가 그 글자 전체를 금지 낱말로 찾으면
+# 규칙 이름으로 본다 — 사람 인용 · 옛 제목은 낱말 하나가 아니라 문장이라 여기 들지 않는다
+labels = [n for n, _ in PATTERNS] + [n for n, _ in WORDS]
+parts = {p for n in labels for p in [n] + n.split(' · ')}
+for a in NAMES:
+    if not find(masked(a, 'docs/adr/0000-example.md')[0]):
+        bad.append('킷 `CLAUDE.md` 밖의 파일에서 이 규칙 이름을 허용했다: %s' % a)
+for a in ALLOW:
+    inner = re.fullmatch(r'「([^「」]*)」', a)
+    if inner and (inner.group(1) in parts or any(w == inner.group(1) for _, _, w in find(inner.group(1)))):
+        bad.append('`ALLOW` 에 규칙 이름이 있다 — 모든 파일에서 지워지므로 `NAMES` 에 둔다: %s' % a)
 if bad:
     for b in bad:
         print('  ✗ ' + b)
@@ -441,5 +446,5 @@ if found:
     print('    %d자리. 바꿀 말은 자리마다 뜻대로 정한다. 규칙은 CLAUDE.md 의 「언어」 절에 있다' % len(found))
     sys.exit(1)
 print('  ✓ 쓰지 않기로 한 낱말이 없다(검색식 %d개 · 자체 검사 %d문장 · 파일 %d개)'
-      % (len(names), len(MUST_FIND) + len(MUST_PASS) + len(MISSED) + len(NAMED_ELSEWHERE), len(files)))
+      % (len(names), len(MUST_FIND) + len(MUST_PASS) + len(MISSED) + len(NAMES), len(files)))
 PY
