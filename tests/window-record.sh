@@ -239,6 +239,14 @@ PROJ="$T/wp-sib" HOOK_AT="$T/wp-sib/.claude/hooks/window_record.sh" \
 case "$OUT" in *'cd '*) echo "  ✗ linked worktree 세션의 worktree 에서 프로젝트 루트로 옮기라고 안내한다: $OUT"; fail=1 ;;
   *"지금 \`bash $WREL2 7\`"*) echo "  ✓ linked worktree 세션이 원래 체크아웃에 만든 worktree 에서도 그 자리에서의 경로를 안내한다: bash $WREL2 7" ;;
   *) echo "  ✗ linked worktree 세션의 worktree 에서의 안내가 프로젝트의 스크립트를 가리키지 않는다: $OUT"; fail=1 ;; esac
+# 세션을 `claude -w` 로 연 경우. 프로젝트 루트 자체가 원래 체크아웃의 `.claude/worktrees/<이름>` 이다. 셸이 그 프로젝트
+# 루트에 있으면 worktree 가 아니라 프로젝트 루트다 — allow 와 같은 명령을 알리고 권한 검사 문구를 붙이지 않는다
+WT3="$WP/.claude/worktrees/w3"; git -C "$WP" worktree add -q "$WT3"
+PROJ="$WT3" HOOK_AT="$WT3/.claude/hooks/window_record.sh" \
+  ask "$WT3" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
+case "$OUT" in *'권한 검사'*|*'분류기'*) echo "  ✗ claude -w 세션의 프로젝트 루트에서 allow 의 명령에 권한 검사 문구를 붙인다: $OUT"; fail=1 ;;
+  *'지금 `bash .claude/hooks/human_comment.sh 7`'*) echo "  ✓ claude -w 세션의 프로젝트 루트에서는 allow 의 명령을 권한 검사 문구 없이 안내한다" ;;
+  *) echo "  ✗ claude -w 세션의 프로젝트 루트에서의 안내가 allow 의 명령이 아니다: $OUT"; fail=1 ;; esac
 
 rm -rf "$W"
 ask "$T/bot" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"필수 하나만 고치고 머지하자\"}"

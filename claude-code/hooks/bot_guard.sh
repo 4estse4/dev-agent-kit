@@ -383,7 +383,8 @@ def human_comment():
             return os.path.realpath(r.stdout.strip()) if r.returncode == 0 else None
         ctop = os.path.realpath(top.stdout.strip())
         pcommon = common_of(proj)
-        worktree = (pcommon is not None and common_of(cwd) == pcommon
+        # 프로젝트 루트 자체는 worktree 가 아니다 — `claude -w` 로 연 세션은 프로젝트 루트가 원래 체크아웃의 그 자리에 있다
+        worktree = (pcommon is not None and common_of(cwd) == pcommon and ctop != root
                     and (ctop.startswith(root + os.sep)
                          or ctop.startswith(os.path.join(os.path.dirname(pcommon), '.claude', 'worktrees') + os.sep)))
         if worktree:

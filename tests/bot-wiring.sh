@@ -105,7 +105,7 @@ guard() {
     "hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": sys.argv[2]}}))' "$dir" "$cmd")
   : > "$T/curl-log"
   out=$(printf '%s' "$input" | HOME="$T/home" PATH="$T/bin:$PATH" STUB_CURL_LOG="$T/curl-log" \
-    CLAUDE_PROJECT_DIR="${GUARD_PROJ:-$R}" bash "$H/bot_guard.sh" 2>&1)
+    CLAUDE_PROJECT_DIR="${GUARD_PROJ:-$R}" bash "${GUARD_HOOKS:-$H}/bot_guard.sh" 2>&1)
   case "$out" in
     *'"permissionDecision": "deny"'*) got=deny ;;
     *'"permissionDecision": "ask"'*) got=ask ;;
@@ -457,6 +457,13 @@ GUARD_PROJ="$RW" guard "worktree 거절 사유가 auto 모드에서는 분류기
 # 세션을 linked worktree(위 $T/rw-sib)에서 연 경우. Claude Code 는 세션 도중 들어간 worktree 를 원래 체크아웃($RW)의
 # `.claude/worktrees/` 에 둔다 — 프로젝트 루트 밖이다. 그 worktree 도 worktree 로 보고 그 자리에서의 경로를 알린다
 GUARD_PROJ="$T/rw-sib" guard "linked worktree 세션이 원래 체크아웃에 만든 worktree 에서 입력한 사람 계정 게시는 그 자리에서의 경로를 알린다" deny "bash .claude/hooks/human_comment.sh 155" "$RWT" "worktree 루트("
+# 세션을 `claude -w` 로 연 경우. 프로젝트 루트 자체가 원래 체크아웃의 `.claude/worktrees/<이름>` 이고 훅도 그 자리의 것이다.
+# 그 프로젝트 루트에서 입력한 allow 의 명령은 통과하고, 하위 디렉터리에서 입력하면 worktree 가 아니라 프로젝트 루트의
+# 사유(옮길 자리와 allow 의 모양)를 낸다
+RWT3="$RW/.claude/worktrees/w3"; git -C "$RW" worktree add -q "$RWT3"
+mkdir -p "$RWT3/.claude/hooks" "$RWT3/sub"; cp "$H"/*.sh "$H"/*.py "$RWT3/.claude/hooks/"
+GUARD_PROJ="$RWT3" GUARD_HOOKS="$RWT3/.claude/hooks" guard "claude -w 세션의 프로젝트 루트에서 입력한 사람 계정 게시" pass "bash .claude/hooks/human_comment.sh 155" "$RWT3"
+GUARD_PROJ="$RWT3" GUARD_HOOKS="$RWT3/.claude/hooks" guard "claude -w 세션의 하위 디렉터리에서 입력한 사람 계정 게시는 프로젝트 루트의 사유를 낸다" deny "bash .claude/hooks/human_comment.sh 155" "$RWT3/sub" "세션을 연 프로젝트의 레포 루트("
 # 창 기록은 창 기록 훅이 사람이 고른 창에서만 만든다. 세션이 그 훅을 직접 실행하면 지어낸 창 결과로 기록이 생겨
 # 사람이 고르지 않은 결정이 사람 계정으로 올라간다
 W="$H/window_record.sh"

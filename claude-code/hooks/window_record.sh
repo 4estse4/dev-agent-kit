@@ -154,8 +154,9 @@ ctop = subprocess.run(['git', 'rev-parse', '--show-toplevel'], cwd=cwd, capture_
 ccommon = subprocess.run(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'], cwd=cwd,
                          capture_output=True, text=True)
 cpath = os.path.realpath(ctop.stdout.strip())
+# 프로젝트 루트 자체는 worktree 가 아니다 — `claude -w` 로 연 세션은 프로젝트 루트가 원래 체크아웃의 그 자리에 있다
 worktree = (ctop.returncode == 0 and ccommon.returncode == 0
-            and os.path.realpath(ccommon.stdout.strip()) == pcommon
+            and os.path.realpath(ccommon.stdout.strip()) == pcommon and cpath != post
             and (cpath.startswith(post + os.sep)
                  or cpath.startswith(os.path.join(os.path.dirname(pcommon), '.claude', 'worktrees') + os.sep)))
 if worktree:
