@@ -125,7 +125,7 @@ version … used to build golangci-lint is lower than the targeted Go version」
 같은 낱말을 쓰므로 두 출력을 그대로 견줄 수 있다.
 그 트리는 남으므로 **거기서 직접 병합하면 된다.**
 
-`.kit/**` 와 `.claude/**`(`settings.json` 은 빼고), `docs/process/**` 는 킷 소유라
+`.kit/**` 와 킷이 `.claude/` 에 놓는 파일(`settings.json` 은 빼고), `docs/process/**` 는 킷 소유라
 **재설치가 덮어쓴다** — 여기 손댄 것은 다음 설치에서 사라진다. 고칠 것이 있으면 킷 레포에
 이슈나 PR 로 올려라. `CLAUDE.md`·`.claude/settings.json`·CI·린터 설정과 템플릿으로 놓는 `docs/` 문서 · PR
 템플릿은 **프로젝트 소유**라 건드리지 않는다 — 킷의 것과 다르면 킷의 것을 `<파일>.kit-new` 로 옆에 두고,

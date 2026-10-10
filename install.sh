@@ -9,7 +9,7 @@
 #
 #   <kit>/install.sh <경로> --dry-run    아무것도 바꾸지 않고 무엇이 달라질지만 본다
 #
-# 킷 소유는 .kit/** 와 .claude/**(settings.json 은 빼고) 와 docs/process/** 다 —
+# 킷 소유는 .kit/** 와, 킷이 .claude/ 에 놓는 파일(settings.json 은 빼고)과 docs/process/** 다 —
 # 재설치가 **덮어쓴다.** 프로젝트 소유는 CLAUDE.md · .claude/settings.json · CI · 린터 설정과,
 # 템플릿으로 놓는 docs/ 문서(SPEC · dev-log 등) · PR 템플릿이다. 이미 있으면 건드리지 않고 내용이
 # 다르면 .kit-new 로 옆에 둔다. **자동 병합은 하지 않는다** — 합치는 것은 사람·에이전트가 한다.
@@ -437,7 +437,7 @@ if [ "$DO_AGENT" = 1 ]; then
     rel=${f#"$cc"/}
     [ "$rel" = "README.md" ] && continue
     # settings.json 만 프로젝트 소유다 — 그 안에 프로젝트의 permissions 와 훅 등록이
-    # 있다. 그 밖의 파일(스킬·에이전트·훅 스크립트 · ruff 설정 등)은 킷 소유라 덮어쓴다.
+    # 있다. 그 밖의 파일(스킬·에이전트·훅 스크립트와 훅이 쓰는 hooks/kit/ 등)은 킷 소유라 덮어쓴다.
     if [ "$rel" = "settings.json" ]; then place "$f" ".claude/$rel"
     else                                  replace "$f" ".claude/$rel"; fi
   done < <(find "$cc" -type f)
@@ -627,7 +627,8 @@ dryrun_report() {
     #
     # **여기의 소유 판정은 위 설치 경로와 같아야 한다.** 다르면 dry-run 이 예고한 것과
     # 실제 설치가 어긋나고, 그러면 예고를 읽을 이유가 없어진다. 킷 소유는 .kit 전체,
-    # .claude 에서 settings.json 을 뺀 전부, docs/process 다. .claude 안에서는 settings.json 만 프로젝트 소유다.
+    # 킷이 .claude 에 놓는 파일(settings.json 은 빼고), docs/process 다. 킷이 .claude 에 놓는 것 가운데 settings.json 만
+    # 프로젝트 소유다. 이 판정은 킷이 놓을 파일(임시 트리)에만 하므로 프로젝트가 .claude 에 둔 파일은 여기 오지 않는다.
     elif case "$rel" in
            .kit/*) true ;;
            .claude/settings.json) false ;;
@@ -646,7 +647,7 @@ dryrun_report() {
   # 한 번은 예고 3 / 실제 0, 한 번은 예고 1 / 실제 3(그중 둘은 지우지도 않았다).
   #
   # 삭제가 .kit 에서만 생기는 것도 그 배열이 이미 반영한다. 킷 소유는 그 밖에도 있지만
-  # (.claude 에서 settings.json 을 뺀 전부, docs/process) 그 자리들은 **통째로 비우고 놓는 자리가
+  # (킷이 .claude 에 놓는 파일, docs/process) 그 자리들은 **통째로 비우고 놓는 자리가
   # 아니라 파일 단위로 덮어쓰는 자리**라 애초에 사라지는 것이 없다.
   n_gone=${#DELETED[@]}
   for rel in ${DELETED+"${DELETED[@]}"}; do list_gone="${list_gone}  - $(why_gone "$rel")"$'\n'; done
@@ -654,7 +655,7 @@ dryrun_report() {
   echo "── dry-run: 아무것도 바꾸지 않았습니다 ──"
   echo ""
   echo "지금 설치하면 — 설치 ${n_new} · 교체 ${n_repl} · 보존 ${n_side} · 동일 ${n_same} · 삭제 ${n_gone}"
-  [ -n "$list_repl" ] && { echo ""; echo "교체 — .kit, .claude(settings.json 은 빼고), docs/process 는 킷 소유다"; printf '%s' "$list_repl"; }
+  [ -n "$list_repl" ] && { echo ""; echo "교체 — .kit, 킷이 .claude 에 놓는 파일(settings.json 은 빼고), docs/process 는 킷 소유다"; printf '%s' "$list_repl"; }
   [ -n "$list_side" ] && { echo ""; echo "보존 — 이 레포 것을 두고 킷의 것은 <파일>.kit-new 로 옆에 놓는다"; printf '%s' "$list_side"; }
   [ -n "$list_new" ]  && { echo ""; echo "설치"; printf '%s' "$list_new"; }
   [ -n "$list_gone" ] && { echo ""; echo "삭제 — 재설치가 지운다"; printf '%s' "$list_gone"; }
