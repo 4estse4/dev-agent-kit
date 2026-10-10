@@ -593,6 +593,11 @@ ok "curl 이 기다리는 시간에 끝이 있다" 'grep -qF -- "--max-time" "$T
 printf '2000-01-01T00:00:00Z\n' > "$BOTDIR/expires"
 guard "만료된 토큰으로 판정 스크립트" pass "bash .claude/hooks/human_review.sh approved 1"
 ok "판정 스크립트 앞에서도 토큰을 새로 받는다" 'grep -qF access_tokens "$T/curl-log" && grep -qF 2099 "$BOTDIR/expires"'
+# 「다음 일」 목록 스크립트도 안에서 gh 를 부른다. 오래 쉰 세션에서는 그것이 첫 조회일 수 있고, 그때 토큰이 끝났으면
+# 다시 실행해도 같은 이유로 실패한다.
+printf '2000-01-01T00:00:00Z\n' > "$BOTDIR/expires"
+guard "만료된 토큰으로 「다음 일」 목록" pass "bash .claude/hooks/backlog.sh"
+ok "「다음 일」 목록 앞에서도 토큰을 새로 받는다" 'grep -qF access_tokens "$T/curl-log" && grep -qF 2099 "$BOTDIR/expires"'
 printf '2000-01-01T00:00:00Z\n' > "$BOTDIR/expires"
 guard "만료된 토큰으로 명령 치환 안의 git push" pass "out=\$(git push 2>&1); echo \"\$out\""
 ok "명령 치환 안의 git push 앞에서도 토큰을 새로 받는다" 'grep -qF access_tokens "$T/curl-log" && grep -qF 2099 "$BOTDIR/expires"'
