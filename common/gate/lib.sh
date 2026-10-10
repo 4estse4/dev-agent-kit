@@ -24,8 +24,23 @@ gate_have() { command -v "$1" >/dev/null 2>&1; }
 #   frontend/dist · 빈 node_modules  0개
 #   Go 의 vendor/(go mod vendor 산출) go.mod 0개 · .go 23개
 # 그래서 이름으로 거르는 대상은 **마커가 실제로 들어 있는 것과 VCS 내부**로 한정한다.
-# 나머지는 걸러도 얻는 것이 없고 잃을 것만 있다.
-GATE_PRUNE_DIRS="${KIT_PRUNE_DIRS:-.git node_modules .venv .tox __pycache__}"
+# 나머지는 걸러도 얻는 것이 없고 잃을 것만 있다. 프로젝트는 `.kit/gate.conf` 의 KIT_PRUNE_DIRS 로 목록을 바꾼다(아래).
+#
+# 게이트 설정은 커밋된 `.kit/gate.conf`(게이트 디렉터리의 부모)에서만 읽는다. 환경 변수로 받지 않는다 — 명령 앞에 붙인
+# 값은 커밋에도 리뷰에도 남지 않는데 검사를 줄인다(테스트 플래그 하나 · 건너뛸 디렉터리 이름 하나로). 파일에 커밋에 안
+# 들어간 변경이 있으면 커밋 훅과 푸시 훅이 막는다. 파일은 `키=값` 줄만 읽고 셸로 실행하지 않는다. 같은 키가 여럿이면
+# 마지막 줄을 쓴다.
+GATE_CONF="$(cd "${SELF_DIR:-$(dirname "${BASH_SOURCE[0]:-.}")}/.." 2>/dev/null && pwd -P)/gate.conf"
+gate_conf() { # $1=키 [$2=gate.conf 경로] → 값을 출력한다. 파일이나 키가 없으면 빈 출력
+  local f="${2:-$GATE_CONF}"
+  [ -f "$f" ] || return 0
+  sed -n "s/^$1=//p" "$f" | tail -1
+}
+gate_prune_dirs() { # [$1=gate.conf 경로] → 모듈을 찾을 때 건너뛸 디렉터리 목록
+  local v; v=$(gate_conf KIT_PRUNE_DIRS "${1:-}")
+  printf '%s' "${v:-.git node_modules .venv .tox __pycache__}"
+}
+GATE_PRUNE_DIRS=$(gate_prune_dirs)
 
 # find 에 전달할 prune 표현식을 조립한다. 게이트와 설치기가 같은 함수를 쓴다.
 gate_prune_expr() { # 출력: -name a -o -name b ...  (호출부가 \( \) 로 감싼다)
