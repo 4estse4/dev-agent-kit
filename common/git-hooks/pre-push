@@ -18,7 +18,7 @@ conf_rel="${KIT#"$REPO"/}/gate.conf"
 conf_dirty() {
   [ "$conf_rel" != "$KIT/gate.conf" ] || return 1
   ! git -C "$REPO" diff --quiet HEAD -- "$conf_rel" \
-    || { [ -e "$REPO/$conf_rel" ] && ! git -C "$REPO" ls-files --error-unmatch -- "$conf_rel" >/dev/null 2>&1; }
+    || { [ -e "$REPO/$conf_rel" ] && ! git -C "$REPO" -c core.quotePath=false ls-files --error-unmatch -- "$conf_rel" >/dev/null 2>&1; }
 }
 
 while read -r local_ref local_sha _remote_ref remote_sha; do

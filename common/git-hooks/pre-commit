@@ -126,7 +126,7 @@ fi
 conf_rel="${KIT#"$REPO"/}/gate.conf"
 if [ "$conf_rel" != "$KIT/gate.conf" ]; then
   if ! git -C "$REPO" diff --quiet -- "$conf_rel" \
-     || { [ -e "$REPO/$conf_rel" ] && ! git -C "$REPO" ls-files --error-unmatch -- "$conf_rel" >/dev/null 2>&1; }; then
+     || { [ -e "$REPO/$conf_rel" ] && ! git -C "$REPO" -c core.quotePath=false ls-files --error-unmatch -- "$conf_rel" >/dev/null 2>&1; }; then
     cat >&2 <<MSG
 
 $conf_rel 에 이 커밋에 들어가지 않는 변경이 있습니다. 게이트는 작업 트리의 이 파일을 읽으므로, 그대로 두면 커밋에 남지
