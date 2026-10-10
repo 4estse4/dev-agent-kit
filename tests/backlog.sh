@@ -7,8 +7,11 @@
 #   · `gh issue list` 의 기본 30건에서 잘리지 않고 열린 이슈를 모두 낸다. 받은 수가 한도에 닿으면 실패한다
 #   · 열린 PR 은 닫는 이슈와 본문의 `Refs #N` 만 뺄 번호로 낸다. 본문이 근거로 든 다른 번호는 빼지 않는다 —
 #     빼면 그 PR 이 열려 있는 동안 근거로 든 이슈가 후보에서 빠진다
-#   · PR 이 없는 다른 worktree 의 브랜치는 기본 브랜치에 없는 커밋의 메시지에 나오는 번호를 꼴을 가리지 않고 낸다.
-#     번호가 없으면 브랜치 이름을 그대로 낸다. PR 이 있는 브랜치는 PR 쪽 규칙을 따른다
+#   · PR 이 없는 다른 worktree 의 브랜치는 기본 브랜치에 없는 커밋의 메시지에서 닫는 키워드(Closes · Fixes · Resolves
+#     꼴)나 `Refs` 가 붙은 번호만 뺄 번호로 낸다. 그 밖의 번호는 그 worktree 줄에 근거로 든 번호로 보이고 빼지 않는다 —
+#     빼면 다른 세션이 계획 커밋에서 근거로만 든 이슈가 후보에서 빠진다(이슈 #215). 커밋에 그런 키워드가 하나도 없으면
+#     맡은 이슈를 알 단서가 번호뿐이라 번호를 모두 낸다. 번호가 없으면 브랜치 이름을 그대로 낸다. PR 이 있는 브랜치는
+#     PR 쪽 규칙을 따른다
 #   · 열린 PR 은 없고 팁이 머지되거나 닫힌 PR 의 head 에 든(head 와 같거나 그 조상인) 브랜치는 끝난 일이라 번호를
 #     빼지 않는다. 이름만 같고 팁이 그 head 뒤로 나아간 브랜치는 새 일이라 번호를 뺀다
 #   · 이 스크립트를 실행한 worktree(세션 자신의 일), 기본 브랜치에 없는 커밋이 없는 detach worktree, 기본 브랜치의
@@ -89,6 +92,13 @@ git -C "$T/self" commit -q --allow-empty -m 'work on my own issue (Refs #7)'
 # PR 이 없고 커밋 본문이 닫는 키워드 없이 번호를 말하는 브랜치. 열린 이슈가 아닌 번호도 하나 말한다
 git -C "$T/self" worktree add -q -b feat/a "$T/wt-a" main
 git -C "$T/wt-a" commit -q --allow-empty -m 'fix the hook' -m 'the commit hook blocked every commit (issue #12). like PR #999.'
+# PR 이 없고 커밋이 Refs · 닫는 키워드로 맡은 이슈를 적은 브랜치. 첫 커밋은 이슈 #215 의 계획 커밋 꼴이다 — 본문이
+# 순서의 근거로 다른 번호를 들고 끝에 `Refs` 를 적는다. 닫는 키워드는 대소문자와 콜론이 다른 두 꼴을 둔다
+git -C "$T/self" worktree add -q -b feat/d "$T/wt-d" main
+git -C "$T/wt-d" commit -q --allow-empty -m 'docs(plan): write the order' \
+  -m 'The next-task window ranked #20 first. #21 and #22 follow, since #20 blocks them.' -m 'Refs #23'
+git -C "$T/wt-d" commit -q --allow-empty -m 'fix the gate' -m 'Closes #24'
+git -C "$T/wt-d" commit -q --allow-empty -m 'test the gate' -m 'fixes: #25'
 # PR 이 없고 번호도 없는 브랜치
 git -C "$T/self" worktree add -q -b feat/b "$T/wt-b" main
 git -C "$T/wt-b" commit -q --allow-empty -m 'start something'
@@ -147,8 +157,23 @@ done
 for n in 41 42; do
   has $n && bad "PR 본문이 근거로 든 번호(#$n)를 뺄 번호로 냈다" || ok "PR 본문이 근거로 든 번호(#$n)는 빼지 않는다"
 done
-has 12 && ok "PR 이 없는 worktree 의 커밋 본문이 닫는 키워드 없이 말한 #12 를 뺄 번호로 낸다" \
-  || bad "PR 이 없는 worktree 의 커밋 본문이 말한 #12 가 뺄 번호에 없다"
+has 12 && ok "PR 이 없는 worktree 의 커밋에 닫는 키워드 · Refs 가 없으면 커밋 본문이 말한 #12 를 뺄 번호로 낸다" \
+  || bad "PR 이 없는 worktree 의 커밋에 닫는 키워드 · Refs 가 없는데 커밋 본문이 말한 #12 가 뺄 번호에 없다"
+grep -E 'feat/a' "$T/out" | grep -q '닫는 키워드 · Refs 가 없어' \
+  && ok "닫는 키워드 · Refs 가 없어 번호를 모두 뺀 worktree(feat/a)는 줄에 그 까닭을 적는다" \
+  || bad "닫는 키워드 · Refs 가 없는 worktree(feat/a)의 줄에 까닭이 없다: $(grep -E 'feat/a' "$T/out")"
+for n in 23 24 25; do
+  has $n && ok "PR 이 없는 worktree 의 커밋이 Refs · 닫는 키워드로 적은 번호(#$n)를 뺄 번호로 낸다" \
+    || bad "PR 이 없는 worktree 의 커밋이 Refs · 닫는 키워드로 적은 번호(#$n)가 뺄 번호에 없다"
+done
+for n in 20 21 22; do
+  has $n && bad "PR 이 없는 worktree 의 커밋이 근거로만 든 번호(#$n)를 뺄 번호로 냈다" \
+    || ok "PR 이 없는 worktree 의 커밋이 근거로만 든 번호(#$n)는 빼지 않는다"
+done
+dline=$(grep -E 'feat/d' "$T/out")
+printf '%s\n' "$dline" | grep -q '빼는 번호 #23 #24 #25' && printf '%s\n' "$dline" | grep -q '근거로 든 번호 #20 #21 #22' \
+  && ok "worktree 줄에 빼는 번호와 근거로 든 번호를 나눠 보인다" \
+  || bad "worktree(feat/d) 줄이 빼는 번호와 근거로 든 번호를 나눠 보이지 않는다: $dline"
 has 999 && bad "열린 이슈가 아닌 #999 를 뺄 번호로 냈다" || ok "열린 이슈가 아닌 번호는 뺄 번호로 내지 않는다"
 has 13 && bad "PR 이 있는 브랜치의 커밋이 말한 #13 을 뺄 번호로 냈다" || ok "PR 이 있는 브랜치는 커밋이 아니라 PR 을 따른다"
 has 7 && bad "이 세션 자신의 브랜치가 말한 #7 을 뺄 번호로 냈다" || ok "이 스크립트를 실행한 worktree 는 다른 세션의 일로 내지 않는다"
