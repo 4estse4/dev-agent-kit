@@ -165,9 +165,9 @@ def bad_labels(body):
     return bad
 
 
-# 명령을 읽는 규칙은 콜드 대조 훅(round_comment_cold.sh)과 같이 쓰는 round_comment_cmd.py 에 있다.
+# 명령을 읽는 규칙은 콜드 대조 훅(round_comment_cold.sh)과 같이 쓰는 kit/round_comment_cmd.py 에 있다.
 # 두 훅이 받는 게시 모양이 한 벌이어야 한쪽이 받는 모양이 다른 쪽의 대조를 피해 가지 않는다.
-sys.path.insert(0, os.environ['HOOK_DIR'])
+sys.path.insert(0, os.path.join(os.environ['HOOK_DIR'], 'kit'))
 import round_comment_cmd  # noqa: E402
 
 try:

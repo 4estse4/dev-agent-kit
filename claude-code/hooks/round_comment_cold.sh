@@ -37,8 +37,9 @@ esac
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)" HOOK_INPUT="$input" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
 import json, os, re, subprocess, sys
 
-# 명령을 읽는 규칙은 인용 훅(round_comment_quotes.sh)과 같이 쓰는 round_comment_cmd.py 에 있다.
-sys.path.insert(0, os.environ['HOOK_DIR'])
+# 명령을 읽는 규칙은 인용 훅(round_comment_quotes.sh)과 같이 쓰는 kit/round_comment_cmd.py 에 있다. 킷만 쓰는
+# 하위 디렉터리에 두는 까닭은 그 디렉터리의 ruff.toml 머리에 있다.
+sys.path.insert(0, os.path.join(os.environ['HOOK_DIR'], 'kit'))
 import round_comment_cmd  # noqa: E402
 
 ROUND = re.compile(r'^\s*## 리뷰 ')
