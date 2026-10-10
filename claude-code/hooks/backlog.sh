@@ -10,8 +10,10 @@
 #
 # 다른 세션이 맡은 일은 두 곳에서 알아낸다. 열린 PR 은 닫는 이슈와 본문의 `Refs #N` 만 뺀다 — 본문은 근거로 다른
 # 이슈를 들기도 해서, 다 빼면 그 PR 이 열려 있는 동안 근거로 든 이슈가 후보에서 빠진다. PR 이 없는 다른 worktree 의
-# 브랜치는 기본 브랜치에 없는 커밋의 메시지에 나오는 `#N` 을 꼴을 가리지 않고 모두 뺀다 — PR 이 없으면 커밋
-# 메시지가 유일한 단서이고, 닫는 키워드 없이 번호를 적기도 한다. 번호가 없는 브랜치는 이름을 그대로 낸다.
+# 브랜치도 같다 — 기본 브랜치에 없는 커밋의 메시지에서 닫는 키워드(Closes · Fixes · Resolves 꼴)나 `Refs` 가 붙은
+# 번호만 빼고, 그 밖의 번호는 그 worktree 줄에 근거로 든 번호로 보이기만 한다. 한때 번호를 모두 빼서, 다른 세션이 계획
+# 커밋에서 순서의 근거로만 든 이슈가 후보에서 빠졌다. 커밋에 그런 키워드가 하나도 없으면 맡은 이슈를 알 단서가
+# 번호뿐이라 번호를 모두 뺀다. 번호가 없는 브랜치는 이름을 그대로 낸다.
 #
 # 빼지 않는 것: 열린 PR 은 없고 팁이 머지되거나 닫힌 PR 의 head 에 들어 있는 브랜치는 끝난 일이라 그 커밋의 번호를
 # 빼지 않는다 — 스쿼시 머지에서는 그 커밋이 기본 브랜치의 조상이 되지 않아 「기본 브랜치에 없는 커밋」으로 나온다.
@@ -76,6 +78,16 @@ def nums(text):
     return [int(n) for n in re.findall(r'#(\d+)', text or '')]
 
 
+# `Refs #N` 은 PR 본문과 커밋 메시지에서 같은 식으로 본다. 닫는 키워드는 `merge-pr` 가 스쿼시 커밋의 키워드를 찾는 식과
+# 같다(다른 레포의 `owner/repo#N` 도 번호로 읽는다).
+REFS = r'(?im)\brefs?:?[ \t]+#(\d+)'
+CLOSES = r'(?i)\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\s+(?:[\w.-]+/[\w.-]+)?#(\d+)'
+
+
+def keyed(text):
+    return [int(n) for n in re.findall(REFS, text or '') + re.findall(CLOSES, text or '')]
+
+
 top = run(['git', 'rev-parse', '--show-toplevel'])
 if top.returncode != 0:
     die('git 레포 안에서 실행하지 않았다')
@@ -99,7 +111,7 @@ pr_by_branch = {}
 for p in prs:
     pr_by_branch[p['headRefName']] = p['number']
     closing = [c['number'] for c in p.get('closingIssuesReferences') or []]
-    refs = [int(n) for n in re.findall(r'(?im)\brefs?:?[ \t]+#(\d+)', p.get('body') or '')]
+    refs = [int(n) for n in re.findall(REFS, p.get('body') or '')]
     for n in closing:
         drop.append((n, 'PR #%d 의 닫는 이슈' % p['number']))
     for n in refs:
@@ -143,9 +155,19 @@ for t in trees:
         rows.append('%s\t%s\tPR #%d %s' % (path, name, done[0], done[1]))
         continue
     found = sorted(set(nums(log.stdout)))
-    for n in found:
-        drop.append((n, 'worktree %s 의 커밋' % name))
-    rows.append('%s\t%s\tPR 없음\t커밋이 말하는 번호 %s' % (path, name, ' '.join('#%d' % n for n in found) or '없음'))
+    taken = sorted(set(keyed(log.stdout)))
+    if taken:
+        why = 'worktree %s 의 Refs · 닫는 키워드' % name
+        note = ''
+    else:
+        taken, why = found, 'worktree %s 의 커밋(닫는 키워드 · Refs 없음)' % name
+        note = '(닫는 키워드 · Refs 가 없어 커밋이 말하는 번호를 모두 뺀다)' if found else ''
+    cited = [n for n in found if n not in taken]
+    for n in taken:
+        drop.append((n, why))
+    rows.append('%s\t%s\tPR 없음\t빼는 번호 %s%s\t근거로 든 번호 %s' % (
+        path, name, ' '.join('#%d' % n for n in taken) or '없음', note,
+        ' '.join('#%d' % n for n in cited) or '없음'))
 print('== 다른 worktree %d개' % len(rows))
 for r in rows:
     print(r)
