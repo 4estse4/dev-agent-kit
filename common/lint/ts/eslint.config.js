@@ -6,9 +6,9 @@
 //   eslint typescript-eslint @eslint/js eslint-plugin-react-hooks
 // 선택 패키지:
 //   eslint-plugin-jsx-a11y  ← 설치돼 있을 때만 접근성 규칙이 켜진다 (아래 참조)
-import js from '@eslint/js';
-import tseslint from 'typescript-eslint';
-import reactHooks from 'eslint-plugin-react-hooks';
+import js from "@eslint/js";
+import tseslint from "typescript-eslint";
+import reactHooks from "eslint-plugin-react-hooks";
 
 // 접근성 린트는 선택이다. eslint-plugin-jsx-a11y 6.10.2 는 peer 가 eslint ^9 까지라
 // eslint 10 에서는 --legacy-peer-deps 없이 설치되지 않는다(2026-08 확인).
@@ -16,7 +16,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 // peer 범위가 갱신되면 devDependencies 에 추가하기만 하면 자동으로 켜진다.
 let jsxA11y = null;
 try {
-  jsxA11y = (await import('eslint-plugin-jsx-a11y')).default;
+  jsxA11y = (await import("eslint-plugin-jsx-a11y")).default;
 } catch {
   // 미설치 — 접근성 규칙 없이 진행한다.
 }
@@ -24,11 +24,11 @@ try {
 export default tseslint.config(
   {
     ignores: [
-      'dist/**',
-      'build/**',
-      'coverage/**',
-      'node_modules/**',
-      'eslint.config.js',
+      "dist/**",
+      "build/**",
+      "coverage/**",
+      "node_modules/**",
+      "eslint.config.js",
     ],
   },
 
@@ -45,18 +45,18 @@ export default tseslint.config(
       },
     },
     plugins: {
-      'react-hooks': reactHooks,
-      ...(jsxA11y ? { 'jsx-a11y': jsxA11y } : {}),
+      "react-hooks": reactHooks,
+      ...(jsxA11y ? { "jsx-a11y": jsxA11y } : {}),
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
       // 접근성 — 리뷰에서 사람이 눈으로 보던 항목을 린트 규칙으로 옮긴다(설치돼 있을 때만).
       ...(jsxA11y ? jsxA11y.flatConfigs.recommended.rules : {}),
 
-      '@typescript-eslint/no-explicit-any': 'error',
-      '@typescript-eslint/consistent-type-imports': [
-        'error',
-        { prefer: 'type-imports', fixStyle: 'inline-type-imports' },
+      "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/consistent-type-imports": [
+        "error",
+        { prefer: "type-imports", fixStyle: "inline-type-imports" },
       ],
 
       // ── 프로젝트 하드룰 코드화 ──
@@ -96,10 +96,10 @@ export default tseslint.config(
   // },
 
   {
-    files: ['**/*.test.{ts,tsx}', '**/*.spec.{ts,tsx}'],
+    files: ["**/*.test.{ts,tsx}", "**/*.spec.{ts,tsx}"],
     rules: {
       // 테스트는 rejection 을 expect 로 읽는 것이 정상이다.
-      '@typescript-eslint/no-floating-promises': 'off',
+      "@typescript-eslint/no-floating-promises": "off",
       // 위 절대 URL 예시의 주석을 풀 때 이 줄의 주석도 푼다 — 테스트 픽스처에 절대 URL 이 들어가는 것은 정상.
       // 'no-restricted-syntax': 'off',
     },
