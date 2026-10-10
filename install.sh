@@ -413,8 +413,9 @@ fi
 # .prettierignore 는 루트의 package.json 이 prettier 를 쓸 때만(의존성이나 스크립트에 prettier 가 있을 때) 루트에 놓는다.
 # 킷이 관리하는 파일(.kit/ · docs/process/ · .claude/)을 프로젝트의 prettier 검사에서 뺀다. 그 경로를 놓는 것은
 # --hooks · --agent · --templates 라서 --lint 가 아니라 그 항목을 따른다 — --lint 에만 두었을 때 --lint 없이 설치한
-# 레포의 게이트가 실패했다. prettier 는 --ignore-path 를 주지 않으면 실행한 디렉터리의 .prettierignore 만 읽는다. 그래서
-# 하위 디렉터리의 package.json 에서 실행한 prettier 는 루트의 킷 파일을 보지 않으므로 거기에는 놓지 않는다.
+# 레포의 게이트가 실패했다. prettier 는 --ignore-path 를 주지 않으면 실행한 디렉터리의 .prettierignore 만 읽으므로 루트에
+# 놓는다. 하위 디렉터리의 package.json 에서 실행한 prettier 는 그 디렉터리 아래만 검사해 루트의 킷 파일을 보지 않으므로
+# 거기에는 놓지 않는다.
 if [ "$DO_HOOKS" = 1 ] || [ "$DO_AGENT" = 1 ] || [ "$DO_TEMPLATES" = 1 ]; then
   if grep -Eq '"prettier"[[:space:]]*:|[" ]prettier[ "]' "$TARGET/package.json" 2>/dev/null; then
     place "$KIT_ROOT/common/lint/ts/.prettierignore" ".prettierignore"
