@@ -3,8 +3,8 @@
 #
 # 이 테스트가 있는 이유: 우회 변수(`KIT_ALLOW_PROTECTED` · `KIT_ALLOW_MISSING_TOOLS`)는 사람이 의도적 예외를 둘 때
 # 쓴다. 세션도 같은 변수를 명령 앞에 붙일 수 있었고, 어느 권한 규칙도 그것을 묻지 않았다(이슈 #46). 권한 규칙은 세션이
-# 쓴 명령 글자에만 맞춰 보므로, 세션이 `export` 나 스크립트 파일로 값을 두면 규칙이 그 값을 보지 못한다. 그래서 훅과
-# 게이트가 직접 본다 — Claude Code 는 자기가 띄운 프로세스에 `CLAUDE_CODE_CHILD_SESSION=1` 을 두고, 훅과 게이트는
+# 쓴 명령 글자에만 맞춰 보므로, 세션이 스크립트 파일 안에서 우회 변수를 두면 명령 글자에 그것이 없어 규칙이 보지 못한다.
+# 그래서 훅과 게이트가 직접 본다 — Claude Code 는 자기가 띄운 프로세스에 `CLAUDE_CODE_CHILD_SESSION=1` 을 두고, 훅과 게이트는
 # 세션이 실행한 git · bash 의 자식이라 그 값을 물려받는다.
 # 보는 것:
 #   · 세션이면 보호 브랜치 커밋을 `KIT_ALLOW_PROTECTED=1` 로 허용하지 않고, 사람(표시 없음)이면 허용한다
@@ -34,7 +34,8 @@ echo x > "$R/README"; git -C "$R" add -A; git -C "$R" commit -q --no-verify -m i
 echo y >> "$R/README"; git -C "$R" add -A
 
 # hook <브랜치> <누가: SESSION|HUMAN> [변수=값 …] — 그 브랜치에서 훅을 실행한다. 린트는 이 테스트가 보는 것이 아니라
-# 사람 쪽에서만 도구 없는 검사를 건너뛰게 한다(세션 쪽은 보호 브랜치 검사에서 먼저 끝나야 한다)
+# 사람 쪽에는 도구 없는 검사를 건너뛰게 한다. 세션 쪽에는 붙여도 게이트가 받지 않으므로 붙이지 않는다. 이 레포에는
+# 린트할 파일이 없어(README 하나) 세션 쪽도 보호 브랜치가 아니면 훅 끝까지 통과한다
 hook() {
   local br=$1 who=$2; shift 2
   git -C "$R" switch -q "$br" 2>/dev/null || git -C "$R" switch -qc "$br"

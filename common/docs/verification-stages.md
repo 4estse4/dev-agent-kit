@@ -669,14 +669,19 @@ Claude Code 는 자기가 띄운 프로세스(Bash 도구 · 훅)에 `CLAUDE_COD
 검사를 실패로 둔다. 거부할 때는 사람이 세션 밖 터미널에서 하라고 적고, 그 변수 이름도 적는다 — 세션이 띄운
 `screen` 같은 데서 그 값을 물려받은 터미널이면 사람도 거부되기 때문이다.
 
-권한 규칙으로는 막지 못한다. 규칙은 세션이 쓴 명령 글자에만 맞춰 보고, 그 프로그램을 둘러싼 보안 경계가 아니다 —
-*"A Bash rule matches the command text Claude writes"* · *"isn't a security boundary around the program"*
-(`/docs/en/permissions`). 세션이 `export` 나 스크립트 파일로 값을 두면 규칙이 그 값을 보지 못한다. 세션이 그 값을
-지우고 실행하면 훅과 게이트도 받는다. 그것은 작정한 우회라 CI 와 브랜치 보호가 막는다.
+권한 규칙으로는 막지 못한다. 규칙은 세션이 쓴 명령 글자에만 맞춰 보고, 규칙이 이름 붙인 명령을 다른 꼴로 실행하는
+것까지 막지는 않는다 — *"A Bash rule matches the command text Claude writes"* · *"isn't a security boundary around
+the program"*(`/docs/en/permissions`). 세션이 스크립트 파일 안에서 우회 변수를 두면 명령 글자에 그것이 없어 규칙이
+보지 못한다. 세션이 `CLAUDE_CODE_CHILD_SESSION` 을 지우고 실행하면 훅과 게이트도 받는다. 그것은 작정한 우회라 CI 와 브랜치
+보호가 막는다.
 
-세션 안에서도 그대로 적용되는 설정 변수가 남는다. `KIT_GO_TEST_FLAGS` · `KIT_PYTEST_FLAGS` · `KIT_GRADLE_TASKS` 는
-실행할 테스트와 태스크를, `KIT_PRUNE_DIRS` 는 모듈을 찾을 때 건너뛸 디렉터리를, `KIT_DIR` 은 훅이 부를 게이트를
-바꾼다. 프로젝트가 평소에 쓰는 설정이라 세션 안에서도 받고, 값에 따라 검사 범위가 줄어든다.
+세션 안에서도 그대로 적용되는 설정 변수가 남는다. 값에 따라 검사 범위가 줄어든다.
+
+- `KIT_GO_TEST_FLAGS` · `KIT_PYTEST_FLAGS` · `KIT_GRADLE_TASKS` 는 실행할 테스트와 태스크를 바꾼다. 프로젝트가 쓰는
+  설정이라(예: 공유 DB 를 쓰는 통합 테스트의 `-p 1`) 세션 안에서만 받지 않으면 그 프로젝트의 게이트가 세션 안에서만 달라진다.
+- `KIT_PRUNE_DIRS` 는 모듈을 찾을 때 건너뛸 디렉터리를, `KIT_DIR` 은 훅이 부를 킷 디렉터리(시크릿 검사 · 게이트 ·
+  요구 추적)를 바꾼다. 이 둘로 검사를 줄이려면 값을 일부러 골라야 해서(가짜 스크립트 디렉터리를 만드는 등) 위의 작정한
+  우회와 같이 둔다.
 
 > **그래서 로컬 훅은 강제가 아니라 조기 피드백이다.** 되돌릴 수 없는 결과를 막는
 > 진짜 강제는 CI + 브랜치 보호뿐이다. 훅을 믿고 CI 를 생략하면, 훅이 꺼졌거나 `--no-verify` 로
