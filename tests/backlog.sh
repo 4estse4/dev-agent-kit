@@ -5,10 +5,10 @@
 # 한 번도 보기에 오르지 않았다(이슈 #208). 그래서 「다음 일」을 고를 때마다 열린 이슈 전체를 다시 받는다. 받는 쪽이
 # 틀리면 고르는 규칙이 맞아도 후보가 빠진다. 보는 것:
 #   · `gh issue list` 의 기본 30건에서 잘리지 않고 열린 이슈를 모두 낸다. 받은 수가 한도에 닿으면 실패한다
-#   · 열린 PR 은 닫는 이슈와 본문의 `Refs #N` 만 뺄 번호로 낸다. 본문이 근거로 든 다른 번호는 빼지 않는다 —
+#   · 열린 PR 은 닫는 이슈와 본문 줄 머리의 `Refs #N` 만 뺄 번호로 낸다. 본문이 근거로 든 다른 번호는 빼지 않는다 —
 #     빼면 그 PR 이 열려 있는 동안 근거로 든 이슈가 후보에서 빠진다
-#   · PR 이 없는 다른 worktree 의 브랜치는 기본 브랜치에 없는 커밋의 메시지에서 닫는 키워드(Closes · Fixes · Resolves
-#     꼴)나 `Refs` 가 붙은 번호만 뺄 번호로 낸다. 그 밖의 번호는 그 worktree 줄에 근거로 든 번호로 보이고 빼지 않는다 —
+#   · PR 이 없는 다른 worktree 의 브랜치는 기본 브랜치에 없는 커밋의 메시지에서 줄 머리의 닫는 키워드(Closes · Fixes ·
+#     Resolves 꼴)나 `Refs` 뒤에 이은 번호만 뺄 번호로 낸다. 줄을 넘은 번호와 다른 레포의 번호는 읽지 않는다. 그 밖의 번호는 그 worktree 줄에 근거로 든 번호로 보이고 빼지 않는다 —
 #     빼면 다른 세션이 계획 커밋에서 근거로만 든 이슈가 후보에서 빠진다(이슈 #215). 커밋에 그런 키워드가 하나도 없으면
 #     맡은 이슈를 알 단서가 번호뿐이라 번호를 모두 낸다. 번호가 없으면 브랜치 이름을 그대로 낸다. PR 이 있는 브랜치는
 #     PR 쪽 규칙을 따른다
@@ -109,6 +109,10 @@ git -C "$T/self" worktree add -q -b feat/f "$T/wt-f" main
 git -C "$T/wt-f" commit -q --allow-empty -m 'explain' \
   -m 'This is the same fix #31 asked for; #32 follows. gh still returns "Closes #34" for the earlier PR.' \
   -m "$(printf 'The gate change also fixes\n#35 bypass, so it comes next.')" -m 'Refs #33'
+# 줄 머리의 키워드라도 줄을 넘은 번호는 읽지 않는다(#36 · #38). 앞에 공백이 있는 줄 머리는 읽는다(#39). 다른 레포의
+# 번호는 이 레포의 이슈가 아니라 읽지 않는다(#18)
+git -C "$T/wt-f" commit -q --allow-empty -m 'wrap' -m "$(printf 'Closes\n#36 is the one after.')" \
+  -m "$(printf 'Refs #37,\n#38 waits for it.')" -m '  Refs #39' -m 'Refs other/kit#18'
 # PR 이 없고 번호도 없는 브랜치
 git -C "$T/self" worktree add -q -b feat/b "$T/wt-b" main
 git -C "$T/wt-b" commit -q --allow-empty -m 'start something'
@@ -171,11 +175,15 @@ has 45 && bad "PR 본문의 문장 안에 든 Refs 번호(#45)를 뺄 번호로 
 for n in 26 27 28 29 30; do
   has $n && ok "키워드 하나 뒤에 이은 번호(#$n)를 모두 뺄 번호로 낸다" || bad "키워드 하나 뒤에 이은 번호(#$n)가 뺄 번호에 없다"
 done
-has 33 && ok "줄 머리의 Refs 번호(#33)를 뺄 번호로 낸다" || bad "줄 머리의 Refs 번호(#33)가 뺄 번호에 없다"
-for n in 31 32 34 35; do
+for n in 33 37 39; do
+  has $n && ok "줄 머리(앞 공백 포함)의 Refs 번호(#$n)를 뺄 번호로 낸다" || bad "줄 머리(앞 공백 포함)의 Refs 번호(#$n)가 뺄 번호에 없다"
+done
+for n in 31 32 34 35 36 38; do
   has $n && bad "산문 · 인용 속이나 줄을 넘은 키워드 뒤의 번호(#$n)를 뺄 번호로 냈다" \
     || ok "산문 · 인용 속이나 줄을 넘은 키워드 뒤의 번호(#$n)는 빼지 않는다"
 done
+has 18 && bad "다른 레포의 번호(other/kit#18)를 이 레포의 이슈로 보고 뺄 번호로 냈다" \
+  || ok "다른 레포의 번호(other/kit#18)는 이 레포의 이슈로 보지 않는다"
 has 12 && ok "PR 이 없는 worktree 의 커밋에 닫는 키워드 · Refs 가 없으면 커밋 본문이 말한 #12 를 뺄 번호로 낸다" \
   || bad "PR 이 없는 worktree 의 커밋에 닫는 키워드 · Refs 가 없는데 커밋 본문이 말한 #12 가 뺄 번호에 없다"
 grep -E 'feat/a' "$T/out" | grep -q '닫는 키워드 · Refs 가 없어' \
