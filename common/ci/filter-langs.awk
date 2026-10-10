@@ -46,7 +46,12 @@ function flush_job() { if (job != "" && !jobdrop) printf "%s", job; job = ""; jo
   }
   # 블록 끝 — 남은 항목이 있을 때만 헤더와 함께 되살린다
   if (nenv > 0) { flush_c(); print envhdr; for (i = 1; i <= nenv; i++) print ebuf[i] }
-  else { nc = 0 }                      # 앞서 모아둔 설명 주석도 함께 버린다
+  else {
+    nc = 0                             # 앞서 모아둔 설명 주석도 함께 버린다
+    # 블록 앞의 빈 줄은 이미 출력했다. 블록 뒤의 빈 줄까지 출력하면 빈 줄이 두 줄 남고, prettier 가 그것을
+    # 한 줄로 고치므로 TypeScript 프로젝트의 포맷 검사에서 설치된 gates.yml 이 실패했다(이슈 #206).
+    if ($0 == "") { inenv = 0; next }
+  }
   inenv = 0
 }
 
