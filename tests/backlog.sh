@@ -54,7 +54,7 @@ if a[:2] == ['issue', 'list']:
 if a[:2] == ['pr', 'list']:
     prs = [{'number': 300, 'title': 'PR 셋백', 'headRefName': 'feat/c', 'state': 'OPEN',
             'closingIssuesReferences': [{'number': 40}],
-            'body': '근거로 든 것: #41 · #42\n\nRefs #43\nrefs: #44'},
+            'body': '근거로 든 것: #41 · #42. 문장 안의 Refs #45 는 꼬리말이 아니다\n\nRefs #43\nrefs: #44'},
            {'number': 301, 'title': '머지된 PR', 'headRefName': 'feat/merged', 'state': 'MERGED',
             'headRefOid': os.environ.get('STUB_OID_MERGED', ''), 'closingIssuesReferences': [], 'body': 'Refs #14'},
            {'number': 302, 'title': '닫힌 PR', 'headRefName': 'feat/closed', 'state': 'CLOSED',
@@ -99,6 +99,16 @@ git -C "$T/wt-d" commit -q --allow-empty -m 'docs(plan): write the order' \
   -m 'The next-task window ranked #20 first. #21 and #22 follow, since #20 blocks them.' -m 'Refs #23'
 git -C "$T/wt-d" commit -q --allow-empty -m 'fix the gate' -m 'Closes #24'
 git -C "$T/wt-d" commit -q --allow-empty -m 'test the gate' -m 'fixes: #25'
+# 키워드 하나 뒤에 번호를 여럿 이은 꼴 — 이 레포의 커밋에 실제로 있다. 이은 번호를 모두 뺀다
+git -C "$T/self" worktree add -q -b feat/e "$T/wt-e" main
+git -C "$T/wt-e" commit -q --allow-empty -m 'close three' -m 'Closes #26, #27 and #28.'
+git -C "$T/wt-e" commit -q --allow-empty -m 'refer two' -m 'Refs #29, #30'
+# 키워드가 줄 머리가 아니라 산문 · 인용 속에 있거나, 줄을 넘어 번호가 다음 줄에 오는 꼴 — 다른 일을 설명하는 것이라
+# 빼지 않는다. 이 브랜치가 맡은 것은 줄 머리의 `Refs #33` 이다
+git -C "$T/self" worktree add -q -b feat/f "$T/wt-f" main
+git -C "$T/wt-f" commit -q --allow-empty -m 'explain' \
+  -m 'This is the same fix #31 asked for; #32 follows. gh still returns "Closes #34" for the earlier PR.' \
+  -m "$(printf 'The gate change also fixes\n#35 bypass, so it comes next.')" -m 'Refs #33'
 # PR 이 없고 번호도 없는 브랜치
 git -C "$T/self" worktree add -q -b feat/b "$T/wt-b" main
 git -C "$T/wt-b" commit -q --allow-empty -m 'start something'
@@ -156,6 +166,15 @@ for n in 40 43 44; do
 done
 for n in 41 42; do
   has $n && bad "PR 본문이 근거로 든 번호(#$n)를 뺄 번호로 냈다" || ok "PR 본문이 근거로 든 번호(#$n)는 빼지 않는다"
+done
+has 45 && bad "PR 본문의 문장 안에 든 Refs 번호(#45)를 뺄 번호로 냈다" || ok "PR 본문의 문장 안에 든 Refs 번호(#45)는 빼지 않는다"
+for n in 26 27 28 29 30; do
+  has $n && ok "키워드 하나 뒤에 이은 번호(#$n)를 모두 뺄 번호로 낸다" || bad "키워드 하나 뒤에 이은 번호(#$n)가 뺄 번호에 없다"
+done
+has 33 && ok "줄 머리의 Refs 번호(#33)를 뺄 번호로 낸다" || bad "줄 머리의 Refs 번호(#33)가 뺄 번호에 없다"
+for n in 31 32 34 35; do
+  has $n && bad "산문 · 인용 속이나 줄을 넘은 키워드 뒤의 번호(#$n)를 뺄 번호로 냈다" \
+    || ok "산문 · 인용 속이나 줄을 넘은 키워드 뒤의 번호(#$n)는 빼지 않는다"
 done
 has 12 && ok "PR 이 없는 worktree 의 커밋에 닫는 키워드 · Refs 가 없으면 커밋 본문이 말한 #12 를 뺄 번호로 낸다" \
   || bad "PR 이 없는 worktree 의 커밋에 닫는 키워드 · Refs 가 없는데 커밋 본문이 말한 #12 가 뺄 번호에 없다"
