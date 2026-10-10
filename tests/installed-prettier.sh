@@ -20,8 +20,8 @@
 #   · go.mod 가 하위 디렉터리에 있으면 킷이 그 옆에 놓는 .golangci.yml 도 루트의 `prettier --check .` 를 통과한다.
 #     게이트는 Go 도구까지 실행하므로 이 사례만 게이트 대신 format:check 와 같은 명령을 실행한다
 #   · 루트 package.json 이 prettier 를 쓰지 않으면 `.prettierignore` 를 놓지 않는다. 하위 디렉터리의 package.json 만
-#     prettier 를 써도 놓지 않는다 — prettier 는 실행한 디렉터리의 `.prettierignore` 만 읽고, 거기서 실행한 prettier 는
-#     루트의 킷 파일을 보지 않는다
+#     prettier 를 써도 놓지 않는다 — prettier 는 `--ignore-path` 를 주지 않으면 실행한 디렉터리의 `.prettierignore` 만
+#     읽고, 거기서 실행한 prettier 는 루트의 킷 파일을 보지 않는다
 #   · 프로젝트에 `.prettierignore` 가 이미 있으면 그것을 두고 킷의 것을 `.prettierignore.kit-new` 로 옆에 놓는다
 set -u
 PIN=3.9.9

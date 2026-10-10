@@ -1,5 +1,5 @@
 # 킷이 관리하는 파일이다. 고쳐도 다시 설치하면 덮어써지므로 프로젝트의 prettier 로 검사하지 않는다.
-# .claude/ 는 통째로 뺀다. 프로젝트가 .claude/ 에 둔 파일도 검사에서 빠진다.
+# .claude/ 는 통째로 뺀다. 프로젝트 소유인 .claude/settings.json 과 프로젝트가 .claude/ 에 둔 파일도 검사에서 빠진다.
 .kit/
 docs/process/
 .claude/
