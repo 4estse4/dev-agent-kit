@@ -37,6 +37,8 @@ bash .kit/gate/secrets.sh       # staged 시크릿 스캔
 위 `gate.sh` 두 명령 모두 도구가 없는 검사를 실패로 처리한다. 불가피하게 건너뛰려면
 `KIT_ALLOW_MISSING_TOOLS=1` 을 붙인다. 그러면 그 검사는 실행되지 않고, 그 검사 때문에
 게이트가 실패하지도 않는다. 건너뛴 검사는 `gate — 건너뜀(도구 없음):` 줄에 출력된다.
+Claude Code 세션 안(`CLAUDE_CODE_CHILD_SESSION=1`)에서는 이 변수도 `GATE_STRICT=0` 도 받지 않는다 — 도구를 설치하거나,
+사람이 세션 밖 터미널에서 실행한다.
 
 ## 고쳐도 된다. 대신 고친 것을 킷에도 올려라
 

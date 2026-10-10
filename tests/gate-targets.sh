@@ -43,7 +43,8 @@ change() { # $1=저장소  나머지=바꾸거나 새로 만들 경로. 한 커�
 
 expect() { # $1=설명  $2=골라야 하는 모듈 수  $3=저장소
   local out got
-  out=$(cd "$3" && KIT_ALLOW_MISSING_TOOLS=1 bash "$KIT/common/gate/gate.sh" --base main 2>&1)
+  # 세션 표시를 지운다 — 세션 안에서는 게이트가 KIT_ALLOW_MISSING_TOOLS 를 받지 않는다(tests/session-escapes.sh)
+  out=$(cd "$3" && env -u CLAUDE_CODE_CHILD_SESSION KIT_ALLOW_MISSING_TOOLS=1 bash "$KIT/common/gate/gate.sh" --base main 2>&1)
   got=$(printf '%s\n' "$out" | grep -o 'ts(node_modules 없음)' | wc -l | tr -d ' ')
   if [ "$got" = "$2" ]; then
     echo "  ✓ $1"

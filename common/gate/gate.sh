@@ -50,7 +50,17 @@ done
 # 불가피할 때만 KIT_ALLOW_MISSING_TOOLS=1 로 도구가 없는 검사를 건너뛰게 한다.
 # 그러면 무엇이 검사되지 않는지 눈에 띄게 출력한다.
 export GATE_LINT_ONLY
-if [ "${KIT_ALLOW_MISSING_TOOLS:-0}" = "1" ]; then
+# Claude Code 가 띄운 프로세스(세션의 Bash 도구 · 훅)에는 CLAUDE_CODE_CHILD_SESSION=1 이 있다. 그 안에서는
+# KIT_ALLOW_MISSING_TOOLS 도, GATE_STRICT 를 낮추는 것도 받지 않는다 — 세션이 스스로 붙여도 묻는 것이 없다. 권한
+# 규칙은 세션이 쓴 명령 글자에만 맞춰 보므로, 세션이 스크립트 파일 안에서 이 변수를 두면 명령 글자에 그것이 없어 규칙이
+# 보지 못한다. 사람의 터미널에는 CLAUDE_CODE_CHILD_SESSION 이 없어 이전처럼 받는다. 세션이 띄운 screen 같은 데서
+# 그것을 물려받은 터미널은 예외라, 메시지에 그 변수 이름을 적어 원인을 알 수 있게 한다.
+if [ "${CLAUDE_CODE_CHILD_SESSION:-}" = "1" ]; then
+  if [ "${KIT_ALLOW_MISSING_TOOLS:-0}" = "1" ]; then
+    echo "gate — Claude Code 세션 안이라(CLAUDE_CODE_CHILD_SESSION=1) KIT_ALLOW_MISSING_TOOLS=1 을 받지 않습니다. 도구 · 어댑터가 없는 검사는 실패합니다 — 설치하거나, 불가피하면 사람이 세션 밖 터미널에서 실행합니다." >&2
+  fi
+  GATE_STRICT=1
+elif [ "${KIT_ALLOW_MISSING_TOOLS:-0}" = "1" ]; then
   GATE_STRICT=0
   echo "gate — KIT_ALLOW_MISSING_TOOLS=1: 도구가 없는 검사는 건너뜁니다(통과가 아닙니다)." >&2
 else

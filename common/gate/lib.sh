@@ -236,6 +236,18 @@ gate_run_empty() {
 # 그 순간 도구가 정말로 없는 경우를 막는 검사까지 함께 꺼진다. 보고는 하되 막지 않는다.
 gate_absent() { GATE_ABSENT+=("$1"); }
 
+# 실패 블록 끝에 붙이는 「건너뛰려면」 안내. Claude Code 세션 안(CLAUDE_CODE_CHILD_SESSION=1)에서는 게이트가
+# KIT_ALLOW_MISSING_TOOLS 를 받지 않으므로(gate.sh), 그 변수로 건너뛰라고 세션에 안내하지 않고 사람이 세션 밖에서 하라고 적는다.
+gate_escape_hint() {
+  if [ "${CLAUDE_CODE_CHILD_SESSION:-}" = "1" ]; then
+    printf '%s\n%s\n' "  Claude Code 세션 안(CLAUDE_CODE_CHILD_SESSION=1)에서는 건너뛰지 않습니다. 위 안내대로 설치하거나, 불가피하면 사람이 세션 밖 터미널에서 실행합니다:" \
+      "    KIT_ALLOW_MISSING_TOOLS=1 <명령>"
+  else
+    printf '%s\n%s\n' "  불가피하게 건너뛰려면(그 검사는 실행되지 않고, 그 때문에 게이트가 실패하지도 않습니다):" \
+      "    KIT_ALLOW_MISSING_TOOLS=1 <명령>"
+  fi
+}
+
 # 도구가 없어 검사를 건너뛴 것을 기록한다.
 # GATE_STRICT=1 이면 건너뜀을 실패로 처리한다 — CI 에서 도구 부재는 "통과"가 아니라
 # "검사가 실행되지 않았음"이고, 그것을 통과로 보고하면 게이트가 거짓말을 한다.
@@ -249,7 +261,7 @@ gate_skip() {
     if [ -n "$hint" ]; then
       GATE_FAILOUT+=$'\n'"  설치:  $hint"$'\n'
     fi
-    GATE_FAILOUT+=$'\n'"  전부 설치:  bash .kit/gate/install-tools.sh"$'\n'"  버전은 .kit/gate/tool-versions 가 단일 출처입니다."$'\n'$'\n'"  불가피하게 건너뛰려면(그 검사는 실행되지 않고, 그 때문에 게이트가 실패하지도 않습니다):"$'\n'"    KIT_ALLOW_MISSING_TOOLS=1 <명령>"$'\n'
+    GATE_FAILOUT+=$'\n'"  전부 설치:  bash .kit/gate/install-tools.sh"$'\n'"  버전은 .kit/gate/tool-versions 가 단일 출처입니다."$'\n'$'\n'"$(gate_escape_hint)"$'\n'
   else
     GATE_SKIPPED+=("$1")
   fi
@@ -281,7 +293,7 @@ gate_skip_adapter() { # $1=언어. 어댑터 이름이 곧 --lang 값이다
     GATE_FAILOUT+="  .kit/install-manifest 에서 langs 를 읽지 못했습니다 — 킷을 설치할 때 고른 언어를 알 수 없습니다."$'\n'"  <킷>/install.sh 로 다시 설치합니다. --lang 에는 .kit/gate/adapters/ 에 있는 언어를 모두 적고 $1 도 적습니다."$'\n'"  --lang 에 적지 않은 언어의 어댑터는 지워집니다."$'\n'
   fi
   GATE_FAILOUT+="  처음 설치할 때 항목(--hooks · --lint 등)을 골랐으면 그 플래그도 같이 줍니다. 항목 플래그가 없으면 모든 항목이 설치됩니다."$'\n'
-  GATE_FAILOUT+=$'\n'"  불가피하게 건너뛰려면(그 검사는 실행되지 않고, 그 때문에 게이트가 실패하지도 않습니다):"$'\n'"    KIT_ALLOW_MISSING_TOOLS=1 <명령>"$'\n'
+  GATE_FAILOUT+=$'\n'"$(gate_escape_hint)"$'\n'
 }
 
 # gate_report → 실패가 있으면 1
