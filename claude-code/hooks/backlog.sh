@@ -8,10 +8,10 @@
 # 그래서 고를 때마다 열린 이슈 전체를 다시 받는다. 순서는 이 스크립트가 아니라 세션이 `merge-pr` 의 「다음 일」
 # 문단대로 정한다. 이 스크립트는 받아 오기만 한다.
 #
-# 다른 세션이 맡은 일은 두 곳에서 알아낸다. 열린 PR 은 닫는 이슈와 본문의 `Refs #N` 만 뺀다 — 본문은 근거로 다른
-# 이슈를 들기도 해서, 다 빼면 그 PR 이 열려 있는 동안 근거로 든 이슈가 후보에서 빠진다. PR 이 없는 다른 worktree 의
-# 브랜치도 같다 — 기본 브랜치에 없는 커밋의 메시지에서 닫는 키워드(Closes · Fixes · Resolves 꼴)나 `Refs` 가 붙은
-# 번호만 빼고, 그 밖의 번호는 그 worktree 줄에 근거로 든 번호로 보이기만 한다. 한때 번호를 모두 빼서, 다른 세션이 계획
+# 다른 세션이 맡은 일은 두 곳에서 알아낸다. 열린 PR 은 닫는 이슈와 본문 줄 머리의 `Refs #N` 만 뺀다 — 본문은 근거로
+# 다른 이슈를 들기도 해서, 다 빼면 그 PR 이 열려 있는 동안 근거로 든 이슈가 후보에서 빠진다. PR 이 없는 다른 worktree 의
+# 브랜치도 같다 — 기본 브랜치에 없는 커밋의 메시지에서 줄 머리의 닫는 키워드(Closes · Fixes · Resolves 꼴)나 `Refs` 가
+# 붙은 번호만 빼고, 그 밖의 번호는 그 worktree 줄에 근거로 든 번호로 보이기만 한다. 한때 번호를 모두 빼서, 다른 세션이 계획
 # 커밋에서 순서의 근거로만 든 이슈가 후보에서 빠졌다. 커밋에 그런 키워드가 하나도 없으면 맡은 이슈를 알 단서가
 # 번호뿐이라 번호를 모두 뺀다. 번호가 없는 브랜치는 이름을 그대로 낸다.
 #
@@ -78,14 +78,22 @@ def nums(text):
     return [int(n) for n in re.findall(r'#(\d+)', text or '')]
 
 
-# `Refs #N` 은 PR 본문과 커밋 메시지에서 같은 식으로 본다. 닫는 키워드는 `merge-pr` 가 스쿼시 커밋의 키워드를 찾는 식과
-# 같다(다른 레포의 `owner/repo#N` 도 번호로 읽는다).
-REFS = r'(?im)\brefs?:?[ \t]+#(\d+)'
-CLOSES = r'(?i)\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\s+(?:[\w.-]+/[\w.-]+)?#(\d+)'
+# `Refs` 와 닫는 키워드(Closes · Fixes · Resolves 꼴)는 PR 본문과 커밋 메시지에서 같은 식으로 본다. 줄 머리(앞 공백만
+# 허용)에서 시작하는 줄만 보고, 키워드 뒤에 `,` · `and` · `&` 로 이은 번호를 모두 읽으며, 줄을 넘지 않는다. 산문이나
+# 인용 속의 키워드는 다른 일을 설명하는 것일 수 있다. `merge-pr` 가 스쿼시 커밋에서 키워드를 찾는 식은 무엇이 닫히는지를
+# 보므로 줄 어디서든 찾고 번호를 하나씩 읽는데, 여기서는 누가 그 이슈를 맡았는지를 본다. 다른 레포의 `owner/repo#N` 도
+# 번호로 읽는다.
+LIST = r'((?:[\w.-]+/[\w.-]+)?#\d+(?:[ \t]*(?:,|\band\b|&)[ \t]*(?:[\w.-]+/[\w.-]+)?#\d+)*)'
+REFS = r'(?im)^[ \t]*refs?:?[ \t]+' + LIST
+CLOSES = r'(?im)^[ \t]*(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?[ \t]+' + LIST
+
+
+def listed(pattern, text):
+    return [int(n) for span in re.findall(pattern, text or '') for n in re.findall(r'#(\d+)', span)]
 
 
 def keyed(text):
-    return [int(n) for n in re.findall(REFS, text or '') + re.findall(CLOSES, text or '')]
+    return listed(REFS, text) + listed(CLOSES, text)
 
 
 top = run(['git', 'rev-parse', '--show-toplevel'])
@@ -111,7 +119,7 @@ pr_by_branch = {}
 for p in prs:
     pr_by_branch[p['headRefName']] = p['number']
     closing = [c['number'] for c in p.get('closingIssuesReferences') or []]
-    refs = [int(n) for n in re.findall(REFS, p.get('body') or '')]
+    refs = listed(REFS, p.get('body'))
     for n in closing:
         drop.append((n, 'PR #%d 의 닫는 이슈' % p['number']))
     for n in refs:
