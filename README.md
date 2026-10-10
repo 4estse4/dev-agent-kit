@@ -241,4 +241,5 @@ Go 도구는 `go list -m <모듈>@latest`, ruff 는 PyPI, ktlint 는 GitHub rele
 | `.golangci.yml` · `eslint.config.js` | **프로젝트** (시작 템플릿) | 하드룰이 프로젝트마다 다르다 |
 
 워크플로가 프로젝트 소유여도 **게이트 명령을 워크플로에 다시 적지 않는다** — `gate.sh` 를 부른다.
-프로젝트가 플래그를 더 줘야 하면 확장점(`KIT_GO_TEST_FLAGS` 등)을 쓴다.
+프로젝트가 플래그를 더 줘야 하면 커밋된 `.kit/gate.conf` 에 적는다(`KIT_GO_TEST_FLAGS` 등. 형식은
+`common/gate/VENDOR-README.md`). 환경 변수로는 받지 않는다 — 명령 앞에 붙인 값은 커밋에 남지 않는데 검사를 줄인다.

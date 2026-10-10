@@ -40,6 +40,25 @@ bash .kit/gate/secrets.sh       # staged 시크릿 스캔
 Claude Code 세션 안(`CLAUDE_CODE_CHILD_SESSION=1`)에서는 이 변수도 `GATE_STRICT=0` 도 받지 않는다 — 도구를 설치하거나,
 사람이 세션 밖 터미널에서 실행한다.
 
+## 게이트 설정 — `.kit/gate.conf`
+
+프로젝트가 게이트에 더할 값은 이 디렉터리의 `gate.conf` 에 `키=값` 한 줄씩 적고 커밋한다. 없으면 기본값이다. 환경 변수로는
+받지 않는다 — 명령 앞에 붙인 값은 커밋에도 리뷰에도 남지 않는데 검사를 줄인다. 이 파일에 커밋에 안 들어간 변경이 있으면
+커밋 훅과 푸시 훅이 실패한다. 이 파일은 프로젝트 소유라 킷을 다시 설치해도 남는다.
+
+```
+# 공유 DB 를 쓰는 통합 테스트를 직렬로 실행한다
+KIT_GO_TEST_FLAGS=-p 1
+KIT_PYTEST_FLAGS=-x
+KIT_GRADLE_TASKS=check
+KIT_PRUNE_DIRS=.git node_modules .venv .tox __pycache__
+```
+
+- `KIT_GO_TEST_FLAGS` · `KIT_PYTEST_FLAGS` — `go test` · `pytest` 에 더할 플래그. `KIT_GRADLE_TASKS` — `check` 대신
+  실행할 gradle 태스크. `KIT_PRUNE_DIRS` — 모듈을 찾을 때 건너뛸 디렉터리. 기본 목록(위 예의 값)을 통째로 바꾼다.
+- `#` 로 시작하는 줄은 읽지 않는다. 값은 `=` 뒤 줄 끝까지이고 셸로 풀지 않는다 — 줄 끝에 붙인 `#` 주석과 따옴표도 값에
+  들어간다. 값은 공백에서 나뉘어 명령의 인자가 된다. 같은 키가 여럿이면 마지막 줄을 쓴다.
+
 ## 고쳐도 된다. 대신 고친 것을 킷에도 올려라
 
 급하면 여기서 바로 고쳐라 — 게이트가 틀렸는데 고치지 못하게 막는 것이 더 나쁘다.
