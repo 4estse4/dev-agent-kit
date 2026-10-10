@@ -9,9 +9,13 @@
 #     빼면 그 PR 이 열려 있는 동안 근거로 든 이슈가 후보에서 빠진다
 #   · PR 이 없는 다른 worktree 의 브랜치는 기본 브랜치에 없는 커밋의 메시지에 나오는 번호를 꼴을 가리지 않고 낸다.
 #     번호가 없으면 브랜치 이름을 그대로 낸다. PR 이 있는 브랜치는 PR 쪽 규칙을 따른다
-#   · 이 스크립트를 실행한 worktree(세션 자신의 일)는 다른 세션의 일로 내지 않는다
+#   · 열린 PR 은 없고 팁이 머지되거나 닫힌 PR 의 head 에 든(head 와 같거나 그 조상인) 브랜치는 끝난 일이라 번호를
+#     빼지 않는다. 이름만 같고 팁이 그 head 뒤로 나아간 브랜치는 새 일이라 번호를 뺀다
+#   · 이 스크립트를 실행한 worktree(세션 자신의 일), 기본 브랜치에 없는 커밋이 없는 detach worktree, 기본 브랜치의
+#     worktree 는 다른 세션의 일로 내지 않는다
 #   · 뺄 번호는 열린 이슈인 것만 낸다
-#   · `gh` 가 실패하거나 기본 브랜치를 모르면 그 사실을 내고 0 이 아닌 코드로 끝난다
+#   · `gh` 가 실패하거나 기본 브랜치를 모르면 그 사실을 `!!` 줄로 내고 0 이 아닌 코드로 끝난다. 그 줄은 세션이
+#     사람에게 그대로 보이므로 글자까지 본다
 #
 # **네트워크를 안 쓴다.** PATH 앞에 둔 가짜 `gh` 가 `--limit` 을 따라(없으면 30건) 열린 이슈와 PR 을 돌려준다.
 set -u
@@ -52,9 +56,12 @@ if a[:2] == ['pr', 'list']:
             'headRefOid': os.environ.get('STUB_OID_MERGED', ''), 'closingIssuesReferences': [], 'body': 'Refs #14'},
            {'number': 302, 'title': '닫힌 PR', 'headRefName': 'feat/closed', 'state': 'CLOSED',
             'headRefOid': os.environ.get('STUB_OID_CLOSED', ''), 'closingIssuesReferences': [], 'body': 'Refs #15'},
-           # 오래전에 머지된 PR — 그 브랜치 이름을 다시 써서 새 일을 한다. 그 head 는 지금 브랜치에 없다
+           # 머지된 PR — 그 브랜치에 이어 커밋해 새 일을 한다. 팁이 그 head 의 뒤에 있다
            {'number': 303, 'title': '예전 PR', 'headRefName': 'feat/reused', 'state': 'MERGED',
-            'headRefOid': 'f' * 40, 'closingIssuesReferences': [], 'body': ''}]
+            'headRefOid': os.environ.get('STUB_OID_REUSED', ''), 'closingIssuesReferences': [], 'body': ''},
+           # 머지된 PR — worktree 의 팁이 그 head 의 조상이다(다른 곳에서 head 가 앞으로 갔다)
+           {'number': 304, 'title': '앞서간 PR', 'headRefName': 'feat/behind', 'state': 'MERGED',
+            'headRefOid': os.environ.get('STUB_OID_BEHIND', ''), 'closingIssuesReferences': [], 'body': ''}]
     if '--head' in a:
         prs = [p for p in prs if p['headRefName'] == a[a.index('--head') + 1]]
     state = a[a.index('--state') + 1] if '--state' in a else 'open'
@@ -95,9 +102,19 @@ git -C "$T/wt-merged" commit -q --allow-empty -m 'first part' -m 'Refs #14'
 git -C "$T/self" worktree add -q -b feat/closed "$T/wt-closed" main
 git -C "$T/wt-closed" commit -q --allow-empty -m 'abandoned' -m 'Refs #15'
 export STUB_OID_MERGED=$(git -C "$T/wt-merged" rev-parse HEAD) STUB_OID_CLOSED=$(git -C "$T/wt-closed" rev-parse HEAD)
-# 머지된 PR(#303)과 이름이 같은 브랜치로 새 일을 하는 것 — 팁이 그 PR 의 head 에 없으니 끝난 일이 아니다
+# 머지된 PR(#303)의 브랜치에 이어 커밋해 새 일을 하는 것 — 팁이 그 head 에 들어 있지 않으니 끝난 일이 아니다.
+# head 를 레포에 있는 커밋으로 둬서 조상 판정이 실제로 실행되게 한다
 git -C "$T/self" worktree add -q -b feat/reused "$T/wt-reused" main
+git -C "$T/wt-reused" commit -q --allow-empty -m 'old work'
+export STUB_OID_REUSED=$(git -C "$T/wt-reused" rev-parse HEAD)
 git -C "$T/wt-reused" commit -q --allow-empty -m 'new work' -m 'for issue #16'
+# 머지된 PR(#304)의 head 가 worktree 의 팁보다 앞에 있는 것 — 팁이 그 head 에 들어 있으니 끝난 일이다
+git -C "$T/self" worktree add -q -b feat/behind "$T/wt-behind" main
+git -C "$T/wt-behind" commit -q --allow-empty -m 'part one' -m 'Refs #17'
+# PR 의 head 는 그 팁에 커밋 하나를 더한 것이다. 브랜치로 남겨 객체가 레포에 있게 한다(worktree 가 아니라 목록에 안 나온다)
+behind=$(git -C "$T/wt-behind" rev-parse HEAD)
+export STUB_OID_BEHIND=$(git -C "$T/self" commit-tree -p "$behind" -m 'part two' "$(git -C "$T/self" rev-parse "$behind^{tree}")")
+git -C "$T/self" branch -q pr304-head "$STUB_OID_BEHIND"
 # `merge-pr` 4절대로 정리를 마치고 기본 브랜치에 detach 한 worktree, 기본 브랜치에 있는 worktree — 하는 일이 없다
 git -C "$T/self" worktree add -q --detach "$T/wt-done" main
 git -C "$T/self" worktree add -q "$T/wt-main" main
@@ -149,8 +166,10 @@ grep -q 'wt-done' "$T/out" && bad "정리를 마치고 detach 한 worktree(wt-do
   || ok "기본 브랜치에 없는 커밋이 없는 detach worktree 는 내지 않는다"
 grep -q 'wt-main' "$T/out" && bad "기본 브랜치에 있는 worktree(wt-main)를 다른 세션의 일로 냈다" \
   || ok "기본 브랜치에 있는 worktree 는 내지 않는다"
-has 16 && ok "머지된 PR 과 이름만 같은 브랜치(feat/reused)의 새 일이 말하는 번호(#16)를 뺄 번호로 낸다" \
-  || bad "머지된 PR 과 이름만 같은 브랜치(feat/reused)를 끝난 일로 봤다: $(grep -E 'feat/reused' "$T/out")"
+has 16 && ok "머지된 PR 의 브랜치에 이어 새 일을 한 worktree(feat/reused)가 말하는 번호(#16)를 뺄 번호로 낸다" \
+  || bad "머지된 PR 의 브랜치에 이어 새 일을 한 worktree(feat/reused)를 끝난 일로 봤다: $(grep -E 'feat/reused' "$T/out")"
+has 17 && bad "팁이 머지된 PR 의 head 에 든 worktree(feat/behind)의 번호(#17)를 뺄 번호로 냈다: $(grep -E 'feat/behind' "$T/out")" \
+  || ok "팁이 머지된 PR 의 head 에 든 worktree(feat/behind)는 끝난 일이라 그 번호(#17)를 빼지 않는다"
 
 # 받은 수가 한도에 닿으면 잘렸을 수 있다 — 잘린 목록으로 고르지 않게 실패한다
 STUB_ISSUES=100000 run
