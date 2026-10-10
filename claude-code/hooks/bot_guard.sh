@@ -72,8 +72,8 @@
 # 의 `gh` 는 인자다.
 #
 # **토큰을 새로 받는다.** 설치 토큰은 한 시간이면 끝난다. 연결된 세션이 gh 를 부르거나 git 의 원격
-# 명령(push · fetch · pull · clone · ls-remote)이나 안에서 gh 를 부르는 판정 스크립트(`human_review.sh`)를
-# 실행할 때 토큰이 10분 안에 끝나면, 토큰
+# 명령(push · fetch · pull · clone · ls-remote)이나 안에서 gh 를 부르는 스크립트(판정 `human_review.sh` ·
+# 「다음 일」 목록 `backlog.sh`)를 실행할 때 토큰이 10분 안에 끝나면, 토큰
 # 스크립트(`bot_token.sh`)로 새로 받아 봇 디렉터리의 파일만 바꾼다. `GH_CONFIG_DIR` 은 그대로 그
 # 디렉터리를 가리킨다. 연결된 세션의 git 은 github.com 자격 증명을 gh(봇)에게서 받으므로
 # (`bot_session.sh`) 푸시 앞에서도 새로 받아야 한다. 새로 받는 시간(토큰 스크립트의 curl `--max-time`)도
@@ -88,7 +88,7 @@
 input=$(cat)
 # 모든 Bash 호출마다 실행되므로 관련 글자가 없으면 파이썬을 실행하지 않고 끝낸다.
 case "$input" in
-  *gh*|*git*|*GH_*|*GITHUB_TOKEN*|*GIT_CONFIG*|*credential*|*kit-bot*|*human_comment*|*human_review*|*window_record*|*review_record*|*'env -'*|*.config/*|*key.pem*) ;;
+  *gh*|*git*|*GH_*|*GITHUB_TOKEN*|*GIT_CONFIG*|*credential*|*kit-bot*|*human_comment*|*human_review*|*backlog.sh*|*window_record*|*review_record*|*'env -'*|*.config/*|*key.pem*) ;;
   *) exit 0 ;;
 esac
 
@@ -461,8 +461,10 @@ if any(wraps(s, 'human_comment.sh') for s in segs):
 if any(runs(s, 'human_comment.sh') for s in segs):
     human_comment()
 
-# 판정 스크립트는 안에서 gh 를 부른다(`merge-pr` 2절). 명령 글자에 gh 가 없어도 토큰이 살아 있어야 한다.
-remote = any(s in GIT_REMOTE for s in git_subs) or any(runs(s, 'human_review.sh') for s in segs)
+# 판정 스크립트(`merge-pr` 2절)와 「다음 일」 목록 스크립트(`merge-pr` 의 「다음 일」 문단)는 안에서 gh 를 부른다.
+# 명령 글자에 gh 가 없어도 토큰이 살아 있어야 한다 — 오래 쉰 세션에서는 목록 스크립트가 첫 조회일 수 있다.
+remote = any(s in GIT_REMOTE for s in git_subs) or any(runs(s, n) for s in segs
+                                                        for n in ('human_review.sh', 'backlog.sh'))
 if not gh_calls and not remote:
     sys.exit(0)
 
