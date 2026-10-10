@@ -8,11 +8,16 @@
 # 그래서 고를 때마다 열린 이슈 전체를 다시 받는다. 순서는 이 스크립트가 아니라 세션이 `merge-pr` 의 「다음 일」
 # 문단대로 정한다. 이 스크립트는 받아 오기만 한다.
 #
-# 다른 세션이 맡은 일은 둘로 안다. 열린 PR 은 닫는 이슈와 본문의 `Refs #N` 만 뺀다 — 본문은 근거로 다른 이슈를
-# 들기도 해서, 다 빼면 그 PR 이 열려 있는 동안 근거로 든 이슈가 후보에서 빠진다. PR 이 없는 다른 worktree 의
+# 다른 세션이 맡은 일은 두 곳에서 알아낸다. 열린 PR 은 닫는 이슈와 본문의 `Refs #N` 만 뺀다 — 본문은 근거로 다른
+# 이슈를 들기도 해서, 다 빼면 그 PR 이 열려 있는 동안 근거로 든 이슈가 후보에서 빠진다. PR 이 없는 다른 worktree 의
 # 브랜치는 기본 브랜치에 없는 커밋의 메시지에 나오는 `#N` 을 꼴을 가리지 않고 모두 뺀다 — PR 이 없으면 커밋
-# 메시지가 유일한 단서이고, 닫는 키워드 없이 번호를 적기도 한다. 번호가 없는 브랜치는 이름을 그대로 낸다. 이
-# 스크립트를 실행한 worktree 는 세션 자신의 일이라 내지 않는다. 같은 레포의 다른 clone 은 보이지 않는다.
+# 메시지가 유일한 단서이고, 닫는 키워드 없이 번호를 적기도 한다. 번호가 없는 브랜치는 이름을 그대로 낸다.
+#
+# 빼지 않는 것: 열린 PR 은 없고 머지되거나 닫힌 PR 이 있는 브랜치는 끝난 일이라 그 커밋의 번호를 빼지 않는다 —
+# 스쿼시 머지에서는 그 커밋이 기본 브랜치의 조상이 되지 않아 「기본 브랜치에 없는 커밋」으로 나온다. 기본 브랜치에
+# 없는 커밋이 하나도 없는 detach worktree(정리를 마친 worktree)와 기본 브랜치의 worktree 는 내지 않는다. 이
+# 스크립트를 실행한 worktree 는 세션 자신의 일이라 내지 않는다. 같은 레포의 다른 clone 에서 PR 없이 하는 일은
+# 보이지 않는다.
 #
 # `gh issue list` · `gh pr list` 는 기본으로 30건만 받는다. 한도를 크게 주고, 받은 수가 한도에 닿으면 잘렸을 수
 # 있어 실패한다.
@@ -34,16 +39,32 @@ def run(args):
     return subprocess.run(args, capture_output=True, text=True)
 
 
+def first_line(text):
+    return (text.strip().splitlines() or ['(출력 없음)'])[0]
+
+
 def gh_list(kind, fields):
+    # 조사가 앞말에 맞게 이름마다 따로 둔다: (목적격, 주격)
+    obj, subj = ('이슈를', '이슈가') if kind == 'issue' else ('PR 을', 'PR 이')
     r = run(['gh', kind, 'list', '--state', 'open', '--limit', str(LIMIT), '--json', fields])
     if r.returncode != 0:
-        err = (r.stderr.strip().splitlines() or ['(출력 없음)'])[0]
-        die('열린 %s 을 받지 못했다: %s' % ('이슈' if kind == 'issue' else 'PR', err))
+        die('열린 %s 받지 못했다: %s' % (obj, first_line(r.stderr)))
     items = json.loads(r.stdout or '[]')
     if len(items) >= LIMIT:
-        die('열린 %s 이 한도(%d)만큼 왔다 — 잘렸을 수 있어 이 목록으로 고르지 않는다'
-            % ('이슈' if kind == 'issue' else 'PR', LIMIT))
+        die('열린 %s 한도(%d)만큼 왔다 — 잘렸을 수 있어 이 목록으로 고르지 않는다' % (subj, LIMIT))
     return items
+
+
+def finished_pr(branch):
+    """열린 PR 이 없는 브랜치에 머지되거나 닫힌 PR 이 있으면 (번호, 상태) 를, 없으면 None 을 낸다"""
+    r = run(['gh', 'pr', 'list', '--state', 'all', '--head', branch, '--limit', '10', '--json', 'number,state'])
+    if r.returncode != 0:
+        die('%s 브랜치의 PR 을 받지 못했다: %s' % (branch, first_line(r.stderr)))
+    done = [p for p in json.loads(r.stdout or '[]') if p.get('state') in ('MERGED', 'CLOSED')]
+    if not done:
+        return None
+    p = max(done, key=lambda p: p['number'])
+    return p['number'], '머지됨' if p['state'] == 'MERGED' else '닫힘'
 
 
 def nums(text):
@@ -85,7 +106,7 @@ for p in prs:
 
 wt = run(['git', 'worktree', 'list', '--porcelain'])
 if wt.returncode != 0:
-    die('worktree 목록을 받지 못했다: %s' % (wt.stderr.strip().splitlines() or [''])[0])
+    die('worktree 목록을 받지 못했다: %s' % first_line(wt.stderr))
 trees, cur = [], {}
 for line in wt.stdout.splitlines() + ['']:
     if not line:
@@ -109,8 +130,12 @@ for t in trees:
         continue
     log = run(['git', 'log', '%s..%s' % (base, ref), '--format=%B'])
     if log.returncode != 0:
-        die('%s 의 커밋을 읽지 못했다: %s' % (name, (log.stderr.strip().splitlines() or [''])[0]))
-    if branch == default and not log.stdout.strip():
+        die('%s 의 커밋을 읽지 못했다: %s' % (name, first_line(log.stderr)))
+    if (not branch or branch == default) and not log.stdout.strip():
+        continue
+    done = finished_pr(branch) if branch else None
+    if done:
+        rows.append('%s\t%s\tPR #%d %s' % (path, name, done[0], done[1]))
         continue
     found = sorted(set(nums(log.stdout)))
     for n in found:

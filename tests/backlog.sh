@@ -45,9 +45,18 @@ if a[:2] == ['issue', 'list']:
     print(json.dumps(issues[:limit], ensure_ascii=False))
     sys.exit(0)
 if a[:2] == ['pr', 'list']:
-    prs = [{'number': 300, 'title': 'PR 셋백', 'headRefName': 'feat/c',
+    prs = [{'number': 300, 'title': 'PR 셋백', 'headRefName': 'feat/c', 'state': 'OPEN',
             'closingIssuesReferences': [{'number': 40}],
-            'body': '근거로 든 것: #41 · #42\n\nRefs #43\nrefs: #44'}]
+            'body': '근거로 든 것: #41 · #42\n\nRefs #43\nrefs: #44'},
+           {'number': 301, 'title': '머지된 PR', 'headRefName': 'feat/merged', 'state': 'MERGED',
+            'closingIssuesReferences': [], 'body': 'Refs #14'},
+           {'number': 302, 'title': '닫힌 PR', 'headRefName': 'feat/closed', 'state': 'CLOSED',
+            'closingIssuesReferences': [], 'body': 'Refs #15'}]
+    if '--head' in a:
+        prs = [p for p in prs if p['headRefName'] == a[a.index('--head') + 1]]
+    state = a[a.index('--state') + 1] if '--state' in a else 'open'
+    if state != 'all':
+        prs = [p for p in prs if p['state'].lower() == state]
     print(json.dumps(prs[:limit], ensure_ascii=False))
     sys.exit(0)
 sys.stderr.write('stub: 모르는 호출 %s\n' % joined)
@@ -75,6 +84,14 @@ git -C "$T/wt-b" commit -q --allow-empty -m 'start something'
 # 열린 PR(#300)이 있는 브랜치 — 커밋이 말하는 번호가 아니라 PR 의 닫는 이슈와 Refs 를 따른다
 git -C "$T/self" worktree add -q -b feat/c "$T/wt-c" main
 git -C "$T/wt-c" commit -q --allow-empty -m 'as discussed in #13'
+# PR 이 이미 머지된(또는 닫힌) 브랜치가 worktree 에 남은 것 — 스쿼시 머지라 그 커밋은 기본 브랜치의 조상이 아니다.
+# 그 커밋이 가리키는 열린 이슈는 아무도 하고 있지 않으므로 빼지 않는다
+git -C "$T/self" worktree add -q -b feat/merged "$T/wt-merged" main
+git -C "$T/wt-merged" commit -q --allow-empty -m 'first part' -m 'Refs #14'
+git -C "$T/self" worktree add -q -b feat/closed "$T/wt-closed" main
+git -C "$T/wt-closed" commit -q --allow-empty -m 'abandoned' -m 'Refs #15'
+# `merge-pr` 4절대로 정리를 마치고 기본 브랜치에 detach 한 worktree — 하는 일이 없다
+git -C "$T/self" worktree add -q --detach "$T/wt-done" main
 
 run() { ( cd "$T/self" && bash "$S" ) > "$T/out" 2>&1; echo $? > "$T/rc"; }
 
@@ -99,10 +116,10 @@ PY
 drop=$(sed -n '/^== 후보에서 뺄 열린 이슈/,/^==/p' "$T/out")
 has() { printf '%s\n' "$drop" | grep -qE "^#$1([^0-9]|$)"; }
 for n in 40 43 44; do
-  has $n && ok "열린 PR 의 닫는 이슈 · Refs 인 #$n 을 뺄 번호로 낸다" || bad "열린 PR 의 닫는 이슈 · Refs 인 #$n 이 뺄 번호에 없다"
+  has $n && ok "열린 PR 의 닫는 이슈 · Refs 번호(#$n)를 뺄 번호로 낸다" || bad "열린 PR 의 닫는 이슈 · Refs 번호(#$n)가 뺄 번호에 없다"
 done
 for n in 41 42; do
-  has $n && bad "PR 본문이 근거로 든 #$n 을 뺄 번호로 냈다" || ok "PR 본문이 근거로 든 #$n 은 빼지 않는다"
+  has $n && bad "PR 본문이 근거로 든 번호(#$n)를 뺄 번호로 냈다" || ok "PR 본문이 근거로 든 번호(#$n)는 빼지 않는다"
 done
 has 12 && ok "PR 이 없는 worktree 의 커밋 본문이 닫는 키워드 없이 말한 #12 를 뺄 번호로 낸다" \
   || bad "PR 이 없는 worktree 의 커밋 본문이 말한 #12 가 뺄 번호에 없다"
@@ -112,6 +129,15 @@ has 7 && bad "이 세션 자신의 브랜치가 말한 #7 을 뺄 번호로 냈�
 grep -E 'feat/b' "$T/out" | grep -q '번호 없음' && ok "번호가 없는 worktree 브랜치를 이름 그대로 낸다" \
   || bad "번호가 없는 worktree 브랜치(feat/b)가 출력에 없다"
 grep -q 'feat/self' "$T/out" && bad "이 세션 자신의 브랜치(feat/self)를 다른 worktree 로 냈다" || ok "이 세션 자신의 브랜치는 worktree 목록에 없다"
+for c in '14:feat/merged:머지됨' '15:feat/closed:닫힘'; do
+  n=${c%%:*}; rest=${c#*:}; br=${rest%%:*}; st=${rest#*:}
+  has "$n" && bad "PR 이 끝난 브랜치(${br})의 커밋이 가리키는 번호(#${n})를 뺄 번호로 냈다" \
+    || ok "PR 이 끝난 브랜치(${br})의 커밋이 가리키는 번호(#${n})는 빼지 않는다"
+  grep -E "${br}" "$T/out" | grep -q "${st}" && ok "PR 이 끝난 브랜치(${br})를 「${st}」으로 낸다" \
+    || bad "PR 이 끝난 브랜치(${br})가 「${st}」으로 나오지 않는다: $(grep -E "${br}" "$T/out")"
+done
+grep -q 'wt-done' "$T/out" && bad "정리를 마치고 detach 한 worktree(wt-done)를 다른 세션의 일로 냈다" \
+  || ok "기본 브랜치에 없는 커밋이 없는 detach worktree 는 내지 않는다"
 
 # 받은 수가 한도에 닿으면 잘렸을 수 있다 — 잘린 목록으로 고르지 않게 실패한다
 STUB_ISSUES=100000 run
@@ -119,11 +145,13 @@ rc=$(cat "$T/rc")
 [ "$rc" != 0 ] && grep -q '^!!' "$T/out" && ok "열린 이슈 수가 한도에 닿으면 그 사실을 내고 실패한다" \
   || bad "열린 이슈 수가 한도에 닿았는데 rc=$rc: $(head -1 "$T/out")"
 
-for what in 'issue list' 'pr list'; do
+# 실패 줄은 세션이 사람에게 그대로 보인다 — 조사까지 앞말에 맞는지 본다
+for c in 'issue list:!! 열린 이슈를 받지 못했다' 'pr list:!! 열린 PR 을 받지 못했다' '--head:!! feat/'; do
+  what=${c%%:*}; want=${c#*:}
   STUB_FAIL="$what" run
   rc=$(cat "$T/rc")
-  [ "$rc" != 0 ] && grep -q '^!!' "$T/out" && ok "gh $what 이 실패하면 그 사실을 내고 실패한다" \
-    || bad "gh $what 이 실패했는데 rc=$rc: $(head -1 "$T/out")"
+  [ "$rc" != 0 ] && grep -qF "$want" "$T/out" && ok "\`gh\` 조회(${what})가 실패하면 「${want}」 줄을 내고 실패한다" \
+    || bad "\`gh\` 조회(${what})가 실패했는데 rc=$rc: $(head -1 "$T/out")"
 done
 
 # 기본 브랜치를 모르면 어느 커밋이 그 브랜치의 일인지 가리지 못한다
