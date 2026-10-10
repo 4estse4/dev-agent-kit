@@ -50,8 +50,9 @@ gate_have java || { gate_skip "java(미설치)"; return 0 2>/dev/null || exit 0;
 
 # --no-daemon: CI 러너에서 데몬이 남으면 잡이 안 끝난다. 로컬에서도 게이트는 단발이다.
 # `.kit/gate.conf` 의 KIT_GRADLE_TASKS 로 프로젝트가 태스크를 바꿀 수 있다(게이트를 복사해 고치지 않고).
-_tasks=$(gate_conf KIT_GRADLE_TASKS)
-# shellcheck disable=SC2086
-gate_run "gradle ${_tasks:-check}" \
-  "${_jvm_cmd[@]}" --no-daemon --console=plain ${_tasks:-check}
+# 공백에서만 나누고(lib.sh 의 gate_conf), 값이 없거나 공백뿐이면 check 다.
+read -r -a _tasks <<< "$(gate_conf KIT_GRADLE_TASKS)"
+[ ${#_tasks[@]} -gt 0 ] || _tasks=(check)
+gate_run "gradle ${_tasks[*]}" \
+  "${_jvm_cmd[@]}" --no-daemon --console=plain "${_tasks[@]}"
 unset _jvm_cmd _tasks

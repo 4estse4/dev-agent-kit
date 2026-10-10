@@ -8,6 +8,9 @@
 # 보는 것:
 #   · 환경 변수 넷이 게이트가 실행하는 테스트 · 태스크와 찾는 모듈을 바꾸지 않는다
 #   · `.kit/gate.conf` 의 값은 적용된다(공백이 든 값 포함)
+#   · 값은 공백에서만 나눈다 — 공백뿐인 값은 기본값이고, `KIT_PRUNE_DIRS` 의 `.` 은 탐색을 끄지 않고, 와일드카드는 파일
+#     이름으로 펼치지 않는다(`-run` 정규식 · gradle 태스크 · `find -name` 패턴). 모듈을 찾다 읽지 못한 디렉터리는 게이트
+#     출력에 알린다
 #   · `.kit/gate.conf` 에 커밋에 안 들어간 변경이 있으면 커밋 훅과 푸시 훅이 실패한다 — 작업 트리만 고침 · 인덱스에서 뺌 ·
 #     (푸시 훅) 스테이지만 하고 커밋하지 않음 · 커밋한 적 없음. 커밋에 넣으려고 스테이지한 변경(커밋 훅)과 깨끗한 상태는 그
 #     이유로 막지 않는다
@@ -79,6 +82,49 @@ printf 'KIT_PRUNE_DIRS=.git node_modules .venv svc-py\n' >> "$R/.kit/gate.conf"
 gate
 printf '%s\n' "$log" | grep -q '^pytest' && { bad ".kit/gate.conf 의 KIT_PRUNE_DIRS 가 svc-py 를 빼야 한다:"; show "$log"; } \
   || ok ".kit/gate.conf 의 KIT_PRUNE_DIRS 가 모듈을 검사에서 뺀다"
+
+echo "── .kit/gate.conf 의 값을 읽는 법"
+# 공백뿐인 값은 값이 없는 것이다. 공백 하나가 남은 줄은 diff 에서 빈 값과 구분되지 않는데, 그대로 읽으면 건너뛸 목록이
+# 비어 모듈 탐색이 통째로 꺼지고 gradle 태스크가 빠진다
+printf 'KIT_PRUNE_DIRS= \nKIT_GRADLE_TASKS= \n' > "$R/.kit/gate.conf"
+gate
+ran 'pytest -q' && ok "공백뿐인 KIT_PRUNE_DIRS 는 기본 목록으로 읽어 모듈을 찾는다" \
+  || { bad "공백뿐인 KIT_PRUNE_DIRS 로 모듈을 찾지 못했다:"; show "$out"; }
+ran 'gradlew --no-daemon --console=plain check' && ok "공백뿐인 KIT_GRADLE_TASKS 는 check 를 실행한다" \
+  || { bad "공백뿐인 KIT_GRADLE_TASKS 가 check 를 없앴다:"; show "$log"; }
+printf 'KIT_PRUNE_DIRS=.git node_modules .venv .\n' > "$R/.kit/gate.conf"
+gate
+ran 'pytest -q' && ok "KIT_PRUNE_DIRS 의 . 은 모듈 탐색을 통째로 끄지 않는다" \
+  || { bad "KIT_PRUNE_DIRS 의 . 이 모듈 탐색을 껐다:"; show "$out"; }
+# 값은 공백에서만 나눈다. 와일드카드를 파일 이름으로 펼치면 -run 정규식 · find -name 패턴이 다른 것이 된다.
+# 각 모듈 디렉터리에는 그 패턴에 맞는 파일이 있다(go.mod · pyproject.toml · settings.gradle)
+printf 'KIT_GO_TEST_FLAGS=-run go.*\nKIT_PYTEST_FLAGS=-k py*\nKIT_GRADLE_TASKS=settings*\n' > "$R/.kit/gate.conf"
+gate
+ran 'go test -run go.* ./...' && ok "KIT_GO_TEST_FLAGS 의 와일드카드를 파일 이름으로 펼치지 않는다" \
+  || { bad "KIT_GO_TEST_FLAGS 의 와일드카드가 펼쳐졌다:"; show "$log"; }
+ran 'pytest -q -k py*' && ok "KIT_PYTEST_FLAGS 의 와일드카드를 파일 이름으로 펼치지 않는다" \
+  || { bad "KIT_PYTEST_FLAGS 의 와일드카드가 펼쳐졌다:"; show "$log"; }
+ran 'gradlew --no-daemon --console=plain settings*' && ok "KIT_GRADLE_TASKS 의 와일드카드를 파일 이름으로 펼치지 않는다" \
+  || { bad "KIT_GRADLE_TASKS 의 와일드카드가 펼쳐졌다:"; show "$log"; }
+# find -name 에 전달할 패턴. 루트의 vend.txt 로 펼쳐지면 lib/vend-py 를 건너뛰지 못한다
+: > "$R/vend.txt"; mkdir -p "$R/lib/vend-py"; printf '[project]\nname = "v"\nversion = "0"\n' > "$R/lib/vend-py/pyproject.toml"
+fake "$R/lib/vend-py/.venv/bin/pytest" vendpytest
+printf 'KIT_PRUNE_DIRS=.git node_modules .venv vend*\n' > "$R/.kit/gate.conf"
+gate
+printf '%s\n' "$log" | grep -q '^vendpytest' && { bad "KIT_PRUNE_DIRS 의 vend* 가 파일 이름으로 펼쳐져 lib/vend-py 를 건너뛰지 못했다:"; show "$log"; } \
+  || ok "KIT_PRUNE_DIRS 의 패턴을 파일 이름으로 펼치지 않고 find -name 에 전달한다"
+rm -rf "$R/vend.txt" "$R/lib"
+# 읽지 못한 디렉터리 — 게이트는 실패하지 않지만 그 안의 모듈은 검사되지 않았으므로 알린다
+rm -f "$R/.kit/gate.conf"; mkdir -p "$R/locked/svc"; : > "$R/locked/svc/go.mod"; chmod 000 "$R/locked"
+if [ -r "$R/locked" ]; then
+  echo "  - 건너뜀: 이 사용자는 권한을 지운 디렉터리도 읽는다(root) — 읽지 못한 디렉터리 경우를 만들 수 없다"
+else
+  gate
+  if printf '%s\n' "$out" | grep -q '읽지 못한 디렉터리' && printf '%s\n' "$out" | grep -q 'locked' && ran 'pytest -q'; then
+    ok "모듈을 찾다 읽지 못한 디렉터리를 게이트 출력에 알리고 나머지 모듈은 검사한다"
+  else bad "모듈을 찾다 읽지 못한 디렉터리를 게이트 출력에 알려야 한다:"; show "$out"; fi
+fi
+chmod 755 "$R/locked"; rm -rf "$R/locked"
 
 echo "── 커밋에 안 들어간 .kit/gate.conf"
 H="$T/h"; newrepo "$H" py

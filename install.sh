@@ -343,7 +343,7 @@ if [ "$DO_LINT" = 1 ]; then
   # 대상 레포의 .kit/gate.conf 를 따른다 — 게이트가 그 레포에서 읽는 값이 그것이다.
   # shellcheck source=/dev/null
   . "$KIT_ROOT/common/gate/lib.sh"
-  GATE_PRUNE_DIRS=$(gate_prune_dirs "$TARGET/.kit/gate.conf")
+  gate_set_prune "$TARGET/.kit/gate.conf"
 
   # $4 · $5 는 선택 인자다 — set -u 하에서는 ${4:-} 로 받아야 미설정일 때 오류가 나지 않는다.
   place_beside() { # $1=마커 $2=킷 설정 파일 $3=놓을 이름 $4=마커에 이 문자열이 있으면 건너뜀(선택) $5=마커가 있는 디렉터리를 받아 성공할 때만 놓는 함수(선택)
@@ -362,8 +362,7 @@ if [ "$DO_LINT" = 1 ]; then
       case " ${PLACED_DESTS:-} " in *" $dest "*) continue ;; esac
       PLACED_DESTS="${PLACED_DESTS:-} $dest"
       place "$2" "$dest"
-    # shellcheck disable=SC2046
-    done < <(cd "$TARGET" && find . \( $(gate_prune_expr) \) -prune -o -name "$1" -print 2>/dev/null)
+    done < <(cd "$TARGET" && find . \( "${GATE_PRUNE_ARGS[@]}" \) -prune -o -name "$1" -print 2>/dev/null)
   }
 
   # eslint 는 그 package.json 이 eslint 를 쓸 때만 놓는다 — package.json 에 `"eslint":` 키가 있거나(대개

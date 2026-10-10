@@ -20,8 +20,8 @@ gate_have golangci-lint && gate_run "golangci-lint" golangci-lint run || gate_sk
 if [ "${GATE_LINT_ONLY:-0}" != 1 ]; then
 # 프로젝트가 추가 플래그를 요구할 수 있다(예: 공유 DB 를 쓰는 통합 테스트에
 # 필요한 -p 1 직렬화). 게이트 정의를 복사해 고치지 않고 `.kit/gate.conf` 의 KIT_GO_TEST_FLAGS 로 전달한다.
-_flags=$(gate_conf KIT_GO_TEST_FLAGS)
-# shellcheck disable=SC2086
-gate_run       "go test"      go test $_flags ./...
+# 값은 공백에서만 나눈다 — 와일드카드를 파일 이름으로 펼치면 -run 정규식이 다른 것이 된다(lib.sh 의 gate_conf).
+read -r -a _flags <<< "$(gate_conf KIT_GO_TEST_FLAGS)"
+gate_run       "go test"      go test ${_flags[@]+"${_flags[@]}"} ./...
 unset _flags
 fi

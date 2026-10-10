@@ -44,22 +44,22 @@ jobs:
         # 알리지 않고 건너뛴다. 어댑터를 추가하면 반드시 여기도 같이 추가해야 한다.
         #
         # 마커를 찾는 기준은 게이트(gate.sh)와 같다. 깊이를 제한하지 않고, 건너뛸 디렉터리는
-        # lib.sh 의 gate_prune_expr 하나를 쓴다. 한때 여기만 maxdepth 3 이라 네 단계 아래의
+        # lib.sh 의 GATE_PRUNE_ARGS 하나를 쓴다. 한때 여기만 maxdepth 3 이라 네 단계 아래의
         # 모듈을 게이트는 보고 이 감지는 못 봤다. 아래 스텝들의 find 도 같은 기준이다.
         # 대부분 -print -quit 로 첫 하나에서 멈춘다.
         run: |
           . .kit/gate/lib.sh
-          find . \( $(gate_prune_expr) \) -prune -o -name go.mod -print > "$RUNNER_TEMP/go.mods"; \
+          find . \( "${GATE_PRUNE_ARGS[@]}" \) -prune -o -name go.mod -print > "$RUNNER_TEMP/go.mods"; \
             gomod=$(gate_go_highest < "$RUNNER_TEMP/go.mods"); \
             [ -n "$gomod" ] && echo "gomod=${gomod#./}" >> "$GITHUB_OUTPUT" && echo "go=true" >> "$GITHUB_OUTPUT" || echo "go=false" >> "$GITHUB_OUTPUT"
-          find . \( $(gate_prune_expr) \) -prune -o -name package.json -print -quit | grep -q . \
+          find . \( "${GATE_PRUNE_ARGS[@]}" \) -prune -o -name package.json -print -quit | grep -q . \
             && echo "node=true" >> "$GITHUB_OUTPUT" || echo "node=false" >> "$GITHUB_OUTPUT"
-          find . \( $(gate_prune_expr) \) -prune -o \
+          find . \( "${GATE_PRUNE_ARGS[@]}" \) -prune -o \
                  \( -name 'settings.gradle' -o -name 'settings.gradle.kts' \
                     -o -name 'build.gradle' -o -name 'build.gradle.kts' \) \
                  -print -quit | grep -q . \
             && echo "jvm=true" >> "$GITHUB_OUTPUT" || echo "jvm=false" >> "$GITHUB_OUTPUT"
-          find . \( $(gate_prune_expr) \) -prune -o -name pyproject.toml -print -quit | grep -q . \
+          find . \( "${GATE_PRUNE_ARGS[@]}" \) -prune -o -name pyproject.toml -print -quit | grep -q . \
             && echo "py=true" >> "$GITHUB_OUTPUT" || echo "py=false" >> "$GITHUB_OUTPUT"
 
   vendored:
@@ -214,8 +214,8 @@ jobs:
           # gradlew, 서브모듈마다 build.gradle)가 여기서 실패한다. 어댑터는 그 서브모듈에
           # 들어가지도 않는데 CI 만 실패한다.
           # 건너뛰는 디렉터리도 게이트와 같다. build/ 를 이름으로 거르지 않는다 —
-          # 업무 도메인 이름이기도 해서 멀쩡한 모듈이 빠진다(lib.sh 의 GATE_PRUNE_DIRS 주석).
-          done < <(find . \( $(gate_prune_expr) \) -prune -o \
+          # 업무 도메인 이름이기도 해서 멀쩡한 모듈이 빠진다(lib.sh 의 GATE_PRUNE_DEFAULT 주석).
+          done < <(find . \( "${GATE_PRUNE_ARGS[@]}" \) -prune -o \
                           \( -name 'settings.gradle' -o -name 'settings.gradle.kts' \
                              -o -name 'build.gradle' -o -name 'build.gradle.kts' \) -print \
                    | while IFS= read -r m; do printf '%s|%s\n' "$(dirname "$m")" "$m"; done \
@@ -353,7 +353,7 @@ jobs:
                      "[project.optional-dependencies].dev · requirements-dev.txt 중 하나로 선언하세요."
               fi
             )
-          done < <(find . \( $(gate_prune_expr) \) -prune -o -name pyproject.toml -print)
+          done < <(find . \( "${GATE_PRUNE_ARGS[@]}" \) -prune -o -name pyproject.toml -print)
 
       # node 버전은 **레포 루트의 `.nvmrc`** 가 정한다. 없으면 여기서 이유를 말하며 멈춘다
       # (lib.sh 의 gate_nvmrc_check). 한때 setup-node 가 루트의 `.nvmrc` 와 lockfile 을 가정했고,
@@ -380,7 +380,7 @@ jobs:
           while IFS= read -r f; do
             echo "── $(dirname "$f") ──"
             (cd "$(dirname "$f")" && npm ci --no-audit --no-fund)
-          done < <(find . \( $(gate_prune_expr) \) -prune -o -name package.json -print)
+          done < <(find . \( "${GATE_PRUNE_ARGS[@]}" \) -prune -o -name package.json -print)
 
       # 게이트 본체 — 로컬 pre-push 와 같은 스크립트.
       - run: bash .kit/gate/gate.sh --all
@@ -427,7 +427,7 @@ jobs:
             echo "── $d ──" | tee -a /tmp/cov.txt
             ( cd "$d" && go test -cover ./... ) 2>&1 | tee -a /tmp/cov.txt
             [ "${PIPESTATUS[0]}" = 0 ] || fail=1
-          done < <(find . \( $(gate_prune_expr) \) -prune -o -name go.mod -print)
+          done < <(find . \( "${GATE_PRUNE_ARGS[@]}" \) -prune -o -name go.mod -print)
           {
             echo "### 커버리지"
             echo '```'
@@ -529,7 +529,7 @@ jobs:
             d=$(dirname "$mod")
             echo "── govulncheck $d ──"
             ( cd "$d" && govulncheck ./... ) || fail=1
-          done < <(find . \( $(gate_prune_expr) \) -prune -o -name go.mod -print)
+          done < <(find . \( "${GATE_PRUNE_ARGS[@]}" \) -prune -o -name go.mod -print)
           exit $fail
 
       - if: needs.detect.outputs.node == 'true'
@@ -550,7 +550,7 @@ jobs:
           while IFS= read -r f; do
             echo "── $(dirname "$f") ──"
             (cd "$(dirname "$f")" && npm audit --audit-level=high)
-          done < <(find . \( $(gate_prune_expr) \) -prune -o \( -name package-lock.json -o -name npm-shrinkwrap.json \) -print)
+          done < <(find . \( "${GATE_PRUNE_ARGS[@]}" \) -prune -o \( -name package-lock.json -o -name npm-shrinkwrap.json \) -print)
 
   trace:
     runs-on: ubuntu-latest
