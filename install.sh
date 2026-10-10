@@ -398,6 +398,14 @@ if [ "$DO_LINT" = 1 ]; then
 
   place_beside go.mod         "$KIT_ROOT/common/lint/go/.golangci.yml"    ".golangci.yml"
   place_beside package.json   "$ESLINT_KIT_CONFIG"                        "eslint.config.js" "" eslint_wanted
+  # .prettierignore 는 루트의 package.json 이 prettier 를 쓸 때만(의존성이나 스크립트에 prettier 가 있을 때) 루트에
+  # 놓는다. 킷이 관리하는 파일(.kit/ · docs/process/ · .claude/)을 프로젝트의 prettier 검사에서 뺀다. prettier 는 실행한
+  # 디렉터리의 .prettierignore 만 읽고, 하위 디렉터리의 package.json 에서 실행한 prettier 는 루트의 킷 파일을 보지 않으므로
+  # 거기에는 놓지 않는다.
+  prettier_wanted() { # $1=package.json 이 있는 디렉터리(끝에 /)
+    [ "$1" = "$TARGET/" ] && grep -Eq '"prettier"[[:space:]]*:|[" ]prettier[ "]' "$1package.json" 2>/dev/null
+  }
+  place_beside package.json   "$KIT_ROOT/common/lint/ts/.prettierignore"  ".prettierignore" "" prettier_wanted
   # pyproject 에 [tool.ruff] 가 이미 있으면 그쪽이 설정이다 — 두 벌을 만들지 않는다.
   place_beside pyproject.toml "$KIT_ROOT/common/lint/py/ruff.toml"        "ruff.toml" \
     '^\[tool\.ruff'
