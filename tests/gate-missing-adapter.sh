@@ -32,8 +32,9 @@ ok() { echo "  ✓ $1"; }
 bad() { echo "  ✗ $1"; fail=1; }
 
 # 게이트를 실행하고 go 어댑터의 실패 블록을 뽑는다. 다른 검사의 블록은 보지 않는다.
-run_gate() { # 인자=앞에 붙일 환경 변수
-  out=$(cd "$R" && env "$@" bash .kit/gate/gate.sh --all 2>&1); rc=$?
+run_gate() { # 인자=앞에 붙일 환경 변수. 세션 표시를 지운다 — 세션 안에서는 게이트가 KIT_ALLOW_MISSING_TOOLS 를 받지
+  # 않는다(tests/session-escapes.sh)
+  out=$(cd "$R" && env -u CLAUDE_CODE_CHILD_SESSION "$@" bash .kit/gate/gate.sh --all 2>&1); rc=$?
   block=$(printf '%s\n' "$out" | awk '/^──── go\(어댑터 없음\) ────$/ { on = 1; print; next } on && (/^──── / || /^gate /) { on = 0 } on')
 }
 show() { printf '%s\n' "$out" | tail -12 | sed 's/^/      /'; }
