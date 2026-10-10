@@ -106,10 +106,11 @@ git -C "$T/self" worktree add -q -b feat/e "$T/wt-e" main
 git -C "$T/wt-e" commit -q --allow-empty -m 'close three' -m 'Closes #26, #27 and #28.'
 git -C "$T/wt-e" commit -q --allow-empty -m 'refer two' -m 'Refs #29, #30'
 # 키워드가 줄 머리가 아니라 산문 · 인용 속에 있거나, 줄을 넘어 번호가 다음 줄에 오는 꼴 — 다른 일을 설명하는 것이라
-# 빼지 않는다. 이 브랜치가 맡은 것은 줄 머리의 `Refs #33` 이다
+# 빼지 않는다. PR 본문과 달리 문장 안의 `Refs`(#11)도 빼지 않는다. 이 브랜치가 맡은 것은 줄 머리의 `Refs #33` 이다
 git -C "$T/self" worktree add -q -b feat/f "$T/wt-f" main
 git -C "$T/wt-f" commit -q --allow-empty -m 'explain' \
   -m 'This is the same fix #31 asked for; #32 follows. gh still returns "Closes #34" for the earlier PR.' \
+  -m 'That PR body also says Refs #11 in a sentence.' \
   -m "$(printf 'The gate change also fixes\n#35 bypass, so it comes next.')" -m 'Refs #33'
 # 줄 머리의 키워드라도 줄을 넘은 번호는 읽지 않는다(#36 · #38). 앞에 공백이 있는 줄 머리는 읽는다(#39). 다른 레포의
 # 번호는 이 레포의 이슈가 아니라 읽지 않는다(#18)
@@ -183,7 +184,7 @@ done
 for n in 33 37 39; do
   has $n && ok "줄 머리(앞 공백 포함)의 Refs 번호(#$n)를 뺄 번호로 낸다" || bad "줄 머리(앞 공백 포함)의 Refs 번호(#$n)가 뺄 번호에 없다"
 done
-for n in 31 32 34 35 36 38; do
+for n in 31 32 34 35 36 38 11; do
   has $n && bad "산문 · 인용 속이나 줄을 넘은 키워드 뒤의 번호(#$n)를 뺄 번호로 냈다" \
     || ok "산문 · 인용 속이나 줄을 넘은 키워드 뒤의 번호(#$n)는 빼지 않는다"
 done
