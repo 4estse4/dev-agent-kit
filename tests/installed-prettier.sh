@@ -6,22 +6,24 @@
 # `npm run format:check`)가 설치 직후부터 실패했다(이슈 #206). 킷 소유 파일(`.kit/` · `docs/process/` · `.claude/`)은
 # 설치기가 루트에 놓는 `.prettierignore` 로 빼고, 프로젝트 소유로 놓는 템플릿은 prettier 기본값으로 포맷해 둔다.
 #
-# 원격 없는 새 레포에 킷을 설치한다(옵션 없이. 두 사례만 `--lang ts` 와 `--lint` 를 뺀 항목으로). 보는 것:
+# 원격 없는 새 레포에 킷을 설치한다. 대부분 옵션 없이 설치하고, `tsonly` 사례는 `--lang ts` 로, `nolint` · `only-*`
+# 사례는 `--lint` 를 뺀 항목으로 설치한다. 보는 것:
 #   · PATH 의 prettier 가 아래 PIN 과 같다 — 다르면 판정하지 못한 것이라 실패한다. 킷은 TypeScript 도구를 핀하지
 #     않으므로(프로젝트의 락파일이 정한다) 이 테스트만의 기준을 여기 둔다. CI 는 이 버전을 설치하고(`kit-tests.yml`),
 #     로컬에서는 이 버전을 PATH 앞에 두고 실행한다
 #   · 루트 package.json 이 prettier 를 쓰면 `.prettierignore` 가 놓이고, 설치한 그대로 `gate.sh --lint` 의 prettier 가
-#     통과한다. node_modules 는 npm install 대신 PATH 의 prettier 를 `.bin/prettier` 로 하나만 둔다
+#     통과한다. node_modules 는 npm install 대신 PATH 의 prettier 를 `.bin/prettier` 로 하나만 둔다.
 #     그 package.json 은 eslint 도 쓴다 — 킷이 그 옆에 놓는 eslint.config.js 도 prettier 를 통과해야 한다
 #   · `--lang ts` 로 설치해도 그렇다. 언어 필터(`common/ci/filter-langs.awk`)가 jvm 의 워크플로 env 블록을 지우면서
 #     빈 줄 두 줄을 남겨, 설치된 gates.yml 이 prettier 에서 실패했다
 #   · `--lint` 없이 `--hooks --agent --templates --ci` 로 설치해도 그렇다. `.prettierignore` 가 빼는 경로를 놓는 것은 그
-#     항목들인데, `.prettierignore` 가 `--lint` 에서만 놓여 게이트가 실패했다
+#     항목들인데, `.prettierignore` 가 `--lint` 에서만 놓여 게이트가 실패했다. `--hooks` · `--agent` · `--templates`
+#     가운데 하나만 골라 설치해도 `.prettierignore` 가 놓인다 — 셋을 함께 준 사례만으로는 설치기 조건에서 항목 하나를
+#     빼도 알 수 없다
 #   · go.mod 가 하위 디렉터리에 있으면 킷이 그 옆에 놓는 .golangci.yml 도 루트의 `prettier --check .` 를 통과한다.
 #     게이트는 Go 도구까지 실행하므로 이 사례만 게이트 대신 format:check 와 같은 명령을 실행한다
 #   · 루트 package.json 이 prettier 를 쓰지 않으면 `.prettierignore` 를 놓지 않는다. 하위 디렉터리의 package.json 만
-#     prettier 를 써도 놓지 않는다 — prettier 는 `--ignore-path` 를 주지 않으면 실행한 디렉터리의 `.prettierignore` 만
-#     읽고, 거기서 실행한 prettier 는 루트의 킷 파일을 보지 않는다
+#     prettier 를 써도 놓지 않는다 — 거기서 실행한 prettier 는 그 디렉터리 아래만 검사해 루트의 킷 파일을 보지 않는다
 #   · 프로젝트에 `.prettierignore` 가 이미 있으면 그것을 두고 킷의 것을 `.prettierignore.kit-new` 로 옆에 놓는다
 set -u
 PIN=3.9.9
@@ -77,12 +79,21 @@ fi
 # TypeScript 만 골라 설치한 레포: 언어 필터를 거친 gates.yml 도 게이트의 prettier 를 통과한다
 demo tsonly "$USES" "" "" --lang ts && gate_prettier tsonly
 
-# 린터 설정 없이 설치한 레포: .prettierignore 가 빼는 경로는 --hooks · --agent · --templates 가 놓으므로 그때도 놓인다
+# 린터 설정 없이 설치한 레포: .prettierignore 가 빼는 경로를 놓는 것은 --hooks · --agent · --templates 이므로, --lint 가
+# 없어도 .prettierignore 가 놓이고 게이트의 prettier 가 통과한다
 if demo nolint "$USES" "" "" --hooks --agent --templates --ci; then
   if [ -f "$R/.prettierignore" ]; then echo "  ✓ nolint: --lint 없이 설치해도 루트에 .prettierignore 가 놓였다"
   else echo "  ✗ nolint: --lint 없이 설치하자 .prettierignore 가 놓이지 않았다"; fail=1; fi
   gate_prettier nolint
 fi
+
+# 셋 가운데 하나만 골라 설치한 레포: 무엇을 골라도 .prettierignore 가 놓인다
+for item in hooks agent templates; do
+  if demo "only-$item" "$USES" "" "" "--$item"; then
+    if [ -f "$R/.prettierignore" ]; then echo "  ✓ only-$item: --$item 만 골라 설치해도 루트에 .prettierignore 가 놓였다"
+    else echo "  ✗ only-$item: --$item 만 골라 설치하자 .prettierignore 가 놓이지 않았다"; fail=1; fi
+  fi
+done
 
 # go.mod 가 하위 디렉터리에 있는 레포: 그 옆에 놓인 .golangci.yml 도 루트의 prettier 를 통과한다
 if demo gomod "$USES" "" backend_go; then
