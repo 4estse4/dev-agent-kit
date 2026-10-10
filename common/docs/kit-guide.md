@@ -23,6 +23,8 @@ bash .kit/gate/gate.sh --all                 # 전부 (CI 가 부르는 것)
 ```
 
 불가피할 때만 `KIT_ALLOW_MISSING_TOOLS=1` 로 도구가 없는 검사를 건너뛰게 한다. **무엇이 검사되지 않는지 출력된다.**
+Claude Code 세션 안에서는 이 변수를 받지 않는다 — 도구를 설치하거나, 사람이 세션 밖 터미널에서 실행한다
+(`verification-stages.md` 6.4).
 
 ## 2. 프로젝트가 채워야 하는 것
 

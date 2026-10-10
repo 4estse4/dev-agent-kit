@@ -129,3 +129,6 @@ Co-Authored-By: Claude Opus 5 (xhigh) <noreply@anthropic.com>
 > 아니라 "검사되지 않았다" 이다. 로컬만 도구 없이 통과시키면 로컬에서 통과한 커밋이 CI 에서
 > 실패하고, 고쳐서 다시 푸시하는 데 CI 와 사람의 시간이 든다. 불가피할 때만
 > `KIT_ALLOW_MISSING_TOOLS=1` 로 도구가 없는 검사를 건너뛰게 하고, 그때 무엇이 검사되지 않는지 출력된다.
+> **Claude Code 세션 안에서는 게이트가 이 변수를, 커밋 훅이 보호 브랜치 예외(`KIT_ALLOW_PROTECTED`)를 받지 않는다.**
+> 세션은 도구를 설치하고, 불가피한 예외는 사람에게 세션 밖 터미널에서 실행해 달라고 한다
+> (`docs/process/verification-stages.md` 6.4).
