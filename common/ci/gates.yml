@@ -131,7 +131,7 @@ jobs:
         id: go
         uses: actions/setup-go@v7
         with:
-          go-version-file: '${{ needs.detect.outputs.gomod }}'
+          go-version-file: "${{ needs.detect.outputs.gomod }}"
           cache: true
           cache-dependency-path: |
             **/go.mod
@@ -364,7 +364,7 @@ jobs:
       - if: needs.detect.outputs.node == 'true'
         uses: actions/setup-node@v7
         with:
-          node-version-file: '.nvmrc'
+          node-version-file: ".nvmrc"
           cache: npm
           cache-dependency-path: |
             **/package-lock.json
@@ -398,7 +398,7 @@ jobs:
       # 캐시 키는 gate 잡과 같다(레포 전체의 go.mod 와 go.sum). 세 잡 가운데 먼저 끝난 잡의 캐시가 저장된다.
       - uses: actions/setup-go@v7
         with:
-          go-version-file: '${{ needs.detect.outputs.gomod }}'
+          go-version-file: "${{ needs.detect.outputs.gomod }}"
           cache: true
           cache-dependency-path: |
             **/go.mod
@@ -490,7 +490,7 @@ jobs:
         id: go
         uses: actions/setup-go@v7
         with:
-          go-version-file: '${{ needs.detect.outputs.gomod }}'
+          go-version-file: "${{ needs.detect.outputs.gomod }}"
           cache: true
           cache-dependency-path: |
             **/go.mod
@@ -535,7 +535,7 @@ jobs:
           gate_nvmrc_check
       - if: needs.detect.outputs.node == 'true'
         uses: actions/setup-node@v7
-        with: { node-version-file: '.nvmrc' }
+        with: { node-version-file: ".nvmrc" }
       - if: needs.detect.outputs.node == 'true'
         name: npm audit (high+)
         run: |

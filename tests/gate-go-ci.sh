@@ -129,7 +129,8 @@ wiring=$(awk -v q="'" '
   function endstep() {
     if (step ~ /uses: actions\/setup-go@/) {
       n++; msg = ""; blockpaths(step)
-      if (!index(step, "go-version-file: " q "${{ needs.detect.outputs.gomod }}" q)) msg = msg " detect 의 gomod 를 go-version-file 로 받지 않는다."
+      v = "${{ needs.detect.outputs.gomod }}"
+      if (!index(step, "go-version-file: " q v q) && !index(step, "go-version-file: \"" v "\"")) msg = msg " detect 의 gomod 를 go-version-file 로 받지 않는다."
       if (step !~ ("cache: *[\"" q "]?true[\"" q "]? *[,}#\n]")) msg = msg " cache 가 켜져 있지 않다."
       else if (!(("**/go.mod" in deps) && ("**/go.sum" in deps)))
         msg = msg " cache-dependency-path 블록에 레포 전체의 go.mod 와 go.sum 이 다 있지 않다."
