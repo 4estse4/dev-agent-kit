@@ -5,8 +5,9 @@
 # 한 번도 보기에 오르지 않았다(이슈 #208). 그래서 「다음 일」을 고를 때마다 열린 이슈 전체를 다시 받는다. 받는 쪽이
 # 틀리면 고르는 규칙이 맞아도 후보가 빠진다. 보는 것:
 #   · `gh issue list` 의 기본 30건에서 잘리지 않고 열린 이슈를 모두 낸다. 받은 수가 한도에 닿으면 실패한다
-#   · 열린 PR 은 닫는 이슈와 본문 줄 머리의 `Refs #N` 만 뺄 번호로 낸다. 본문이 근거로 든 다른 번호는 빼지 않는다 —
-#     빼면 그 PR 이 열려 있는 동안 근거로 든 이슈가 후보에서 빠진다
+#   · 열린 PR 은 닫는 이슈와 본문의 `Refs #N` 만 뺄 번호로 낸다. PR 본문은 `Refs` 를 문장이나 괄호 안에 적으므로
+#     줄 어디서든 읽고, 뒤에 이은 번호도 읽는다. 본문이 근거로 든 다른 번호는 빼지 않는다 — 빼면 그 PR 이 열려 있는
+#     동안 근거로 든 이슈가 후보에서 빠진다
 #   · PR 이 없는 다른 worktree 의 브랜치는 기본 브랜치에 없는 커밋의 메시지에서 줄 머리의 닫는 키워드(Closes · Fixes ·
 #     Resolves 꼴)나 `Refs` 뒤에 이은 번호만 뺄 번호로 낸다. 줄을 넘은 번호와 다른 레포의 번호는 읽지 않는다. 그 밖의 번호는 그 worktree 줄에 근거로 든 번호로 보이고 빼지 않는다 —
 #     빼면 다른 세션이 계획 커밋에서 근거로만 든 이슈가 후보에서 빠진다(이슈 #215). 커밋에 그런 키워드가 하나도 없으면
@@ -54,7 +55,8 @@ if a[:2] == ['issue', 'list']:
 if a[:2] == ['pr', 'list']:
     prs = [{'number': 300, 'title': 'PR 셋백', 'headRefName': 'feat/c', 'state': 'OPEN',
             'closingIssuesReferences': [{'number': 40}],
-            'body': '근거로 든 것: #41 · #42. 문장 안의 Refs #45 는 꼬리말이 아니다\n\nRefs #43\nrefs: #44'},
+            'body': '근거로 든 것: #41 · #42. 이 PR 은 이슈 #45 를 닫지 않는다. Refs #45.\n\n'
+                    '- 이 PR 은 이슈를 닫지 않는다(Refs #8, #9 and #10).\n\nRefs #43\nrefs: #44'},
            {'number': 301, 'title': '머지된 PR', 'headRefName': 'feat/merged', 'state': 'MERGED',
             'headRefOid': os.environ.get('STUB_OID_MERGED', ''), 'closingIssuesReferences': [], 'body': 'Refs #14'},
            {'number': 302, 'title': '닫힌 PR', 'headRefName': 'feat/closed', 'state': 'CLOSED',
@@ -171,7 +173,10 @@ done
 for n in 41 42; do
   has $n && bad "PR 본문이 근거로 든 번호(#$n)를 뺄 번호로 냈다" || ok "PR 본문이 근거로 든 번호(#$n)는 빼지 않는다"
 done
-has 45 && bad "PR 본문의 문장 안에 든 Refs 번호(#45)를 뺄 번호로 냈다" || ok "PR 본문의 문장 안에 든 Refs 번호(#45)는 빼지 않는다"
+for n in 45 8 9 10; do
+  has $n && ok "PR 본문의 문장 · 괄호 안에 적은 Refs 번호(#$n)를 뺄 번호로 낸다" \
+    || bad "PR 본문의 문장 · 괄호 안에 적은 Refs 번호(#$n)가 뺄 번호에 없다"
+done
 for n in 26 27 28 29 30; do
   has $n && ok "키워드 하나 뒤에 이은 번호(#$n)를 모두 뺄 번호로 낸다" || bad "키워드 하나 뒤에 이은 번호(#$n)가 뺄 번호에 없다"
 done
