@@ -4,7 +4,7 @@
 # 이 테스트가 있는 이유: gates.yml 의 concurrency 가 `group: <워크플로>-<ref>` · `cancel-in-progress: true` 라, main 에
 # 푸시 둘이 잇달아 오면 앞 실행이 취소됐다. push 의 시크릿 스캔은 그 푸시가 들여온 커밋(before..after)만 보므로 앞 푸시가
 # 들여온 커밋은 어느 실행도 시크릿 스캔으로 보지 않았다(이슈 #176). PR 은 base..head 를 보므로 앞 실행이 취소돼도 빠지는
-# 커밋이 없고, 같은 PR 의 앞 실행은 지금처럼 취소한다.
+# 커밋이 없어, 같은 PR 의 앞 실행은 취소한다.
 #
 # 깨끗한 레포에 킷을 설치하고 그 gates.yml 의 워크플로 concurrency 를 읽는다. `${{ … }}` 는 GitHub 식의 부분집합(문맥 값 ·
 # 문자열 · == · != · && · || · ! · 괄호 · format)으로 경우마다 계산한다. 모르는 문맥이나 함수가 나오면 값을 짐작하지 않고
@@ -14,6 +14,8 @@
 #   · 같은 PR 의 두 실행(머지 커밋이 다르다)은 그룹이 같고, 그때 cancel-in-progress 가 참이다 — 앞 실행을 취소한다
 #   · 다른 PR 의 실행은 그룹이 다르다
 #   · 잡마다 둔 concurrency 가 없다 — 있으면 잡 단위로 다시 취소될 수 있는데 이 테스트가 그것을 계산하지 않는다
+# 짧은 꼴(`concurrency: <문자열>`)은 GitHub 문서대로 그 문자열을 그룹으로, cancel-in-progress 를 거짓으로 읽어 위 항목으로
+# 판정한다. 워크플로에 concurrency 가 없으면 같은 PR 의 앞 실행을 취소하지 않는다고 알리며 실패한다.
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 fail=0
@@ -38,8 +40,12 @@ def ng(m):
     print(f"  ✗ {m}"); bad = 1
 
 conc = doc.get('concurrency')
+if conc is None:
+    print("  ✗ 워크플로에 concurrency 가 없다 — 같은 PR 의 앞 실행을 취소하지 않는다"); sys.exit(1)
+if isinstance(conc, str):  # 짧은 꼴: 그 문자열이 그룹이고 cancel-in-progress 는 기본값(거짓)이다
+    conc = {'group': conc}
 if not isinstance(conc, dict) or 'group' not in conc:
-    print("  ✗ 워크플로의 concurrency 에 group 이 없다 — 이 테스트가 볼 것이 없다"); sys.exit(1)
+    print(f"  ✗ 워크플로의 concurrency 에서 group 을 읽지 못했다 — {conc!r}"); sys.exit(1)
 for name, job in doc['jobs'].items():
     if 'concurrency' in job:
         ng(f"{name} 잡이 concurrency 를 둔다 — 잡 단위 취소는 이 테스트가 계산하지 않는다")
