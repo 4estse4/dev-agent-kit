@@ -8,9 +8,9 @@
 # 보는 것:
 #   · 환경 변수 넷이 게이트가 실행하는 테스트 · 태스크와 찾는 모듈을 바꾸지 않는다
 #   · `.kit/gate.conf` 의 값은 적용된다(공백이 든 값 포함)
-#   · 값은 공백에서만 나눈다 — 공백뿐인 값은 기본값이고, `KIT_PRUNE_DIRS` 의 `.` 은 탐색을 끄지 않고, 와일드카드는 파일
-#     이름으로 펼치지 않는다(`-run` 정규식 · gradle 태스크 · `find -name` 패턴). 모듈을 찾다 읽지 못한 디렉터리는 게이트
-#     출력에 알린다
+#   · 값은 공백에서만 나눈다 — 공백뿐인 값은 기본값이고, 와일드카드는 파일 이름으로 펼치지 않는다(`-run` 정규식 ·
+#     gradle 태스크 · `find -name` 패턴). `KIT_PRUNE_DIRS` 의 이름과 패턴(`.` · `.*` · `?` · `*` · `build*`)은 시작점과
+#     표지 파일을 건너뛰지 않는다. 모듈을 찾다 읽지 못한 디렉터리는 게이트 출력에 알린다
 #   · `.kit/gate.conf` 에 커밋에 안 들어간 변경이 있으면 커밋 훅과 푸시 훅이 실패한다 — 작업 트리만 고침 · 인덱스에서 뺌 ·
 #     (푸시 훅) 스테이지만 하고 커밋하지 않음 · 커밋한 적 없음. 커밋에 넣으려고 스테이지한 변경(커밋 훅)과 깨끗한 상태는 그
 #     이유로 막지 않는다
@@ -96,6 +96,34 @@ printf 'KIT_PRUNE_DIRS=.git node_modules .venv .\n' > "$R/.kit/gate.conf"
 gate
 ran 'pytest -q' && ok "KIT_PRUNE_DIRS 의 . 은 모듈 탐색을 통째로 끄지 않는다" \
   || { bad "KIT_PRUNE_DIRS 의 . 이 모듈 탐색을 껐다:"; show "$out"; }
+# 패턴도 find 의 시작점(.)에 맞으면 탐색이 통째로 꺼진다. .* 는 숨김 디렉터리만 건너뛰어야 한다
+mkdir -p "$R/.hidden"; printf '[project]\nname = "h"\nversion = "0"\n' > "$R/.hidden/pyproject.toml"
+fake "$R/.hidden/.venv/bin/pytest" hidpytest
+printf 'KIT_PRUNE_DIRS=.*\n' > "$R/.kit/gate.conf"
+gate
+if ran 'go test ./...' && ! printf '%s\n' "$log" | grep -q '^hidpytest'; then
+  ok "KIT_PRUNE_DIRS 의 .* 는 숨김 디렉터리만 건너뛰고 모듈 탐색을 끄지 않는다"
+else bad "KIT_PRUNE_DIRS 의 .* 는 숨김 디렉터리만 건너뛰어야 한다:"; show "$log"; fi
+rm -rf "$R/.hidden"
+printf 'KIT_PRUNE_DIRS=?\n' > "$R/.kit/gate.conf"
+gate
+ran 'go test ./...' && ok "KIT_PRUNE_DIRS 의 ? 는 모듈 탐색을 통째로 끄지 않는다" \
+  || { bad "KIT_PRUNE_DIRS 의 ? 가 모듈 탐색을 껐다:"; show "$out"; }
+# 건너뛰는 것은 디렉터리다. 패턴이 표지 파일 이름에 맞아도 그 파일은 찾는다. * 는 모든 하위 디렉터리를 건너뛰므로
+# go test 는 루트 모듈에서만 실행된다
+printf 'module example.com/root\n\ngo 1.25\n' > "$R/go.mod"
+printf 'KIT_PRUNE_DIRS=*\n' > "$R/.kit/gate.conf"
+gate
+ran 'go test ./...' && ok "KIT_PRUNE_DIRS 의 * 는 하위 디렉터리만 건너뛰고 루트 모듈은 찾는다" \
+  || { bad "KIT_PRUNE_DIRS 의 * 가 루트 모듈까지 건너뛰었다:"; show "$out"; }
+rm -f "$R/go.mod"
+# build 디렉터리를 건너뛰려는 build* 가 build.gradle.kts 까지 건너뛰면 그 모듈이 검사에서 빠진다
+mkdir -p "$R/svc-kts"; : > "$R/svc-kts/build.gradle.kts"; fake "$R/svc-kts/gradlew" ktsgradlew
+printf 'KIT_PRUNE_DIRS=.git node_modules .venv build*\n' > "$R/.kit/gate.conf"
+gate
+ran 'ktsgradlew --no-daemon --console=plain check' && ok "KIT_PRUNE_DIRS 의 build* 는 build.gradle.kts 를 건너뛰지 않는다" \
+  || { bad "KIT_PRUNE_DIRS 의 build* 가 build.gradle.kts 의 모듈을 검사에서 뺐다:"; show "$log"; }
+rm -rf "$R/svc-kts"
 # 값은 공백에서만 나눈다. 와일드카드를 파일 이름으로 펼치면 -run 정규식 · find -name 패턴이 다른 것이 된다.
 # 각 모듈 디렉터리에는 그 패턴에 맞는 파일이 있다(go.mod · pyproject.toml · settings.gradle)
 printf 'KIT_GO_TEST_FLAGS=-run go.*\nKIT_PYTEST_FLAGS=-k py*\nKIT_GRADLE_TASKS=settings*\n' > "$R/.kit/gate.conf"

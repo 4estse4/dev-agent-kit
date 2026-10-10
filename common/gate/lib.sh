@@ -41,24 +41,21 @@ gate_conf() { # $1=키 [$2=gate.conf 경로] → 값을 출력한다. 파일이�
   sed -n "s/^$1=//p" "$f" | tail -1
 }
 GATE_PRUNE_DEFAULT=".git node_modules .venv .tox __pycache__"
-# 모듈을 찾는 find 에 전달할 prune 인자(-name a -o -name b …)를 배열 GATE_PRUNE_ARGS 에 정한다. 호출부는
+# 모듈을 찾는 find 에 전달할 prune 인자를 배열 GATE_PRUNE_ARGS 에 정한다. 호출부는
 # `find . \( "${GATE_PRUNE_ARGS[@]}" \) -prune -o …` 로 쓴다. 게이트 · 설치기 · CI 가 이 하나를 함께 쓴다.
-# `.` · `..` 은 읽지 않는다 — `-name .` 은 find 의 시작점에 맞아 탐색을 통째로 건너뛴다. 남는 것이 없으면 기본 목록이다.
+# 목록의 이름은 `find -name` 패턴이고, 목록이 비면 기본 목록이다. 건너뛰는 것은 시작점이 아닌 디렉터리뿐이다 — 그렇게
+# 거르지 않으면 시작점 `.` 이 `.` · `.*` · `*` · `?` 에 맞아 탐색이 통째로 꺼지고, `build*` 가 표지 파일 `build.gradle` 에
+# 맞아 그 모듈이 빠진다.
 gate_set_prune() { # [$1=gate.conf 경로]
-  local -a dirs; local d
+  local -a dirs names; local d
   read -r -a dirs <<< "$(gate_conf KIT_PRUNE_DIRS "${1:-}")"
-  GATE_PRUNE_ARGS=()
-  for d in ${dirs[@]+"${dirs[@]}"}; do
-    case "$d" in .|..) continue ;; esac
-    [ ${#GATE_PRUNE_ARGS[@]} -eq 0 ] || GATE_PRUNE_ARGS+=(-o)
-    GATE_PRUNE_ARGS+=(-name "$d")
-  done
-  [ ${#GATE_PRUNE_ARGS[@]} -gt 0 ] && return 0
-  read -r -a dirs <<< "$GATE_PRUNE_DEFAULT"
+  [ ${#dirs[@]} -gt 0 ] || read -r -a dirs <<< "$GATE_PRUNE_DEFAULT"
+  names=()
   for d in "${dirs[@]}"; do
-    [ ${#GATE_PRUNE_ARGS[@]} -eq 0 ] || GATE_PRUNE_ARGS+=(-o)
-    GATE_PRUNE_ARGS+=(-name "$d")
+    [ ${#names[@]} -eq 0 ] || names+=(-o)
+    names+=(-name "$d")
   done
+  GATE_PRUNE_ARGS=(-type d '(' "${names[@]}" ')' ! -path .)
 }
 gate_set_prune
 
