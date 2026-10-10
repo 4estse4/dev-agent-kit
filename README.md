@@ -124,6 +124,10 @@ bash .kit/gate/install-tools.sh --dry-run    # 무엇을 설치할지만
 KIT_ALLOW_MISSING_TOOLS=1 git push
 ```
 
+Claude Code 세션 안에서는 이 변수도, 보호 브랜치 커밋을 허용하는 `KIT_ALLOW_PROTECTED` 도 받지 않는다 — 세션이 스스로
+붙여도 묻는 규칙이 없어서다. 세션은 도구를 설치하고, 불가피한 예외는 사람이 세션 밖 터미널에서 실행한다
+(`common/docs/verification-stages.md` 6.4).
+
 ### 어느 검사가 언제 실행되나
 
 | 시점 | 무엇 | 막나 |
