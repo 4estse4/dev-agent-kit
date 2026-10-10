@@ -30,21 +30,21 @@ updates:
     directory: "/"
     schedule: { interval: weekly }
 
-  # - package-ecosystem: gomod    # go: go.mod 가 있는 디렉터리
+  # - package-ecosystem: gomod # go: go.mod 가 있는 디렉터리
   #   directory: "/"
   #   schedule: { interval: weekly }
 
-  # - package-ecosystem: npm      # ts: package.json 이 있는 디렉터리. pnpm · yarn 도 이것이다
+  # - package-ecosystem: npm # ts: package.json 이 있는 디렉터리. pnpm · yarn 도 이것이다
   #   directory: "/"
   #   schedule: { interval: weekly }
 
-  # - package-ecosystem: uv       # py: uv(uv.lock)를 쓰면 이것. 아래 pip 과 둘 중 하나만 켠다
+  # - package-ecosystem: uv # py: uv(uv.lock)를 쓰면 이것. 아래 pip 과 둘 중 하나만 켠다
   #   directory: "/"
   #   schedule: { interval: weekly }
-  # - package-ecosystem: pip      # py: requirements · poetry · pipenv · pip-compile 이면 이것
+  # - package-ecosystem: pip # py: requirements · poetry · pipenv · pip-compile 이면 이것
   #   directory: "/"
   #   schedule: { interval: weekly }
 
-  # - package-ecosystem: gradle   # jvm: settings.gradle(.kts) 나 build.gradle(.kts) 가 있는 디렉터리
+  # - package-ecosystem: gradle # jvm: settings.gradle(.kts) 나 build.gradle(.kts) 가 있는 디렉터리
   #   directory: "/"
   #   schedule: { interval: weekly }

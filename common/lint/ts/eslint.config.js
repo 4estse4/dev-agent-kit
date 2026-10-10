@@ -64,24 +64,25 @@ export default tseslint.config(
       // 금지할 것은 프로젝트마다 다르다. 금지 대상이 생기면 아래 예시를 그 대상과 이유로 고치고 주석을 푼다.
       // 아래 빌드 설정 파일 블록과 테스트 블록의 예외는 절대 URL 예시를 위한 것이다. 그 예시의 주석을 풀 때만 예외의
       // 주석도 푼다 — 예외는 no-restricted-syntax 를 통째로 끄므로, 다른 것을 막도록 고친 규칙도 그 파일들에서 꺼진다.
-      // 'no-restricted-syntax': [
-      //   'error',
+      // "no-restricted-syntax": [
+      //   "error",
       //   {
       //     // 예: 백엔드 호스트를 하드코딩하지 않는다.
-      //     selector: 'Literal[value=/^https?:\\u002F\\u002F/]',
+      //     selector: "Literal[value=/^https?:\\u002F\\u002F/]",
       //     message:
-      //       '절대 URL 을 쓰지 않는다 — 상대경로를 쓴다 (ADR-<번호>). ' +
-      //       '문서 링크 등 예외는 윗줄에 eslint-disable-next-line 과 사유를 단다.',
+      //       "절대 URL 을 쓰지 않는다 — 상대경로를 쓴다 (ADR-<번호>). " +
+      //       "문서 링크 등 예외는 윗줄에 eslint-disable-next-line 과 사유를 단다.",
       //   },
       // ],
-      // 'no-restricted-imports': [
-      //   'error',
+      // "no-restricted-imports": [
+      //   "error",
       //   {
       //     patterns: [
       //       {
       //         // 예: 프론트는 클라우드 SDK 를 직접 임포트하지 않는다.
-      //         group: ['@google-cloud/*', 'googleapis'],
-      //         message: '클라우드 SDK 를 직접 쓰지 않는다 — 백엔드 API 를 거친다 (ADR-<번호>).',
+      //         group: ["@google-cloud/*", "googleapis"],
+      //         message:
+      //           "클라우드 SDK 를 직접 쓰지 않는다 — 백엔드 API 를 거친다 (ADR-<번호>).",
       //       },
       //     ],
       //   },
@@ -91,8 +92,8 @@ export default tseslint.config(
 
   // 위 절대 URL 예시의 주석을 풀 때 이 블록의 주석도 푼다 — 빌드 설정 파일은 절대 URL(dev 프록시 대상 등)이 정상이다.
   // {
-  //   files: ['*.config.{ts,js,mts,mjs}', 'vite.config.*', 'vitest.setup.*'],
-  //   rules: { 'no-restricted-syntax': 'off' },
+  //   files: ["*.config.{ts,js,mts,mjs}", "vite.config.*", "vitest.setup.*"],
+  //   rules: { "no-restricted-syntax": "off" },
   // },
 
   {
@@ -101,7 +102,7 @@ export default tseslint.config(
       // 테스트는 rejection 을 expect 로 읽는 것이 정상이다.
       "@typescript-eslint/no-floating-promises": "off",
       // 위 절대 URL 예시의 주석을 풀 때 이 줄의 주석도 푼다 — 테스트 픽스처에 절대 URL 이 들어가는 것은 정상.
-      // 'no-restricted-syntax': 'off',
+      // "no-restricted-syntax": "off",
     },
   },
 );

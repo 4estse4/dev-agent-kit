@@ -42,8 +42,8 @@ linters:
     # ── 프로젝트 하드룰 코드화 ──
     # depguard·forbidigo 는 규칙이 비면 golangci-lint 가 에러를 낸다.
     # 금지 대상이 생기면 아래 settings 를 채우고 여기서 주석을 푼다.
-    # - depguard      # 금지 라이브러리 (예: ORM 금지)
-    # - forbidigo     # 금지 호출 패턴 (예: fmt.Print 금지)
+    # - depguard # 금지 라이브러리 (예: ORM 금지)
+    # - forbidigo # 금지 호출 패턴 (예: fmt.Print 금지)
 
   settings:
     errcheck:
