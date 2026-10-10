@@ -14,7 +14,9 @@
 #   · PATH 의 ruff 가 `common/gate/tool-versions` 의 핀과 같다 — 다르면 판정하지 못한 것이라 실패한다. CI 는 핀 버전을
 #     설치하고(`kit-tests.yml`), 로컬에서는 핀 버전을 PATH 앞에 두고 실행한다
 #   · `claude-code/ruff.toml` 의 설정 줄(줄 전체가 주석인 줄과 빈 줄을 뺀 것)이 `common/lint/py/ruff.toml` 과 같다 —
-#     설치된 킷 파일은 킷이 프로젝트 루트에 놓는 설정과 같은 설정으로 검사된다
+#     설치된 킷 파일은 킷이 프로젝트 루트에 놓는 설정과 같은 설정으로 검사된다. 프로젝트의 `tests/` 를 가리키는
+#     `[lint.per-file-ignores]` 표는 견주지 않는다 — `.claude/` 아래에는 그 자리가 없고, 설치된 파일이 킷에만 있는
+#     경로를 가리키면 `tests/installed-docs.sh` 가 막는다
 #   · pyproject 에 `[tool.ruff]` 가 없는 레포(킷의 `ruff.toml` 이 루트에 놓인다)와 있는 레포(놓이지 않는다) 모두에서
 #     설치한 그대로 `gate.sh --lint` 가 `ruff format` · `ruff check` 를 둘 다 실행해 통과한다. 있는 레포의 설정은
 #     `target-version` 한 줄이라 줄 길이와 규칙은 ruff 의 기본값이다
@@ -32,7 +34,9 @@ if [ -z "$pin" ] || [ "$got" != "$pin" ]; then
   exit 1
 fi
 
-settings() { grep -v -E '^[[:space:]]*(#|$)' "$1"; }
+settings() { # $1=ruff 설정 파일 → [lint.per-file-ignores] 표와 주석 줄 · 빈 줄을 뺀 줄
+  awk '/^\[/ { skip = ($0 == "[lint.per-file-ignores]") } !skip' "$1" | grep -v -E '^[[:space:]]*(#|$)'
+}
 if [ -f "$KIT/claude-code/ruff.toml" ] \
    && cmp -s <(settings "$KIT/claude-code/ruff.toml") <(settings "$KIT/common/lint/py/ruff.toml"); then
   echo "  ✓ claude-code/ruff.toml 의 설정 줄이 common/lint/py/ruff.toml 과 같다"

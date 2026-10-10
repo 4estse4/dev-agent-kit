@@ -158,7 +158,7 @@ CI 가 같은 검사를 다시 실행하는 이유는 **로컬 검사가 실행�
 ```
 지금 설치하면 — 설치 0 · 교체 1 · 보존 1 · 동일 39 · 삭제 1
 
-교체 — .kit, .claude 의 스킬·에이전트·훅, docs/process 는 킷 소유다
+교체 — .kit, .claude(settings.json 은 빼고), docs/process 는 킷 소유다
   ~ .kit/gate/secrets.sh
 
 보존 — 이 레포 것을 두고 킷의 것은 <파일>.kit-new 로 옆에 놓는다
@@ -180,7 +180,7 @@ diff 가 길면 `KIT_DIFF_MAX_LINES`·`KIT_DIFF_MAX_TOTAL` 로 조절한다.
 |---|---|
 | `.kit/gate/` · `git-hooks/` | 킷 소유 — 통째로 교체 |
 | `CLAUDE.md` · `.claude/settings.json` · CI · 린터 · 템플릿으로 놓는 `docs/` 문서와 PR 템플릿 | 프로젝트 소유 — 건드리지 않고 킷의 것을 `<파일>.kit-new` 로 옆에 둔다 |
-| `.claude/skills|agents|hooks` · `docs/process` | **킷 소유 — 재설치가 덮어쓴다** |
+| `.claude/`(`settings.json` 은 빼고) · `docs/process` | **킷 소유 — 재설치가 덮어쓴다** |
 
 ### 자동 병합을 하지 않는 이유
 
