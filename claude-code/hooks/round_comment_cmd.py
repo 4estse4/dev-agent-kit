@@ -18,41 +18,69 @@ import re
 import shlex
 
 CANON = "`gh pr comment <N> [-R <레포>] --body-file <절대 경로>`"
-_FLAGS = r'(?:-\S+\s+(?:[^-\s;&|]\S*\s+)?)*'
+_FLAGS = r"(?:-\S+\s+(?:[^-\s;&|]\S*\s+)?)*"
 CAND = re.compile(
-    r'(?<![\w.-])["\']?(?:[^\s"\']*/)?gh["\']?\s+' + _FLAGS + r'["\']?pr["\']?\s+' + _FLAGS
-    + r'["\']?comment["\']?(?![\w-])')
+    r'(?<![\w.-])["\']?(?:[^\s"\']*/)?gh["\']?\s+'
+    + _FLAGS
+    + r'["\']?pr["\']?\s+'
+    + _FLAGS
+    + r'["\']?comment["\']?(?![\w-])'
+)
 # 정규형이 받는 플래그. `gh pr comment --help` 의 FLAGS · INHERITED FLAGS 그대로다.
-VALUED = {'-R': 'repo', '--repo': 'repo', '-F': 'file', '--body-file': 'file',
-          '-b': 'body', '--body': 'body'}
-BOOLS = {'--create-if-none', '--delete-last', '--edit-last', '--yes',
-         '-e', '--editor', '-w', '--web', '-h', '--help'}
+VALUED = {
+    "-R": "repo",
+    "--repo": "repo",
+    "-F": "file",
+    "--body-file": "file",
+    "-b": "body",
+    "--body": "body",
+}
+BOOLS = {
+    "--create-if-none",
+    "--delete-last",
+    "--edit-last",
+    "--yes",
+    "-e",
+    "--editor",
+    "-w",
+    "--web",
+    "-h",
+    "--help",
+}
 
 
 def _canon(why):
-    return ('deny', "gh pr comment 는 한 줄 정규형으로 따로 입력해라: " + CANON + ". " + why
-            + " 게시가 아니면 그 글자를 명령에서 빼라. 찾을 때는 `pr comment` 로 찾고, "
-            "파일은 Write 도구로 쓴다.")
+    return (
+        "deny",
+        "gh pr comment 는 한 줄 정규형으로 따로 입력해라: "
+        + CANON
+        + ". "
+        + why
+        + " 게시가 아니면 그 글자를 명령에서 빼라. 찾을 때는 `pr comment` 로 찾고, "
+        "파일은 Write 도구로 쓴다.",
+    )
 
 
 def parse(cmd):
-    cmd = cmd.replace('\\\n', ' ')
+    cmd = cmd.replace("\\\n", " ")
     if not CAND.search(cmd):
-        return ('none', None)
+        return ("none", None)
     line = cmd.strip()
-    if '\n' in line:
+    if "\n" in line:
         return _canon("줄바꿈으로 다른 명령과 이으면 이 훅이 무엇이 올라가는지 믿을 수 없다.")
     try:
         lex = shlex.shlex(line, posix=True, punctuation_chars=True)
         lex.whitespace_split = True
-        lex.commenters = ''
+        lex.commenters = ""
         toks = list(lex)
     except ValueError:
         return _canon("명령을 읽지 못했다.")
-    if len(toks) < 3 or os.path.basename(toks[0]) != 'gh' or toks[1:3] != ['pr', 'comment']:
+    if len(toks) < 3 or os.path.basename(toks[0]) != "gh" or toks[1:3] != ["pr", "comment"]:
         return _canon("앞붙임 · 래퍼 · 하위 명령 앞의 플래그는 받지 않는다.")
-    if any(set(t) <= set('();<>|&') or t.startswith('#') for t in toks):
-        return _canon("다른 명령 · 주석 · 리다이렉트와 이으면 이 훅이 무엇이 올라가는지 믿을 수 없다.")
+    if any(set(t) <= set("();<>|&") or t.startswith("#") for t in toks):
+        return _canon(
+            "다른 명령 · 주석 · 리다이렉트와 이으면 이 훅이 무엇이 올라가는지 믿을 수 없다."
+        )
 
     pr, got, bools = [], {}, set()
     args = toks[3:]
@@ -60,11 +88,11 @@ def parse(cmd):
     while j < len(args):
         a = args[j]
         name, val = a, None
-        if a.startswith('--') and '=' in a:
-            name, val = a.split('=', 1)
-        elif re.match(r'^-[RFb].', a):          # 짧은 플래그에 값을 붙인 `-Fx` · `-F=x`
+        if a.startswith("--") and "=" in a:
+            name, val = a.split("=", 1)
+        elif re.match(r"^-[RFb].", a):  # 짧은 플래그에 값을 붙인 `-Fx` · `-F=x`
             name, val = a[:2], a[2:]
-            if val.startswith('='):
+            if val.startswith("="):
                 val = val[1:]
         if name in VALUED:
             if val is None:
@@ -77,23 +105,30 @@ def parse(cmd):
             got[VALUED[name]] = val
         elif name in BOOLS and val is None:
             bools.add(name)
-        elif not a.startswith('-'):
+        elif not a.startswith("-"):
             pr.append(a)
         else:
             return _canon("모르는 플래그다: " + a)
         j += 1
 
-    if bools & {'-h', '--help'}:
-        return ('skip', None)
-    if 'body' in got or bools & {'-e', '--editor', '-w', '--web'}:
-        return ('deny', "gh pr comment 의 본문은 절대 경로 파일 하나로만 전달한다: " + CANON
-                + ". 인라인 본문 · 편집기 · 웹은 이 훅이 판정할 수 없다.")
-    if 'file' not in got:
-        return ('skip', None)       # 본문 없이는 새 글을 안 올린다(`--delete-last` 등)
-    if len(pr) != 1 or not re.match(r'^\d+$', pr[0]):
+    if bools & {"-h", "--help"}:
+        return ("skip", None)
+    if "body" in got or bools & {"-e", "--editor", "-w", "--web"}:
+        return (
+            "deny",
+            "gh pr comment 의 본문은 절대 경로 파일 하나로만 전달한다: "
+            + CANON
+            + ". 인라인 본문 · 편집기 · 웹은 이 훅이 판정할 수 없다.",
+        )
+    if "file" not in got:
+        return ("skip", None)  # 본문 없이는 새 글을 안 올린다(`--delete-last` 등)
+    if len(pr) != 1 or not re.match(r"^\d+$", pr[0]):
         return _canon("PR 은 번호 하나로 적는다(URL · 브랜치 이름은 받지 않는다).")
-    path = got['file']
+    path = got["file"]
     if not os.path.isabs(path):
-        return ('deny', "gh pr comment 의 --body-file 에 상대 경로를 전달했다. 이 훅은 명령 안의 cd 를 못 "
-                "따라가므로 절대 경로만 받는다: " + CANON)
-    return ('ok', {'pr': pr[0], 'repo': got.get('repo'), 'path': path})
+        return (
+            "deny",
+            "gh pr comment 의 --body-file 에 상대 경로를 전달했다. 이 훅은 명령 안의 cd 를 못 "
+            "따라가므로 절대 경로만 받는다: " + CANON,
+        )
+    return ("ok", {"pr": pr[0], "repo": got.get("repo"), "path": path})
