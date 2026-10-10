@@ -13,8 +13,9 @@
 # 브랜치는 기본 브랜치에 없는 커밋의 메시지에 나오는 `#N` 을 꼴을 가리지 않고 모두 뺀다 — PR 이 없으면 커밋
 # 메시지가 유일한 단서이고, 닫는 키워드 없이 번호를 적기도 한다. 번호가 없는 브랜치는 이름을 그대로 낸다.
 #
-# 빼지 않는 것: 열린 PR 은 없고 머지되거나 닫힌 PR 이 있는 브랜치는 끝난 일이라 그 커밋의 번호를 빼지 않는다 —
-# 스쿼시 머지에서는 그 커밋이 기본 브랜치의 조상이 되지 않아 「기본 브랜치에 없는 커밋」으로 나온다. 기본 브랜치에
+# 빼지 않는 것: 열린 PR 은 없고 팁이 머지되거나 닫힌 PR 의 head 에 들어 있는 브랜치는 끝난 일이라 그 커밋의 번호를
+# 빼지 않는다 — 스쿼시 머지에서는 그 커밋이 기본 브랜치의 조상이 되지 않아 「기본 브랜치에 없는 커밋」으로 나온다.
+# 이름만 같고 팁이 그 head 에 없으면(브랜치 이름을 다시 써서 새 일을 한다) 끝난 일이 아니다. 기본 브랜치에
 # 없는 커밋이 하나도 없는 detach worktree(정리를 마친 worktree)와 기본 브랜치의 worktree 는 내지 않는다. 이
 # 스크립트를 실행한 worktree 는 세션 자신의 일이라 내지 않는다. 같은 레포의 다른 clone 에서 PR 없이 하는 일은
 # 보이지 않는다.
@@ -55,16 +56,20 @@ def gh_list(kind, fields):
     return items
 
 
-def finished_pr(branch):
-    """열린 PR 이 없는 브랜치에 머지되거나 닫힌 PR 이 있으면 (번호, 상태) 를, 없으면 None 을 낸다"""
-    r = run(['gh', 'pr', 'list', '--state', 'all', '--head', branch, '--limit', '10', '--json', 'number,state'])
+def finished_pr(branch, tip):
+    """열린 PR 이 없는 브랜치의 팁이 머지되거나 닫힌 PR 의 head 에 들어 있으면 (번호, 상태) 를, 아니면 None 을
+    낸다. 이름만 보면 머지된 PR 의 브랜치 이름을 다시 써서 새 일을 하는 worktree 도 끝난 일로 본다"""
+    r = run(['gh', 'pr', 'list', '--state', 'all', '--head', branch, '--limit', '10',
+             '--json', 'number,state,headRefOid'])
     if r.returncode != 0:
         die('%s 브랜치의 PR 을 받지 못했다: %s' % (branch, first_line(r.stderr)))
     done = [p for p in json.loads(r.stdout or '[]') if p.get('state') in ('MERGED', 'CLOSED')]
-    if not done:
-        return None
-    p = max(done, key=lambda p: p['number'])
-    return p['number'], '머지됨' if p['state'] == 'MERGED' else '닫힘'
+    for p in sorted(done, key=lambda p: -p['number']):
+        oid = p.get('headRefOid') or ''
+        # 그 head 가 이 레포에 없으면 is-ancestor 가 실패한다 — 끝난 일로 보지 않는다(번호를 빼는 쪽)
+        if oid and (oid == tip or run(['git', 'merge-base', '--is-ancestor', tip, oid]).returncode == 0):
+            return p['number'], '머지됨' if p['state'] == 'MERGED' else '닫힘'
+    return None
 
 
 def nums(text):
@@ -133,7 +138,7 @@ for t in trees:
         die('%s 의 커밋을 읽지 못했다: %s' % (name, first_line(log.stderr)))
     if (not branch or branch == default) and not log.stdout.strip():
         continue
-    done = finished_pr(branch) if branch else None
+    done = finished_pr(branch, t.get('HEAD', '')) if branch else None
     if done:
         rows.append('%s\t%s\tPR #%d %s' % (path, name, done[0], done[1]))
         continue

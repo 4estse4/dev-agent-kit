@@ -49,9 +49,12 @@ if a[:2] == ['pr', 'list']:
             'closingIssuesReferences': [{'number': 40}],
             'body': '근거로 든 것: #41 · #42\n\nRefs #43\nrefs: #44'},
            {'number': 301, 'title': '머지된 PR', 'headRefName': 'feat/merged', 'state': 'MERGED',
-            'closingIssuesReferences': [], 'body': 'Refs #14'},
+            'headRefOid': os.environ.get('STUB_OID_MERGED', ''), 'closingIssuesReferences': [], 'body': 'Refs #14'},
            {'number': 302, 'title': '닫힌 PR', 'headRefName': 'feat/closed', 'state': 'CLOSED',
-            'closingIssuesReferences': [], 'body': 'Refs #15'}]
+            'headRefOid': os.environ.get('STUB_OID_CLOSED', ''), 'closingIssuesReferences': [], 'body': 'Refs #15'},
+           # 오래전에 머지된 PR — 그 브랜치 이름을 다시 써서 새 일을 한다. 그 head 는 지금 브랜치에 없다
+           {'number': 303, 'title': '예전 PR', 'headRefName': 'feat/reused', 'state': 'MERGED',
+            'headRefOid': 'f' * 40, 'closingIssuesReferences': [], 'body': ''}]
     if '--head' in a:
         prs = [p for p in prs if p['headRefName'] == a[a.index('--head') + 1]]
     state = a[a.index('--state') + 1] if '--state' in a else 'open'
@@ -66,7 +69,8 @@ chmod +x "$T/bin/gh"
 export PATH="$T/bin:$PATH"
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.com GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.com
 
-# 원격(bare)에서 clone 한 체크아웃이 이 세션이고, 다른 worktree 셋이 다른 세션의 일이다
+# 원격(bare)에서 clone 한 체크아웃이 이 세션이다. 다른 worktree 는 다른 세션의 일인 것과, 끝났거나 하는 일이
+# 없어 다른 세션의 일로 내지 않는 것을 섞어 둔다
 git init -q --bare -b main "$T/remote.git"
 git clone -q "$T/remote.git" "$T/self" 2>/dev/null
 git -C "$T/self" commit -q --allow-empty -m init
@@ -90,8 +94,13 @@ git -C "$T/self" worktree add -q -b feat/merged "$T/wt-merged" main
 git -C "$T/wt-merged" commit -q --allow-empty -m 'first part' -m 'Refs #14'
 git -C "$T/self" worktree add -q -b feat/closed "$T/wt-closed" main
 git -C "$T/wt-closed" commit -q --allow-empty -m 'abandoned' -m 'Refs #15'
-# `merge-pr` 4절대로 정리를 마치고 기본 브랜치에 detach 한 worktree — 하는 일이 없다
+export STUB_OID_MERGED=$(git -C "$T/wt-merged" rev-parse HEAD) STUB_OID_CLOSED=$(git -C "$T/wt-closed" rev-parse HEAD)
+# 머지된 PR(#303)과 이름이 같은 브랜치로 새 일을 하는 것 — 팁이 그 PR 의 head 에 없으니 끝난 일이 아니다
+git -C "$T/self" worktree add -q -b feat/reused "$T/wt-reused" main
+git -C "$T/wt-reused" commit -q --allow-empty -m 'new work' -m 'for issue #16'
+# `merge-pr` 4절대로 정리를 마치고 기본 브랜치에 detach 한 worktree, 기본 브랜치에 있는 worktree — 하는 일이 없다
 git -C "$T/self" worktree add -q --detach "$T/wt-done" main
+git -C "$T/self" worktree add -q "$T/wt-main" main
 
 run() { ( cd "$T/self" && bash "$S" ) > "$T/out" 2>&1; echo $? > "$T/rc"; }
 
@@ -138,6 +147,10 @@ for c in '14:feat/merged:머지됨' '15:feat/closed:닫힘'; do
 done
 grep -q 'wt-done' "$T/out" && bad "정리를 마치고 detach 한 worktree(wt-done)를 다른 세션의 일로 냈다" \
   || ok "기본 브랜치에 없는 커밋이 없는 detach worktree 는 내지 않는다"
+grep -q 'wt-main' "$T/out" && bad "기본 브랜치에 있는 worktree(wt-main)를 다른 세션의 일로 냈다" \
+  || ok "기본 브랜치에 있는 worktree 는 내지 않는다"
+has 16 && ok "머지된 PR 과 이름만 같은 브랜치(feat/reused)의 새 일이 말하는 번호(#16)를 뺄 번호로 낸다" \
+  || bad "머지된 PR 과 이름만 같은 브랜치(feat/reused)를 끝난 일로 봤다: $(grep -E 'feat/reused' "$T/out")"
 
 # 받은 수가 한도에 닿으면 잘렸을 수 있다 — 잘린 목록으로 고르지 않게 실패한다
 STUB_ISSUES=100000 run
