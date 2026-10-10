@@ -109,18 +109,22 @@ TARGETS=()
 changed_under() {
   P="$1/" awk 'index($0, ENVIRON["P"]) == 1 { f = 1; exit } END { exit !f }' <<< "$CHANGED"
 }
+# find 가 읽지 못한 디렉터리(권한 등)는 게이트를 실패로 두지 않는다 — 그런 디렉터리(도커가 root 로 만든 볼륨 등)가
+# 하나만 있어도 find 는 읽을 수 있는 곳의 모듈을 다 찾고도 실패로 끝난다. 대신 그 오류를 버리지 않고 알린다. 그 디렉터리
+# 안의 모듈은 검사되지 않았다는 뜻이다.
+FIND_ERR=$(mktemp) || exit 1
+trap 'rm -f "$FIND_ERR"' EXIT
 discover() { # $1=마커파일 $2=어댑터명
   local marker dir rel
   # 깊이를 제한하지 않는다. 예전에는 maxdepth 3 이었는데 apps/svc/api/go.mod 같은
   # 구조에서 마커를 못 찾고 "검사 대상 없음" 으로 **오류 없이 통과**했다.
-  # 노이즈는 깊이가 아니라 lib.sh 의 GATE_PRUNE_DIRS 로 막는다.
-  # shellcheck disable=SC2046
+  # 노이즈는 깊이가 아니라 lib.sh 의 GATE_PRUNE_ARGS 로 막는다.
   while IFS= read -r marker; do
     dir=$(dirname "$marker"); rel=${dir#./}; [ "$rel" = "." ] && rel=""
     if [ "$ALL" = 1 ] || [ -z "$rel" ] || changed_under "$rel"; then
       TARGETS+=("$2|$dir")
     fi
-  done < <(find . \( $(gate_prune_expr) \) -prune -o -name "$1" -print 2>/dev/null)
+  done < <(find . \( "${GATE_PRUNE_ARGS[@]}" \) -prune -o -name "$1" -print 2>>"$FIND_ERR")
 }
 
 discover go.mod       go
@@ -133,6 +137,10 @@ discover settings.gradle.kts jvm
 discover build.gradle        jvm
 discover build.gradle.kts    jvm
 discover pyproject.toml      py
+if [ -s "$FIND_ERR" ]; then
+  echo "gate — 모듈을 찾다가 읽지 못한 디렉터리가 있습니다. 그 안의 모듈은 검사되지 않았습니다:"
+  sort -u "$FIND_ERR" | sed 's/^/  /'
+fi
 
 # 조상 디렉터리에서 실행할 때 이미 검사되는 자손을 뺀다 — **JVM 에만 적용한다.**
 #

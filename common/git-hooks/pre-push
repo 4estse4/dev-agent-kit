@@ -4,16 +4,32 @@
 # 브랜치를 올리는 푸시면 요구 추적(trace.sh)도 본다.
 # 에이전트 훅과 달리 사람이 손으로 푸시해도, 다른 에이전트를 써도 작동한다.
 set -uo pipefail
-# 게이트는 대상 레포에 복사해 둔 .kit/ 에서 찾는다 — 다른 머신·CI 에서도 동일 경로.
 REPO=$(git rev-parse --show-toplevel) || exit 1
-KIT="${KIT_DIR:-$REPO/.kit}"
-[ -d "$KIT" ] || { echo "$(basename "$0"): .kit 이 없습니다 — install.sh 를 다시 실행하세요" >&2; exit 1; }
+# 킷 디렉터리는 이 훅이 있는 디렉터리의 부모다. 환경 변수로 받지 않는 이유는 pre-commit 의 같은 자리에 있다.
+KIT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P) || exit 1
 
 ZERO='0000000000000000000000000000000000000000'
 fail=0
 
+# 커밋에 안 들어간 게이트 설정 — 게이트는 작업 트리의 gate.conf 를 읽으므로, 그 파일이 푸시하는 커밋(HEAD)과 다르면 푸시하는
+# 것과 다른 값으로 검사한다. 고치고 커밋하지 않은 것(스테이지했든 안 했든), 인덱스에서 뺐는데 작업 트리에 남은 것을 막는다.
+# 까닭과 킷 디렉터리가 레포 밖일 때 보지 않는 것은 pre-commit 과 같다. 게이트를 실행하는 푸시에서만 본다.
+conf_rel="${KIT#"$REPO"/}/gate.conf"
+conf_dirty() {
+  [ "$conf_rel" != "$KIT/gate.conf" ] || return 1
+  ! git -C "$REPO" diff --quiet HEAD -- "$conf_rel" \
+    || { [ -e "$REPO/$conf_rel" ] && ! git -C "$REPO" -c core.quotePath=false ls-files --error-unmatch -- "$conf_rel" >/dev/null 2>&1; }
+}
+
 while read -r local_ref local_sha _remote_ref remote_sha; do
   [ "$local_sha" = "$ZERO" ] && continue            # 브랜치 삭제 — 검사 없음
+  if [ -z "${conf_checked:-}" ]; then
+    conf_checked=1
+    if conf_dirty; then
+      echo "pre-push: $conf_rel 에 커밋하지 않은 변경이 있습니다. 게이트는 작업 트리의 이 파일을 읽으므로, 푸시하는 커밋과 다른 값으로 검사합니다. 커밋하거나 되돌린 뒤 푸시합니다." >&2
+      fail=1
+    fi
+  fi
   secrets_range=""
   if [ "$remote_sha" = "$ZERO" ]; then
     # 새 브랜치의 첫 푸시. 원격에 기준점이 없으므로 기본 브랜치와의 merge-base 를 쓴다.

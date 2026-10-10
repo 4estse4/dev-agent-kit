@@ -24,17 +24,40 @@ gate_have() { command -v "$1" >/dev/null 2>&1; }
 #   frontend/dist · 빈 node_modules  0개
 #   Go 의 vendor/(go mod vendor 산출) go.mod 0개 · .go 23개
 # 그래서 이름으로 거르는 대상은 **마커가 실제로 들어 있는 것과 VCS 내부**로 한정한다.
-# 나머지는 걸러도 얻는 것이 없고 잃을 것만 있다.
-GATE_PRUNE_DIRS="${KIT_PRUNE_DIRS:-.git node_modules .venv .tox __pycache__}"
-
-# find 에 전달할 prune 표현식을 조립한다. 게이트와 설치기가 같은 함수를 쓴다.
-gate_prune_expr() { # 출력: -name a -o -name b ...  (호출부가 \( \) 로 감싼다)
-  local d first=1
-  for d in $GATE_PRUNE_DIRS; do
-    [ "$first" = 1 ] || printf ' -o'
-    printf ' -name %s' "$d"; first=0
-  done
+# 나머지는 걸러도 얻는 것이 없고 잃을 것만 있다. 프로젝트는 `.kit/gate.conf` 의 KIT_PRUNE_DIRS 로 목록을 바꾼다(아래).
+#
+# 게이트 설정은 커밋된 `.kit/gate.conf`(게이트 디렉터리의 부모)에서만 읽는다. 환경 변수로 받지 않는다 — 명령 앞에 붙인
+# 값은 커밋에도 리뷰에도 남지 않는데 검사를 줄인다(테스트 플래그 하나 · 건너뛸 디렉터리 이름 하나로). 파일에 커밋에 안
+# 들어간 변경이 있으면 커밋 훅과 푸시 훅이 막는다. 파일은 `키=값` 줄만 읽고 셸로 실행하지 않는다. 같은 키가 여럿이면
+# 마지막 줄을 쓴다.
+#
+# 값은 공백에서만 나눈다(`read -a`). 따옴표 없이 펼치면 와일드카드가 그 자리의 파일 이름으로 바뀌어 `-run` 정규식이나
+# `find -name` 패턴이 다른 것이 된다. 그래서 값을 쓰는 자리는 문자열을 펼치지 않고 배열을 쓴다. 공백뿐인 값은 값이 없는
+# 것이다 — 공백 하나가 남은 줄은 diff 에서 빈 값과 구분되지 않는다.
+GATE_CONF="$(cd "${SELF_DIR:-$(dirname "${BASH_SOURCE[0]:-.}")}/.." 2>/dev/null && pwd -P)/gate.conf"
+gate_conf() { # $1=키 [$2=gate.conf 경로] → 값을 출력한다. 파일이나 키가 없으면 빈 출력
+  local f="${2:-$GATE_CONF}"
+  [ -f "$f" ] || return 0
+  sed -n "s/^$1=//p" "$f" | tail -1
 }
+GATE_PRUNE_DEFAULT=".git node_modules .venv .tox __pycache__"
+# 모듈을 찾는 find 에 전달할 prune 인자를 배열 GATE_PRUNE_ARGS 에 정한다. 호출부는
+# `find . \( "${GATE_PRUNE_ARGS[@]}" \) -prune -o …` 로 쓴다. 게이트 · 설치기 · CI 가 이 하나를 함께 쓴다.
+# 목록의 이름은 `find -name` 패턴이고, 목록이 비면 기본 목록이다. 건너뛰는 것은 시작점이 아닌 디렉터리뿐이다 — 그렇게
+# 거르지 않으면 시작점 `.` 이 `.` · `.*` · `*` · `?` 에 맞아 탐색이 통째로 꺼지고, `build*` 가 마커 파일 `build.gradle` 에
+# 맞아 그 모듈이 빠진다.
+gate_set_prune() { # [$1=gate.conf 경로]
+  local -a dirs names; local d
+  read -r -a dirs <<< "$(gate_conf KIT_PRUNE_DIRS "${1:-}")"
+  [ ${#dirs[@]} -gt 0 ] || read -r -a dirs <<< "$GATE_PRUNE_DEFAULT"
+  names=()
+  for d in "${dirs[@]}"; do
+    [ ${#names[@]} -eq 0 ] || names+=(-o)
+    names+=(-name "$d")
+  done
+  GATE_PRUNE_ARGS=(-type d '(' "${names[@]}" ')' ! -path .)
+}
+gate_set_prune
 
 # go.mod 하나에서 setup-go 가 받을 Go 버전과 그 줄 이름을 낸다: 「<버전> toolchain」 또는
 # 「<버전> go」. 둘 다 없으면 아무것도 안 낸다. 버전에 패치가 없으면 setup-go 는 그 계열의 패치
@@ -84,7 +107,7 @@ gate_go_min_check() {
   local min f v line want what raise
   min=$(gate_tool_version go_min)
   [ -n "$min" ] || { echo "::error::.kit/gate/tool-versions 에 go_min 이 없습니다 — 킷을 갱신하세요"; return 1; }
-  f=$(find . \( $(gate_prune_expr) \) -prune -o -name go.mod -print | gate_go_highest)
+  f=$(find . \( "${GATE_PRUNE_ARGS[@]}" \) -prune -o -name go.mod -print | gate_go_highest)
   read -r v line <<< "$(gate_go_setup_version "$f")"
   case "$v" in
     *.*.*) want="$min" ;;
@@ -107,7 +130,7 @@ gate_go_min_check() {
 gate_nvmrc_check() {
   local found
   [ -f .nvmrc ] && return 0
-  found=$(find . \( $(gate_prune_expr) \) -prune -o -name .nvmrc -print | sed 's#^\./##' | paste -sd ' ' -)
+  found=$(find . \( "${GATE_PRUNE_ARGS[@]}" \) -prune -o -name .nvmrc -print | sed 's#^\./##' | paste -sd ' ' -)
   echo "::error::.nvmrc 가 레포 루트에 없습니다${found:+(하위 디렉터리에는 있습니다: $found)}. CI 는 node 를 잡마다 하나만 설치하고 그 버전을 루트의 .nvmrc 에서 읽습니다. 레포 루트에 node 버전 한 줄(예: 22)로 만들고 커밋하세요."
   return 1
 }
