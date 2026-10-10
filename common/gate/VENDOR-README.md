@@ -55,7 +55,9 @@ KIT_PRUNE_DIRS=.git node_modules .venv .tox __pycache__
 ```
 
 - `KIT_GO_TEST_FLAGS` · `KIT_PYTEST_FLAGS` — `go test` · `pytest` 에 더할 플래그. `KIT_GRADLE_TASKS` — `check` 대신
-  실행할 gradle 태스크. `KIT_PRUNE_DIRS` — 모듈을 찾을 때 건너뛸 디렉터리. 기본 목록(위 예의 값)을 통째로 바꾼다.
+  실행할 gradle 태스크. `KIT_PRUNE_DIRS` — 모듈을 찾을 때 건너뛸 디렉터리 이름. 경로가 아니라 이름이라 어느 깊이에서든
+  그 이름의 디렉터리를 모두 건너뛰고, `apps/legacy` 같은 경로는 어느 디렉터리에도 맞지 않는다. 기본 목록(위 예의 값)을
+  통째로 바꾼다.
 - `#` 로 시작하는 줄은 읽지 않는다. 값은 `=` 뒤 줄 끝까지이고 셸로 풀지 않는다 — 줄 끝에 붙인 `#` 주석과 따옴표도 값에
   들어간다. 값은 공백에서만 나뉘어 명령의 인자가 된다. 같은 키가 여럿이면 마지막 줄을 쓴다. 값이 비거나 공백뿐이면
   기본값이다.

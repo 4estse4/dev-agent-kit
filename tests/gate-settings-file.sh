@@ -10,7 +10,7 @@
 #   · `.kit/gate.conf` 의 값은 적용된다(공백이 든 값 포함)
 #   · 값은 공백에서만 나눈다 — 공백뿐인 값은 기본값이고, 와일드카드는 파일 이름으로 펼치지 않는다(`-run` 정규식 ·
 #     gradle 태스크 · `find -name` 패턴). `KIT_PRUNE_DIRS` 의 이름과 패턴(`.` · `.*` · `?` · `*` · `build*`)은 시작점과
-#     표지 파일을 건너뛰지 않는다. 모듈을 찾다 읽지 못한 디렉터리는 게이트 출력에 알린다
+#     마커 파일을 건너뛰지 않는다. 모듈을 찾다 읽지 못한 디렉터리는 게이트 출력에 알린다
 #   · `.kit/gate.conf` 에 커밋에 안 들어간 변경이 있으면 커밋 훅과 푸시 훅이 실패한다 — 작업 트리만 고침 · 인덱스에서 뺌 ·
 #     (푸시 훅) 스테이지만 하고 커밋하지 않음 · 커밋한 적 없음. 커밋에 넣으려고 스테이지한 변경(커밋 훅)과 깨끗한 상태는 그
 #     이유로 막지 않는다
@@ -109,14 +109,17 @@ printf 'KIT_PRUNE_DIRS=?\n' > "$R/.kit/gate.conf"
 gate
 ran 'go test ./...' && ok "KIT_PRUNE_DIRS 의 ? 는 모듈 탐색을 통째로 끄지 않는다" \
   || { bad "KIT_PRUNE_DIRS 의 ? 가 모듈 탐색을 껐다:"; show "$out"; }
-# 건너뛰는 것은 디렉터리다. 패턴이 표지 파일 이름에 맞아도 그 파일은 찾는다. * 는 모든 하위 디렉터리를 건너뛰므로
-# go test 는 루트 모듈에서만 실행된다
+# 건너뛰는 것은 디렉터리다. 패턴이 마커 파일 이름에 맞아도 그 파일은 찾는다. * 는 모든 하위 디렉터리를 건너뛰므로
+# go test 는 루트 모듈에서만 실행된다. 게이트는 모듈 디렉터리에서 어댑터를 실행하므로, 가짜 go 가 실행된 디렉터리
+# 이름(루트는 r)을 함께 적게 해 그것을 본다
 printf 'module example.com/root\n\ngo 1.25\n' > "$R/go.mod"
+printf '#!/usr/bin/env bash\necho "go@${PWD##*/} $*" >> "$FAKE_LOG"\n' > "$F/go"
 printf 'KIT_PRUNE_DIRS=*\n' > "$R/.kit/gate.conf"
 gate
-ran 'go test ./...' && ok "KIT_PRUNE_DIRS 의 * 는 하위 디렉터리만 건너뛰고 루트 모듈은 찾는다" \
-  || { bad "KIT_PRUNE_DIRS 의 * 가 루트 모듈까지 건너뛰었다:"; show "$out"; }
-rm -f "$R/go.mod"
+if ran 'go@r test ./...' && ! printf '%s\n' "$log" | grep -q '^go@svc-go '; then
+  ok "KIT_PRUNE_DIRS 의 * 는 하위 디렉터리만 건너뛰고 루트 모듈은 찾는다"
+else bad "KIT_PRUNE_DIRS 의 * 는 루트 모듈에서만 go test 를 실행해야 한다:"; show "$log"; fi
+rm -f "$R/go.mod"; fake "$F/go" go
 # build 디렉터리를 건너뛰려는 build* 가 build.gradle.kts 까지 건너뛰면 그 모듈이 검사에서 빠진다
 mkdir -p "$R/svc-kts"; : > "$R/svc-kts/build.gradle.kts"; fake "$R/svc-kts/gradlew" ktsgradlew
 printf 'KIT_PRUNE_DIRS=.git node_modules .venv build*\n' > "$R/.kit/gate.conf"

@@ -44,7 +44,7 @@ GATE_PRUNE_DEFAULT=".git node_modules .venv .tox __pycache__"
 # 모듈을 찾는 find 에 전달할 prune 인자를 배열 GATE_PRUNE_ARGS 에 정한다. 호출부는
 # `find . \( "${GATE_PRUNE_ARGS[@]}" \) -prune -o …` 로 쓴다. 게이트 · 설치기 · CI 가 이 하나를 함께 쓴다.
 # 목록의 이름은 `find -name` 패턴이고, 목록이 비면 기본 목록이다. 건너뛰는 것은 시작점이 아닌 디렉터리뿐이다 — 그렇게
-# 거르지 않으면 시작점 `.` 이 `.` · `.*` · `*` · `?` 에 맞아 탐색이 통째로 꺼지고, `build*` 가 표지 파일 `build.gradle` 에
+# 거르지 않으면 시작점 `.` 이 `.` · `.*` · `*` · `?` 에 맞아 탐색이 통째로 꺼지고, `build*` 가 마커 파일 `build.gradle` 에
 # 맞아 그 모듈이 빠진다.
 gate_set_prune() { # [$1=gate.conf 경로]
   local -a dirs names; local d
