@@ -70,6 +70,7 @@
     "올라가는 것은 창 기록뿐이고, 세션은 그 기록을 도구로 만들거나 고치지 못하며(위 deny) 봇 설정이 있는",
     "레포 안에서 창 기록 훅을 직접 실행하는 명령은 bot_guard.sh 가 막는다. 콜드 리뷰 기록 훅을 직접",
     "실행하는 명령도 같다. allow 의 bash .claude/hooks/cold_review.sh 는 그 기록을 출력하기만 한다.",
+    "allow 의 bash .claude/hooks/backlog.sh 는 「다음 일」을 고를 때 열린 이슈 · PR · worktree 를 읽어 출력하기만 한다.",
     "무엇을 켜는지는 docs/process/kit-guide.md 의 「봇 계정과 사람의 승인」 절.",
     "라운드 코멘트는 다음",
     "라운드가 고치는 글이라 되돌릴 수 없는 것이 아니다. 되돌릴 수 없는 것은 위의",
@@ -153,7 +154,8 @@
       "Bash(docker compose logs*)",
       "Bash(bash .kit/gate/*)",
       "Bash(bash .claude/hooks/human_comment.sh *)",
-      "Bash(bash .claude/hooks/cold_review.sh *)"
+      "Bash(bash .claude/hooks/cold_review.sh *)",
+      "Bash(bash .claude/hooks/backlog.sh)"
     ]
   },
   "hooks": {
