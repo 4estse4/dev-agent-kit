@@ -240,7 +240,7 @@ gate_absent() { GATE_ABSENT+=("$1"); }
 # KIT_ALLOW_MISSING_TOOLS 를 받지 않으므로(gate.sh), 그 변수로 건너뛰라고 세션에 안내하지 않고 사람이 세션 밖에서 하라고 적는다.
 gate_escape_hint() {
   if [ "${CLAUDE_CODE_CHILD_SESSION:-}" = "1" ]; then
-    printf '%s\n%s\n' "  Claude Code 세션 안에서는 건너뛰지 않습니다. 위 안내대로 설치하거나, 불가피하면 사람이 세션 밖 터미널에서 실행합니다:" \
+    printf '%s\n%s\n' "  Claude Code 세션 안(CLAUDE_CODE_CHILD_SESSION=1)에서는 건너뛰지 않습니다. 위 안내대로 설치하거나, 불가피하면 사람이 세션 밖 터미널에서 실행합니다:" \
       "    KIT_ALLOW_MISSING_TOOLS=1 <명령>"
   else
     printf '%s\n%s\n' "  불가피하게 건너뛰려면(그 검사는 실행되지 않고, 그 때문에 게이트가 실패하지도 않습니다):" \
