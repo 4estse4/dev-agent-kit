@@ -20,12 +20,13 @@
 #     경로를 가리키면 `tests/installed-docs.sh` 가 막는다
 #   · pyproject 에 `[tool.ruff]` 가 없는 레포(킷의 `ruff.toml` 이 루트에 놓인다)와 있는 레포(놓이지 않는다) 모두에서
 #     설치한 그대로 `gate.sh --lint` 가 `ruff format` · `ruff check` 를 둘 다 실행해 통과한다. 있는 레포의 설정은
-#     `target-version` 한 줄이라 줄 길이와 규칙은 ruff 의 기본값이다
+#     `target-version` 과 `select = ["E", "F"]` 라 줄 길이는 ruff 의 기본값(88)이다 — 킷 모듈이 이 설정으로 검사되면
+#     `ruff format` 이 실패한다
 #   · `[tool.ruff]` 가 있는 레포에는 프로젝트 자신의 훅(`.claude/hooks/notify.py`)을 둔다. import 순서가 정렬되지 않아
-#     킷 설정(I 규칙)으로 검사되면 실패하고 프로젝트 설정(기본값)으로 검사되면 통과한다 — 그 파일이 프로젝트 설정으로
-#     검사되는지 본다
+#     킷 설정(I 규칙)으로 검사되면 실패하고 프로젝트 설정(E · F)으로 검사되면 통과한다 — 그 파일이 프로젝트 설정으로
+#     검사되는지 본다. ruff 의 기본 규칙에는 I 가 들어 있어 프로젝트 설정을 기본값으로 두면 이 파일로는 가리지 못한다
 # 킷 설정은 `.claude/hooks/kit/` 아래에만 적용된다. 그 밖에 놓이는 킷 파일(스킬 · 에이전트의 `.md`, `docs/process/` 등)은
-# 프로젝트 루트의 설정으로 검사된다. 이 테스트는 그 설정이 킷의 `ruff.toml` 일 때와 ruff 의 기본값일 때만 본다.
+# 프로젝트 루트의 설정으로 검사된다. 이 테스트는 그 설정이 킷의 `ruff.toml` 일 때와 위의 프로젝트 설정일 때만 본다.
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 fail=0
@@ -79,7 +80,7 @@ demo() { # $1=이름 $2=pyproject.toml 내용 $3=루트에 킷의 ruff.toml 이 
   fi
 }
 demo kit-config $'[project]\nname = "demo"\nversion = "0.1.0"\n' 놓임 없음
-demo project-config $'[project]\nname = "demo"\nversion = "0.1.0"\n\n[tool.ruff]\ntarget-version = "py312"\n' "안 놓임" 있음
+demo project-config $'[project]\nname = "demo"\nversion = "0.1.0"\n\n[tool.ruff]\ntarget-version = "py312"\n\n[tool.ruff.lint]\nselect = ["E", "F"]\n' "안 놓임" 있음
 
 rm -rf "$T"
 exit $fail
