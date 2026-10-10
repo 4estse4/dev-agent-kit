@@ -9,7 +9,7 @@
 #
 #   <kit>/install.sh <경로> --dry-run    아무것도 바꾸지 않고 무엇이 달라질지만 본다
 #
-# 킷 소유는 .kit/** 와 .claude/{skills,agents,hooks}/** 와 docs/process/** 다 —
+# 킷 소유는 .kit/** 와, 킷이 .claude/ 에 놓는 파일(settings.json 은 빼고)과 docs/process/** 다 —
 # 재설치가 **덮어쓴다.** 프로젝트 소유는 CLAUDE.md · .claude/settings.json · CI · 린터 설정과,
 # 템플릿으로 놓는 docs/ 문서(SPEC · dev-log 등) · PR 템플릿이다. 이미 있으면 건드리지 않고 내용이
 # 다르면 .kit-new 로 옆에 둔다. **자동 병합은 하지 않는다** — 합치는 것은 사람·에이전트가 한다.
@@ -139,7 +139,7 @@ place() { # $1=src $2=dst(대상 레포 상대)
 
 # 킷 소유 자리는 **덮어쓴다.** place() 와 달라지는 지점이 여기다.
 #
-# 왜 스킬·에이전트·훅이 킷 소유인가: 덮어쓰지 않으면 갱신이 무의미하다. 그것들은 킷이 계속
+# 왜 .claude 의 킷 파일(스킬·에이전트·훅 등)이 킷 소유인가: 덮어쓰지 않으면 갱신이 무의미하다. 그것들은 킷이 계속
 # 고치는 파일이고, 프로젝트가 손댈 이유가 없다(손댈 것은 settings.json 과 CLAUDE.md 다).
 # 실제로 덮어쓰지 않은 결과가 이렇다 — 한 프로젝트가 8월 31일 판의 정의로 리뷰를 일곱 라운드
 # 진행했고, 그 옛 판은 지금 킷이 없애려는 바로 그 동작을 시키고 있었다.
@@ -437,7 +437,7 @@ if [ "$DO_AGENT" = 1 ]; then
     rel=${f#"$cc"/}
     [ "$rel" = "README.md" ] && continue
     # settings.json 만 프로젝트 소유다 — 그 안에 프로젝트의 permissions 와 훅 등록이
-    # 있다. 스킬·에이전트·훅 스크립트는 킷 소유라 덮어쓴다.
+    # 있다. 그 밖의 파일(스킬·에이전트·훅 스크립트와 훅이 쓰는 hooks/kit/ 등)은 킷 소유라 덮어쓴다.
     if [ "$rel" = "settings.json" ]; then place "$f" ".claude/$rel"
     else                                  replace "$f" ".claude/$rel"; fi
   done < <(find "$cc" -type f)
@@ -627,7 +627,8 @@ dryrun_report() {
     #
     # **여기의 소유 판정은 위 설치 경로와 같아야 한다.** 다르면 dry-run 이 예고한 것과
     # 실제 설치가 어긋나고, 그러면 예고를 읽을 이유가 없어진다. 킷 소유는 .kit 전체,
-    # .claude 의 스킬·에이전트·훅, docs/process 이고, .claude 안에서는 settings.json 만 프로젝트 소유다.
+    # 킷이 .claude 에 놓는 파일(settings.json 은 빼고), docs/process 다. 킷이 .claude 에 놓는 것 가운데 settings.json 만
+    # 프로젝트 소유다. 이 판정은 킷이 놓을 파일(임시 트리)에만 하므로 프로젝트가 .claude 에 둔 파일은 여기 오지 않는다.
     elif case "$rel" in
            .kit/*) true ;;
            .claude/settings.json) false ;;
@@ -646,7 +647,7 @@ dryrun_report() {
   # 한 번은 예고 3 / 실제 0, 한 번은 예고 1 / 실제 3(그중 둘은 지우지도 않았다).
   #
   # 삭제가 .kit 에서만 생기는 것도 그 배열이 이미 반영한다. 킷 소유는 그 밖에도 있지만
-  # (.claude 의 스킬·에이전트·훅, docs/process) 그 자리들은 **통째로 비우고 놓는 자리가
+  # (킷이 .claude 에 놓는 파일, docs/process) 그 자리들은 **통째로 비우고 놓는 자리가
   # 아니라 파일 단위로 덮어쓰는 자리**라 애초에 사라지는 것이 없다.
   n_gone=${#DELETED[@]}
   for rel in ${DELETED+"${DELETED[@]}"}; do list_gone="${list_gone}  - $(why_gone "$rel")"$'\n'; done
@@ -654,7 +655,7 @@ dryrun_report() {
   echo "── dry-run: 아무것도 바꾸지 않았습니다 ──"
   echo ""
   echo "지금 설치하면 — 설치 ${n_new} · 교체 ${n_repl} · 보존 ${n_side} · 동일 ${n_same} · 삭제 ${n_gone}"
-  [ -n "$list_repl" ] && { echo ""; echo "교체 — .kit, .claude 의 스킬·에이전트·훅, docs/process 는 킷 소유다"; printf '%s' "$list_repl"; }
+  [ -n "$list_repl" ] && { echo ""; echo "교체 — .kit, 킷이 .claude 에 놓는 파일(settings.json 은 빼고), docs/process 는 킷 소유다"; printf '%s' "$list_repl"; }
   [ -n "$list_side" ] && { echo ""; echo "보존 — 이 레포 것을 두고 킷의 것은 <파일>.kit-new 로 옆에 놓는다"; printf '%s' "$list_side"; }
   [ -n "$list_new" ]  && { echo ""; echo "설치"; printf '%s' "$list_new"; }
   [ -n "$list_gone" ] && { echo ""; echo "삭제 — 재설치가 지운다"; printf '%s' "$list_gone"; }
