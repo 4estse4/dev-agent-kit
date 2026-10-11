@@ -120,9 +120,12 @@ git -C "$T/wt-f" commit -q --allow-empty -m 'wrap' -m "$(printf 'Closes\n#36 is 
 # PR 이 없고 번호도 없는 브랜치
 git -C "$T/self" worktree add -q -b feat/b "$T/wt-b" main
 git -C "$T/wt-b" commit -q --allow-empty -m 'start something'
-# 「다음 일」에서 고른 직후 둔 첫 커밋 — 고칠 것이 아직 없어 `Refs` 만 담은 빈 커밋으로 맡은 이슈를 알린다(이슈 #217)
+# 「다음 일」에서 고른 직후 둔 첫 커밋 — 고칠 것이 아직 없어 빈 커밋으로 맡은 이슈를 `Refs` 에 적는다(이슈 #217).
+# 본문은 근거로 다른 번호(#2)를 든다. `Refs` 를 읽지 못하면 「번호를 모두 뺀다」로 #19 와 함께 #2 도 빠지므로, #2 가
+# 남는지까지 봐야 `Refs` 로 맡은 번호만 빠진다는 것을 확인한다
 git -C "$T/self" worktree add -q -b feat/claim "$T/wt-claim" main
-git -C "$T/wt-claim" commit -q --allow-empty -m 'chore: take issue #19' -m 'Refs #19'
+git -C "$T/wt-claim" commit -q --allow-empty -m 'chore: take the chosen issue' \
+  -m 'The next-task window ranked it above #2.' -m 'Refs #19'
 # 고른 뒤 첫 커밋 전인 브랜치 — 맡은 일을 알 단서가 없다(이슈 #217)
 git -C "$T/self" worktree add -q -b feat/fresh "$T/wt-fresh" main
 # 열린 PR(#300)이 있는 브랜치 — 커밋이 말하는 번호가 아니라 PR 의 닫는 이슈와 Refs 를 따른다
@@ -221,8 +224,8 @@ wtline feat/b | grep -qF '맡은 일을 모름(커밋에 번호 없음)' && ok "
   || bad "커밋에 번호가 없는 worktree 브랜치(feat/b)를 맡은 일을 모른다고 내지 않았다: $(wtline feat/b)"
 wtline feat/fresh | grep -qF '맡은 일을 모름(커밋 없음)' && ok "커밋이 없는 worktree 브랜치(feat/fresh)는 맡은 일을 모른다고 낸다" \
   || bad "커밋이 없는 worktree 브랜치(feat/fresh)를 맡은 일을 모른다고 내지 않았다: $(wtline feat/fresh)"
-has 19 && ok "고른 직후 Refs 만 담은 빈 커밋을 둔 worktree(feat/claim)의 번호(#19)를 뺄 번호로 낸다" \
-  || bad "고른 직후 Refs 만 담은 빈 커밋을 둔 worktree(feat/claim)의 번호(#19)가 뺄 번호에 없다: $(wtline feat/claim)"
+if has 19 && ! has 2; then ok "고른 직후 둔 빈 커밋(feat/claim)은 Refs 로 적은 #19 만 빼고 근거로 든 #2 는 빼지 않는다"
+else bad "고른 직후 둔 빈 커밋(feat/claim)이 Refs 로 적은 #19 만 빼야 한다: $(wtline feat/claim)"; fi
 grep -q 'feat/self' "$T/out" && bad "이 세션 자신의 브랜치(feat/self)를 다른 worktree 로 냈다" || ok "이 세션 자신의 브랜치는 worktree 목록에 없다"
 for c in '14:feat/merged:머지됨' '15:feat/closed:닫힘'; do
   n=${c%%:*}; rest=${c#*:}; br=${rest%%:*}; st=${rest#*:}
