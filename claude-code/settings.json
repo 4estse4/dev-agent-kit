@@ -176,6 +176,10 @@
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/bot_guard.sh\"",
             "timeout": 90
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/hooks_path.sh\""
           }
         ]
       },
@@ -245,6 +249,10 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/kit_freshness.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/hooks_path.sh\""
           },
           {
             "type": "command",

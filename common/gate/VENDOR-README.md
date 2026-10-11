@@ -10,7 +10,9 @@ git config core.hooksPath .kit/git-hooks
 ```
 
 훅 *파일* 은 clone 을 따라오지만, 그것을 활성화하는 `core.hooksPath` 설정은
-따라오지 않는다 — git 이 보안상 의도한 동작이고 우회 방법이 없다.
+따라오지 않는다 — git 이 보안상 의도한 동작이고 우회 방법이 없다. Claude Code 세션은 시작할 때 훅이 꺼졌다는
+알림을 받고, 켜기 전에는 에이전트 훅이 세션의 `git commit` · `git push` 를 막는다. 세션 없이 터미널에서
+커밋하는 사람에게는 이 안내뿐이다.
 
 활성화하면 다음을 막는다:
 
