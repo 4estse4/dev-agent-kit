@@ -162,18 +162,18 @@ replace() { # $1=src $2=dst(대상 레포 상대)
 # 복사해 레포에 커밋하면 어디서 clone 해도 같은 게이트가 실행된다.
 if [ "$DO_HOOKS" = 1 ]; then
   vendor="$TARGET/.kit"
-  # .kit/gate 와 git-hooks 는 킷 소유라 통째로 교체한다. identity 는 그 아래
+  # .kit/gate 와 git-hooks 는 킷 소유라 통째로 교체한다. identity 와 gate.conf(게이트 설정)는 그 아래
   # 있지만 킷 소유가 아니므로 남긴다.
   kit_rev=$( cd "$KIT_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo unknown )
   # 설치와 dry-run 이 **같은 함수**를 쓴다. 두 벌로 두면 dry-run 이 예고하는 내용과
   # 설치가 놓는 내용이 어긋나고, 어긋났을 때 알아챌 방법이 없다.
   vendor_into() { # $1=목적지 .kit 디렉터리
     local v="$1"
-    # .kit 은 identity 를 빼면 전부 킷 소유다. 소유한 자리는 **통째로 비우고 놓는다** —
+    # .kit 은 identity 와 gate.conf 를 빼면 전부 킷 소유다. 소유한 자리는 **통째로 비우고 놓는다** —
     # 이름을 지목해 지우면 그 목록이 킷이 바뀔 때마다 늘어나고, 늘리다가 빠뜨린다.
     # 무엇이 사라지는지는 --dry-run 의 「삭제 — 재설치가 지운다」 목록이 미리 보여준다.
     if [ -d "$v" ]; then
-      find "$v" -mindepth 1 -maxdepth 1 ! -name identity -exec rm -rf {} +
+      find "$v" -mindepth 1 -maxdepth 1 ! -name identity ! -name gate.conf -exec rm -rf {} +
     fi
     mkdir -p "$v"
     cp -R "$KIT_ROOT/common/gate" "$KIT_ROOT/common/git-hooks" "$v/"
@@ -184,11 +184,13 @@ if [ "$DO_HOOKS" = 1 ]; then
     # 고르지 않은 언어의 어댑터는 복사하지 않는다.
     for _l in $(echo "$DROP" | tr ',' ' '); do rm -f "$v/gate/adapters/$_l.sh"; done
     chmod +x "$v"/gate/*.sh "$v"/git-hooks/* 2>/dev/null
-    # identity 는 킷 소유가 아니다. 실제 설치는 위 rm 이 건너뛰어 그대로 두고, dry-run 은
+    # identity 와 gate.conf 는 킷 소유가 아니다. 실제 설치는 위 rm 이 건너뛰어 그대로 두고, dry-run 은
     # 대상의 것을 가져온다. **두 모드가 같은 최종 트리를 만들어야** 삭제 집계가 어긋나지
     # 않는다 — 이 복사가 집계보다 뒤에 있었을 때 dry-run 이 identity 를 삭제로 셌다.
-    [ "$v" = "$TARGET/.kit" ] || [ ! -f "$TARGET/.kit/identity" ] \
-      || cp "$TARGET/.kit/identity" "$v/identity"
+    for _own in identity gate.conf; do
+      [ "$v" = "$TARGET/.kit" ] || [ ! -f "$TARGET/.kit/$_own" ] \
+        || cp "$TARGET/.kit/$_own" "$v/$_own"
+    done
     # install-manifest 는 **어디서 왔는지**만 적는다 — 킷 커밋과 언어 선택.
     # 내용 체크섬은 두지 않는다. 이 레포에서 게이트를 고치는 것이 정상 작업인데
     # (.kit/README.md), 체크섬을 두면 그 정상 작업 때문에 CI 의 vendored 잡이 체크섬 대조에서 실패하고,
@@ -337,9 +339,11 @@ if [ "$DO_LINT" = 1 ]; then
   # 그 자리에 없어 도구 기본값으로 실행됐다. 찾은 자리마다 설정을 놓으면 이름을 몰라도 된다.
   #
   # 건너뛸 디렉터리 목록을 여기 다시 적지 않는다 — 두 벌이 되면 KIT_PRUNE_DIRS 를 바꿨을 때
-  # 게이트는 찾고 설치기는 못 찾는 상태가 된다. lib.sh 의 정의 하나를 함께 쓴다.
+  # 게이트는 찾고 설치기는 못 찾는 상태가 된다. lib.sh 의 정의 하나를 함께 쓴다. 목록은 킷의 것이 아니라
+  # 대상 레포의 .kit/gate.conf 를 따른다 — 게이트가 그 레포에서 읽는 값이 그것이다.
   # shellcheck source=/dev/null
   . "$KIT_ROOT/common/gate/lib.sh"
+  gate_set_prune "$TARGET/.kit/gate.conf"
 
   # $4 · $5 는 선택 인자다 — set -u 하에서는 ${4:-} 로 받아야 미설정일 때 오류가 나지 않는다.
   place_beside() { # $1=마커 $2=킷 설정 파일 $3=놓을 이름 $4=마커에 이 문자열이 있으면 건너뜀(선택) $5=마커가 있는 디렉터리를 받아 성공할 때만 놓는 함수(선택)
@@ -358,8 +362,7 @@ if [ "$DO_LINT" = 1 ]; then
       case " ${PLACED_DESTS:-} " in *" $dest "*) continue ;; esac
       PLACED_DESTS="${PLACED_DESTS:-} $dest"
       place "$2" "$dest"
-    # shellcheck disable=SC2046
-    done < <(cd "$TARGET" && find . \( $(gate_prune_expr) \) -prune -o -name "$1" -print 2>/dev/null)
+    done < <(cd "$TARGET" && find . \( "${GATE_PRUNE_ARGS[@]}" \) -prune -o -name "$1" -print 2>/dev/null)
   }
 
   # eslint 는 그 package.json 이 eslint 를 쓸 때만 놓는다 — package.json 에 `"eslint":` 키가 있거나(대개
@@ -697,7 +700,7 @@ dryrun_report() {
 
   echo ""
   echo "병합용 트리: $STAGE"
-  echo "  킷이 놓을 파일이 들어 있습니다(예고 건수를 맞추려고 .kit/identity 도 넣지만"
+  echo "  킷이 놓을 파일이 들어 있습니다(예고 건수를 맞추려고 .kit/identity · .kit/gate.conf 도 넣지만"
   echo "  그것은 킷이 놓는 것이 아니라 보존하는 것입니다). 파일별로 비교하려면:"
   echo "      diff -u <파일> $STAGE/<파일>"
   echo "  임시 디렉터리이므로 시스템이 정리하면 사라질 수 있습니다. 남길 것은 옮겨두세요."

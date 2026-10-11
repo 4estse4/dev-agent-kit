@@ -49,15 +49,16 @@ fi
 if [ "${GATE_LINT_ONLY:-0}" = 1 ]; then
   :
 elif _p=$(_py pytest); then
-  # shellcheck disable=SC2086
-  out=$("$_p" -q ${KIT_PYTEST_FLAGS:-} 2>&1); rc=$?
+  # 프로젝트가 더할 플래그는 `.kit/gate.conf` 의 KIT_PYTEST_FLAGS 다. 공백에서만 나눈다(lib.sh 의 gate_conf).
+  read -r -a _flags <<< "$(gate_conf KIT_PYTEST_FLAGS)"
+  out=$("$_p" -q ${_flags[@]+"${_flags[@]}"} 2>&1); rc=$?
   case "$rc" in
     0) GATE_PASSED+=("pytest") ;;
     5) GATE_PASSED+=("pytest(테스트 없음)") ;;
     *) GATE_FAILED+=("pytest")
        GATE_FAILOUT+=$'\n'"──── pytest ────"$'\n'"$out"$'\n' ;;
   esac
-  unset out rc _p
+  unset out rc _p _flags
 else
   gate_skip "pytest"
 fi

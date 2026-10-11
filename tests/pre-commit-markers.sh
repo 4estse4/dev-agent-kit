@@ -6,7 +6,7 @@
 # 파이프라인의 결과로 삼아 "마커 없음" 이 됐다. 마커가 앞쪽에 있고 뒤가 파이프 버퍼보다 긴
 # 파일 — 병합 충돌이 가장 흔한 package-lock.json 이 그 모양이다 — 이 rc=0 으로 커밋됐다.
 #
-# 훅을 실제로 실행한다. 설치된 레포의 .kit/ 대신 킷의 common/ 을 KIT_DIR 로 준다.
+# 훅을 실제로 실행한다. 킷의 common/git-hooks/ 에 있는 훅을 실행하므로 훅은 킷의 common/ 을 킷 디렉터리로 쓴다.
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 fail=0
@@ -22,7 +22,7 @@ check() { # $1=설명  $2=마커 뒤에 붙일 줄 수
     [ "$lines" -gt 0 ] && seq -f '  "pkg-%g": "1.0.0",' 1 "$lines"
   } > "$R/package-lock.json"
   git -C "$R" add package-lock.json
-  out=$(cd "$R" && KIT_DIR="$KIT/common" KIT_ALLOW_MISSING_TOOLS=1 bash "$KIT/common/git-hooks/pre-commit" 2>&1)
+  out=$(cd "$R" && KIT_ALLOW_MISSING_TOOLS=1 bash "$KIT/common/git-hooks/pre-commit" 2>&1)
   rc=$?
   if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '병합 충돌 마커'; then
     echo "  ✓ $what"

@@ -69,7 +69,7 @@ S, O = yaml.safe_load("\n".join(srcl)), yaml.safe_load("\n".join(outl))
 
 # 설치본의 워크플로 env 에 남은 변수마다 쓰는 곳이 있는지 본다. 설치된 gates.yml 과, 설치된 `.kit/` 의 스크립트(이름이
 # `.sh` 로 끝나거나 첫 줄이 `#!` 인 파일)에서 `env.<이름>` · `$<이름>` 을 찾는다 — 워크플로 env 는 스텝의 환경으로
-# 전달되고, 스텝이 실행하는 `.kit/` 의 게이트 스크립트는 확장점을 환경에서 읽는다. 문서(`.kit/README.md` 포함)와
+# 전달되고, 스텝이 실행하는 `.kit/` 의 게이트 스크립트는 몇몇 변수를 환경에서 읽는다. 문서(`.kit/README.md` 포함)와
 # `tool-versions` 처럼 이름을 적기만 하는 파일은 보지 않는다. 필터는 언어 전용 변수를 이름으로 찾으므로(ENVOF),
 # 그 이름이 gates.yml 의 변수 이름과 다르면 빠진 언어의 변수가 쓰는 곳 없이 남는다.
 kit = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(out)))), ".kit")
@@ -222,12 +222,12 @@ tail_case jobhead "잡 머리 앞" '/^  trace:$/ { print c } { print }'
 tail_case jobnote "2칸 주석 앞" '/^  trace:$/ { print c; print ""; print "  # trace 잡(tests/filter-langs.sh 가 넣었다)" } { print }'
 tail_case eof "파일 끝" '{ print } END { print "      - if: needs.detect.outputs.node == '\''true'\''"; print "        run: echo node"; print c }'
 
-# 워크플로 env 는 스텝의 환경으로 전달되고, 게이트 스크립트는 확장점을 환경에서 읽는다(`KIT_GO_TEST_FLAGS`).
+# 워크플로 env 는 스텝의 환경으로 전달되고, 게이트 스크립트는 몇몇 변수를 환경에서 읽는다(`KIT_ALLOW_MISSING_TOOLS`).
 # 그런 변수는 gates.yml 에 쓰는 곳이 없어도 설치본의 게이트가 쓴다. 킷 사본의 env 에 넣고 go 를 남겨 설치한다.
-K=$(kit_copy extvar '{ print } /^env:$/ { print "  KIT_GO_TEST_FLAGS: \"\"" }')
+K=$(kit_copy extvar '{ print } /^env:$/ { print "  KIT_ALLOW_MISSING_TOOLS: \"0\"" }')
 y=$(install_lang "$K" "go,py")
 out=$(python3 "$T/check.py" "$K/common/ci/gates.yml" "$y" "go,py" 2>&1); rc=$?
-if [ $rc -eq 0 ] && grep -q '^  KIT_GO_TEST_FLAGS:' "$y" 2>/dev/null; then
+if [ $rc -eq 0 ] && grep -q '^  KIT_ALLOW_MISSING_TOOLS:' "$y" 2>/dev/null; then
   ok "게이트 스크립트가 환경에서 읽는 워크플로 env 변수는 쓰이는 것으로 본다"
 else
   bad "게이트 스크립트가 환경에서 읽는 워크플로 env 변수를 쓰는 곳이 없는 것으로 봤거나 설치본에 없다"

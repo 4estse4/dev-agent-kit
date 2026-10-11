@@ -41,7 +41,7 @@ hook() {
   git -C "$R" switch -q "$br" 2>/dev/null || git -C "$R" switch -qc "$br"
   local -a pre
   if [ "$who" = SESSION ]; then pre=("${SESSION[@]}"); else pre=("${HUMAN[@]}" KIT_ALLOW_MISSING_TOOLS=1); fi
-  out=$(cd "$R" && "${pre[@]}" KIT_DIR="$KIT/common" "$@" bash "$HOOK" 2>&1); rc=$?
+  out=$(cd "$R" && "${pre[@]}" "$@" bash "$HOOK" 2>&1); rc=$?
 }
 blocked() { [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '보호 브랜치입니다'; }
 show() { printf '%s\n' "$out" | sed 's/^/      /' | head -12; }

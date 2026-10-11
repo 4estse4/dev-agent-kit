@@ -13,7 +13,9 @@
 # 브랜치도 같다 — 기본 브랜치에 없는 커밋의 메시지에서 줄 머리의 닫는 키워드(Closes · Fixes · Resolves 꼴)나 `Refs` 가
 # 붙은 번호만 빼고, 그 밖의 번호는 그 worktree 줄에 근거로 든 번호로 보이기만 한다. 한때 번호를 모두 빼서, 다른 세션이 계획
 # 커밋에서 순서의 근거로만 든 이슈가 후보에서 빠졌다. 브랜치의 커밋 어디에도 그런 키워드가 없으면 맡은 이슈를 알 단서가
-# 번호뿐이라 번호를 모두 뺀다. 번호가 없는 브랜치는 이름을 그대로 낸다.
+# 번호뿐이라 번호를 모두 뺀다. 기본 브랜치에 없는 커밋이 없거나 커밋에 번호가 없는 브랜치는 「맡은 일을 모름」으로 낸다.
+# 「다음 일」에서 일을 고른 세션은 고른 직후 `Refs #N` 을 단 첫 커밋을 둔다(`merge-pr` 의 「다음 일」 문단). 그 전에는
+# 맡은 일을 알 단서가 없어, 커밋이 아직 없는 다른 worktree 가 이미 맡은 이슈를 세션이 추천했다.
 #
 # 빼지 않는 것: 열린 PR 은 없고 팁이 머지되거나 닫힌 PR 의 head 에 들어 있는 브랜치는 끝난 일이라 그 커밋의 번호를
 # 빼지 않는다 — 스쿼시 머지에서는 그 커밋이 기본 브랜치의 조상이 되지 않아 「기본 브랜치에 없는 커밋」으로 나온다.
@@ -168,6 +170,10 @@ for t in trees:
         continue
     found = sorted(set(nums(log.stdout)))
     taken = sorted(set(keyed(log.stdout)))
+    if not found:
+        rows.append('%s\t%s\tPR 없음\t맡은 일을 모름(%s)' % (
+            path, name, '커밋에 번호 없음' if log.stdout.strip() else '커밋 없음'))
+        continue
     if taken:
         why = 'worktree %s 의 Refs · 닫는 키워드' % name
         note = ''
