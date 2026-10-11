@@ -11,8 +11,9 @@
 #   · PR 이 없는 다른 worktree 의 브랜치는 기본 브랜치에 없는 커밋의 메시지에서 줄 머리의 닫는 키워드(Closes · Fixes ·
 #     Resolves 꼴)나 `Refs` 뒤에 이은 번호만 뺄 번호로 낸다. 줄을 넘은 번호와 다른 레포의 번호는 읽지 않는다. 그 밖의 번호는 그 worktree 줄에 근거로 든 번호로 보이고 빼지 않는다 —
 #     빼면 다른 세션이 계획 커밋에서 근거로만 든 이슈가 후보에서 빠진다(이슈 #215). 커밋에 그런 키워드가 하나도 없으면
-#     맡은 이슈를 알 단서가 번호뿐이라 번호를 모두 낸다. 번호가 없으면 브랜치 이름을 그대로 낸다. PR 이 있는 브랜치는
-#     PR 쪽 규칙을 따른다
+#     맡은 이슈를 알 단서가 번호뿐이라 번호를 모두 낸다. 기본 브랜치에 없는 커밋이 없거나 커밋에 번호가 없으면 「맡은 일을
+#     모름」으로 낸다 — 「다음 일」에서 고른 직후 `Refs` 만 담은 빈 커밋을 두면 그 번호를 뺀다(이슈 #217). PR 이 있는
+#     브랜치는 PR 쪽 규칙을 따른다
 #   · 열린 PR 은 없고 팁이 머지되거나 닫힌 PR 의 head 에 든(head 와 같거나 그 조상인) 브랜치는 끝난 일이라 번호를
 #     빼지 않는다. 이름만 같고 팁이 그 head 뒤로 나아간 브랜치는 새 일이라 번호를 뺀다
 #   · 이 스크립트를 실행한 worktree(세션 자신의 일), 기본 브랜치에 없는 커밋이 없는 detach worktree, 기본 브랜치의
@@ -119,6 +120,14 @@ git -C "$T/wt-f" commit -q --allow-empty -m 'wrap' -m "$(printf 'Closes\n#36 is 
 # PR 이 없고 번호도 없는 브랜치
 git -C "$T/self" worktree add -q -b feat/b "$T/wt-b" main
 git -C "$T/wt-b" commit -q --allow-empty -m 'start something'
+# 「다음 일」에서 고른 직후 둔 첫 커밋 — 고칠 것이 아직 없어 빈 커밋으로 맡은 이슈를 `Refs` 에 적는다(이슈 #217).
+# 본문은 근거로 다른 번호(#2)를 든다. `Refs` 를 읽지 못하면 「번호를 모두 뺀다」로 #19 와 함께 #2 도 빠지므로, #2 가
+# 남는지까지 봐야 `Refs` 로 맡은 번호만 빠진다는 것을 확인한다
+git -C "$T/self" worktree add -q -b feat/claim "$T/wt-claim" main
+git -C "$T/wt-claim" commit -q --allow-empty -m 'chore: take the chosen issue' \
+  -m 'The next-task window ranked it above #2.' -m 'Refs #19'
+# 고른 뒤 첫 커밋 전인 브랜치 — 맡은 일을 알 단서가 없다(이슈 #217)
+git -C "$T/self" worktree add -q -b feat/fresh "$T/wt-fresh" main
 # 열린 PR(#300)이 있는 브랜치 — 커밋이 말하는 번호가 아니라 PR 의 닫는 이슈와 Refs 를 따른다
 git -C "$T/self" worktree add -q -b feat/c "$T/wt-c" main
 git -C "$T/wt-c" commit -q --allow-empty -m 'as discussed in #13'
@@ -210,8 +219,13 @@ printf '%s\n' "$dline" | grep -q '빼는 번호 #23 #24 #25' && printf '%s\n' "$
 has 999 && bad "열린 이슈가 아닌 #999 를 뺄 번호로 냈다" || ok "열린 이슈가 아닌 번호는 뺄 번호로 내지 않는다"
 has 13 && bad "PR 이 있는 브랜치의 커밋이 말한 #13 을 뺄 번호로 냈다" || ok "PR 이 있는 브랜치는 커밋이 아니라 PR 을 따른다"
 has 7 && bad "이 세션 자신의 브랜치가 말한 #7 을 뺄 번호로 냈다" || ok "이 스크립트를 실행한 worktree 는 다른 세션의 일로 내지 않는다"
-grep -E 'feat/b' "$T/out" | grep -q '번호 없음' && ok "번호가 없는 worktree 브랜치를 이름 그대로 낸다" \
-  || bad "번호가 없는 worktree 브랜치(feat/b)가 출력에 없다"
+wtline() { awk -F'\t' -v b="$1" '$2 == b' "$T/out"; }
+wtline feat/b | grep -qF '맡은 일을 모름(커밋에 번호 없음)' && ok "커밋에 번호가 없는 worktree 브랜치(feat/b)는 맡은 일을 모른다고 낸다" \
+  || bad "커밋에 번호가 없는 worktree 브랜치(feat/b)를 맡은 일을 모른다고 내지 않았다: $(wtline feat/b)"
+wtline feat/fresh | grep -qF '맡은 일을 모름(커밋 없음)' && ok "커밋이 없는 worktree 브랜치(feat/fresh)는 맡은 일을 모른다고 낸다" \
+  || bad "커밋이 없는 worktree 브랜치(feat/fresh)를 맡은 일을 모른다고 내지 않았다: $(wtline feat/fresh)"
+if has 19 && ! has 2; then ok "고른 직후 둔 빈 커밋(feat/claim)은 Refs 로 적은 #19 만 빼고 근거로 든 #2 는 빼지 않는다"
+else bad "고른 직후 둔 빈 커밋(feat/claim)이 Refs 로 적은 #19 만 빼야 한다: $(wtline feat/claim)"; fi
 grep -q 'feat/self' "$T/out" && bad "이 세션 자신의 브랜치(feat/self)를 다른 worktree 로 냈다" || ok "이 세션 자신의 브랜치는 worktree 목록에 없다"
 for c in '14:feat/merged:머지됨' '15:feat/closed:닫힘'; do
   n=${c%%:*}; rest=${c#*:}; br=${rest%%:*}; st=${rest#*:}
