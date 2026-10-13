@@ -1,8 +1,8 @@
 ## 4. base 복귀와 브랜치 삭제
 
-`<baseRefName>` · `<headRefName>` · `isCrossRepository` 는 2절이 받아둔 값이다. **이름을 여기서 새로 구하지 마라.**
+`<baseRefName>` · `<headRefName>` · `isCrossRepository` 는 2절이 받아 둔 값이다. **이름을 여기서 새로 구하지 마라.**
 이 절은 base 로 옮긴 **뒤**에 브랜치를 지우고, `$ARGUMENTS` 로 **다른 PR 을 번호로 머지하는
-것이 정상 경로**다(`argument-hint`).
+것이 정상 경로**라서(`argument-hint`), 지금 체크아웃의 브랜치가 그 PR 의 브랜치가 아닐 수 있다.
 
 **base 로 돌아온다:**
 
@@ -29,7 +29,7 @@ worktree 가 base 를 쓰면 `git switch` 가 `fatal: '<baseRefName>' is already
 둔다. 킷이 전제하는 macOS · ubuntu CI 의 git 은 그보다 새것이다.
 
 **이 줄의 종료 코드가 0 이 아니면 중단한다.** fetch 가 네트워크 때문에 실패하면 그 줄이 실패한다.
-fetch 를 따로 두면 fetch 가 실패해도 받아 둔 옛 `origin/<baseRefName>` 에 멈추지 않고 detach 해서, 머지 전
+fetch 를 따로 두면 fetch 가 실패해도 멈추지 않고 받아 둔 옛 `origin/<baseRefName>` 에 detach 해서, 머지 전
 커밋에 있는 채 브랜치를 지우고 5절이 그 SHA 를 보고한다. base 로 옮기는 경로는 `git pull --ff-only` 가
 fetch 한다.
 
@@ -83,7 +83,7 @@ fork 에서 온 PR 의 head 브랜치는 fork 에 있다. origin 에 같은 이�
 코멘트를 하나 더 붙인다.** 결정 코멘트를 편집으로 채우면 한 번 올린 기록이 바뀌고, 편집한
 뒤에 생긴 것은 또 빠진다. 실제로 둘 다 있었다 — 결정 코멘트의 빈 칸을 머지 뒤 편집으로
 채웠고, 그 편집 뒤에 연 이슈가 최종 기록에서 빠졌다. **이 후속 코멘트도 응답에 초안 전문을 출력하고
-승인받은 뒤 올린다.** 지금은 받는 승인이다(`docs/process/verification-stages.md` 6.3).
+승인받은 뒤 올린다.** `docs/process/verification-stages.md` 6.3 의 표가 이 코멘트의 승인을 「지금은 받는다」로 정했다.
 
 ## 5. 한 줄 보고
 `Merged PR #<N>. main at <short SHA>. dev-log: 있음|없음|판정 못 함.`
@@ -94,5 +94,5 @@ auto-merge 를 켜고 끝낸 응답(3절 「봇 설정이 있을 때」)에서�
 `없음` 과 `판정 못 함` 은 2절에서 사람이 알고도 머지를 지시한 경우뿐이고, 그 사실은 결정 코멘트에
 적혀 있다. 판정 못 한 것을 `없음` 으로 적지 않는다 — 그것이 2절의 그 확인이 없애려는 거짓 기록이다.
 
-이후 새 작업을 시작하지 않는다. 다음 작업을 시작할 때의 정리로 불렀으면(`SKILL.md` 「꼭 지킬 것」의 예외) 사람이 시킨 그 작업으로
+이후 새 작업을 스스로 시작하지 않고 2절의 「다음 일」 창으로 묻는다. 다음 작업을 시작할 때의 정리로 불렀으면(`SKILL.md` 「꼭 지킬 것」의 예외) 사람이 시킨 그 작업으로
 돌아간다. 머지된 PR 이 더 있으면 그 PR 도 정리한 뒤다.
