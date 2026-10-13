@@ -14,7 +14,8 @@
 #   · 에이전트 훅: 꺼진 clone 에서 `git commit` · `git push` 를 막고 사유에 켜는 명령을 적는다 — 하위 디렉터리에서
 #     입력한 것, 레포 밖에서 `git -C <그 clone>` 으로 입력한 것, 그 clone 의 worktree 에서 입력한 것, 전역 옵션
 #     (`--no-pager` · `-c <키=값>`) 뒤의 것, 명령이 시작되는 여러 자리(`&&` · `||` · `;` · `(` · `$(` · 백틱 ·
-#     `bash -c '` · 앞의 `이름=값` · `env` · `command` · `then` · `if` · `elif` · `while` · `until` · `{` 뒤)의 것도.
+#     `bash -c '` · 앞의 `이름=값` · `env` · `command` · `exec` · `time` · `nohup` · `then` · `do` · `else` · `if` ·
+#     `elif` · `while` · `until` · `{` 뒤)의 것도.
 #     거절 사유에 켜지 않기로 했을 때와 따옴표 안의 글자로 막혔을 때 할 일을 적는다. 다른 git 명령(`status` ·
 #     `log --grep commit` · `--no-pager log --grep commit` · `stash push` · `commit-tree` · `config`), 따옴표 안에
 #     명령이 시작되는 자리가 없는 검색 · `echo` 의 인자에 든 글자, git 이 아닌 명령은 막지 않는다
@@ -115,6 +116,11 @@ blocks "앞에 이름=값을 붙인 git commit 을 막는다" "$C" "$C" "GIT_AUT
 blocks "앞에 따옴표 안에 공백이 든 이름=값을 붙인 git commit 을 막는다" "$C" "$C" 'GIT_AUTHOR_NAME="a b" git commit -qm x'
 blocks "env 뒤의 git commit 을 막는다" "$C" "$C" "env GIT_AUTHOR_NAME=x git commit -qm x"
 blocks "command 뒤의 git push 를 막는다" "$C" "$C" "command git push origin main"
+blocks "exec 뒤의 git push 를 막는다" "$C" "$C" "exec git push origin main"
+blocks "time 뒤의 git commit 을 막는다" "$C" "$C" "time git commit -qm x"
+blocks "nohup 뒤의 git push 를 막는다" "$C" "$C" "nohup git push origin main"
+blocks "do 뒤의 git push 를 막는다" "$C" "$C" "for r in origin; do git push \$r main; done"
+blocks "else 뒤의 git commit 을 막는다" "$C" "$C" "if false; then :; else git commit -qm x; fi"
 blocks "then 뒤의 git commit 을 막는다" "$C" "$C" "if true; then git commit -qm x; fi"
 blocks "if 뒤의 git commit 을 막는다" "$C" "$C" "if git commit -qm x; then echo ok; fi"
 blocks "elif 뒤의 git push 를 막는다" "$C" "$C" "if false; then :; elif git push origin main; then :; fi"
