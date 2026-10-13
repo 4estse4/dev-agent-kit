@@ -55,6 +55,9 @@
     "검색 · heredoc 도 막는다. 같은 자리의 round_comment_cold.sh 는 라운드 코멘트의 콜드 리뷰 전문이",
     "아래 review_record.sh 가 남긴 같은 head 의 기록과 글자로 같지 않거나 기록이 없으면 막는다. 봇 설정이",
     "없으면 대조할 기록이 없어 라운드 코멘트를 막는다.",
+    "hooks_path.sh 도 막는 훅이다. 레포에 .kit/git-hooks/ 가 있는데 core.hooksPath 가 그 자리가 아니면(clone 에는",
+    "그 설정이 따라오지 않는다) SessionStart 에서 그렇다고 알리고, PreToolUse 에서 세션을 연 프로젝트의 레포에",
+    "입력한 git commit · git push 를 켤 때까지 막는다.",
     "킷은 봇과 함께 쓴다. 레포에 봇 설정(.claude/bot.json)이 있으면 훅이 넷 더 동작한다. SessionStart 의",
     "bot_session.sh 가 세션의 gh 를 봇 계정에 연결하고, 막는 훅인 PreToolUse 의 bot_guard.sh 가",
     "gh 와 git 의 계정을 바꾸거나 토큰을 꺼내거나 연결 없이 GitHub 에 쓰는 것을 막는다.",
@@ -176,6 +179,10 @@
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/bot_guard.sh\"",
             "timeout": 90
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/hooks_path.sh\""
           }
         ]
       },
@@ -245,6 +252,10 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/kit_freshness.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/hooks_path.sh\""
           },
           {
             "type": "command",
