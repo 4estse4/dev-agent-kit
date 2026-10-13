@@ -17,8 +17,9 @@
 # 명령의 `git -C <경로>` 가 있으면 그 경로의 레포를, 없으면 명령을 입력한 디렉터리의 레포를 그 레포와 견준다.
 # 프로젝트 밖에 실험하려고 만든 clone 은 프로젝트의 커밋이 아니라 보지 않는다.
 #
-# **무엇을 못 막나.** 명령 글자로 알아보므로 스크립트 파일 안의 `git commit` 은 못 보고, `git -C "$d"` 처럼 경로를
-# 셸 변수로 준 명령은 그 경로를 풀지 못해 판정하지 않는다. 한 명령 안에서 `cd` 로 다른 디렉터리에 들어가 입력한
+# **무엇을 못 막나.** 명령 글자로 알아보므로 스크립트 파일 안의 `git commit` 은 못 보고, 명령이 시작되는 자리가
+# 아닌 곳의 `git`(`xargs git push` · `find … -exec git commit` 처럼 다른 명령의 인자로 실행되는 것)도 보지 않는다.
+# `git -C "$d"` 처럼 경로를 셸 변수로 준 명령은 그 경로를 풀지 못해 판정하지 않는다. 한 명령 안에서 `cd` 로 다른 디렉터리에 들어가 입력한
 # 커밋은 처음 디렉터리로 판정하고, `git -c core.hooksPath=…` 로 그 명령에만 준 설정은 보지 않는다. 판정하지
 # 못하면(레포가 아니거나 git 이 실패하면) 막지 않는다. 이 훅은 켜는 것을 잊은 경우를 막는 것이고, 작정한 우회를
 # 막는 것은 CI 와 브랜치 보호다.
@@ -89,11 +90,16 @@ if data.get('hook_event_name') == 'SessionStart':
 
 cmd = (data.get('tool_input') or {}).get('command') or ''
 cwd = data.get('cwd') or os.getcwd()
-# `git` 다음에 전역 옵션만 오고 그다음 낱말이 commit · push 인 것. 값을 따로 받는 전역 옵션(`-C` · `-c` ·
-# `--git-dir` · `--work-tree` · `--namespace` · `--config-env`)만 다음 낱말을 값으로 읽는다 — 다른 옵션까지 값을
-# 받게 하면 `git --no-pager log --grep commit` 의 `log` 를 값으로 읽어 commit 을 하위 명령으로 본다. 따옴표 ·
-# `bash -c` 안이어도 찾는다. `commit-tree` 처럼 이어진 낱말은 아니다.
-CALL = re.compile(r'(?<![\w.-])["\']?(?:[^\s"\';&|()]*/)?git["\']?'
+# 명령이 시작되는 자리의 `git` 다음에 전역 옵션만 오고 그다음 낱말이 commit · push 인 것. 명령이 시작되는 자리는
+# 줄 머리 · `;` · `&` · `|` · `(` · `$(` · 백틱 뒤와 `sh -c '` 처럼 셸에 전달한 글의 머리이고, 그 앞에 `이름=값` ·
+# `env` · `command` · `then` 같은 낱말이 와도 된다. 검색 · `echo` 의 인자에 든 글자는 명령이 아니라 찾지 않는다 —
+# 찾으면 켜지 않기로 한 레포에서 그 검색이 끝까지 막힌다. 값을 따로 받는 전역 옵션(`-C` · `-c` · `--git-dir` ·
+# `--work-tree` · `--namespace` · `--config-env`)만 다음 낱말을 값으로 읽는다 — 다른 옵션까지 값을 받게 하면
+# `git --no-pager log --grep commit` 의 `log` 를 값으로 읽어 commit 을 하위 명령으로 본다. `commit-tree` 처럼 이어진
+# 낱말은 아니다.
+CALL = re.compile(r'(?m)(?:^|[;&|(`]|\$\(|\b(?:ba|z)?sh\s+-[a-zA-Z]*c\s+["\'])\s*'
+                  r'(?:(?:env|command|exec|time|nohup|then|do|else|!)\s+|[A-Za-z_]\w*=[^\s;&|]*\s+)*'
+                  r'["\']?(?:[^\s"\';&|()]*/)?git["\']?'
                   r'((?:\s+(?:(?:-C|-c|--git-dir|--work-tree|--namespace|--config-env)\s+[^\s;&|]+|-[^\s;&|]+))*)'
                   r'\s+["\']?(commit|push)["\']?(?![\w-])')
 for m in CALL.finditer(cmd):
