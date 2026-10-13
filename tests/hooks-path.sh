@@ -13,9 +13,11 @@
 #     아무것도 출력하지 않는다
 #   · 에이전트 훅: 꺼진 clone 에서 `git commit` · `git push` 를 막고 사유에 켜는 명령을 적는다 — 하위 디렉터리에서
 #     입력한 것, 레포 밖에서 `git -C <그 clone>` 으로 입력한 것, 그 clone 의 worktree 에서 입력한 것, 전역 옵션
-#     (`--no-pager` · `-c <키=값>`) 뒤의 것, 명령이 시작되는 여러 자리(`&&` · `;` · `(` · `$(` · `bash -c '` · 앞의
-#     `이름=값` · `env` · `then` 뒤)의 것도. 다른 git 명령(`status` · `log --grep commit` · `--no-pager log --grep
-#     commit` · `stash push` · `commit-tree` · `config`), 검색 · `echo` 의 인자에 든 글자, git 이 아닌 명령은 막지 않는다
+#     (`--no-pager` · `-c <키=값>`) 뒤의 것, 명령이 시작되는 여러 자리(`&&` · `||` · `;` · `(` · `$(` · 백틱 ·
+#     `bash -c '` · 앞의 `이름=값` · `env` · `command` · `then` · `if` · `elif` · `while` · `until` · `{` 뒤)의 것도.
+#     거절 사유에 켜지 않기로 했을 때와 따옴표 안의 글자로 막혔을 때 할 일을 적는다. 다른 git 명령(`status` ·
+#     `log --grep commit` · `--no-pager log --grep commit` · `stash push` · `commit-tree` · `config`), 따옴표 안에
+#     명령이 시작되는 자리가 없는 검색 · `echo` 의 인자에 든 글자, git 이 아닌 명령은 막지 않는다
 #   · 켜진 레포 · `.kit/git-hooks/` 가 없는 레포 · 세션을 연 프로젝트 밖의 레포(실험용 clone)에서는 막지 않는다.
 #     꺼진 clone 에서 `git -C <켜진 레포>` 로 입력한 커밋도 막지 않는다
 #   · `core.hooksPath` 를 절대 경로로 켜도 켜진 것으로 보고, 다른 디렉터리를 가리키면 꺼진 것으로 본다
@@ -83,6 +85,10 @@ session "$N"
 echo "── 에이전트 훅 — 훅이 꺼진 clone"
 blocks "git commit 을 막는다" "$C" "$C" "git commit -qm x"
 blocks "git push 를 막는다" "$C" "$C" "git push origin main"
+pre "$C" "$C" "git commit -qm x"
+if printf '%s' "$out" | grep -qF '켜지 않기로 하면' && printf '%s' "$out" | grep -qF '따옴표 안의 글자'; then
+  ok "거절 사유에 켜지 않기로 했을 때와 따옴표 안의 글자로 막혔을 때 할 일을 적는다"
+else bad "거절 사유에 켜지 않기로 했을 때와 따옴표 안의 글자로 막혔을 때 할 일을 적어야 한다: [$out]"; fi
 blocks "하위 디렉터리에서 입력한 git commit 을 막는다" "$C" "$C/sub" "git add -A && git commit -qm x"
 blocks "레포 밖에서 git -C 로 입력한 git commit 을 막는다" "$C" "$T" "git -C $C commit -qm x"
 passes "git status 는 막지 않는다" "$C" "$C" "git status --short"
@@ -96,15 +102,25 @@ passes "인자를 받지 않는 전역 옵션 뒤의 git log --grep commit 은 �
 passes "인자를 받지 않는 전역 옵션 뒤의 git stash push 는 막지 않는다" "$C" "$C" "git -P stash push -m wip"
 blocks "인자를 받지 않는 전역 옵션 뒤의 git commit 은 막는다" "$C" "$C" "git --no-pager commit -qm x"
 blocks "값을 받는 전역 옵션 뒤의 git push 를 막는다" "$C" "$C" "git -c color.ui=never push origin main"
-# 찾는 것은 명령이 시작되는 자리의 git 이다. 검색 · echo 의 글자를 막으면 켜지 않기로 한 레포에서 끝까지 막힌다
+# 찾는 것은 명령이 시작되는 자리의 git 이다. 검색 · echo 의 글자를 막으면 켜지 않기로 한 레포에서 끝까지 막힌다.
+# 따옴표 안에 명령이 시작되는 자리(`|` · 백틱 · 줄 머리)가 있으면 막는다 — 훅 머리 주석의 「잘못 막는 것」
 passes "검색 명령의 글자 git push 는 막지 않는다" "$C" "$C" "grep -rn 'git push' .claude/skills"
 passes "echo 의 글자 git commit 은 막지 않는다" "$C" "$C" "echo \"run git commit -m x\""
 blocks "sh -c 안의 git push 를 막는다" "$C" "$C" "bash -c 'git push origin main'"
-blocks "괄호 안의 git push 를 막는다" "$C" "$C" "(cd sub; git push origin main)"
+blocks "괄호 안의 git push 를 막는다" "$C" "$C" "(git push origin main)"
 blocks "명령 치환 안의 git commit 을 막는다" "$C" "$C" 'x=$(git commit -qm x)'
+blocks "백틱 안의 git commit 을 막는다" "$C" "$C" 'x=`git commit -qm x`'
+blocks "|| 뒤의 git commit 을 막는다" "$C" "$C" "git diff --cached --quiet || git commit -qm x"
 blocks "앞에 이름=값을 붙인 git commit 을 막는다" "$C" "$C" "GIT_AUTHOR_NAME=x git commit -qm x"
+blocks "앞에 따옴표 안에 공백이 든 이름=값을 붙인 git commit 을 막는다" "$C" "$C" 'GIT_AUTHOR_NAME="a b" git commit -qm x'
 blocks "env 뒤의 git commit 을 막는다" "$C" "$C" "env GIT_AUTHOR_NAME=x git commit -qm x"
+blocks "command 뒤의 git push 를 막는다" "$C" "$C" "command git push origin main"
 blocks "then 뒤의 git commit 을 막는다" "$C" "$C" "if true; then git commit -qm x; fi"
+blocks "if 뒤의 git commit 을 막는다" "$C" "$C" "if git commit -qm x; then echo ok; fi"
+blocks "elif 뒤의 git push 를 막는다" "$C" "$C" "if false; then :; elif git push origin main; then :; fi"
+blocks "while 뒤의 git push 를 막는다" "$C" "$C" "while ! git push origin main; do sleep 1; done"
+blocks "until 뒤의 git push 를 막는다" "$C" "$C" "until git push origin main; do sleep 1; done"
+blocks "{ 뒤의 git commit 을 막는다" "$C" "$C" '{ git commit -qm x; echo rc=$?; }'
 # 판정하는 것은 세션을 연 프로젝트의 레포다. 같은 git 공통 디렉터리를 쓰는 worktree 는 그 레포다
 passes "프로젝트 밖의 실험용 clone 에 git -C 로 커밋하는 것은 막지 않는다" "$C" "$C" "git -C $X commit -qm x"
 passes "프로젝트 밖의 실험용 clone 에서 입력한 커밋은 막지 않는다" "$C" "$X" "git commit -qm x"

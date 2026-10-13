@@ -18,11 +18,18 @@
 # 프로젝트 밖에 실험하려고 만든 clone 은 프로젝트의 커밋이 아니라 보지 않는다.
 #
 # **무엇을 못 막나.** 명령 글자로 알아보므로 스크립트 파일 안의 `git commit` 은 못 보고, 명령이 시작되는 자리가
-# 아닌 곳의 `git`(`xargs git push` · `find … -exec git commit` 처럼 다른 명령의 인자로 실행되는 것)도 보지 않는다.
+# 아닌 곳의 `git`(`xargs git push` · `timeout 60 git push` · `nice git commit` · `find … -exec git commit` 처럼 다른
+# 명령의 인자로 실행되는 것)도 보지 않는다.
 # `git -C "$d"` 처럼 경로를 셸 변수로 준 명령은 그 경로를 풀지 못해 판정하지 않는다. 한 명령 안에서 `cd` 로 다른 디렉터리에 들어가 입력한
 # 커밋은 처음 디렉터리로 판정하고, `git -c core.hooksPath=…` 로 그 명령에만 준 설정은 보지 않는다. 판정하지
 # 못하면(레포가 아니거나 git 이 실패하면) 막지 않는다. 이 훅은 켜는 것을 잊은 경우를 막는 것이고, 작정한 우회를
 # 막는 것은 CI 와 브랜치 보호다.
+#
+# **잘못 막는 것.** 따옴표 안을 가려 읽지 않으므로, 따옴표 안에서 `|` · `;` · `&` · `(` · 백틱 뒤나 줄 머리에 오는
+# `git commit` · `git push` 도 명령으로 읽어 막는다 — `grep -rn "git commit\|git push"` · `` grep '`git push`' `` 같은
+# 검색과, 여러 줄 인자(`--body "…"`) · heredoc 본문의 줄 머리다. 켜지 않기로 한 레포에서는 이 거절이 계속되므로
+# 거절 사유가 그때 그 글자를 바꿔 다시 입력하라고 알린다. 따옴표를 가려 읽게 고치는 대신 여기와 거절 사유에 적기로
+# 사람이 정했다. 드는 비용은 낱말을 바꿔 다시 입력하는 한 번이다.
 input=$(cat)
 # PreToolUse 는 모든 Bash 호출마다 실행되므로 git 이 없으면 파이썬을 실행하지 않고 끝낸다.
 case "$input" in
@@ -35,6 +42,8 @@ import json, os, re, shlex, subprocess, sys
 
 ENABLE = 'git config core.hooksPath .kit/git-hooks'
 DECLINE = '켜지 않기로 하면 이 레포에서는 커밋 · 푸시하지 않고, 사람이 세션 밖 터미널에서 합니다.'
+MISREAD = ('실행하려던 것이 아니라 따옴표 안의 글자(검색어 · 본문)를 명령으로 읽어 막은 것이면, 그 글자를 바꿔 '
+           '다시 입력합니다.')
 try:
     data = json.loads(os.environ.get('HOOK_INPUT') or '{}')
 except ValueError:
@@ -91,14 +100,16 @@ if data.get('hook_event_name') == 'SessionStart':
 cmd = (data.get('tool_input') or {}).get('command') or ''
 cwd = data.get('cwd') or os.getcwd()
 # 명령이 시작되는 자리의 `git` 다음에 전역 옵션만 오고 그다음 낱말이 commit · push 인 것. 명령이 시작되는 자리는
-# 줄 머리 · `;` · `&` · `|` · `(` · `$(` · 백틱 뒤와 `sh -c '` 처럼 셸에 전달한 글의 머리이고, 그 앞에 `이름=값` ·
-# `env` · `command` · `then` 같은 낱말이 와도 된다. 검색 · `echo` 의 인자에 든 글자는 명령이 아니라 찾지 않는다 —
-# 찾으면 켜지 않기로 한 레포에서 그 검색이 끝까지 막힌다. 값을 따로 받는 전역 옵션(`-C` · `-c` · `--git-dir` ·
+# 줄 머리 · `;` · `&` · `|` · `(`(`$(` 도 이것으로 찾는다) · 백틱 뒤와 `sh -c '` 처럼 셸에 전달한 글의 머리이고, 그
+# 앞에 `이름=값`(값이 따옴표 안에 공백을 담아도 된다) · `env` · `command` · `then` · `if` · `while` · `{` 같은 낱말이
+# 와도 된다. 검색 · `echo` 의 인자에 든 글자는 명령이 아니라 찾지 않는다 — 찾으면 켜지 않기로 한 레포에서 그 검색이
+# 끝까지 막힌다. 다만 따옴표 안에 위의 자리가 있으면 찾는다(머리 주석의 「잘못 막는 것」). 값을 따로 받는 전역 옵션(`-C` · `-c` · `--git-dir` ·
 # `--work-tree` · `--namespace` · `--config-env`)만 다음 낱말을 값으로 읽는다 — 다른 옵션까지 값을 받게 하면
 # `git --no-pager log --grep commit` 의 `log` 를 값으로 읽어 commit 을 하위 명령으로 본다. `commit-tree` 처럼 이어진
 # 낱말은 아니다.
-CALL = re.compile(r'(?m)(?:^|[;&|(`]|\$\(|\b(?:ba|z)?sh\s+-[a-zA-Z]*c\s+["\'])\s*'
-                  r'(?:(?:env|command|exec|time|nohup|then|do|else|!)\s+|[A-Za-z_]\w*=[^\s;&|]*\s+)*'
+CALL = re.compile(r'(?m)(?:^|[;&|(`]|\b(?:ba|z)?sh\s+-[a-zA-Z]*c\s+["\'])\s*'
+                  r'(?:(?:env|command|exec|time|nohup|then|do|else|if|elif|while|until|!|\{)\s+'
+                  r'|[A-Za-z_]\w*=(?:"[^"]*"|\'[^\']*\'|[^\s;&|"\'])*\s+)*'
                   r'["\']?(?:[^\s"\';&|()]*/)?git["\']?'
                   r'((?:\s+(?:(?:-C|-c|--git-dir|--work-tree|--namespace|--config-env)\s+[^\s;&|]+|-[^\s;&|]+))*)'
                   r'\s+["\']?(commit|push)["\']?(?![\w-])')
@@ -117,8 +128,8 @@ for m in CALL.finditer(cmd):
     sub = m.group(2)
     why = ('이 레포(%s)는 킷의 git 훅이 꺼져 있어(core.hooksPath: %s) git %s %s 막습니다. 켜기 전에는 커밋 전 '
            '검사(보호 브랜치 · 시크릿 · 게이트)가 실행되지 않습니다. 사람에게 켤지 묻고, 고르면 레포 루트에서 이 '
-           '명령으로 켠 뒤 다시 입력합니다: %s. %s'
-           % (s[0], s[1] or '없음', sub, '을' if sub == 'commit' else '를', ENABLE, DECLINE))
+           '명령으로 켠 뒤 다시 입력합니다: %s. %s %s'
+           % (s[0], s[1] or '없음', sub, '을' if sub == 'commit' else '를', ENABLE, DECLINE, MISREAD))
     print(json.dumps({'hookSpecificOutput': {
         'hookEventName': 'PreToolUse',
         'permissionDecision': 'deny',
