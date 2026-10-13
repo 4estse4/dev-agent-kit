@@ -738,7 +738,7 @@ if [ "$DO_HOOKS" = 1 ] && [ "$DRY_RUN" = 0 ]; then
 
       git config core.hooksPath .kit/git-hooks
 
-  그래서 로컬 훅은 우회 가능한 '조기 피드백' 이고, 우회할 수 없는 강제는 CI 입니다.
+  그래서 로컬 훅은 실수만 막고, 일부러 하는 우회까지 막는 것은 CI 와 브랜치 보호입니다.
   둘이 같은 gate.sh 를 부르는 이유가 그것입니다.
 MSG
 fi
