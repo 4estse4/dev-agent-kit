@@ -12,7 +12,7 @@ set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$KIT" || exit 1
 python3 - <<'PY'
-import re, glob, sys
+import os, re, glob, sys
 fail = 0
 # 훑을 것이 없으면 통과가 아니다 — 디렉터리 구조가 바뀌는 날 아무 표시 없이 이 테스트가 통과한다.
 # **glob 마다 따로 본다.** 합쳐서 보면 한쪽이 통째로 사라져도 다른 쪽 때문에 안 비어
@@ -57,6 +57,10 @@ for f in files:
     if not inj:
         continue
     bad = 0
+    # 스킬은 `SKILL.md` 와 보조 파일로 나뉜다. 주입이 내는 문자열의 설명은 「차례」가 가리키는 보조 파일에 있을 수
+    # 있으므로 같은 디렉터리의 `.md` 를 모두 설명으로 본다(`tests/answer-window.sh` 와 같다). 주입은 `SKILL.md` 에만 있다
+    if os.path.basename(f) == 'SKILL.md':
+        s = ''.join(open(p, encoding='utf-8').read() for p in sorted(glob.glob(os.path.join(os.path.dirname(f), '*.md'))))
     body = re.sub(r'^!`.*`$', '', s, flags=re.M)          # 주입 줄 자체는 설명이 아니다
     # **뽑는 자리에 예외를 두지 않는다.** `echo "…"` 만 보던 탓에 `echo '…'` 와
     # `printf "…"` 로 쓴 메시지가 통째로 안 보였다(실제로 확인함: 셋 다 이 테스트를 통과했다).
