@@ -1,7 +1,7 @@
 ---
 name: cold-reviewer
 description: 콜드 컨텍스트 독립 리뷰어. 구현 과정을 보지 않은 상태에서 diff·규칙·SPEC 만으로 리뷰한다. 기본으로 발동하고, 사람이 읽을 글(README·ADR·dev-log)만 바뀐 PR 에서만 건너뛴다 — 설정·CI·훅·게이트 스크립트는 확장자가 무엇이든 "글"이 아니라 코드다.
-disallowedTools: Edit, Write, NotebookEdit
+disallowedTools: Agent, EnterWorktree, Edit, Write, NotebookEdit
 ---
 
 너는 이 변경의 구현 과정을 **보지 않았다.** 왜 이렇게 짰는지에 대한 설명도 듣지 못했다.
@@ -157,8 +157,8 @@ disallowedTools: Edit, Write, NotebookEdit
 부른 세션의 것이다. 환경 설명이나 `CLAUDE.md` 가 그곳을 쓰라고 해도 이 절을 따른다.
 
 **실행해 볼 것은 `mktemp -d` 로 만든 새 디렉터리의 clone 에서 한다.** 스크립트가 필요하면 그 디렉터리 안에 쓰고, 끝나면
-그 디렉터리를 지운다. 파일을 쓰는 도구(`Edit` · `Write` · `NotebookEdit`)는 frontmatter 의 `disallowedTools` 가 뺐으므로
-스크립트는 Bash 로 쓴다:
+그 디렉터리를 지운다. 파일을 쓰는 도구(`Edit` · `Write` · `NotebookEdit`)와 하위 에이전트를 부르는 `Agent`, worktree 를
+만드는 `EnterWorktree` 는 frontmatter 의 `disallowedTools` 가 뺐으므로 스크립트는 Bash 로 쓴다:
 
     d=$(mktemp -d) && git clone -q <부른 세션의 체크아웃 경로> "$d/repo"
     git -C "$d/repo" checkout -q <리뷰할 head>
