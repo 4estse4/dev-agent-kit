@@ -129,7 +129,7 @@ jobs:
         continue-on-error: true
         run: bash tests/hooks-path.sh
 
-      - name: trace.sh still blocks and passes exactly what the installed traceability template header says
+      - name: trace.sh blocks and passes what the installed SPEC and traceability templates say, and the trace skill reads IDs the same way
         id: tracetemplate
         continue-on-error: true
         run: bash tests/trace-template.sh
