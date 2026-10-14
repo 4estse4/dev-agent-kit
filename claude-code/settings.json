@@ -124,6 +124,8 @@
       "Bash(git diff*)",
       "Bash(git log*)",
       "Bash(git show*)",
+      "Bash(git -c core.quotePath=false log*)",
+      "Bash(git -c core.quotePath=false show*)",
       "Bash(git add*)",
       "Bash(git commit*)",
       "Bash(git switch*)",
