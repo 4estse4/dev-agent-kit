@@ -63,8 +63,9 @@ delete head branches」가 지우고, 4절은 머지 뒤 다음 작업을 시작
 `body.md` 「본문 작성 규칙」), 그 뒤에 달라진 것을 말하는 자리가 여기밖에 없다. 아래를 적는다:
 
 - 라운드 수와 마지막 라운드의 두 `Verdict`
-- 리뷰를 거치지 않은 커밋. 마지막 라운드 코멘트의 head 뒤에 온 커밋을 `docs/dev-log.md` 하나만
-  바뀐 것과 그 밖의 것으로 나눠 적고, 커밋마다 건드린 파일을 같이 적고, 사람이 리뷰를 거치지 않은 그 커밋들을
+- 리뷰를 거치지 않은 커밋. 마지막 라운드 코멘트의 head 뒤에 온 커밋을 머지 커밋 · `docs/dev-log.md` 하나만
+  바뀐 것 · 그 밖의 것으로 나눠 적고, 커밋마다 건드린 파일을 같이 적고(머지 커밋에는 2절의 `--remerge-diff` 출력을
+  `evidence.sh` 로 붙인다), 사람이 리뷰를 거치지 않은 그 커밋들을
   알고 머지를 지시했다고 적는다(2절). auto-merge 를 켜는 경우에는 그 목록을 Approve 를 요청하는 응답에 출력했다고
   적는다 — Approve 는 아직 없다. 나열을 판정 못 했으면 그 사실을 적는다. 없으면 이 줄을 아예
   쓰지 않는다
@@ -280,15 +281,90 @@ URL 이다:
    때는 Approve 뒤에 세션이 한 번 더 확인했으므로, 사람은 누르기 전에 그 차이를 알아야 한다. 머지되면 GitHub 이
    head 브랜치를 지운다. 5절의 `Auto-merge on …` 줄도 이 응답에 적는다.
 
-**머지되기 전에 다시 해야 하면 먼저 끈다.** 브랜치에 푸시해야 할 때와, 사람이 결정 코멘트나 스쿼시 제목 · 본문을
-고치라고 할 때다. 차례는 이렇다.
+**Approve 를 받고도 머지되지 않으면 상태마다 할 일이 다르다.** 「PR #N 최종 검토」 창에서 「Approve 했다」를 고른 뒤
+본 PR 이 열려 있을 때와, 다음 작업을 시작할 때(아래) 그런 PR 을 찾았을 때다. 상태와 아래 명령이 쓰는 값은
+이것으로 본다:
 
-1. `gh pr merge <N> --disable-auto` 로 끈다.
-2. 옛 결정 코멘트 뒤에 코멘트로 한 줄 `auto-merge 를 껐다. 이 결정 코멘트로는 머지하지 않는다.` 를 남긴다. 올리는
-   시점의 사실만 적는다 — 다시 켤지는 그 뒤의 일이다.
-3. 푸시해야 하면 푸시한다.
-4. 2절부터 다시 한다(결정 코멘트 · auto-merge · 요청). 푸시했으면 2절의 「리뷰 반영 확인」이 새 커밋을 나열하며
-   멈추고, 한 라운드 더 할지는 사람이 정한다.
+    gh pr view <N> --json state,headRefName,headRefOid,baseRefName,reviewDecision,mergeStateStatus,autoMergeRequest --jq '"\(.state) \(.headRefName) \(.headRefOid) \(.baseRefName) \(.reviewDecision) \(.mergeStateStatus) auto-merge=\(.autoMergeRequest != null)"'
+
+- 바로 머지할 수 있는 상태(`CLEAN` · `HAS_HOOKS` · `UNSTABLE`)인데 auto-merge 가 켜져 있으면 GitHub 이 늦게 머지하는
+  중일 수 있다. 상태가 그대로인 채 Approve 뒤 9분 가까이 지나서야 머지된 적이 있다. 「PR #N 최종 검토」 창 뒤면
+  10분까지 1분마다 본다:
+
+      for i in 1 2 3 4 5 6 7 8 9 10; do s=$(gh pr view <N> --json state --jq .state); echo "$i $s"; [ "$s" = MERGED ] && break; sleep 60; done
+
+  백그라운드로 실행하고 끝나면 출력을 본다. 머지됐으면 블록의 「머지됨」대로 한다. 10분이 지나도 열려 있으면 위 상태
+  조회를 다시 실행한다. 그 사이 다른 PR 이 base 에 머지되어 상태가 바뀌었으면 바뀐 상태의 항목대로 하고, 그대로면
+  기다린 시간과 상태를 알리고 창으로 묻는다. 다음 작업을 시작할 때 찾은 PR 이면 Approve 뒤 이미 시간이 지났으므로
+  기다리지 않고 바로 묻는다. 머리말은 「머지 지연」, 보기는 「더 기다린다」 · 「세션이 머지한다」다. 「더
+  기다린다」면 같은 명령을 한 번 더 실행한다. 「세션이 머지한다」면 차례는 이렇다.
+
+  1. `human_review.sh approved <N>` 으로 지금 head 의 Approve 를 확인한다(2절).
+  2. auto-merge 를 켤 때 준 제목 · 본문을 읽는다. 끄면 읽을 곳이 없어지므로 끄기 전에 읽는다:
+
+         gh pr view <N> --json autoMergeRequest --jq '.autoMergeRequest | .commitHeadline, .commitBody'
+
+  3. `gh pr merge <N> --disable-auto` 로 끄고, 읽은 제목 · 본문을 `--subject` · `--body` 로 주고
+     `--squash --match-head-commit <headRefOid>` 를 붙여 `--auto` 없이 머지한다.
+  4. 머지했으면 결정 코멘트 뒤에 코멘트로 한 줄을 남긴다. 결정 코멘트가 적은 「Approve 하면 GitHub 이 머지한다」와
+     실제가 달라졌기 때문이다:
+
+         Approve 뒤 10분이 지나도 auto-merge 가 머지하지 않아, 세션이 auto-merge 를 끄고 켤 때 준 제목 · 본문으로 머지했다.
+
+     그 뒤는 「머지됨」과 같다 — `merge-pr <N>` 으로 다시 불러 4절과 5절을 한 뒤 「다음 일」 창으로 묻는다. 머지가
+     실패하면 결정 코멘트 뒤에 아래 「먼저 끈다」 2 의 한 줄을 남기고, gh 가 낸 오류를 사람에게 알린다.
+
+  auto-merge 가 꺼져 있으면 2절의 「그 밖이면 세션이 Approve 를 확인한다」대로 한다
+- `BEHIND` · `DIRTY` 이면 그 사이 base 에 다른 PR 이 머지되어 이 브랜치가 뒤처졌거나(`install.sh --protect` 가 켜는
+  브랜치 보호는 최신 브랜치를 요구한다) 충돌한 것이다. 브랜치를 갱신해야 머지되지만, 세션은 사람에게 묻기 전에
+  갱신하지 않는다 — 갱신 푸시는 사람의 Approve 를 옛 head 의 것으로 만들어, 사람이 다시 Approve 해야 한다. 그 사이
+  base 에 들어온 커밋을 보이고 창으로 묻는다:
+
+      git fetch origin <headRefName> <baseRefName>; echo "rc=$?"
+      git log --oneline <headRefOid>..origin/<baseRefName>; echo "rc=$?"
+
+  머리말은 「브랜치 갱신」이고 질문에 게시 표지를 적는다(`open-pr` 3.5). 보기는 「base 를 합쳐 다시 요청한다」 ·
+  「그대로 둔다」다. 「base 를 합쳐 다시 요청한다」를 고르면 그 보기를 사람 계정 코멘트로 올린 뒤 아래 「먼저
+  끈다」의 차례대로 갱신한다
+- `BLOCKED` 이면 갱신할 것이 아니다. `gh pr checks <N>` 을 본다. 필요한 검사가 진행 중이면 끝난 뒤 상태를 다시 본다.
+  실패했으면 실패한 검사를 알리고, 고칠지 창으로 묻는다 — 머리말은 「검사 실패」이고 질문에 게시 표지를 적는다.
+  보기는 「고친다」 · 「그대로 둔다」다. 「고친다」를 고르면 그 보기를 사람 계정 코멘트로 올린 뒤 아래 「먼저 끈다」의
+  차례대로 고친다. 검사가 모두 통과했으면 풀리지 않은 리뷰 대화가 남았거나(`--protect` 가 켜는 브랜치 보호는 대화
+  해결도 요구한다) 브랜치 보호가 요구하는 승인이 모자라다. 승인 쪽은 `human_review.sh approved <N>` 이 보인다(2절).
+  대화는 사람이 PR 웹에서 푸는 것이라 PR 링크와 함께 알린다
+- `UNKNOWN` 이면 GitHub 이 아직 계산하는 것이라 잠시 뒤 다시 본다
+
+**머지되기 전에 다시 해야 하면 먼저 끈다.** 브랜치에 푸시해야 할 때(고칠 것이 있을 때 · base 를 합쳐 브랜치를
+갱신할 때)와, 사람이 결정 코멘트나 스쿼시 제목 · 본문을 고치라고 할 때다. 차례는 이렇다.
+
+1. 브랜치에 푸시해야 하면, 끄기 전에 PR 브랜치가 어디 체크아웃돼 있는지 본다(`git worktree list`). 지금
+   체크아웃에 있으면 여기서 하고, 어디에도 없으면 지금 체크아웃에서 그 브랜치로 옮긴다(`git switch <headRefName>`).
+   다른 worktree 에 있으면 그 worktree 를 쓰는 세션의 일이라, 끄지 않고 사람에게 그 사실을 알리고 멈춘다 — 끈 뒤에
+   그 브랜치로 옮기지 못하면 auto-merge 가 꺼진 채 남고, 다음 작업을 시작할 때의 조회는 auto-merge 가 켜진 PR 만
+   보므로 그 PR 을 다시 찾지 못한다.
+2. auto-merge 가 켜져 있으면(`gh pr view <N> --json autoMergeRequest` 가 `null` 이 아니면)
+   `gh pr merge <N> --disable-auto` 로 끄고, 옛 결정 코멘트 뒤에 코멘트로 한 줄
+   `auto-merge 를 껐다. 이 결정 코멘트로는 머지하지 않는다.` 를 남긴다. 올리는 시점의 사실만 적는다 — 다시 켤지는
+   그 뒤의 일이다. 꺼져 있으면 둘 다 하지 않는다.
+3. 브랜치를 갱신하면 PR 브랜치에서 base 를 합친다. rebase 하지 않는다 — 라운드 코멘트와 두 리뷰의 기록이 가리키는
+   head 가 브랜치에서 사라지고, 강제 푸시가 필요하다:
+
+       git fetch origin <baseRefName>; echo "rc=$?"
+       git merge --no-ff --no-commit origin/<baseRefName>; echo "rc=$?"
+
+   충돌하면 푼다. 머지 커밋은 `git commit -F <파일>` 로 만든다. 메시지는 `commit` 스킬의 `Refs` 줄 규칙과
+   `CLAUDE.md` 의 「커밋 트레일러」를 따르고, 본문에 무엇이 부딪혔고 어떻게 풀었는지 적는다.
+4. 푸시해야 하면 푸시한다. 푸시하면 사람의 Approve 는 옛 head 의 것이 된다. `install.sh --protect` 가 켜는 브랜치
+   보호는 그 Approve 를 지운다(`dismiss_stale_reviews`).
+5. 2절부터 다시 한다(결정 코멘트 · auto-merge · 요청). 푸시했으면 그 전에 검사가 끝날 때까지 기다린다 — 푸시하면
+   CI 가 새로 시작해, 곧바로 들어간 2절의 `gh pr checks` 확인이 진행 중인 검사를 보고 멈춘다. 백그라운드로 실행하고
+   끝나면 출력을 본다:
+
+       gh pr checks <N> --watch; echo "rc=$?"
+
+   새 head 에 검사가 아직 등록되지 않았으면 기다리지 않고 `no checks reported` 로 끝난다. 그때는 잠시 뒤 다시
+   실행한다. 푸시했으면 2절의 「리뷰 반영 확인」이 새 커밋을 나열하며 멈추고, 한 라운드 더 할지는 사람이 정한다.
+   base 를 합친 것이면 2절의 「base 를 합친 머지 커밋은」 문단대로 한다.
 
 끄지 않으면 사람이나 다른 리뷰어가 Approve 하는 순간 켤 때 담긴 옛 제목 · 본문과 옛 결정 코멘트대로 머지된다.
 옛 결정 코멘트를 편집하지 않는 이유는 3절의 거절 경로와 같다 — 한 번 올린 기록이 바뀐다. 막기 훅(`bot_guard.sh`)이
@@ -301,11 +377,10 @@ auto-merge 가 켜진 PR 의 브랜치로 가는 푸시를 막는다.
     gh pr list --state merged --limit 30 --json number,headRefName --jq '.[] | "#\(.number) \(.headRefName)"'
 
 - auto-merge 가 켜진 열린 PR 가운데 `reviewDecision` 이 `APPROVED` 인 것은 Approve 를 받고도 머지되지 못한 것이다.
-  브랜치가 base 보다 뒤처졌거나(`BEHIND` — `install.sh --protect` 가 켜는 브랜치 보호는 최신 브랜치를 요구한다),
-  충돌했거나(`DIRTY`), 필요한 검사가 실패했거나 풀리지 않은 리뷰 대화가 있다(`BLOCKED` — `--protect` 가 켜는 브랜치
-  보호는 대화 해결도 요구한다). 사람에게 그 PR 과 상태를 알린다. 브랜치를 갱신하는 절차는 킷에 아직 없으므로 세션이
-  스스로 갱신하지 않는다 — base 를 합치면 2절의 「리뷰 반영 확인」이 다른 PR 의 커밋을 이 PR 의 커밋으로 나열하고,
-  충돌을 푼 내용은 파일 없이 나열한다. 어떻게 할지는 사람이 정한다
+  그 PR 의 브랜치가 다른 worktree 에 체크아웃돼 있으면(`git worktree list`) 그 worktree 의 세션이 할 일이라 사람에게
+  그 PR 과 상태만 알린다. 사람이 이미 다음 일을 시켜서 이 확인을 하는 중이면 그 PR 의 상태만 알리고 시킨 일을 하며,
+  그 PR 은 시킨 일이 끝난 뒤 「다음 일」 창의 후보로 올린다. 둘 다 아니면 위 「Approve 를 받고도 머지되지 않으면」대로
+  한다
 - `REVIEW_REQUIRED` 인 것은 Approve 를 기다리는 중이라 그대로 둔다
 - 머지된 PR 가운데 로컬 브랜치가 남은 것(`git rev-parse --verify --quiet <headRefName>` 이 출력을 낸다)은
   머지 뒤 정리를 하지 않은 것이다 — 사람이 GitHub 에서만 Approve 하고 「PR #N 최종 검토」 창을 고르지 않았거나,
