@@ -7,30 +7,32 @@
 # 머지 커밋은 파일 없이 나왔다. 그래서 결정 코멘트가 그 커밋을 손으로 풀어 적었다. `--first-parent` 로 base 의
 # 커밋을 빼면 base 가 아닌 브랜치를 합친 머지에서 그 브랜치의 커밋까지 빠진다.
 #
-# 스킬 글에서 명령(fetch · 나열 · 머지 커밋 보기)을 꺼내, 라운드 head 뒤에 base 를 세 번 합치고 base 가 아닌
+# 스킬 글에서 명령(fetch · 나열 · 머지 커밋 보기)을 꺼내, 라운드 head 뒤에 base 를 네 번 합치고 base 가 아닌
 # 브랜치를 한 번 합친 브랜치에서 실행한다. 실행하는 clone 은 base 를 둘째 커밋까지만 받아 두고 PR 브랜치의
-# 객체는 없어서, base 의 셋째 커밋과 PR 브랜치는 스킬의 fetch 로만 받는다. 보는 것:
+# 객체는 없어서, base 의 셋째 · 넷째 커밋과 PR 브랜치는 스킬의 fetch 로만 받는다. 스킬의 명령은 빈 HOME 에서
+# 실행한다 — 사람의 git 설정(`core.quotePath` 등)이 결과를 바꾸지 않게 한다. 보는 것:
 #   · base 로 들어온 커밋은 나열에 나오지 않는다. 받아 둔 옛 base 에 없던 커밋도 나오지 않는다
-#   · 라운드 head 뒤 이 브랜치의 커밋과 base 가 아닌 브랜치의 커밋은 건드린 파일과 함께 나온다
+#   · 라운드 head 뒤 이 브랜치의 커밋과 base 가 아닌 브랜치의 커밋은 건드린 파일과 함께 나온다. 한글 이름의
+#     파일도 이름 그대로 나온다
 #   · 머지 커밋은 부모 둘과 함께 나오고, 파일은 자동 머지와 다르게 된 것만 나온다 — 충돌을 푼 파일 · 머지하면서
-#     고친 파일. 충돌 없이 합친 머지는 파일 없이 나온다
+#     고친 파일. 한쪽만 남겨 푼 충돌의 파일도 나온다. 충돌 없이 합친 머지는 파일 없이 나온다
 #   · 머지 커밋 보기가 충돌을 푼 머지에서 충돌 표시와 푼 줄을, 머지하면서 고친 머지에서 고친 줄을 보이고,
 #     충돌 없이 합친 머지에서는 머리 한 줄만 낸다
 set -u
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 T=$(mktemp -d)
 trap 'rm -rf "$T"' EXIT
-# 스킬은 `SKILL.md` 와 보조 파일로 나뉘므로 스킬 디렉터리의 `.md` 를 모두 이어 읽는다
-SK="$T/merge-pr.md"
-awk 1 "$KIT"/claude-code/skills/merge-pr/*.md > "$SK"
+# 명령은 2절이 있는 `checks.md` 에서만 꺼낸다. 3절(`merge.md`)에도 같은 글자의 fetch 줄이 있어, 스킬 전체에서
+# 찾으면 2절의 fetch 줄을 지워도 3절의 줄로 통과했다
+SK="$KIT/claude-code/skills/merge-pr/checks.md"
 fail=0
 ok() { echo "  ✓ $1"; }
 bad() { echo "  ✗ $1"; fail=1; }
 gc() { git -c user.email=t@example.com -c user.name=T -c commit.gpgsign=false "$@"; }
 
 FETCH=$(grep -E '^ +git fetch origin <headRefName>' "$SK" | head -1 | sed 's/^ *//')
-LIST=$(grep -E '^ +git log .*<그 head>\.\.<headRefOid>' "$SK" | head -1 | sed 's/^ *//')
-SHOW=$(grep -E '^ +git show .*<머지 커밋>' "$SK" | head -1 | sed 's/^ *//')
+LIST=$(grep -E '^ +git( -c [^ ]+)* log .*<그 head>\.\.<headRefOid>' "$SK" | head -1 | sed 's/^ *//')
+SHOW=$(grep -E '^ +git( -c [^ ]+)* show .*<머지 커밋>' "$SK" | head -1 | sed 's/^ *//')
 [ -n "$FETCH" ] || bad "2절에서 fetch 명령(git fetch origin <headRefName>)을 찾지 못했다"
 [ -n "$LIST" ] || bad "2절에서 나열 명령(git log … <그 head>..<headRefOid>)을 찾지 못했다"
 [ "$fail" = 0 ] || exit 1
@@ -66,7 +68,11 @@ BASE_SEEN=$(git rev-parse origin/main)
 base 'base three (#3)' g.txt 'g1\n'
 gc merge -q --no-commit origin/main 2>/dev/null; echo f3 > f.txt; git add f.txt
 gc commit -qm 'Merge base: edited'; M_EDITED=$(git rev-parse HEAD)
-git switch -qc side "$ROOT" && echo s > s.txt && git add s.txt && gc commit -qm 'side: s'
+base 'base four (#4)' dev.md '# dev-log\n\n## A\n\n## ONE\n\n## FOUR\n'
+gc merge -q origin/main >/dev/null 2>&1   # dev.md 가 부딪힌다
+git checkout -q --ours dev.md && git add dev.md   # 이 브랜치 쪽만 남겨 base 의 항목을 지운다
+gc commit -qm 'Merge base: kept ours'
+git switch -qc side "$ROOT" && echo s > s.txt && echo k > 한글.txt && git add s.txt 한글.txt && gc commit -qm 'side: s'
 git switch -q feat/x && gc merge -q --no-edit -m 'Merge side' side
 git push -q origin feat/x 2>/dev/null
 HEAD_OID=$(git rev-parse HEAD)
@@ -78,13 +84,14 @@ sub() { # $1=스킬의 명령 $2=머지 커밋 — 자리 표시를 이 레포�
   printf '%s' "$1" | sed -e "s|<그 head>|$RH|g" -e "s|<headRefOid>|$HEAD_OID|g" -e "s|<headRefName>|feat/x|g" \
     -e "s|<baseRefName>|main|g" -e "s|<머지 커밋>|${2:-}|g"
 }
-run() { (cd "$C" && eval "$(sub "$1" "${2:-}")") 2>&1; }
+mkdir -p "$T/home"
+run() { (cd "$C" && export HOME="$T/home" XDG_CONFIG_HOME="$T/home" && eval "$(sub "$1" "${2:-}")") 2>&1; }
 
 out=$(run "$FETCH"; run "$LIST")
 case "$out" in *'rc=0'*) ;; *) bad "fetch · 나열이 rc=0 으로 끝나지 않았다: [$out]" ;; esac
 case "$out" in *rc=[1-9]*) bad "fetch · 나열 가운데 실패한 것이 있다: [$out]" ;; esac
 
-SUBJECTS='x: f and dev-log|x: after merge|Merge base: conflict|Merge base: clean|Merge base: edited|Merge side|side: s|base one (#1)|base two (#2)|base three (#3)'
+SUBJECTS='x: f and dev-log|x: after merge|Merge base: conflict|Merge base: clean|Merge base: edited|Merge base: kept ours|Merge side|side: s|base one (#1)|base two (#2)|base three (#3)|base four (#4)'
 files_of() { # $1=제목 — 나열에서 그 커밋 줄 아래의 파일 줄을 공백으로 이어 낸다. 커밋 줄이 없으면 「없음」
   printf '%s\n' "$out" | awk -v s="$1" -v subs="$SUBJECTS" '
     BEGIN { n = split(subs, a, "|") }
@@ -102,13 +109,15 @@ echo "── 나열"
 want "base 로 들어온 첫 커밋은 나오지 않는다" 'base one (#1)' '없음'
 want "base 로 들어온 둘째 커밋은 나오지 않는다" 'base two (#2)' '없음'
 want "fetch 전에 받아 둔 base 에 없던 커밋도 나오지 않는다" 'base three (#3)' '없음'
+want "fetch 전에 받아 둔 base 에 없던 둘째 커밋도 나오지 않는다" 'base four (#4)' '없음'
 want "라운드 head 는 나오지 않는다" 'x: f and dev-log' '없음'
 want "라운드 head 뒤 이 브랜치의 커밋은 파일과 함께 나온다" 'x: after merge' 'f.txt'
 want "충돌을 푼 머지 커밋은 충돌을 푼 파일만 나온다(base 가 바꾼 다른 파일은 나오지 않는다)" 'Merge base: conflict' 'dev.md'
 want "충돌 없이 합친 머지 커밋은 파일 없이 나온다" 'Merge base: clean' ''
 want "머지하면서 고친 머지 커밋은 고친 파일이 나온다" 'Merge base: edited' 'f.txt'
+want "한쪽만 남겨 푼 충돌 머지 커밋도 그 파일이 나온다(다른 PR 의 항목을 지운 것이 보인다)" 'Merge base: kept ours' 'dev.md'
 want "base 가 아닌 브랜치를 합친 머지 커밋은 파일 없이 나온다" 'Merge side' ''
-want "base 가 아닌 브랜치의 커밋은 파일과 함께 나온다" 'side: s' 's.txt'
+want "base 가 아닌 브랜치의 커밋은 한글 이름의 파일까지 이름 그대로 나온다" 'side: s' 's.txt 한글.txt'
 p2=$(git log -1 --format=%p "$M_CONFLICT" | cut -d' ' -f2)
 line=$(printf '%s\n' "$out" | grep -F 'Merge base: conflict')
 case "$line" in
