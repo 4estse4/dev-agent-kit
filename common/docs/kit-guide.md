@@ -107,7 +107,7 @@ version … used to build golangci-lint is lower than the targeted Go version」
 - **런타임 설치** — Go·JDK·Node·Python 은 프로젝트가 요구하는 버전이 있다. 킷은 설치하지 않는다.
 - **`pytest`·`mypy`** — 프로젝트 의존성이다. `uv.lock`·`poetry.lock`·`[dependency-groups]`·
   `[project.optional-dependencies]`·`requirements-dev.txt` 중 하나로 선언해야 CI 가 설치한다.
-- **빌드 래퍼** — Gradle 은 `./gradlew` 를 **커밋해야** 한다. 없으면 CI 가 막는다
+- **빌드 래퍼** — Gradle 은 `./gradlew` 를 **커밋해야** 한다. 없으면 CI 가 실패한다
   (`./gradlew` 가 없으면 러너 이미지에 든 Gradle 을 쓰게 되어 버전이 고정되지 않기 때문).
 - **docker/compose** — 서비스 구성은 프로젝트마다 달라 템플릿을 주지 않는다.
 - **e2e** — 무엇을 e2e 로 볼지는 프로젝트가 정한다.
