@@ -105,8 +105,8 @@ Co-Authored-By: Claude Opus 5 (xhigh) <noreply@anthropic.com>
 
 ## 요구 추적
 
-모든 요구는 `docs/SPEC.md` 에 ID 를 갖고 `docs/traceability.md` 에 한 행을 갖는다. ID 가 있는 요구에 행이 없으면 `CI` 가
-찾고 `브랜치 보호` 가 머지를 막는다. 요구마다 ID 가 있는지와 같은 ID 의 행이 둘인지는 `리뷰` 가 확인한다.
+모든 요구는 `docs/SPEC.md` 에 ID 를 갖고 `docs/traceability.md` 에 한 행을 갖는다. ID 가 있는 요구에 행이 없으면 `git 훅` 이
+푸시를 막고, `CI` 가 찾고 `브랜치 보호` 가 머지를 막는다. 요구마다 ID 가 있는지와 같은 ID 의 행이 둘인지는 `리뷰` 가 확인한다.
 **미구현은 실패가 아니다. 숨기는 것이 실패다.**
 
 ## 하드룰

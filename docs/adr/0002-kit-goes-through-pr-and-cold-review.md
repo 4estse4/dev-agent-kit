@@ -98,7 +98,7 @@ $ gh api repos/4estse4/ai-native-kit/rules/branches/main --jq '.[] | select(.typ
 룰셋 · `kit-tests.yml` · `.claude/` 의 일부다. `.claude/settings.json` 이 킷의 훅 가운데 무엇을 등록하는지는 그
 파일에 있다. 그 파일은 킷의 `ask` 규칙과 편집 훅(`PostToolUse` 의 `Edit|Write`)을 등록하지 않고, 봇 디렉터리의
 `Read` · `Edit` deny 도 없어 세션이 도구로 창 기록과 콜드 리뷰 기록을 쓸 수 있다. 킷의 스킬 · 게이트 · git 훅도
-적용하지 않았다 — `.claude/` 에 `skills/` 가 없고, `kit-tests.yml` 은 `gate.sh` 를 실행하지 않고,
+적용하지 않았다 — `.claude/` 에 `skills/` 가 없고, `kit-tests.yml` 은 킷 자신의 파일에 `gate.sh` 를 실행하지 않고,
 `core.hooksPath` 를 설정하지 않았다. 적용하지 않은 계층을 적용하려면 풀어야 할 것은 위 「대안과 기각 사유」 표의
 셋째 줄에 있다. 룰셋의 우회자 목록은 그대로 비어 있다 — 사람의 터미널(레포 소유자 계정)에서 실행한 출력:
 

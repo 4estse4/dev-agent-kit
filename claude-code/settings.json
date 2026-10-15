@@ -76,7 +76,7 @@
     "무엇을 켜는지는 docs/process/kit-guide.md 의 「봇 계정과 사람의 승인」 절.",
     "라운드 코멘트는 다음",
     "라운드가 고치는 글이라 되돌릴 수 없는 것이 아니다. 되돌릴 수 없는 것은 위의",
-    "permissions 와 git 훅 · CI 가 막는다.",
+    "permissions 와 git 훅 · CI 와 브랜치 보호가 막는다.",
     "allow 의 bash .claude/hooks/backlog.sh 는 「다음 일」을 고를 때 열린 이슈 · PR · worktree 를 읽어 출력하기만 한다.",
     "",
     "statusLine 은 프로젝트 설정에서도 동작한다(공식 문서 확인). command 에서",
