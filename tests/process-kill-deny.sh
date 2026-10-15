@@ -3,7 +3,7 @@
 #
 # 이 테스트가 있는 이유: 리뷰 에이전트가 스크래치를 정리하며 `pkill -f 'sleep 30'` 을 실행했다(이슈 #179).
 # 그 글자는 같은 맥에서 병렬로 일하는 다른 세션의 테스트가 띄우는 `sleep 300` 에도 맞는다. 하위 에이전트도
-# 세션의 권한 규칙을 따르므로 settings 의 deny 에 둔다. 이 레포는 킷의 settings.json 을 로드하지 않아(이슈 #4)
+# 세션의 권한 규칙을 따르므로 settings 의 deny 에 둔다. 이 레포는 킷의 settings.json 을 로드하지 않아(ADR-0002 「결과」)
 # 그 일이 일어난 이 레포의 `.claude/settings.json` 에도 둔다.
 #
 # 보는 것: 깨끗한 레포에 설치한 `.claude/settings.json` 과 이 레포의 `.claude/settings.json` 의 deny 에

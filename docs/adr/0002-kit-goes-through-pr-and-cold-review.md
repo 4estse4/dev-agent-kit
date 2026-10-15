@@ -40,9 +40,8 @@ PR 없이 · 콜드 리뷰 없이 8커밋을 넣었고, 뒤늦게 콜드 리뷰�
 킷 자신도 **브랜치 → PR → 콜드 리뷰 → 머지** 순서를 따른다. PR #1 부터다. 두 리뷰(셀프 ·
 콜드)를 다 실행하고, 한 리뷰로 줄이지 않는다.
 
-게이트 · 훅 · 권한 규칙을 킷 자신에게 적용하는 것은 이 결정과 별개로 두었다. 그것은 열린
-결정으로 이슈 #4 에 있고, 이 레포에서는 킷의 스킬 · 훅 · `settings.json` 이 로드되지
-않는다.
+게이트 · 훅 · 권한 규칙을 킷 자신에게 적용하는 것은 이 결정과 별개로 두었다(이슈 #4).
+2026-10-15 에 사람이 이슈 #4 를 지금 적용한 만큼으로 닫기로 정했다 — 아래 「결과」.
 
 ## 대안과 기각 사유
 
@@ -88,8 +87,24 @@ $ gh api repos/4estse4/ai-native-kit/rules/branches/main --jq '.[] | select(.typ
 가리키는 `install.sh --protect` 는 클래식 보호를 설정한다(`gh api -X PUT`). 사람이 켠 것은
 룰셋이라 클래식 엔드포인트로 보면 404 이고, 룰셋은
 `repos/{owner}/{repo}/rules/branches/{branch}` 가 보여 준다. 확인 명령을 스킬에 넣을지와
-`--protect` 를 룰셋으로 바꿀지는 이슈 #4 에서 정한다. 룰셋의
-`require_extra_approval_for_unattributed_changes` 가 `true` 라 머지가 막히면 그것부터 본다.
+`--protect` 를 룰셋으로 바꿀지는 이슈 #157 에서 정한다(2026-10-15 에 이슈 #4 를 닫기로
+정하며 옮겼다). 룰셋의 `require_extra_approval_for_unattributed_changes` 가 `true` 라 머지가 막히면
+그것부터 본다.
 
 되돌리려면 룰셋과, `CLAUDE.md` 하드룰 표에서 룰셋을 적은 줄(첫 줄과 「킷 히스토리를
 재작성하지 마라」 줄)을 같이 건드려야 한다. 룰셋만 끄면 규칙은 남고 강제만 사라진다.
+
+**2026-10-15 에 사람이 이슈 #4 를 지금 적용한 만큼으로 닫기로 정했다.** 킷이 이 레포에 적용한 것은 `main`
+룰셋 · `kit-tests.yml` · `.claude/` 의 일부다. `.claude/settings.json` 이 킷의 훅 가운데 무엇을 등록하는지는 그
+파일에 있다. 그 파일은 킷의 `ask` 규칙과 편집 훅(`PostToolUse` 의 `Edit|Write`)을 등록하지 않고, 봇 디렉터리의
+`Read` · `Edit` deny 도 없어 세션이 도구로 창 기록과 콜드 리뷰 기록을 쓸 수 있다. 킷의 스킬 · 게이트 · git 훅도
+적용하지 않았다 — `.claude/` 에 `skills/` 가 없고, `kit-tests.yml` 은 이 레포를 대상으로 `gate.sh` 를 실행하지 않고,
+`core.hooksPath` 를 설정하지 않았다. 적용하지 않은 계층을 적용하려면 풀어야 할 것은 위 「대안과 기각 사유」 표의
+셋째 줄에 있다. 룰셋의 우회자 목록은 그대로 비어 있다 — 사람의 터미널(레포 소유자 계정)에서 실행한 출력:
+
+```
+$ gh api user -q .login
+4estse4
+$ gh api repos/4estse4/dev-agent-kit/rulesets/23029215 --jq '{bypass_actors, current_user_can_bypass}'
+{"bypass_actors":[],"current_user_can_bypass":"never"}
+```
