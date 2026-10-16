@@ -23,7 +23,7 @@ T=$(mktemp -d)
 fail=0
 ok() { echo "  ✓ $1"; }
 bad() { echo "  ✗ $1"; fail=1; }
-python3 -c 'import yaml' 2>/dev/null || { bad "python3 의 yaml 모듈이 없다 — 설치본을 YAML 로 읽을 수 없다"; exit 1; }
+python3 -c 'import yaml' 2>/dev/null || { bad "python3 의 yaml 모듈이 없다 — 설치된 파일을 YAML 로 읽을 수 없다"; exit 1; }
 
 cat > "$T/check.py" <<'PY'
 import re, sys, yaml
@@ -110,7 +110,7 @@ for keep in "" go ts py jvm py,ts go,jvm,py,ts; do
   else bad "$label: 켜진 생태계가 github-actions 하나가 아니다 — $out"; fi
 done
 
-# 주석 블록은 --lang 과 상관없이 같은 파일이다. 한 설치본으로 본다.
+# 주석 블록은 --lang 과 상관없이 같은 파일이다. 설치 하나로 본다.
 y="$T/repo-all/.github/dependabot.yml"
 all=$(sed -n 's/^ALL_LANGS="\(.*\)"$/\1/p' "$KIT/install.sh")
 [ -n "$all" ] || bad "install.sh 에서 ALL_LANGS 를 읽지 못했다"

@@ -7,7 +7,7 @@
 #
 # 필터를 직접 부르지 않고 설치기를 거쳐 부른다(`install.sh <레포> --lang <남길 언어>`). 보는 것:
 #   · go · jvm · py · ts 가운데 한~세 개를 남기는 14개 조합마다 설치된 gates.yml 이 YAML 로 읽힌다
-#   · detect 밖의 잡마다, 설치본의 스텝을 YAML 로 읽은 목록이 원본에서 필터가 뺀 스텝을 제외한 목록과
+#   · detect 밖의 잡마다, 설치된 gates.yml 의 스텝을 YAML 로 읽은 목록이 원본에서 필터가 뺀 스텝을 제외한 목록과
 #     같다. PyYAML 은 같은 키가 두 번 나와도 읽으므로, 필터가 뺀 스텝의 본문 줄이 앞 스텝에 붙어
 #     남은 것은 읽히는지만 봐서는 드러나지 않는다
 #   · 원본에서 스텝 바로 앞에 있는 주석 묶음은 그 스텝이 남으면 그 스텝 머리 바로 앞에 그대로 남고,
@@ -17,7 +17,7 @@
 #     남지 않는다. 그 스텝이 남으면 주석도 제자리에 남는다. 킷 사본의 gates.yml 에 그런 주석을 넣고 본다
 #   · 필터가 빼는 스텝 뒤의 6칸 주석은, 뒤에 스텝 머리가 오지 않으면(잡 머리 · 2칸 주석 · 파일 끝)
 #     그 스텝과 함께 지워진다. 그 스텝이 남으면 주석도 남는다. 킷 사본의 gates.yml 에 넣고 본다
-#   · 설치본의 워크플로 env 에 남은 변수는 설치된 gates.yml 이나 설치된 `.kit/` 의 스크립트에서 쓰인다.
+#   · 설치된 워크플로의 env 에 남은 변수는 설치된 gates.yml 이나 설치된 `.kit/` 의 스크립트에서 쓰인다.
 #     게이트 스크립트만 읽는 변수는 쓰이는 것으로 보고, 설치된 문서(`.kit/README.md` 포함)가 이름만 적은 변수는
 #     쓰이는 것으로 보지 않는지 킷 사본으로 본다
 set -u
@@ -25,7 +25,7 @@ KIT="$(cd "$(dirname "$0")/.." && pwd)"
 fail=0
 ok() { echo "  ✓ $1"; }
 bad() { echo "  ✗ $1"; fail=1; }
-python3 -c 'import yaml' 2>/dev/null || { bad "python3 의 yaml 모듈이 없다 — 설치본이 YAML 로 읽히는지 볼 수 없다"; exit 1; }
+python3 -c 'import yaml' 2>/dev/null || { bad "python3 의 yaml 모듈이 없다 — 설치된 워크플로가 YAML 로 읽히는지 볼 수 없다"; exit 1; }
 
 T=$(mktemp -d)
 
@@ -67,7 +67,7 @@ bad = 0
 # detect 밖의 잡마다 스텝을 견준다. detect 는 필터가 탐지문과 출력을 고치는 잡이라 뺀다.
 S, O = yaml.safe_load("\n".join(srcl)), yaml.safe_load("\n".join(outl))
 
-# 설치본의 워크플로 env 에 남은 변수마다 쓰는 곳이 있는지 본다. 설치된 gates.yml 과, 설치된 `.kit/` 의 스크립트(이름이
+# 설치된 워크플로의 env 에 남은 변수마다 쓰는 곳이 있는지 본다. 설치된 gates.yml 과, 설치된 `.kit/` 의 스크립트(이름이
 # `.sh` 로 끝나거나 첫 줄이 `#!` 인 파일)에서 `env.<이름>` · `$<이름>` 을 찾는다 — 워크플로 env 는 스텝의 환경으로
 # 전달되고, 스텝이 실행하는 `.kit/` 의 게이트 스크립트는 몇몇 변수를 환경에서 읽는다. 문서(`.kit/README.md` 포함)와
 # `tool-versions` 처럼 이름을 적기만 하는 파일은 보지 않는다. 필터는 언어 전용 변수를 이름으로 찾으므로(ENVOF),
@@ -182,7 +182,7 @@ else
   if [ $rc -eq 0 ] && [ "$left" = 0 ]; then
     ok "go 스텝 본문 한가운데의 6칸 주석: go 를 뺀 설치에서 그 스텝이 끝까지 지워지고 나머지 스텝은 원본과 같다"
   else
-    bad "go 스텝 본문 한가운데의 6칸 주석: go 를 뺀 설치에 그 스텝의 줄이 ${left:-?}개 남았거나 설치본이 원본과 다르다"
+    bad "go 스텝 본문 한가운데의 6칸 주석: go 를 뺀 설치에 그 스텝의 줄이 ${left:-?}개 남았거나 설치된 워크플로가 원본과 다르다"
     [ $rc -eq 0 ] || printf '%s\n' "$out" | sed 's/^/      /'
   fi
   # 그 스텝이 남는 설치에서는 주석이 제자리에 있어야 한다. 모았다가 다음 스텝 머리에서 출력하면
@@ -210,7 +210,7 @@ tail_case() {
   if [ $rc -eq 0 ] && [ "$left" = 0 ]; then
     ok "필터가 빼는 스텝 뒤의 6칸 주석($2): ts 를 뺀 설치에서 그 스텝과 함께 지워진다"
   else
-    bad "필터가 빼는 스텝 뒤의 6칸 주석($2): ts 를 뺀 설치에 ${left:-?}줄 남았거나 설치본이 원본과 다르다"
+    bad "필터가 빼는 스텝 뒤의 6칸 주석($2): ts 를 뺀 설치에 ${left:-?}줄 남았거나 설치된 워크플로가 원본과 다르다"
     [ $rc -eq 0 ] || printf '%s\n' "$out" | sed 's/^/      /'
   fi
   y=$(install_lang "$K" "jvm,py,ts")
@@ -223,14 +223,14 @@ tail_case jobnote "2칸 주석 앞" '/^  trace:$/ { print c; print ""; print "  
 tail_case eof "파일 끝" '{ print } END { print "      - if: needs.detect.outputs.node == '\''true'\''"; print "        run: echo node"; print c }'
 
 # 워크플로 env 는 스텝의 환경으로 전달되고, 게이트 스크립트는 몇몇 변수를 환경에서 읽는다(`KIT_ALLOW_MISSING_TOOLS`).
-# 그런 변수는 gates.yml 에 쓰는 곳이 없어도 설치본의 게이트가 쓴다. 킷 사본의 env 에 넣고 go 를 남겨 설치한다.
+# 그런 변수는 gates.yml 에 쓰는 곳이 없어도 설치된 게이트가 쓴다. 킷 사본의 env 에 넣고 go 를 남겨 설치한다.
 K=$(kit_copy extvar '{ print } /^env:$/ { print "  KIT_ALLOW_MISSING_TOOLS: \"0\"" }')
 y=$(install_lang "$K" "go,py")
 out=$(python3 "$T/check.py" "$K/common/ci/gates.yml" "$y" "go,py" 2>&1); rc=$?
 if [ $rc -eq 0 ] && grep -q '^  KIT_ALLOW_MISSING_TOOLS:' "$y" 2>/dev/null; then
   ok "게이트 스크립트가 환경에서 읽는 워크플로 env 변수는 쓰이는 것으로 본다"
 else
-  bad "게이트 스크립트가 환경에서 읽는 워크플로 env 변수를 쓰는 곳이 없는 것으로 봤거나 설치본에 없다"
+  bad "게이트 스크립트가 환경에서 읽는 워크플로 env 변수를 쓰는 곳이 없는 것으로 봤거나 설치된 워크플로에 없다"
   [ $rc -eq 0 ] || printf '%s\n' "$out" | head -3 | sed 's/^/      /'
 fi
 

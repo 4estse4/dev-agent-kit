@@ -19,7 +19,7 @@ if ! out=$(bash "$KIT/install.sh" --hooks --templates --lint --ci --agent "$R" 2
 fi
 [ -d "$R/.kit" ] || { echo "  ✗ 설치 후에도 .kit 이 없다 — 검사할 것이 없다"; exit 1; }
 
-# ① 설치본이 가리키는 킷 경로가 그 레포에 실제로 있나
+# ① 설치된 파일이 가리키는 킷 경로가 그 레포에 실제로 있나
 python3 - "$R" "$KIT" <<'PY' || fail=1
 import re, sys, os, subprocess
 R = sys.argv[1]; bad = 0
@@ -33,7 +33,7 @@ part = re.search(r'(?ms)^## 2\..*?(?=^## )', guide)
 PROJECT = set(re.findall(r'(?m)^\| `([^`]+)`', part.group(0))) if part else set()
 # **확장자로 고르지 않는다.** `.md`·`.yml`·`.json` 만 보던 탓에 `.sh` 와 훅 파일
 # (`pre-commit`·`pre-push`)이 통째로 검사 밖이었다 — 킷 경로를 가장 많이 적는 자리다.
-# 설치본 전부를 보고, 읽을 수 없는 것(바이너리)만 건너뛴다.
+# 설치된 파일 전부를 보고, 읽을 수 없는 것(바이너리)만 건너뛴다.
 found = subprocess.run(['find', R, '-type', 'f'], capture_output=True, text=True).stdout.split()
 for f in found:
     if '/.git/' in f:
@@ -74,7 +74,7 @@ for f in found:
             print(f"  ✗ {f[len(R)+1:]} 가 킷에만 있는 경로를 가리킨다 — {m}"); bad = 1
     # **킷 레포 이름.** 파일이든 PR 이든 킷 레포로 보내는 것은 같다(이슈 #61 의 결정).
     # 주소만 보면 `gh api repos/…` · `-R …` · `owner/repo#N` 을 찾지 못한다. 그래서 이름을
-    # 본다. 레포 홈 주소만 둔다 — 설치본이 어디서 왔는지 밝히는 자리(`.kit/README.md`)다.
+    # 본다. 레포 홈 주소만 둔다 — 설치된 킷이 어디서 왔는지 밝히는 자리(`.kit/README.md`)다.
     # 대소문자를 가리지 않는다. `gh api repos/4ESTSE4/Dev-Agent-Kit` 도 킷 레포를 낸다.
     # 옛 이름 `ai-native-kit` 도 본다. 레포 이름을 바꾼 뒤에도 GitHub 이 옛 이름을 새 레포로 이어 준다.
     # 홈 주소 뒤는 막을 글자로 정한다 — 영숫자 · `@` · `#` · `-`, 그리고 `/` · `.` · `:` 뒤에
@@ -89,7 +89,7 @@ for f in found:
             print(f"  ✗ {f[len(R)+1:]} 가 킷 레포를 가리킨다 — {line}"); bad = 1
 sys.exit(bad)
 PY
-[ "$fail" = 0 ] && echo "  ✓ 설치본의 킷 경로 참조가 전부 실재한다"
+[ "$fail" = 0 ] && echo "  ✓ 설치된 파일의 킷 경로 참조가 전부 실재한다"
 
 # ② 미리보기가 내는 낱말과 문서가 쓰는 낱말이 같나
 # **옛 낱말을 손으로 적지 않는다.** 적으면 다음 개명 때 함께 고쳐지지 않고, 그것이 이 검사가
