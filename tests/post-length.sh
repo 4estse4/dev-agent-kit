@@ -136,7 +136,7 @@ out=$(printf '{"tool_name": "Write", "tool_input": {"file_path": "x"}}' | PATH="
 if [ -z "$out" ]; then echo "  ✓ Bash 가 아닌 도구는 보지 않는다"; else echo "  ✗ Bash 가 아닌 도구에 출력이 있다 — $out"; fail=1; fi
 
 echo "등록"
-# 설치되는 settings 는 설치본(.claude/hooks/)을, 이 레포의 settings 는 원본(claude-code/hooks/)을 가리킨다
+# 설치되는 settings 는 설치된 킷의 훅(.claude/hooks/)을, 이 레포의 settings 는 원본(claude-code/hooks/)을 가리킨다
 for pair in "claude-code/settings.json:.claude/hooks/post_length.sh" ".claude/settings.json:claude-code/hooks/post_length.sh"; do
   s=${pair%%:*} want=${pair#*:}
   if python3 - "$KIT/$s" "$want" <<'PY'
