@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 창 기록 훅(`window_record.sh`)이 사람 계정으로 올릴 결정만, 고른 보기 글자 그대로 기록하는가.
+# 질문 창 기록 훅(`window_record.sh`)이 사람 계정으로 올릴 결정만, 고른 보기 글자 그대로 기록하는가.
 #
 # 사람 계정 코멘트는 세션이 쓰지 않는다. 결정 창에서 사람이 고른 보기로 이 훅이 `- <머리말>: <보기>` 줄을 만들어
 # 봇 디렉터리(`<git 공통 디렉터리>/kit-bot/windows/<PR>.jsonl`)에 적고, `human_comment.sh <PR>` 이 그 기록만
@@ -270,5 +270,5 @@ if python3 -c 'import json, sys; sys.exit(0 if sys.argv[1] in json.load(open(sys
   "$rule" "$KIT/claude-code/settings.json"; then echo "  ✓ settings.json 이 게시 명령을 허용한다: $rule"
 else echo "  ✗ settings.json 의 allow 에 없다: $rule"; fail=1; fi
 
-[ "$fail" = 0 ] && echo "  ✓ 창 기록 훅은 사람이 고른 보기만 사람 계정으로 올릴 결정으로 기록한다"
+[ "$fail" = 0 ] && echo "  ✓ 질문 창 기록 훅은 사람이 고른 보기만 사람 계정으로 올릴 결정으로 기록한다"
 exit "$fail"

@@ -399,7 +399,7 @@ STUB_GH_LOG="$T/gh-log" guard "PR 이 없는 브랜치에 푸시" pass "git push
 ok "푸시 판정은 푸시가 나갈 레포의 PR 을 조회한다" 'grep -E "^pr list( |$)" "$T/gh-log" | grep -qE -- "-R o/r( |$)"'
 
 echo "── 사람 계정으로 올리는 명령(human_comment.sh)"
-# 올리는 글은 창 기록 훅이 적은 기록뿐이라(사람이 창에서 고른 보기) 권한 프롬프트 없이 올린다. 한 줄 정규형만
+# 올리는 글은 질문 창 기록 훅이 적은 기록뿐이라(사람이 창에서 고른 보기) 권한 프롬프트 없이 올린다. 한 줄 정규형만
 # 받고, 스크립트 경로는 훅과 같은 디렉터리의 것이다.
 P="$H/human_comment.sh"
 guard "사람 계정 게시는 한 줄 정규형이면 묻지 않고 통과한다" pass "bash $P 155"
@@ -464,17 +464,17 @@ RWT3="$RW/.claude/worktrees/w3"; git -C "$RW" worktree add -q "$RWT3"
 mkdir -p "$RWT3/.claude/hooks" "$RWT3/sub"; cp "$H"/*.sh "$H"/*.py "$RWT3/.claude/hooks/"
 GUARD_PROJ="$RWT3" GUARD_HOOKS="$RWT3/.claude/hooks" guard "claude -w 세션의 프로젝트 루트에서 입력한 사람 계정 게시" pass "bash .claude/hooks/human_comment.sh 155" "$RWT3"
 GUARD_PROJ="$RWT3" GUARD_HOOKS="$RWT3/.claude/hooks" guard "claude -w 세션의 하위 디렉터리에서 입력한 사람 계정 게시는 프로젝트 루트의 사유를 낸다" deny "bash .claude/hooks/human_comment.sh 155" "$RWT3/sub" "세션을 연 프로젝트의 레포 루트("
-# 창 기록은 창 기록 훅이 사람이 고른 창에서만 만든다. 세션이 그 훅을 직접 실행하면 지어낸 창 결과로 기록이 생겨
+# 창 기록은 질문 창 기록 훅이 사람이 고른 창에서만 만든다. 세션이 그 훅을 직접 실행하면 지어낸 창 결과로 기록이 생겨
 # 사람이 고르지 않은 결정이 사람 계정으로 올라간다
 W="$H/window_record.sh"
-guard "창 기록 훅을 직접 실행(표준입력)" deny "bash $W < /tmp/fake-window.json" "$R" "창 기록 훅"
+guard "질문 창 기록 훅을 직접 실행(표준입력)" deny "bash $W < /tmp/fake-window.json" "$R" "질문 창 기록 훅"
 # 거절 사유가 시키는 일은 open-pr 3.5 와 같다 — 게시 표지부터 보고, 맞으면 PR 웹으로 받는다
-guard "창 기록 훅 직접 실행의 거절 사유가 3.5 와 같은 할 일을 적는다" deny "bash $W < /tmp/fake-window.json" "$R" "게시 표지"
-guard "파이프로 창 기록 훅을 실행" deny "printf '{}' | bash $W"
-guard "bash 없이 창 기록 훅을 실행" deny "$W < /tmp/fake-window.json"
-guard "bash -c 안의 창 기록 훅" deny "bash -c 'bash $W < /tmp/fake-window.json'"
-guard "창 기록 훅의 구문 검사" pass "bash -n $W"
-guard "창 기록 훅을 읽음" pass "sed -n 1,20p $W"
+guard "질문 창 기록 훅 직접 실행의 거절 사유가 3.5 와 같은 할 일을 적는다" deny "bash $W < /tmp/fake-window.json" "$R" "게시 표지"
+guard "파이프로 질문 창 기록 훅을 실행" deny "printf '{}' | bash $W"
+guard "bash 없이 질문 창 기록 훅을 실행" deny "$W < /tmp/fake-window.json"
+guard "bash -c 안의 질문 창 기록 훅" deny "bash -c 'bash $W < /tmp/fake-window.json'"
+guard "질문 창 기록 훅의 구문 검사" pass "bash -n $W"
+guard "질문 창 기록 훅을 읽음" pass "sed -n 1,20p $W"
 # 창 기록은 봇 디렉터리에 있다. 세션이 셸로 읽거나 고치지 못한다
 guard "창 기록을 읽는 명령" deny "cat .git/kit-bot/windows/155.jsonl"
 guard "창 기록을 고치는 명령" deny "printf x >> .git/kit-bot/windows/155.jsonl"
