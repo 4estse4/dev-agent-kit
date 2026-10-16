@@ -3,7 +3,7 @@
 # GitHub 에 쓰는 것을 막는다. 필요: python3 · git(토큰을 새로 받을 때 openssl · curl)
 #
 # **무엇을 막나.**
-# - gh 와 git 의 신원을 바꾸거나 토큰을 꺼내는 명령. 명령 글자에 `GH_CONFIG_DIR` · `GH_TOKEN` ·
+# - gh 와 git 의 신원을 바꾸거나 토큰을 꺼내는 명령. 명령 문자열에 `GH_CONFIG_DIR` · `GH_TOKEN` ·
 #   `GITHUB_TOKEN` · `GH_ENTERPRISE_TOKEN` · `GH_HOST` · `GIT_CONFIG_COUNT` · `GIT_CONFIG_KEY_N` ·
 #   `GIT_CONFIG_VALUE_N` · `GIT_CONFIG_PARAMETERS` · `credential.…helper` · `oauth_token` 이 있거나,
 #   `gh auth` 명령. `oauth_token` 은 `gh config get -h github.com oauth_token` 이 토큰 전체를 출력해서다.
@@ -19,13 +19,13 @@
 #   (`//**/…`) 작업 디렉터리 밖에 있는 worktree 세션의 봇 디렉터리도 막는다. 연결된 세션의 git 은 github.com 자격 증명을
 #   봇(gh)에게서 받으므로 `git credential fill` 이 봇 토큰 전체를 출력한다. 연결되지 않은 세션에서는 사람의
 #   토큰을 출력한다
-# - App 개인키를 가리키는 명령. 명령 글자에 `.config/<App 이름>` 이나 `<App 이름>/key.pem` 이 온전한 이름으로
+# - App 개인키를 가리키는 명령. 명령 문자열에 `.config/<App 이름>` 이나 `<App 이름>/key.pem` 이 온전한 이름으로
 #   있거나, `.config` 와 `key.pem` 이 함께 있으면(`cat ~/.config/*/key.pem` · `find ~/.config -name key.pem`)
 #   막는다. App 이름은 봇 설정에서 읽고, 앞뒤 경계는 봇 디렉터리 이름과 같다. 셋째 꼴은 App 이름 없이 판정한다.
 #   거절 사유는 해당한 꼴과, 키를 다루는 일은 사람이 터미널에서 한다는 것을 적는다. 설치되는 `settings.json` 의
 #   deny `Read(~/.config/*/key.pem)` 은 Read 도구와 `cat` 같은 파일 명령을 막고, 스크립트가 여는 경우와 파일
 #   명령으로 인식되지 않는 명령은 덮지 않는다(Claude Code 권한 문서). `cd` 뒤의 상대 경로와 glob 인자를 덮는지는
-#   문서에 없다. 명령 글자로 알아보므로 디렉터리 단위로 읽는 명령(`grep -r … ~/.config`)과 스크립트 파일 안의
+#   문서에 없다. 명령 문자열로 알아보므로 디렉터리 단위로 읽는 명령(`grep -r … ~/.config`)과 스크립트 파일 안의
 #   경로는 이 훅도 못 막는다
 # - 연결되지 않은 세션의 쓰기. 세션 시작 훅(`bot_session.sh`)이 이 세션을 봇 계정에 연결하지
 #   못했으면 그 세션의 gh 와 git 은 사람 계정이다. gh 의 읽기 명령이 아닌 것과 `git push` 를 막는다.
@@ -80,9 +80,9 @@
 # `BUDGET` 에 포함된다. 토큰 스크립트는 끊지 않는다. 끊으면(SIGKILL) `trap` 이 실행되지 않아 JWT 임시 파일이
 # 남는다.
 #
-# **무엇을 못 막나.** 명령 글자로 알아보므로, 스크립트 파일 안이나 인라인 인터프리터
+# **무엇을 못 막나.** 명령 문자열로 알아보므로, 스크립트 파일 안이나 인라인 인터프리터
 # (`python3 -c` 등) 안의 호출은 못 본다 — 세션이 봇 연결을 지우는 스크립트를 새로 써서 실행하면 사람
-# 계정으로 올라간다. 명령 글자에 위 낱말이 있으면 검색이나 커밋 메시지도 막힌다 — 그 글자를 파일로
+# 계정으로 올라간다. 명령 문자열에 위 낱말이 있으면 검색이나 커밋 메시지도 막힌다 — 그 글자를 파일로
 # 옮겨 전달한다. 이 훅은 형식대로 입력한 명령의 실수를 막고, 일부러 하는 우회는 막으려 하지 않는다. 일부러
 # 하는 우회를 막는 것은 CI 와 브랜치 보호다.
 input=$(cat)
@@ -462,7 +462,7 @@ if any(runs(s, 'human_comment.sh') for s in segs):
     human_comment()
 
 # 판정 스크립트(`merge-pr` 2절)와 「다음 일」 목록 스크립트(`merge-pr` 의 「다음 일」 문단)는 안에서 gh 를 부른다.
-# 명령 글자에 gh 가 없어도 토큰이 살아 있어야 한다 — 오래 쉰 세션에서는 목록 스크립트가 첫 조회일 수 있다.
+# 명령 문자열에 gh 가 없어도 토큰이 살아 있어야 한다 — 오래 쉰 세션에서는 목록 스크립트가 첫 조회일 수 있다.
 remote = any(s in GIT_REMOTE for s in git_subs) or any(runs(s, n) for s in segs
                                                         for n in ('human_review.sh', 'backlog.sh'))
 if not gh_calls and not remote:

@@ -589,7 +589,7 @@ ok "git push 앞에서도 토큰을 새로 받는다" 'grep -qF access_tokens "$
 printf '2000-01-01T00:00:00Z\n' > "$BOTDIR/expires"
 STUB_CURL_EXIT=28 guard "네트워크가 멈춘 뒤의 게시" deny "gh pr comment 1 --body-file /tmp/x.md" "$R" "네트워크"
 ok "curl 이 기다리는 시간에 끝이 있다" 'grep -qF -- "--max-time" "$T/curl-log"'
-# merge-pr 2절이 부르는 판정 스크립트는 안에서 gh 를 부른다. 명령 글자에 gh 가 없어도 새로 받아야 한다.
+# merge-pr 2절이 부르는 판정 스크립트는 안에서 gh 를 부른다. 명령 문자열에 gh 가 없어도 새로 받아야 한다.
 printf '2000-01-01T00:00:00Z\n' > "$BOTDIR/expires"
 guard "만료된 토큰으로 판정 스크립트" pass "bash .claude/hooks/human_review.sh approved 1"
 ok "판정 스크립트 앞에서도 토큰을 새로 받는다" 'grep -qF access_tokens "$T/curl-log" && grep -qF 2099 "$BOTDIR/expires"'
