@@ -111,7 +111,7 @@ version … used to build golangci-lint is lower than the targeted Go version」
   (`./gradlew` 가 없으면 러너 이미지에 든 Gradle 을 쓰게 되어 버전이 고정되지 않기 때문).
 - **docker/compose** — 서비스 구성은 프로젝트마다 달라 템플릿을 주지 않는다.
 - **e2e** — 무엇을 e2e 로 볼지는 프로젝트가 정한다.
-- **낡음 감지는 로컬 전용** — 설치에 쓴 로컬 킷 클론에 설치 뒤 새 커밋이 생겼는지는 세션 시작 시 한 줄로
+- **킷 버전 확인은 로컬 전용** — 설치에 쓴 로컬 킷 클론에 설치 뒤 새 커밋이 생겼는지는 세션 시작 시 한 줄로
   알린다. 그 클론을 갱신하지 않으면 알리지 않고, CI 는 모른다.
 - **macOS Finder 로 만든 한글 이름의 모듈 폴더** — 디스크에는 자모(NFD)로, git 에는 음절(NFC)로
   남을 수 있다. 그러면 로컬에서 실행되는 게이트(pre-commit · pre-push, `open-pr` 이 PR 본문에 붙이는
