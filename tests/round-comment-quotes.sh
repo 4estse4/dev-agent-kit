@@ -194,8 +194,8 @@ mkdir -p "$T/botonly"; cp "$FX/pr89/answer1.md" "$T/botonly/bot1.md"
 check "봇 계정 코멘트에만 있는 인용" deny "gh pr comment 89 --body-file $FX/pr89/round2.md" "$T/botonly" "사람 계정"
 check "사람 계정 코멘트가 아직 없는 PR" deny "gh pr comment 89 --body-file $FX/pr89/round2.md" "$T/empty"
 mk since.md "$r4
-- (사람, 1라운드부터) \"1라운드부터 이월된 가짜 지시\""
-check "(사람, N라운드부터) 표기" deny "$(post since.md)" "" "이월된 가짜 지시"
+- (사람, 1라운드 발견) \"1라운드에서 이월된 가짜 지시\""
+check "(사람, N라운드 발견) 표기" deny "$(post since.md)" "" "이월된 가짜 지시"
 mk wrapped.md "$r4
 - (사람) \"경로는 파일이 있나로 가리지만,
   번호는 가짜로 바꾼 말이다.\""

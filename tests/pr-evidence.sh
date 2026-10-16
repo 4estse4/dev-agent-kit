@@ -77,6 +77,31 @@ open=$(head -1 "$T/fence-cmd.part" 2>/dev/null); close=$(tail -1 "$T/fence-cmd.p
 [ "$open" = "$close" ] && [ "${#open}" -gt 3 ] && ok "명령에만 든 \`\`\`" \
   || bad "명령에만 든 \`\`\` — 여는 줄 '$open'"
 
+# ── 접기 ── 결과 한 줄을 summary 에 두고 명령 · 출력 · rc 를 그 안에 접는다. GitHub 은 태그 앞뒤에 빈 줄이
+# 있어야 안의 코드 블록을 그린다. summary 의 rc 는 스크립트가 붙여, 결과 줄과 실제 종료 코드가 함께 보인다
+fold() {   # fold <조각> <결과 한 줄> <명령>
+  ( cd "$T" && printf '%s\n' "$3" | bash "$S" --fold "$2" "$1" >/dev/null 2>&1 )
+}
+fold "$T/fold.part" '게이트 통과' 'echo checked'
+if [ "$(sed -n 1p "$T/fold.part" 2>/dev/null)" = '<details>' ] \
+   && [ "$(sed -n 2p "$T/fold.part")" = '<summary>게이트 통과 (rc=0)</summary>' ] \
+   && [ -z "$(sed -n 3p "$T/fold.part")" ] && [ "$(sed -n 4p "$T/fold.part")" = '```' ] \
+   && grep -qxF '$ echo checked' "$T/fold.part" && grep -qx 'checked' "$T/fold.part" \
+   && [ -z "$(tail -2 "$T/fold.part" | head -1)" ] && [ "$(tail -1 "$T/fold.part")" = '</details>' ]; then
+  ok "접는다 — summary 에 결과 한 줄과 rc, 안에 명령 · 출력 · rc"
+else bad "접는다 — $(tr '\n' '|' < "$T/fold.part" 2>/dev/null)"; fi
+( cd "$T" && printf '%s\n' 'echo half; exit 3' | bash "$S" --fold '테스트 실패' "$T/fold-fail.part" >/dev/null 2>&1 ); rc=$?
+grep -qxF '<summary>테스트 실패 (rc=3)</summary>' "$T/fold-fail.part" 2>/dev/null && grep -qx 'rc=3' "$T/fold-fail.part" \
+  && [ "$rc" = 3 ] && ok "접어도 실패한 명령의 rc 를 summary 와 안에 적고 그 코드로 끝난다" \
+  || bad "접어도 실패한 명령의 rc — rc=$rc $(tr '\n' '|' < "$T/fold-fail.part" 2>/dev/null)"
+fold "$T/fold-esc.part" 'a<b & c>d' 'echo x'
+grep -qxF '<summary>a&lt;b &amp; c&gt;d (rc=0)</summary>' "$T/fold-esc.part" 2>/dev/null \
+  && ok "summary 의 < & > 를 글자로 바꾼다" || bad "summary 의 < & > — $(sed -n 2p "$T/fold-esc.part" 2>/dev/null)"
+( cd "$T" && printf '%s\n' 'echo x' | bash "$S" --fold '' "$T/fold-empty.part" >/dev/null 2>&1 ); rc=$?
+[ "$rc" = 2 ] && [ ! -e "$T/fold-empty.part" ] && ok "결과 줄이 비면 실패한다" || bad "결과 줄이 비면 실패한다 — rc=$rc"
+( cd "$T" && printf '%s\n' 'echo x' | bash "$S" --fold $'둘\n줄' "$T/fold-nl.part" >/dev/null 2>&1 ); rc=$?
+[ "$rc" = 2 ] && [ ! -e "$T/fold-nl.part" ] && ok "결과 줄이 두 줄이면 실패한다" || bad "결과 줄이 두 줄이면 실패한다 — rc=$rc"
+
 # ── 덧붙이기가 실패하면 성공으로 끝나지 않는다 ──
 ( cd "$T" && printf '%s\n' 'echo hi' | bash "$S" "$T/no-such-dir/x.part" >/dev/null 2>&1 ); rc=$?
 [ "$rc" != 0 ] && ok "덧붙이지 못하면 0 이 아니다" || bad "덧붙이지 못하면 0 이 아니다 — rc=$rc"
@@ -238,8 +263,8 @@ for f in "$OPEN" "$MERGE"; do
   if tr '\n' ' ' < "$f" | grep -qE '출력을? *그대로 *붙인다|게이트 *출력을 *붙인다|출력은 *(\*\*)?그대로(\*\*)? *옮긴다'; then
     bad "$name 이 출력을 손으로 붙이라고 시킨다"
   else ok "$name 이 출력을 손으로 붙이라고 시키지 않는다"; fi
-  # 스킬 디렉터리를 `<스킬 디렉터리>` 로 가리키므로 경로가 아니라 부르는 모양(`bash … evidence.sh <조각>`)을 찾는다
-  grep -qE 'bash .*evidence\.sh <' "$f" && ok "$name 이 evidence.sh 를 부른다" || bad "$name 이 evidence.sh 를 부른다"
+  # 스킬 디렉터리를 `<스킬 디렉터리>` 로 가리키므로 경로가 아니라 부르는 모양(`bash … evidence.sh [--fold "<…>"] <조각>`)을 찾는다
+  grep -qE 'bash .*evidence\.sh (--fold "[^"]*" )?<' "$f" && ok "$name 이 evidence.sh 를 부른다" || bad "$name 이 evidence.sh 를 부른다"
   # 부르는 모양만 보면 없는 디렉터리의 evidence.sh 를 불러도 통과한다. `<스킬 디렉터리>` 는 그 스킬의 디렉터리이므로
   # 킷의 스킬 디렉터리로 바꿔 그 경로에 파일이 있는지 본다. 스킬이 부르는 줄은 `.claude/…` 경로로 적지 않아
   # installed-docs 가 보지 않는다
