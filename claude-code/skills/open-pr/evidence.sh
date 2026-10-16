@@ -2,9 +2,14 @@
 # 명령을 실행해 그 명령 · 출력 · 종료 코드를 코드 블록째 파일에 덧붙인다. PR 본문과 머지
 # 결정 코멘트의 증거를 손으로 옮기지 않게 한다.
 #
-#     bash <open-pr 스킬 디렉터리>/evidence.sh <조각 파일> <<'CMD'
+#     bash <open-pr 스킬 디렉터리>/evidence.sh [--fold "<결과 한 줄>"] <조각 파일> <<'CMD'
 #     <명령>
 #     CMD
+#
+# **`--fold` 는 블록을 `<details>` 로 접는다.** `<summary>` 에 결과 한 줄과 `(rc=N)` 을 두고, 명령 · 출력 · `rc` 는
+# 그 안에 둔다. GitHub 에 올리는 글은 접히지 않은 부분의 길이를 훅(`post_length.sh`)이 세고, 접힌 블록은
+# `<summary>` 만 센다. 펼친 출력 때문에 본문과 결정 코멘트가 길어져 읽히지 않았다. `(rc=N)` 은 스크립트가 붙여,
+# 세션이 쓴 결과 줄과 실제 종료 코드가 함께 보인다. 결과 줄의 `<` · `&` · `>` 는 글자로 바꾼다.
 #
 # **왜 스크립트인가.** 손으로 옮긴 출력이 잘렸다. 한 PR 본문에서 18줄 출력의 앞 넷이 세 번
 # 빠졌고, 결정 코멘트에는 실행한 것과 다른 명령이 옮겨졌다(`git fetch -q` 를 실행하고 `-q` 없이
@@ -19,8 +24,23 @@
 # 종료 코드는 `rc=N` 으로 적고 이 스크립트도 그 코드로 끝난다. 실패가 본문에 남고 부른 쪽도
 # 안다. 실패를 보이려고 실행한 명령(`grep` 이 아무것도 안 찾아 `rc=1`)이면 그 코드가 맞다.
 set -u
+usage="쓰는 법: bash evidence.sh [--fold \"<결과 한 줄>\"] <조각 파일> <<'CMD'  (명령)  CMD"
+summary=''
+fold=''
+if [ "${1:-}" = --fold ]; then
+  fold=1
+  summary=${2:-}
+  shift 2 2>/dev/null || shift $#
+  case "$summary" in
+    *$'\n'*) echo "evidence.sh: --fold 의 결과는 한 줄이다. $usage" >&2; exit 2 ;;
+  esac
+  if [ -z "${summary//[[:space:]]/}" ]; then
+    echo "evidence.sh: --fold 의 결과 한 줄이 비었다. $usage" >&2
+    exit 2
+  fi
+fi
 if [ $# -ne 1 ]; then
-  echo "쓰는 법: bash evidence.sh <조각 파일> <<'CMD'  (명령)  CMD" >&2
+  echo "$usage" >&2
   exit 2
 fi
 out=$1
@@ -126,6 +146,10 @@ while printf '%s\n%s\n' "$cmd" "$res" | grep -qF -- "$fence"; do
 done
 
 {
+  if [ -n "$fold" ]; then
+    printf '<details>\n<summary>%s (rc=%s)</summary>\n\n' \
+      "$(printf '%s' "$summary" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')" "$rc"
+  fi
   printf '%s\n' "$fence"
   mark='$'
   while IFS= read -r line || [ -n "$line" ]; do
@@ -134,6 +158,7 @@ done
   done <<<"$cmd"
   [ -n "$res" ] && printf '%s\n' "$res"
   printf 'rc=%s\n%s\n' "$rc" "$fence"
+  [ -n "$fold" ] && printf '\n</details>\n'
 } | tee -a "$out"
 # 덧붙이기가 실패하면(없는 디렉터리 · 잘못 적은 경로) 표준출력에는 블록이 나와도 조각에는
 # 없다. 명령의 rc 로 끝나면 성공처럼 보여 그 조각이 본문에서 알림 없이 빠진다.

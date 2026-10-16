@@ -69,7 +69,7 @@ import json, os, re, subprocess, sys
 
 ROUND = re.compile(r'^\s*## 리뷰 ')
 BULLET = re.compile(r'^\s*(?:[-*]|\d+\.)\s')
-# 출처 라벨은 `(사람)` 과 `(사람, N라운드부터)` 둘뿐이다.
+# 출처 라벨은 `(사람)` 과 `(사람, N라운드 발견)` 둘뿐이다.
 # `(사람이 연다)` 같은 괄호 글은 라벨이 아니다.
 LABEL = re.compile(r'\(사람(?:\s*,[^)]*)?\)')
 AFTER = re.compile(r'(?:\*\*)?\s*"')          # 라벨 바로 뒤. `**(사람)** "…"` 도 인용이다
