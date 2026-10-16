@@ -17,6 +17,7 @@ cat > "$T/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$STUB_GH_ARGS"
 [ -n "${STUB_GH_FAIL:-}" ] && { echo "HTTP 502: Bad Gateway" >&2; exit 1; }
+[ -n "${STUB_GH_SLEEP:-}" ] && sleep "$STUB_GH_SLEEP"
 if [ "${1:-} ${2:-}" = "repo view" ]; then echo o/r; exit 0; fi
 exec python3 - "$@" <<'PY'
 import html, os, sys
@@ -73,6 +74,10 @@ printf 'x\n' > "$T/w/pre-long-line.md"
 { echo '<pre class="notranslate"><code class="notranslate">'; rep 출 300; echo '</code></pre>'; } > "$T/w/pre-long-line.md.html"
 printf 'x\n' > "$T/w/br.md"
 { printf '<ul dir="auto">\n<li><strong>중간</strong> (콜드) %s<br>\n→ %s</li>\n</ul>\n' "$(rep 가 100)" "$(rep 나 100)"; } > "$T/w/br.md.html"
+# 원문에서 줄을 바꿔 쓴 산문 문단. GitHub 은 문단 안의 줄바꿈을 <br> 와 줄바꿈으로 그린다
+printf 'x\n' > "$T/w/br-prose.md"
+{ printf '<p dir="auto">%s<br>\n%s</p>\n' "$(rep 가 100)" "$(rep 나 100)"; } > "$T/w/br-prose.md.html"
+mkdir -p "$T/home"; rep 라 151 > "$T/home/over.md"
 
 echo "상한"
 check "상한 그대로인 글은 통과" allow "gh pr comment 5 --body-file $T/w/at-limit.md"
@@ -85,12 +90,16 @@ check "접힌 출력은 summary 만 센다" allow "gh pr comment 5 --body-file $
 check "펼쳐 둔 <details open> 은 안을 센다" deny "gh pr comment 5 --body-file $T/w/open-fold.md" "총량"
 check "펼친 코드 블록의 긴 줄은 한 줄 검사에 안 든다" allow "gh pr comment 5 --body-file $T/w/pre-long-line.md"
 check "<br> 로 나뉜 →  줄은 따로 센다" allow "gh pr comment 5 --body-file $T/w/br.md"
+check "<br> 로 줄을 바꿔 쓴 산문 문단은 한 줄로 센다" deny "gh pr comment 5 --body-file $T/w/br-prose.md" "201"
 
 echo "게시 명령"
 check "PR 본문(gh pr create)" deny "gh pr create --title t --body-file $T/w/over-line.md" "151"
-check "PR 본문 고침(gh pr edit)" deny "gh pr edit 5 --body-file $T/w/over-line.md" "151"
+check "PR 본문 고침(gh pr edit)은 보지 않는다" allow "gh pr edit 5 --body-file $T/w/over-line.md"
 check "이슈 본문(gh issue create -F 상대 경로)" deny "gh issue create --title t -F over-line.md" "151"
-check "이슈 본문 고침(gh issue edit --body-file=)" deny "gh issue edit 7 --body-file=$T/w/over-line.md" "151"
+check "이슈 본문 고침(gh issue edit)은 보지 않는다" allow "gh issue edit 7 --body-file=$T/w/over-line.md"
+check "하위 명령 사이의 플래그(gh issue -R <레포> create)" deny "gh issue -R o/r create --title t --body-file $T/w/over-line.md" "151"
+check "하위 명령 앞의 플래그(gh -R <레포> issue comment)" deny "gh -R o/r issue comment 7 --body-file $T/w/over-line.md" "151"
+check "하위 명령 사이의 플래그(gh pr --repo=<레포> create)" deny "gh pr --repo=o/r create --title t --body-file $T/w/over-line.md" "151"
 check "이슈 코멘트(gh issue comment --body 인라인)" deny "gh issue comment 7 --body $(rep 라 151)" "151"
 check "다른 명령과 이은 게시" deny "cd $T/w && gh issue create --title t --body-file $T/w/over-line.md" "151"
 check "이은 명령의 인자는 그 게시의 본문이 아니다" allow "gh issue create --title t --body-file $T/w/short.md && echo -F $T/w/over-line.md"
@@ -98,6 +107,8 @@ check "짧은 이슈 코멘트는 통과" allow "gh issue comment 7 --body-file 
 check "본문을 표준입력으로 주면 막는다" deny "gh issue create --title t --body-file -" "표준입력"
 check "없는 본문 파일은 막는다" deny "gh issue create --title t --body-file $T/w/none.md" "읽지 못"
 check "본문 없는 PR 열기(--web)는 보지 않는다" allow "gh pr create --web"
+check "본문을 커밋에서 채우는 PR 열기(--fill)는 막는다" deny "gh pr create --fill" "본문"
+check "--fill 에 본문 파일을 함께 주면 그 파일을 센다" allow "gh pr create --fill --body-file $T/w/short.md"
 check "글자만 든 검색은 보지 않는다" allow "grep -rn 'gh issue create --body-file' $T/w"
 check "목록 조회는 보지 않는다" allow "gh issue list --state open"
 
@@ -131,6 +142,18 @@ out=$(printf '%s' "$input" | PATH="$T/bin:$PATH" STUB_GH_ARGS="$T/gh-args" STUB_
 case "$out" in
   *'"permissionDecision": "deny"'*'세지 못'*) echo "  ✓ 그리지 못하면 막는다" ;;
   *) echo "  ✗ 그리지 못했는데 막지 않았다 — $out"; fail=1 ;;
+esac
+# gh 가 훅의 시간 제한(30초) 안에 끝나지 않으면 판정하지 못한 것이다. 이 경우만 30초를 기다린다
+out=$(printf '%s' "$input" | PATH="$T/bin:$PATH" STUB_GH_ARGS="$T/gh-args" STUB_GH_SLEEP=40 bash "$HOOK" 2>&1)
+case "$out" in
+  *'"permissionDecision": "deny"'*'세지 못'*) echo "  ✓ gh 가 시간 안에 끝나지 않으면 막는다" ;;
+  *) echo "  ✗ gh 가 시간 안에 끝나지 않았는데 막지 않았다 — $(printf '%s' "$out" | tail -1)"; fail=1 ;;
+esac
+input=$(python3 -c 'import json,sys; print(json.dumps({"tool_name": "Bash", "cwd": sys.argv[2], "tool_input": {"command": sys.argv[1]}}))' 'gh issue comment 7 --body-file ~/over.md' "$T/w")
+out=$(printf '%s' "$input" | HOME="$T/home" PATH="$T/bin:$PATH" STUB_GH_ARGS="$T/gh-args" bash "$HOOK" 2>&1)
+case "$out" in
+  *'"permissionDecision": "deny"'*'151'*) echo "  ✓ ~ 로 시작하는 본문 파일은 홈에서 찾아 센다" ;;
+  *) echo "  ✗ ~ 로 시작하는 본문 파일을 홈에서 찾지 않았다 — $out"; fail=1 ;;
 esac
 out=$(printf '{"tool_name": "Write", "tool_input": {"file_path": "x"}}' | PATH="$T/bin:$PATH" STUB_GH_ARGS="$T/gh-args" bash "$HOOK" 2>&1)
 if [ -z "$out" ]; then echo "  ✓ Bash 가 아닌 도구는 보지 않는다"; else echo "  ✗ Bash 가 아닌 도구에 출력이 있다 — $out"; fail=1; fi

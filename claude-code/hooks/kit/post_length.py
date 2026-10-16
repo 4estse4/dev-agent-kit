@@ -5,9 +5,11 @@
 # (gfm, 레포 context) 태그를 지운 글자를 센다. 원문 마크다운의 글자 수는 문법 · 링크 주소 · 접힌 블록이 섞여 기준이
 # 되지 않았다. 접힌 블록(`<details>`)은 `<summary>` 만 센다. 펼쳐 둔 블록(`<details open>`)은 안까지 센다.
 #
-# **검사 둘.** 접히지 않은 부분 전체(총량)와, 코드 블록을 뺀 접히지 않은 줄 하나(문단 하나 · 목록 항목의 한 줄 ·
-# 표 칸 하나). 한 줄 상한은 산문 문단을 막고, 총량 상한은 펼친 출력을 막는다 — 출력은 접어야 빠진다. 줄 수는 화면
-# 폭마다 달라져 쓰지 않는다.
+# **검사 둘.** 접히지 않은 부분 전체(총량)와, 코드 블록을 뺀 접히지 않은 줄 하나(문단 하나 · 목록 항목 하나 · 표 칸
+# 하나). 한 줄 상한은 산문 문단을 막고, 총량 상한은 펼친 출력을 막는다 — 출력은 접어야 빠진다. 줄 수는 화면 폭마다
+# 달라져 쓰지 않는다. 문단이나 항목 안에서 원문의 줄을 바꾼 자리(GitHub 은 `<br>` 로 그린다)는 앞 줄에 이어 센다.
+# `→` 로 시작하는 줄만 따로 센다 — GitHub 글은 문단과 항목을 한 줄로 쓰고, 항목 아래 `→` 줄만 일부러 바꾼다. 이어
+# 세지 않으면 산문 문단 안에 줄바꿈만 넣어도 한 줄 검사를 통과했다.
 #
 # **상한.** 개조식으로 고쳐 쓴 PR 본문 · 라운드 코멘트 · 결정 코멘트의 가장 긴 줄과 총량보다 크고, 산문 문단 한
 # 개와 펼친 출력이 든 결정 코멘트는 막히게 정했다. 스킬 문서는 숫자를 옮겨 적지 않고 이 파일을 가리킨다.
@@ -24,19 +26,26 @@ import round_comment_cmd
 
 LINE_MAX = 150
 TOTAL_MAX = 2000
+TIMEOUT = 30
 
-# `gh pr comment` 는 인용 훅과 같은 해석(round_comment_cmd)으로 읽는다. 그 밖에 보는 게시 명령이다.
-SUBS = {
-    ("pr", "create"),
-    ("pr", "edit"),
-    ("issue", "create"),
-    ("issue", "edit"),
-    ("issue", "comment"),
-}
+# `gh pr comment` 는 인용 훅과 같은 해석(round_comment_cmd)으로 읽는다. 그 밖에 보는 게시 명령이다. 본문을 고쳐 쓰는
+# `gh pr edit` · `gh issue edit` 는 보지 않는다 — 상한보다 먼저 쓴 긴 본문은 한 줄만 고쳐도 막힌다.
+SUBS = {("pr", "create"), ("issue", "create"), ("issue", "comment")}
 CAND = re.compile(
-    r"(?<![\w.-])gh\s+(?:\S+\s+)*?(?:pr|issue)\s+(?:\S+\s+)*?(?:create|edit|comment)(?![\w-])"
+    r"(?<![\w.-])gh\s+(?:\S+\s+)*?(?:pr|issue)\s+(?:\S+\s+)*?(?:create|comment)(?![\w-])"
 )
+# 값을 받는 플래그. 하위 명령 앞에 와도(`gh -R <레포> issue create` · `gh issue -R <레포> create`) 값을 건너뛴다
+VALUED = {
+    "-F": "file",
+    "--body-file": "file",
+    "-b": "body",
+    "--body": "body",
+    "-R": "repo",
+    "--repo": "repo",
+}
+NOBODY = {"-w", "--web", "-h", "--help"}
 OPS = set("();<>|&")
+BR = re.compile(r"<br>\s*\n(?!\s*→)")
 FIX = (
     "산문 문단은 항목 하나에 한 줄로 나누고, 명령 출력은 evidence.sh --fold 로 접는다. 라운드 코멘트가 총량에"
     " 막히면 심각도가 모두 낮음인 항목을 바구니마다 접는다(open-pr 의 comment-format.md)."
@@ -76,6 +85,7 @@ def width(s):
 
 def count(h):
     """(총량, [(줄의 글자 수, 줄)]) — 줄은 코드 블록을 뺀 접히지 않은 줄이다."""
+    h = BR.sub(" ", h)
     lines = [(width(x), x.strip()) for x in visible(h, True).splitlines() if x.strip()]
     return width(visible(h)), lines
 
@@ -96,10 +106,9 @@ def posts(cmd, cwd):
     except ValueError:
         deny("게시 명령을 읽지 못해 길이를 세지 못했다. 본문은 파일로 주고 명령을 따로 입력한다.")
     for i, t in enumerate(toks):
-        if os.path.basename(t) != "gh" or tuple(toks[i + 1 : i + 3]) not in SUBS:
+        if os.path.basename(t) != "gh":
             continue
-        body, text, repo = None, None, None
-        j = i + 3
+        words, got, j = [], {}, i + 1
         while j < len(toks) and not set(toks[j]) <= OPS:
             a = toks[j]
             name, val = a, None
@@ -107,30 +116,43 @@ def posts(cmd, cwd):
                 name, val = a.split("=", 1)
             elif re.match(r"^-[FbR].", a):  # 짧은 플래그에 값을 붙인 `-Fx` · `-F=x`
                 name, val = a[:2], a[2:].removeprefix("=")
-            if name in ("-F", "--body-file", "-b", "--body", "-R", "--repo"):
+            if name in VALUED:
                 if val is None:
                     j += 1
                     val = toks[j] if j < len(toks) else ""
-                if name in ("-F", "--body-file"):
-                    body = val
-                elif name in ("-b", "--body"):
-                    text = val
-                else:
-                    repo = val
+                got[VALUED[name]] = val
+            elif name in NOBODY:
+                got["nobody"] = True
+            elif not a.startswith("-") and len(words) < 2:
+                words.append(a)
             j += 1
+        if tuple(words) not in SUBS:
+            continue
+        body, text, repo = got.get("file"), got.get("body"), got.get("repo")
         if body == "-":
             deny(
                 "본문을 표준입력으로 주면 길이를 셀 수 없다. 본문은 파일로 준다(--body-file <파일>)."
             )
         if body is not None:
-            found.append(("file", body if os.path.isabs(body) else os.path.join(cwd, body), repo))
+            path = os.path.expanduser(body)
+            found.append(("file", path if os.path.isabs(path) else os.path.join(cwd, path), repo))
         elif text is not None:
             found.append(("text", text, repo))
+        elif tuple(words) == ("pr", "create") and not got.get("nobody"):
+            deny(
+                "본문 없이 여는 gh pr create(--fill 처럼 커밋으로 채우는 것)는 길이를 셀 수 없다. "
+                "본문은 파일로 준다(--body-file <파일>)."
+            )
     return found
 
 
 def gh(args, cwd):
-    r = subprocess.run(["gh", *args], cwd=cwd, capture_output=True, text=True, timeout=30)
+    try:
+        r = subprocess.run(["gh", *args], cwd=cwd, capture_output=True, text=True, timeout=TIMEOUT)
+    except subprocess.TimeoutExpired:
+        deny(f"길이를 세지 못했다(gh {args[0]} 가 {TIMEOUT}초 안에 끝나지 않았다).")
+    except OSError as e:
+        deny(f"길이를 세지 못했다(gh {args[0]} 를 실행하지 못했다: {e}).")
     if r.returncode:
         deny(f"길이를 세지 못했다(gh {args[0]}: {(r.stderr or r.stdout).strip()[:200]}).")
     return r.stdout
