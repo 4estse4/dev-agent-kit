@@ -428,7 +428,7 @@ try:
     app = str(json.load(open(os.path.join(top.stdout.strip(), '.claude', 'bot.json'), encoding='utf-8'))['app'])
 except (OSError, ValueError, KeyError, TypeError):
     app = ''
-# 셋째 꼴은 App 이름이 필요 없다 — 봇 설정에 App 이름이 없거나 깨져도 판정한다.
+# 셋째 꼴은 App 이름이 필요 없다 — 봇 설정에 App 이름이 없거나 봇 설정을 읽지 못해도 판정한다.
 keyhits = []
 if re.match(r'^[A-Za-z0-9-]+$', app):
     if re.search(r'\.config/' + re.escape(app) + r'(?![\w-])', cmd):

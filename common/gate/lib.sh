@@ -247,7 +247,7 @@ gate_run_empty() {
   fi
   GATE_FAILED+=("$name")
   local detail="$out"
-  [ -z "$detail" ] && detail="(출력 없이 종료코드 ${rc} 로 실패 — 도구가 깨졌을 수 있습니다)"
+  [ -z "$detail" ] && detail="(출력 없이 종료코드 ${rc} 로 실패 — 도구 자체가 고장 났을 수 있습니다)"
   GATE_FAILOUT+=$'\n'"──── ${name} ────"$'\n'"${detail}"$'\n'
   return 0
 }

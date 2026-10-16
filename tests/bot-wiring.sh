@@ -552,7 +552,7 @@ guard "App 이름 앞이 붙은 다른 디렉터리의 key.pem" pass "ls certs/o
 guard "다른 도구의 설정 파일과 프로젝트 인증서" pass "npx vite --config vite.config.ts --https.key certs/key.pem"
 guard ".config 뒤가 붙은 다른 디렉터리와 프로젝트 인증서" pass "ls ~/.config-backup && ls certs/key.pem"
 guard "~/.config 와 이름 앞이 붙은 key.pem" pass "ls ~/.config/nvim && cat certs/dev-key.pem"
-# 셋째 꼴은 App 이름이 필요 없다. 봇 설정에 App 이름이 없거나 깨져도 판정한다
+# 셋째 꼴은 App 이름이 필요 없다. 봇 설정에 App 이름이 없거나 봇 설정을 읽지 못해도 판정한다
 mkdir -p "$T/noapp/.claude"; git -C "$T/noapp" init -q; printf '{"app_id": 1}\n' > "$T/noapp/.claude/bot.json"
 guard "App 이름이 없는 봇 설정에서 glob 으로 읽음" deny "cat ~/.config/*/key.pem" "$T/noapp"
 # Read 도구는 이 훅(Bash)을 거치지 않는다. 설치되는 settings.json 의 deny 가 막는다.

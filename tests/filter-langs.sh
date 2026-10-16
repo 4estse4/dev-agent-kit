@@ -169,7 +169,7 @@ kit_copy() {
 }
 
 # 필터가 빼는 스텝의 본문 한가운데 6칸 주석. YAML 은 그 자리의 주석을 허용한다. 필터가 거기서
-# 건너뛰기를 끝내면 그 스텝의 나머지 줄이 남아 워크플로가 깨진다.
+# 건너뛰기를 끝내면 그 스텝의 나머지 줄이 남아 앞 스텝에 붙는다.
 K2=$(kit_copy mid '{ print } /^        name: install golangci-lint$/ { print "      # 스텝 본문 한가운데의 6칸 주석(tests/filter-langs.sh 가 넣었다)" }')
 if ! grep -q '^      # 스텝 본문 한가운데의 6칸 주석' "$K2/common/ci/gates.yml"; then
   bad "go 스텝 본문에 주석을 넣지 못했다 — gates.yml 의 install golangci-lint 스텝이 바뀌었나"

@@ -63,7 +63,7 @@ claude-code/           Claude Code 가 있어야 의미 있는 것
 | `common/` | **실제 프로젝트 적용은 2026-08 판까지** — 2026-08 의 두 판을 실제 프로젝트에 적용해 결함을 찾아냈다. 지금 판은 실제 프로젝트에 적용하지 않았다. 지금 판에 CI 가 실행하는 검사는 `.github/workflows/` 에 있다 |
 | `claude-code/` 의 statusline | **검증됨** — 상시 사용 중 |
 
-무엇이 실제로 깨졌고 누가 찾아냈는지는 [`docs/dev-log.md`](docs/dev-log.md) 에,
+무엇이 실제로 잘못됐고 누가 찾아냈는지는 [`docs/dev-log.md`](docs/dev-log.md) 에,
 그래서 무엇을 정했는지는 [`docs/adr/`](docs/adr/) 에 있다.
 
 ## 누가 썼나
