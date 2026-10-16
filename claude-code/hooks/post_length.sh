@@ -8,8 +8,9 @@
 # **무엇을 보나.** `gh pr comment <N> --body-file <절대 경로>`(인용 훅과 같은 해석, `kit/round_comment_cmd.py`)와
 # `gh pr create` · `gh issue create` · `gh issue comment` 의 `--body-file` · `-F` · `--body` · `-b`. 명령 안 어디에
 # 있든(다른 명령과 이었어도), 하위 명령 앞이나 사이에 플래그가 있어도(`gh issue -R <레포> create`) 찾는다. `~` 는
-# 홈으로, 상대 경로는 훅 입력의 cwd 로 푼다. 명령 안의 `cd` 는 따라가지 않는다. 본문을 고쳐 쓰는 `gh pr edit` ·
-# `gh issue edit` 는 보지 않는다 — 상한보다 먼저 쓴 긴 본문은 한 줄만 고쳐도 막힌다.
+# 홈으로, 상대 경로는 훅 입력의 cwd 로 푼다. 명령 안의 `cd` 는 따라가지 않는다. 따옴표 밖의 줄바꿈은 `;` 처럼 명령의
+# 경계로 본다. 본문을 고쳐 쓰는 `gh pr edit` · `gh issue edit` 는 보지 않는다. 세면 상한이 생기기 전에 쓴 긴 본문은
+# 한 줄만 고쳐도 막힌다.
 #
 # **어떻게 세나 · 상한은 얼마인가.** `kit/post_length.py` 머리에 있다. 게시할 글을 GitHub 의 markdown API 로 그려
 # 세므로 게시마다 API 를 한 번(-R 이 없으면 레포 조회까지 두 번) 부른다.

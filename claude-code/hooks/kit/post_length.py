@@ -29,7 +29,7 @@ TOTAL_MAX = 2000
 TIMEOUT = 30
 
 # `gh pr comment` 는 인용 훅과 같은 해석(round_comment_cmd)으로 읽는다. 그 밖에 보는 게시 명령이다. 본문을 고쳐 쓰는
-# `gh pr edit` · `gh issue edit` 는 보지 않는다 — 상한보다 먼저 쓴 긴 본문은 한 줄만 고쳐도 막힌다.
+# `gh pr edit` · `gh issue edit` 는 보지 않는다. 세면 상한이 생기기 전에 쓴 긴 본문은 한 줄만 고쳐도 막힌다.
 SUBS = {("pr", "create"), ("issue", "create"), ("issue", "comment")}
 CAND = re.compile(
     r"(?<![\w.-])gh\s+(?:\S+\s+)*?(?:pr|issue)\s+(?:\S+\s+)*?(?:create|comment)(?![\w-])"
@@ -44,7 +44,7 @@ VALUED = {
     "--repo": "repo",
 }
 NOBODY = {"-w", "--web", "-h", "--help"}
-OPS = set("();<>|&")
+OPS = set("();<>|&\n")
 BR = re.compile(r"<br>\s*\n(?!\s*→)")
 FIX = (
     "산문 문단은 항목 하나에 한 줄로 나누고, 명령 출력은 evidence.sh --fold 로 접는다. 라운드 코멘트가 총량에"
@@ -99,7 +99,10 @@ def posts(cmd, cwd):
     if not CAND.search(cmd):
         return found
     try:
-        lex = shlex.shlex(cmd.replace("\\\n", " "), posix=True, punctuation_chars=True)
+        # 따옴표 밖의 줄바꿈은 셸처럼 명령의 경계다. 공백으로 읽던 동안 줄바꿈 뒤 명령의 `-F` · `--web` 이 앞 게시의
+        # 값을 덮어, 상한을 넘는 게시가 통과했다
+        lex = shlex.shlex(cmd.replace("\\\n", " "), posix=True, punctuation_chars="();<>|&\n")
+        lex.whitespace = " \t\r"
         lex.whitespace_split = True
         lex.commenters = ""
         toks = list(lex)

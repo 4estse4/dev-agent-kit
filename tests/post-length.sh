@@ -104,10 +104,15 @@ check "하위 명령 사이의 플래그(gh pr --repo=<레포> create)" deny "gh
 check "이슈 코멘트(gh issue comment --body 인라인)" deny "gh issue comment 7 --body $(rep 라 151)" "151"
 check "다른 명령과 이은 게시" deny "cd $T/w && gh issue create --title t --body-file $T/w/over-line.md" "151"
 check "이은 명령의 인자는 그 게시의 본문이 아니다" allow "gh issue create --title t --body-file $T/w/short.md && echo -F $T/w/over-line.md"
+check "줄바꿈으로 이은 뒤 게시가 앞 게시의 본문을 덮지 않는다" deny "gh issue comment 7 --body-file $T/w/over-line.md
+gh issue comment 8 --body-file $T/w/short.md" "151"
+check "줄바꿈 뒤 명령의 --web 이 앞의 본문 없는 PR 열기를 덮지 않는다" deny "gh pr create --fill
+gh pr view 5 --web" "본문"
 check "짧은 이슈 코멘트는 통과" allow "gh issue comment 7 --body-file $T/w/short.md"
 check "본문을 표준입력으로 주면 막는다" deny "gh issue create --title t --body-file -" "표준입력"
 check "없는 본문 파일은 막는다" deny "gh issue create --title t --body-file $T/w/none.md" "읽지 못"
 check "본문 없는 PR 열기(--web)는 보지 않는다" allow "gh pr create --web"
+check "도움말(gh pr create --help)은 보지 않는다" allow "gh pr create --help"
 check "본문을 커밋에서 채우는 PR 열기(--fill)는 막는다" deny "gh pr create --fill" "본문"
 check "--fill 에 본문 파일을 함께 주면 그 파일을 센다" allow "gh pr create --fill --body-file $T/w/short.md"
 check "글자만 든 검색은 보지 않는다" allow "grep -rn 'gh issue create --body-file' $T/w"
