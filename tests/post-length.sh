@@ -78,7 +78,7 @@ printf 'x\n' > "$T/w/br.md"
 printf 'x\n' > "$T/w/br-prose.md"
 { printf '<p dir="auto">%s<br>\n%s</p>\n' "$(rep 가 100)" "$(rep 나 100)"; } > "$T/w/br-prose.md.html"
 mkdir -p "$T/home"; rep 라 151 > "$T/home/over.md"
-# 리뷰 전문 안에 접힌 블록이 또 있는 글. 바깥 블록의 끝은 짝을 센 </details> 다
+# 리뷰 전문 안에 접힌 블록이 또 있는 글. 바깥 블록의 끝은 짝을 세어 찾은 </details> 다
 printf 'x\n' > "$T/w/nested.md"
 { echo '<p dir="auto">짧은 머리</p>'; echo '<details>'; echo '<summary>콜드 리뷰 전문</summary>'
   echo '<p dir="auto">앞</p>'; echo '<details>'; echo '<summary>repro.sh</summary>'

@@ -71,7 +71,7 @@ def deny(why):
 
 
 def fold(h):
-    """접힌 블록(`<details>`)마다 그 `<summary>` 만 남긴다. 블록의 끝은 짝을 센 `</details>` 다 — 리뷰 전문 안에
+    """접힌 블록(`<details>`)마다 그 `<summary>` 만 남긴다. 블록의 끝은 짝을 세어 찾은 `</details>` 다 — 리뷰 전문 안에
     접힌 블록이 또 있으면, 처음 나오는 `</details>` 에서 끝내던 동안 그 뒤의 전문이 접히지 않은 글로 세어졌다.
     펼쳐 둔 블록(`<details open>`)은 그대로 둔다."""
     out, i = [], 0
