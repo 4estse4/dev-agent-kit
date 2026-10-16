@@ -97,6 +97,7 @@ check "PR 본문(gh pr create)" deny "gh pr create --title t --body-file $T/w/ov
 check "PR 본문 고침(gh pr edit)은 보지 않는다" allow "gh pr edit 5 --body-file $T/w/over-line.md"
 check "이슈 본문(gh issue create -F 상대 경로)" deny "gh issue create --title t -F over-line.md" "151"
 check "이슈 본문 고침(gh issue edit)은 보지 않는다" allow "gh issue edit 7 --body-file=$T/w/over-line.md"
+check "게시와 이은 고쳐 쓰는 명령도 보지 않는다" allow "gh pr edit 5 --body-file $T/w/over-line.md && gh issue edit 7 --body-file $T/w/over-line.md && gh issue comment 7 --body-file $T/w/short.md"
 check "하위 명령 사이의 플래그(gh issue -R <레포> create)" deny "gh issue -R o/r create --title t --body-file $T/w/over-line.md" "151"
 check "하위 명령 앞의 플래그(gh -R <레포> issue comment)" deny "gh -R o/r issue comment 7 --body-file $T/w/over-line.md" "151"
 check "하위 명령 사이의 플래그(gh pr --repo=<레포> create)" deny "gh pr --repo=o/r create --title t --body-file $T/w/over-line.md" "151"
