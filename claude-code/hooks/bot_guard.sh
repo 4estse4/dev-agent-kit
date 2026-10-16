@@ -549,7 +549,7 @@ def session_run(prog, *a):
              os.path.join(botdir, 'session-env'), prog, *a], cwd=cwd, capture_output=True, text=True,
             timeout=START + BUDGET - time.monotonic())
     except subprocess.TimeoutExpired:
-        deny("막기 훅이 실행된 지 %d초가 지나도 `%s` 이 끝나지 않아 막았다. GitHub 이 응답하지 않는 것 같으니 잠시 "
+        deny("가드 훅이 실행된 지 %d초가 지나도 `%s` 이 끝나지 않아 막았다. GitHub 이 응답하지 않는 것 같으니 잠시 "
              "뒤 다시 실행한다." % (BUDGET, ' '.join((prog,) + a)))
 
 
@@ -702,7 +702,7 @@ for a in git_calls:
         continue
     urls = push_urls(a)
     if not urls:
-        deny("이 푸시의 주소를 풀지 못해 막는다. 막기 훅은 푸시 주소가 github.com 의 SSH 주소가 아닌지, "
+        deny("이 푸시의 주소를 풀지 못해 막는다. 가드 훅은 푸시 주소가 github.com 의 SSH 주소가 아닌지, "
              "곧 사람 계정으로 푸시하지 않는지 확인한 뒤에 푸시를 통과시킨다. 원격 이름이나 URL 을 적어 다시 "
              "실행한다.")
     for u in urls:

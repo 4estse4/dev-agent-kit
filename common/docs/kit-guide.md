@@ -207,7 +207,7 @@ Approve 가 있는지 확인해 머지한다.
    사용자의 git 설정 파일은 바꾸지 않는다.
 2. App 의 개인키를 만들어 `~/.config/<App 이름>/key.pem` 에 둔다(권한 600). 커밋하지 않는다. 키를 두고
    확인하는 일은 사람이 터미널에서 한다. 세션이 이 자리를 읽는 명령은 막힌다 — 설치되는 `settings.json` 의 deny
-   `Read(~/.config/*/key.pem)` 이 Read 도구와 `cat` 같은 파일 명령을, 막기 훅이 `.config/<App 이름>` 이나
+   `Read(~/.config/*/key.pem)` 이 Read 도구와 `cat` 같은 파일 명령을, 가드 훅이 `.config/<App 이름>` 이나
    `<App 이름>/key.pem` 이 든 명령과 `.config` · `key.pem` 이 함께 든 명령을 막는다. 둘 다 이름이 적힌 경로로 알아보므로
    디렉터리 단위로 읽는 명령(`grep -r … ~/.config`)과 스크립트 파일 안의 경로는 막지 못한다(아래 「무엇을 못
    막나」). 토큰은 `bot_token.sh` 가 받는다.
@@ -216,7 +216,7 @@ Approve 가 있는지 확인해 머지한다.
    리뷰를 요구하지 않으면 CI 의 검사가 모두 통과한 PR 을 머지할 수 있다. Workflows 쓰기로 그 CI 자체도 바꿀 수 있다.
 4. `.claude/bot.json` 을 커밋한다: `{"app_id": <App ID>, "app": "<App 이름>"}`. App 이름은 App
    페이지 URL(`github.com/apps/<App 이름>`)의 이름이고, 봇 계정은 `<App 이름>[bot]` 이다. App 이름을
-   `kit-bot` 으로 짓지 않는다 — 막기 훅이 명령 글자의 그 이름을 봇 디렉터리(`<git 공통 디렉터리>/kit-bot/`)로
+   `kit-bot` 으로 짓지 않는다 — 가드 훅이 명령 글자의 그 이름을 봇 디렉터리(`<git 공통 디렉터리>/kit-bot/`)로
    읽어, App 이름이 든 명령(봇 계정의 PR 을 거르는 `gh pr list --author kit-bot[bot]` 등)을 막는다.
 5. 세션을 다시 시작한다. 연결하지 못하면 그 까닭이 세션에 전달된다. 직접 보려면 레포에서
    `bash .claude/hooks/bot_token.sh` 를 실행한다 — 성공하면 봇 디렉터리의 경로를, 실패하면 까닭을
@@ -236,7 +236,7 @@ App 설치의 저장소 목록에 그 레포를 더하고, 그 레포에 `.claud
 git 의존성 포함) 봇 토큰을 쓴다. 그래서 설치 범위 밖의 비공개 레포는 사람의 터미널에서는 받아지지만 세션에서는
 fetch · clone 이 안 된다. 세션에서 써야 하면 그 레포도 App 설치의 저장소 목록에 더한다.
 사람의 git 설정이 github.com 의 https 를 SSH 로 바꾸면(`url."git@github.com:".insteadOf` ·
-`pushInsteadOf`) 세션의 푸시에 SSH 키, 곧 사람 계정이 쓰이므로 막기 훅이 그 푸시를 막는다. 이 레포에서만
+`pushInsteadOf`) 세션의 푸시에 SSH 키, 곧 사람 계정이 쓰이므로 가드 훅이 그 푸시를 막는다. 이 레포에서만
 그 규칙을 끄려면 소유자까지 적은 더 긴 규칙을 둔다 — git 은 맞는 규칙 가운데 가장 긴 것을 쓴다:
 
 ```bash
@@ -257,18 +257,18 @@ git config --local url."https://github.com/<소유자>/".pushInsteadOf "https://
 여럿이면 필요 승인 수를 GitHub 의 브랜치 보호 설정에서 올린다(`--protect` 는 하나로 둔다). `merge-pr` 은
 GitHub 이 그 수로 계산한 판정(`reviewDecision`)까지 본다.
 
-**무엇을 못 막나.** gh 명령 막기는 명령 글자로 알아본다. 스크립트 파일이나 인라인 인터프리터 안의
+**무엇을 못 막나.** 가드 훅은 명령 글자로 알아본다. 스크립트 파일이나 인라인 인터프리터 안의
 호출(그 안의 `git push` 포함)은 못 보고, 명령 글자에 `GH_TOKEN` 같은 낱말이 있으면 검색이나 커밋 메시지도 막는다(그 글자는
 파일로 옮겨 전달한다). 그래서 세션이 봇 연결을 지우는 스크립트를 새로 써서 실행하면 사람 계정으로 올라간다. App 개인키도
 같다 — 스크립트 파일 안의 경로와, `key.pem` 을 적지 않고 디렉터리 단위로 읽는 명령(`grep -r PRIVATE ~/.config`)은
-deny 규칙도 막기 훅도 막지 못한다. SSH 설정의 호스트 별칭으로 적은 원격(`git@github-me:me/r.git`)은 github.com 인지
+deny 규칙도 가드 훅도 막지 못한다. SSH 설정의 호스트 별칭으로 적은 원격(`git@github-me:me/r.git`)은 github.com 인지
 알 수 없어 그 푸시를 막지 못한다 — 그 푸시에는 SSH 키, 곧 사람 계정이 쓰인다. origin 이 별칭이면 세션이
 봇 계정에 연결되지 않아 푸시가 막히므로, origin 이 아닌 원격에 별칭을 쓴 레포에서만 생긴다. 형식대로
 입력한 명령의 실수를 막는 것이고, 일부러 하는 우회는 CI 와 브랜치 보호의 몫이다. 권한 프롬프트의 허락은
 사람이 그 글을 읽었다는 것까지 보여 주지 않는다.
 
-막기 훅의 `timeout`(`.claude/settings.json`, 기본값 90초)을 `BUDGET`(`bot_guard.sh`, 기본값 60초) 이하로 줄이면,
-조회가 멈췄을 때 Claude Code 가 막기 훅을 먼저 끝내 푸시가 검사 없이 실행된다.
+가드 훅의 `timeout`(`.claude/settings.json`, 기본값 90초)을 `BUDGET`(`bot_guard.sh`, 기본값 60초) 이하로 줄이면,
+조회가 멈췄을 때 Claude Code 가 가드 훅을 먼저 끝내 푸시가 검사 없이 실행된다.
 
 ## 7. 킷 자체의 미결 항목
 

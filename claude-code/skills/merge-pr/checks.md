@@ -161,7 +161,7 @@
   면 3절의 「봇 설정이 있을 때」를 따른다 — 결정 코멘트를 올리고 auto-merge 를 켠 뒤 Approve 를 요청한다.
   **다른 상태에서 `--auto` 를 주지 마라.** gh 는 바로 머지할 수 있는 PR(`CLEAN` · `HAS_HOOKS` · `UNSTABLE`)에서
   `--auto` 를 무시하고 그 자리에서 머지한다(gh v2.92.0 `pkg/cmd/pr/merge/merge.go` 의 `isImmediatelyMergeable`).
-  승인을 요구하지 않는 레포(`reviewDecision` 이 비었다)에서는 검사가 끝나는 순간 Approve 없이 머지된다. 막기
+  승인을 요구하지 않는 레포(`reviewDecision` 이 비었다)에서는 검사가 끝나는 순간 Approve 없이 머지된다. 가드
   훅(`bot_guard.sh`)도 그 상태의 `--auto` 를 막는다. `mergeStateStatus` 가 `UNKNOWN` 이면 GitHub 이 아직 계산하는 것이라
   잠시 뒤 다시 본다. `gh api` 는 설치되는 `settings.json` 의 `ask` 에 있어 권한 프롬프트가 하나 표시된다. 읽기뿐이라
   승인하면 그대로 진행한다.

@@ -52,7 +52,7 @@ if '-w' in a:
 EOF
 chmod +x "$T/bin/curl"
 # git 의 자격 증명 도우미로 불릴 가짜 gh. 세션 환경에서 git 이 봇(gh)에게 자격 증명을 받는지 본다.
-# 막기 훅이 auto-merge 를 판정하려고 부르는 `gh pr view` · `gh pr list` 에는 STUB_PR_VIEW · STUB_PR_LIST 를
+# 가드 훅이 auto-merge 를 판정하려고 부르는 `gh pr view` · `gh pr list` 에는 STUB_PR_VIEW · STUB_PR_LIST 를
 # 돌려준다. STUB_GH_FAIL 이 있으면 그 조회가 실패하고, STUB_GH_LOG 가 있으면 받은 인자를 적는다.
 # STUB_GH_SLEEP 이 있으면 그 초만큼 답하지 않는다(네트워크가 멈춘 조회). `exec` 로 기다려서, 조회를 끝내면
 # 기다리던 프로세스도 함께 끝난다.
@@ -121,7 +121,7 @@ guard() {
 ok() { if eval "$2" 2>/dev/null; then echo "  ✓ $1"; else echo "  ✗ $1"; fail=1; fi; }
 no_token_in_out() { ok "$1 — 출력에 토큰이 없다" '! printf "%s" "$OUT" | grep -qF ghs_stubtoken'; }
 
-# 막기 훅이 부르는 GitHub 조회가 멈추면 훅은 settings 의 timeout 에 닿는다. Claude Code 는 그렇게 취소한 훅의
+# 가드 훅이 부르는 GitHub 조회가 멈추면 훅은 settings 의 timeout 에 닿는다. Claude Code 는 그렇게 취소한 훅의
 # 판정 없이 명령을 진행한다(공식 문서 hooks 「Timeouts」) — `git push` 는 allow 라서 검사 없이 푸시된다.
 # 하네스는 Claude Code 처럼 settings 의 timeout 에서 훅을 끝내고, 그렇게 끝난 것을 판정 없음으로 적는다.
 # 훅이 판정을 낼 때까지 기다리므로 여기서 백그라운드로 시작해 다른 검사와 겹치고, 결과는 끝에서 본다.
@@ -130,7 +130,7 @@ LIMIT=$(python3 -c 'import json, sys
 s = json.load(open(sys.argv[1]))
 print(min(h["timeout"] for g in s["hooks"]["PreToolUse"] for h in g["hooks"] if "bot_guard.sh" in h["command"]))' \
   "$KIT/claude-code/settings.json" 2>/dev/null)
-[ -n "$LIMIT" ] || { echo "  ✗ settings.json 에서 막기 훅의 timeout 을 읽지 못했다"; exit 1; }
+[ -n "$LIMIT" ] || { echo "  ✗ settings.json 에서 가드 훅의 timeout 을 읽지 못했다"; exit 1; }
 cat > "$T/slow.py" <<'EOF'
 import json, os, signal, subprocess, sys, time
 limit, hook, d, cmd = float(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4]
@@ -244,7 +244,7 @@ session "CLAUDE_ENV_FILE 없음" "$R" no
 ok "CLAUDE_ENV_FILE 이 없으면 연결하지 못했다고 알린다" 'printf "%s" "$OUT" | grep -qF CLAUDE_ENV_FILE && [ ! -f "$BOTDIR/wired/s1" ]'
 no_token_in_out "CLAUDE_ENV_FILE 없음"
 
-echo "── gh 명령 막기(bot_guard.sh)"
+echo "── gh 명령 가드 훅(bot_guard.sh)"
 repo "$R" "" no
 guard "봇 설정이 없으면 막지 않는다" pass "gh pr comment 1 --body-file /tmp/x.md"
 guard "봇 설정이 없으면 사람 계정 게시 명령도 막지 않는다(스크립트가 봇 설정이 없다며 끝난다)" pass "bash $H/human_comment.sh 1"
@@ -627,8 +627,8 @@ for n in "${!SLOW_NAMES[@]}"; do
   case "$out" in
     cancel*) echo "  ✗ 막기: ${name} — settings 의 timeout(${LIMIT}초)에 닿아 취소됐다. Claude Code 는 판정 없이 명령을 진행한다"; fail=1 ;;
     *'"permissionDecision": "deny"'*)
-      if ! printf '%s' "$out" | grep -qF -- "${SLOW_MUST[$n]}" || ! printf '%s' "$out" | grep -qE "막기 훅이 실행된 지 [0-9]+초가 지나도"; then
-        echo "  ✗ 막기: ${name} — 사유에 「${SLOW_MUST[$n]}」나 「막기 훅이 실행된 지 N초가 지나도」가 없다: ${out}"; fail=1
+      if ! printf '%s' "$out" | grep -qF -- "${SLOW_MUST[$n]}" || ! printf '%s' "$out" | grep -qE "가드 훅이 실행된 지 [0-9]+초가 지나도"; then
+        echo "  ✗ 막기: ${name} — 사유에 「${SLOW_MUST[$n]}」나 「가드 훅이 실행된 지 N초가 지나도」가 없다: ${out}"; fail=1
       else
         echo "  ✓ 막기: ${name} (deny, ${took#done }초 · settings 의 timeout ${LIMIT}초)"
       fi ;;
