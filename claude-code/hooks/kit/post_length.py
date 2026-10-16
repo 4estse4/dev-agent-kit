@@ -46,6 +46,8 @@ VALUED = {
 NOBODY = {"-w", "--web", "-h", "--help"}
 OPS = set("();<>|&\n")
 BR = re.compile(r"<br>\s*\n(?!\s*→)")
+OPEN = re.compile(r"<details>")
+TAG = re.compile(r"<details(?:\s[^>]*)?>|</details>")
 FIX = (
     "산문 문단은 항목 하나에 한 줄로 나누고, 명령 출력은 evidence.sh --fold 로 접는다. 라운드 코멘트가 총량에"
     " 막히면 심각도가 모두 낮음인 항목을 바구니마다 접는다(open-pr 의 comment-format.md)."
@@ -68,12 +70,28 @@ def deny(why):
     sys.exit(0)
 
 
-def visible(h, drop_pre=False):
-    def summary(m):
-        s = re.search(r"<summary>(.*?)</summary>", m.group(0), flags=re.S)
-        return s.group(1) if s else ""
+def fold(h):
+    """접힌 블록(`<details>`)마다 그 `<summary>` 만 남긴다. 블록의 끝은 짝을 센 `</details>` 다 — 리뷰 전문 안에
+    접힌 블록이 또 있으면, 처음 나오는 `</details>` 에서 끝내던 동안 그 뒤의 전문이 접히지 않은 글로 세어졌다.
+    펼쳐 둔 블록(`<details open>`)은 그대로 둔다."""
+    out, i = [], 0
+    while (m := OPEN.search(h, i)) is not None:
+        out.append(h[i : m.start()])
+        depth, end = 0, len(h)
+        for t in TAG.finditer(h, m.start()):
+            depth += -1 if t.group(0) == "</details>" else 1
+            if depth == 0:
+                end = t.end()
+                break
+        s = re.search(r"<summary>(.*?)</summary>", h[m.start() : end], flags=re.S)
+        out.append(s.group(1) if s else "")
+        i = end
+    out.append(h[i:])
+    return "".join(out)
 
-    h = re.sub(r"<details>.*?</details>", summary, h, flags=re.S)
+
+def visible(h, drop_pre=False):
+    h = fold(h)
     if drop_pre:
         h = re.sub(r"<pre.*?</pre>", "", h, flags=re.S)
     return html.unescape(re.sub(r"<[^>]+>", "", h))

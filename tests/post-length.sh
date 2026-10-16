@@ -78,6 +78,12 @@ printf 'x\n' > "$T/w/br.md"
 printf 'x\n' > "$T/w/br-prose.md"
 { printf '<p dir="auto">%s<br>\n%s</p>\n' "$(rep 가 100)" "$(rep 나 100)"; } > "$T/w/br-prose.md.html"
 mkdir -p "$T/home"; rep 라 151 > "$T/home/over.md"
+# 리뷰 전문 안에 접힌 블록이 또 있는 글. 바깥 블록의 끝은 짝을 센 </details> 다
+printf 'x\n' > "$T/w/nested.md"
+{ echo '<p dir="auto">짧은 머리</p>'; echo '<details>'; echo '<summary>콜드 리뷰 전문</summary>'
+  echo '<p dir="auto">앞</p>'; echo '<details>'; echo '<summary>repro.sh</summary>'
+  echo '<pre class="notranslate"><code class="notranslate">x</code></pre>'; echo '</details>'
+  printf '<p dir="auto">%s</p>\n' "$(rep 가 200)"; echo '</details>'; } > "$T/w/nested.md.html"
 
 echo "상한"
 check "상한 그대로인 글은 통과" allow "gh pr comment 5 --body-file $T/w/at-limit.md"
@@ -87,6 +93,7 @@ check "짧은 글은 통과" allow "gh pr comment 5 --body-file $T/w/short.md"
 
 echo "접힌 부분"
 check "접힌 출력은 summary 만 센다" allow "gh pr comment 5 --body-file $T/w/folded.md"
+check "접힌 블록 안의 접힌 블록 뒤도 바깥 블록이 끝날 때까지 접혀 있다" allow "gh pr comment 5 --body-file $T/w/nested.md"
 check "펼쳐 둔 <details open> 은 안을 센다" deny "gh pr comment 5 --body-file $T/w/open-fold.md" "총량"
 check "펼친 코드 블록의 긴 줄은 한 줄 검사에 안 든다" allow "gh pr comment 5 --body-file $T/w/pre-long-line.md"
 check "<br> 로 나뉜 →  줄은 따로 센다" allow "gh pr comment 5 --body-file $T/w/br.md"
@@ -108,6 +115,9 @@ check "줄바꿈으로 이은 뒤 게시가 앞 게시의 본문을 덮지 않�
 gh issue comment 8 --body-file $T/w/short.md" "151"
 check "줄바꿈 뒤 명령의 --web 이 앞의 본문 없는 PR 열기를 덮지 않는다" deny "gh pr create --fill
 gh pr view 5 --web" "본문"
+check "따옴표 안의 줄바꿈은 본문에 남아 목록 항목마다 센다" allow "gh issue comment 7 --body \"- $(rep 가 60)
+- $(rep 나 60)
+- $(rep 다 60)\""
 check "짧은 이슈 코멘트는 통과" allow "gh issue comment 7 --body-file $T/w/short.md"
 check "본문을 표준입력으로 주면 막는다" deny "gh issue create --title t --body-file -" "표준입력"
 check "없는 본문 파일은 막는다" deny "gh issue create --title t --body-file $T/w/none.md" "읽지 못"
