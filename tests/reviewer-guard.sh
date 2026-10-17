@@ -95,6 +95,15 @@ run 막힘 cold-reviewer $'cat > /tmp/s.sh <<E-1\nx\nE-1\ngh pr comment 1 -b x'
 run 통과 cold-reviewer $'cat > /tmp/s.sh <<\\EOF\ngh pr comment 1 -b x\nEOF'
 run 막힘 cold-reviewer $'cat > /tmp/s.sh <<\\EOF\nx\nEOF\ngh pr comment 1 -b x'
 run 통과 cold-reviewer $'cat > /tmp/s.sh <<"END.1"\ngit push\nEND.1\nbash -n /tmp/s.sh'
+# 끝말은 낱말 전체에서 따옴표를 뗀 것이다 · 줄 끝의 | 는 본문 뒤의 줄로 이어진다(사람이 PR 을 열기 전에 짚었다)
+run 막힘 cold-reviewer $'cat > /dev/null <<E"O"F\nx\nEOF\ngh pr comment 1 -b x'
+run 막힘 cold-reviewer $'cat <<EOF |\ngh pr comment 1 -b x\nEOF\nbash'
+run 통과 cold-reviewer $'cat <<EOF |\ngh pr comment 1 -b x\nEOF\ngrep -c gh'
+# 끝말 줄 없이 끝난 heredoc 은 어디서 닫히는지 판정하지 못한 것이라 막는다
+run 막힘 cold-reviewer $'cat > /tmp/s.sh <<EOF\ngh pr view 1'
+# 따옴표 안의 << 는 heredoc 이 아니다 — 리뷰어가 heredoc 꼴을 검색한다
+run 통과 cold-reviewer "grep -n \"<<'EOF'\" claude-code/skills/open-pr/body.md"
+run 통과 cold-reviewer "grep -c '<<EOF' tests/pr-evidence.sh # <<X 는 주석"
 
 # 메인 세션과 다른 에이전트는 이 가드가 보지 않는다
 run 통과 '' 'gh pr comment 7 --body-file /tmp/x.md'

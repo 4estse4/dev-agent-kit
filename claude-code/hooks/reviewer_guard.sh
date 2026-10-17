@@ -21,11 +21,14 @@
 # (아래). heredoc 을 받는 명령 · 묶음(`{ …; }` · `( … )`)이나 같은 파이프의 그 뒤 명령이 표준입력을 명령으로 실행하면
 # 본문이 그대로 실행되므로 본문 줄도 명령으로 본다. 셸(`bash` · `sh` · `zsh` · `dash` · `ksh`, 경로를 붙인 것 포함)과
 # `source` · `.` 로 `/dev/stdin` 을 읽는 명령이 그렇다(`bash <<'EOF'` · `cat <<'EOF' | bash` · `test … || bash <<EOF` ·
-# `{ bash; } <<EOF` · `source /dev/stdin <<EOF`). heredoc 은 bash 가 닫는 자리에서 닫는다 — 끝말은 따옴표 · `\` 를 뗀
-# 낱말이다(`<<E-1` · `<<\EOF` · `<<"END.1"`). 한때 본문을 늘 보지 않아 셸이 받은 게시 명령이 통과했고, 그다음엔 `||` 뒤 ·
-# `!` · 묶음 · `source` 로 받은 것과 낱말 글자 밖의 끝말이 남았다. 사람이 PR 을 열기 전에 두 번 짚었다.
+# `{ bash; } <<EOF` · `source /dev/stdin <<EOF`). 여는 줄이 `|` · `&&` · `||` 로 끝나면 명령이 본문 뒤의 줄로 이어지므로
+# 그 줄까지 붙여 판정한다(`cat <<EOF |` · 본문 · `EOF` · `bash`). heredoc 은 bash 가 닫는 자리에서 닫는다 — 끝말은 낱말
+# 전체에서 따옴표 · `\` 를 뗀 것이다(`<<E-1` · `<<\EOF` · `<<E"O"F` 는 `EOF`). 따옴표 · 주석 안의 `<<` 는 heredoc 이
+# 아니다. 한때 본문을 늘 보지 않아 셸이 받은 게시 명령이 통과했고, 그다음엔 `||` 뒤 · `!` · 묶음 · `source` 로 받은 것,
+# 끝말을 다르게 읽은 것, 본문 뒤로 이어지는 파이프가 남았다. 사람이 PR 을 열기 전에 세 번 짚었다.
 #
-# **판정 못 하면 막는다.** 훅 입력을 못 읽음 · 따옴표가 닫히지 않아 명령을 나누지 못함.
+# **판정 못 하면 막는다.** 훅 입력을 못 읽음 · 따옴표가 닫히지 않아 명령을 나누지 못함 · heredoc 의 끝말을 읽지 못하거나
+# 끝말 줄 없이 끝남(어디서 닫히는지 모르면 뒤의 줄이 명령인지도 모른다).
 #
 # **무엇을 못 막나.** 형식대로 입력한 명령의 실수를 막는다. 명령 이름을 꾸민 것(변수 · 별칭 · 낱말 안의 따옴표나 `\`),
 # 스크립트 파일 안의 명령, `bash -c` · `eval` 안의 명령, 셸에 here-string(`<<<`)으로 준 명령, 다른 명령의 인자로 실행되는
@@ -172,30 +175,90 @@ def feeds_shell(line):
     return feeds(parse(tokens)[0])
 
 
-# heredoc 을 여는 자리와 끝말. bash 처럼 따옴표 · \ 를 뗀 낱말이 끝말이다. `<<<`(here-string)는 heredoc 이 아니다
-OPEN = re.compile(r'(?<!<)<<(?!<)(-?)[ \t]*(?:\'([^\']*)\'|"([^"]*)"|\\?([^\s;&|<>()\'"]+))')
+def heredocs(line):
+    """여는 줄에서 따옴표 · 주석 밖의 heredoc 들을 (앞 탭을 떼나, 끝말) 로 낸다. `<<<`(here-string)는 heredoc 이 아니다.
+    끝말은 bash 처럼 낱말 전체에서 따옴표와 `\\` 를 뗀 것이다(`<<E"O"F` 는 `EOF`). 끝말을 읽지 못하면 ValueError."""
+    out, i, n, q = [], 0, len(line), None
+    while i < n:
+        c = line[i]
+        if q:
+            if c == q:
+                q = None
+            elif c == '\\' and q == '"':
+                i += 1
+            i += 1
+            continue
+        if c in '\'"':
+            q = c
+        elif c == '\\':
+            i += 1
+        elif c == '#' and (i == 0 or line[i - 1] in ' \t;&|('):
+            break                 # 주석
+        elif line.startswith('<<', i) and not line.startswith('<<<', i) and (i == 0 or line[i - 1] != '<'):
+            i += 2
+            tabs = i < n and line[i] == '-'
+            i += 1 if tabs else 0
+            while i < n and line[i] in ' \t':
+                i += 1
+            word, wq = [], None
+            while i < n:
+                c = line[i]
+                if wq:
+                    if c == wq:
+                        wq = None
+                    else:
+                        word.append(c)
+                elif c in '\'"':
+                    wq = c
+                elif c == '\\' and i + 1 < n:
+                    i += 1
+                    word.append(line[i])
+                elif c in ' \t;&|<>()':
+                    break
+                else:
+                    word.append(c)
+                i += 1
+            if wq or not word:
+                raise ValueError(line)
+            out.append((tabs, ''.join(word)))
+            continue
+        i += 1
+    return out
 
 
 def drop_heredocs(text):
-    """heredoc 본문 줄을 뺀다. 여는 줄과 그 뒤의 명령은 남긴다. 셸이 받는 heredoc 은 본문이 실행되므로 남긴다."""
-    out, waiting = [], []
-    for line in text.split('\n'):
-        if waiting:
-            tabs, word, keep = waiting[0]
-            if (line.lstrip('\t') if tabs else line) == word:
-                waiting.pop(0)
-            elif keep:
-                out.append(line)
-            continue
+    """heredoc 본문 줄을 뺀다. 여는 줄과 그 뒤의 명령은 남긴다. 셸이 받는 heredoc 은 본문이 실행되므로 남긴다.
+    여는 줄이 `|` · `&&` · `||` 로 끝나면 명령은 본문 뒤의 줄로 이어지므로 그 줄까지 붙여 판정한다. 끝말 줄 없이 끝나면
+    어디서 닫히는지 모르므로 ValueError."""
+    lines = text.split('\n')
+    out, i = [], 0
+    while i < len(lines):
+        line = lines[i]
         out.append(line)
-        opened = list(OPEN.finditer(line))
-        keep = bool(opened) and feeds_shell(line)
-        for m in opened:
-            waiting.append((m.group(1) == '-', next(g for g in m.groups()[1:] if g is not None), keep))
+        i += 1
+        bodies = []
+        for tabs, word in heredocs(line):
+            while i < len(lines) and (lines[i].lstrip('\t') if tabs else lines[i]) != word:
+                bodies.append(lines[i])
+                i += 1
+            if i >= len(lines):
+                raise ValueError(word)
+            i += 1                # 끝말 줄
+        if not bodies:
+            continue
+        whole = line
+        if re.search(r'(\||&&)\s*$', line) and i < len(lines):
+            whole = line + ' ' + lines[i]
+        if feeds_shell(whole):
+            out.extend(bodies)
     return '\n'.join(out)
 
 
-lex = shlex.shlex(drop_heredocs(cmd), posix=True, punctuation_chars=';&|()<>\n')
+try:
+    text = drop_heredocs(cmd)
+except ValueError:
+    deny("리뷰어 가드가 heredoc 의 끝말이나 닫는 줄을 찾지 못해 판정하지 못했다. 콜드 리뷰어의 명령이라 막았다.")
+lex = shlex.shlex(text, posix=True, punctuation_chars=';&|()<>\n')
 lex.whitespace = ' \t\r'
 lex.whitespace_split = True
 try:
