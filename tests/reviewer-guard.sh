@@ -76,6 +76,25 @@ run 막힘 cold-reviewer $'/bin/zsh -s <<-EOF\n\tclaude -p x\n\tEOF'
 run 막힘 cold-reviewer $'cd /tmp && bash <<EOF\ngh issue comment 1 -b x\nEOF'
 run 통과 cold-reviewer $'bash <<\'EOF\'\ngh pr view 1 --json title\ngit -C /tmp/r log -1\nEOF'
 run 통과 cold-reviewer $'bash -n /tmp/a.sh; cat > /tmp/s.sh <<\'EOF\'\ngh pr comment 1 -b x\nEOF'
+# 셸이 받는 꼴은 `||` 뒤 · `!` · 경로를 붙인 env · 묶음 · source 로도 온다(사람이 PR 을 열기 전에 짚었다)
+run 막힘 cold-reviewer $'test -d /tmp || bash <<EOF\ngh pr comment 1 -b x\nEOF'
+run 막힘 cold-reviewer $'! bash <<\'EOF\'\ngh pr comment 1 -b x\nEOF'
+run 막힘 cold-reviewer $'env A=1 /usr/bin/env bash <<EOF\ngh pr comment 1 -b x\nEOF'
+run 막힘 cold-reviewer $'{ bash; } <<\'EOF\'\ngh pr comment 1 -b x\nEOF'
+run 막힘 cold-reviewer $'(bash) <<EOF\ngh pr comment 1 -b x\nEOF'
+run 막힘 cold-reviewer $'cat <<EOF | (bash -s)\ngh pr comment 1 -b x\nEOF'
+run 막힘 cold-reviewer $'source /dev/stdin <<\'EOF\'\ngh pr comment 1 -b x\nEOF'
+run 막힘 cold-reviewer $'. /dev/stdin <<\'EOF\'\ngh pr comment 1 -b x\nEOF'
+# 명령 앞의 경로를 붙인 감싸는 명령 · 예약어 · 묶음도 건너뛰고 첫 낱말을 본다
+run 막힘 cold-reviewer '/usr/bin/env gh pr comment 1 -b x'
+run 막힘 cold-reviewer '{ gh pr comment 7 -b x; }'
+run 막힘 cold-reviewer 'if true; then gh pr comment 7 -b x; fi'
+run 막힘 cold-reviewer 'for i in 1; do git push; done'
+# heredoc 을 닫는 자리는 bash 가 닫는 자리와 같다 — 끝말에 낱말 글자 밖의 글자가 있거나 앞에 \ 를 붙인 꼴
+run 막힘 cold-reviewer $'cat > /tmp/s.sh <<E-1\nx\nE-1\ngh pr comment 1 -b x'
+run 통과 cold-reviewer $'cat > /tmp/s.sh <<\\EOF\ngh pr comment 1 -b x\nEOF'
+run 막힘 cold-reviewer $'cat > /tmp/s.sh <<\\EOF\nx\nEOF\ngh pr comment 1 -b x'
+run 통과 cold-reviewer $'cat > /tmp/s.sh <<"END.1"\ngit push\nEND.1\nbash -n /tmp/s.sh'
 
 # 메인 세션과 다른 에이전트는 이 가드가 보지 않는다
 run 통과 '' 'gh pr comment 7 --body-file /tmp/x.md'
