@@ -10,7 +10,8 @@
 #   <kit>/install.sh <경로> --dry-run    아무것도 바꾸지 않고 무엇이 달라질지만 본다
 #
 # 킷 소유는 .kit/** 와, 킷이 .claude/ 에 놓는 파일(settings.json 은 빼고)과 docs/process/** 다 —
-# 재설치가 **덮어쓴다.** 프로젝트 소유는 CLAUDE.md · .claude/settings.json · CI · 린터 설정과,
+# 재설치가 **덮어쓴다.** .kit/ 아래에서 identity · gate.conf 는 프로젝트 소유고, drafts/ 는 세션이 PR 본문 조각을
+# 두는 자리라(git 이 무시한다) 재설치가 남긴다. 프로젝트 소유는 CLAUDE.md · .claude/settings.json · CI · 린터 설정과,
 # 템플릿으로 놓는 docs/ 문서(SPEC · dev-log 등) · PR 템플릿이다. 이미 있으면 건드리지 않고 내용이
 # 다르면 .kit-new 로 옆에 둔다. **자동 병합은 하지 않는다** — 합치는 것은 사람·에이전트가 한다.
 # 무엇을 덮어쓰는지는 --dry-run 이 보여준다.
@@ -75,8 +76,11 @@ echo "install: 킷   $KIT_ROOT"
 # 킷과 무관한 .kit/ 가 이미 있으면 설치하지 않는다. .kit/ 는 설치할 때마다 통째로 비우고 놓는 자리라
 # (아래 vendor_into), 킷이 놓은 것이 아닌 파일도 지운다. 추적하지 않던 파일은 되돌릴 수 없다.
 # 킷이 놓은 것인지는 install-manifest 로 가린다. dry-run 도 같은 판정을 내야 하므로 임시 트리를 만들기 전에 본다.
+# .kit/drafts 는 세서 안 된다 — 세션이 PR 본문 조각을 두는 자리라(open-pr 스킬의 drafts.sh) --agent 만 설치한 레포에도
+# 생기고, 세면 그 레포에 --hooks 를 설치할 때 멈춘다(실제로 확인함). 아래 삭제 집계처럼 레포 루트로 옮겨 상대 경로로
+# 찾는다 — -path 는 패턴이라, 절대 경로를 넣으면 레포 경로에 `[` 가 있을 때 그 글자를 패턴으로 읽어 조각 자리를 빼지 못했다.
 if [ "$DO_HOOKS" = 1 ] && [ ! -f "$TARGET/.kit/install-manifest" ] \
-   && [ -n "$(find "$TARGET/.kit" -type f -print 2>/dev/null | head -1)" ]; then
+   && [ -n "$(cd "$TARGET" 2>/dev/null && find .kit -path .kit/drafts -prune -o -type f -print 2>/dev/null | head -1)" ]; then
   echo "install: $TARGET/.kit 이 이미 있고 킷이 설치한 것이 아닙니다(.kit/install-manifest 없음)." >&2
   echo "  킷은 설치할 때마다 .kit 을 통째로 비우고 킷의 파일을 새로 놓으므로, 그 안의 파일을 지우지 않고 멈춥니다." >&2
   echo "  그 디렉터리를 다른 이름으로 옮긴 뒤 다시 실행하세요." >&2
@@ -163,17 +167,18 @@ replace() { # $1=src $2=dst(대상 레포 상대)
 if [ "$DO_HOOKS" = 1 ]; then
   vendor="$TARGET/.kit"
   # .kit/gate 와 git-hooks 는 킷 소유라 통째로 교체한다. identity 와 gate.conf(게이트 설정)는 그 아래
-  # 있지만 킷 소유가 아니므로 남긴다.
+  # 있지만 킷 소유가 아니므로 남긴다. drafts 는 세션이 PR 본문 조각을 두는 자리라(git 이 무시한다) 남긴다.
   kit_rev=$( cd "$KIT_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo unknown )
   # 설치와 dry-run 이 **같은 함수**를 쓴다. 두 벌로 두면 dry-run 이 예고하는 내용과
   # 설치가 놓는 내용이 어긋나고, 어긋났을 때 알아챌 방법이 없다.
   vendor_into() { # $1=목적지 .kit 디렉터리
     local v="$1"
-    # .kit 은 identity 와 gate.conf 를 빼면 전부 킷 소유다. 소유한 자리는 **통째로 비우고 놓는다** —
+    # .kit 은 identity · gate.conf · drafts 를 빼면 전부 킷 소유다. 소유한 자리는 **통째로 비우고 놓는다** —
     # 이름을 지목해 지우면 그 목록이 킷이 바뀔 때마다 늘어나고, 늘리다가 빠뜨린다.
     # 무엇이 사라지는지는 --dry-run 의 「삭제 — 재설치가 지운다」 목록이 미리 보여준다.
+    # drafts 를 비우면 PR 을 진행하는 중에 다시 설치할 때 아직 올리지 않은 조각이 사라진다(실제로 확인함).
     if [ -d "$v" ]; then
-      find "$v" -mindepth 1 -maxdepth 1 ! -name identity ! -name gate.conf -exec rm -rf {} +
+      find "$v" -mindepth 1 -maxdepth 1 ! -name identity ! -name gate.conf ! -name drafts -exec rm -rf {} +
     fi
     mkdir -p "$v"
     cp -R "$KIT_ROOT/common/gate" "$KIT_ROOT/common/git-hooks" "$v/"
@@ -236,7 +241,8 @@ if [ "$DO_HOOKS" = 1 ]; then
   # dry-run 과 어긋났다 — `common/` 에는 복사할 때 가져오지 않는 ci·docs·templates 도 있어서
   # `.kit/ci/*` 가 "킷이 놓는 것" 으로 오판돼 알림 없이 지워졌다(실제로 확인함: `삭제 0건` 인데
   # 셋이 사라졌다). 근거가 하나면 어긋날 수 없다.
-  _before=$( cd "$TARGET" 2>/dev/null && find .kit -type f 2>/dev/null )
+  # drafts 는 위 vendor_into 가 남기므로 세지 않는다. dry-run 의 임시 트리에는 없어서, 세면 dry-run 만 삭제로 센다.
+  _before=$( cd "$TARGET" 2>/dev/null && find .kit -path .kit/drafts -prune -o -type f -print 2>/dev/null )
 
   if [ "$DRY_RUN" = 1 ]; then vendor_into "$STAGE/.kit"; _final="$STAGE"
   else                        vendor_into "$vendor";        _final="$TARGET"; fi

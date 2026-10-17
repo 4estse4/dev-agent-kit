@@ -18,6 +18,11 @@ if ! out=$(bash "$KIT/install.sh" --hooks --templates --lint --ci --agent "$R" 2
   exit 1
 fi
 [ -d "$R/.kit" ] || { echo "  ✗ 설치 후에도 .kit 이 없다 — 검사할 것이 없다"; exit 1; }
+# 세션이 PR 본문 조각을 두는 자리(`.kit/drafts/`)는 설치 직후에는 없고, 설치된 `drafts.sh` 를 처음 부를 때 생긴다.
+# 그 자리를 가리키는 설치된 파일을 거짓으로 세지 않도록 세션이 하듯 한 번 부른 트리에서 본다. 부르지 못하면 멈춘다 —
+# 그 스크립트가 그 자리를 만들지 않게 바뀌면, 그 자리를 가리키는 설치된 파일이 아래 검사에서 실패한다.
+(cd "$R" && bash .claude/skills/open-pr/drafts.sh pr-body >/dev/null) \
+  || { echo "  ✗ 설치된 drafts.sh 를 부르지 못해 조각 자리를 만들지 못했다"; exit 1; }
 
 # ① 설치된 파일이 가리키는 킷 경로가 그 레포에 실제로 있나
 python3 - "$R" "$KIT" <<'PY' || fail=1
