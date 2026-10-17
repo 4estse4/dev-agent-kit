@@ -39,7 +39,7 @@ feature 브랜치 → 구현 → 테스트 → `commit` → `open-pr` → 리뷰
   (`merge-pr` 3절).
   `막는 것 없음`
 - **세션 시작 알림에 킷의 git 훅이 꺼졌다고 나오면 사람에게 켤지 묻고, 고르면 켠다**(레포 루트에서
-  `git config core.hooksPath .kit/git-hooks`). 그 설정은 clone 에 따라오지 않아 새로 clone 한 레포는 훅이 꺼져 있다.
+  `git config core.hooksPath .kit/git-hooks`). 그 설정은 클론에 따라오지 않아 새로 클론한 레포는 훅이 꺼져 있다.
   켜지 않기로 하면 그 레포에서는 커밋 · 푸시하지 않고, 사람이 세션 밖 터미널에서 한다. `막는 것 없음`
 - **킷의 git 훅이 꺼진 동안은 `git commit` · `git push` 를 하지 않는다.** 커밋 · 푸시 전 검사가 실행되지 않는다.
   `에이전트 훅`

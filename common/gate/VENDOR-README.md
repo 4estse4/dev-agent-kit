@@ -1,15 +1,15 @@
 # .kit — 이 레포에 복사해 둔 게이트
 
 이 디렉터리는 [dev-agent-kit](https://github.com/4estse4/dev-agent-kit) 의 게이트를
-복사해 둔 것이다. **레포와 함께 버전 관리되므로 clone 하면 따라온다.**
+복사해 둔 것이다. **레포와 함께 버전 관리되므로 클론하면 따라온다.**
 
-## 새로 clone 했다면 — 한 줄이 필요하다
+## 새로 클론했다면 — 한 줄이 필요하다
 
 ```bash
 git config core.hooksPath .kit/git-hooks
 ```
 
-훅 *파일* 은 clone 을 따라오지만, 그것을 활성화하는 `core.hooksPath` 설정은
+훅 *파일* 은 클론을 따라오지만, 그것을 활성화하는 `core.hooksPath` 설정은
 따라오지 않는다 — git 이 보안상 의도한 동작이고 우회 방법이 없다. 킷의 Claude Code 설정(`.claude/`)도 설치한
 레포에서는 세션이 시작할 때 훅이 꺼졌다는 알림을 받고, 켜기 전에는 에이전트 훅이 세션의 `git commit` ·
 `git push` 를 막는다. `.claude/` 를 설치하지 않은 레포와 세션 없이 터미널에서 커밋하는 사람에게는 이 안내뿐이다.
@@ -23,7 +23,7 @@ git config core.hooksPath .kit/git-hooks
 
 ## 로컬 훅은 실수만 막는다
 
-`git commit --no-verify` 로 우회되고, 위 설정을 안 한 clone 에서는 아예 실행되지 않는다.
+`git commit --no-verify` 로 우회되고, 위 설정을 안 한 클론에서는 아예 실행되지 않는다.
 **일부러 하는 우회까지 막는 것은 CI + 브랜치 보호뿐이다.** 다만 시크릿처럼 푸시되면 되돌릴 수
 없는 것을 킷이 푸시 전에 막는 자리는 로컬 훅뿐이다.
 

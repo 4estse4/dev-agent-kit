@@ -163,7 +163,7 @@ replace() { # $1=src $2=dst(대상 레포 상대)
 
 # ── 게이트 vendor: 대상 레포에 .kit/ 로 복사한다 ──
 # 홈 디렉터리 경로를 훅·CI 에 적어 두면 다른 머신과 CI 에는 그 경로가 없어 실패한다.
-# 복사해 레포에 커밋하면 어디서 clone 해도 같은 게이트가 실행된다.
+# 복사해 레포에 커밋하면 어디서 클론해도 같은 게이트가 실행된다.
 if [ "$DO_HOOKS" = 1 ]; then
   vendor="$TARGET/.kit"
   # .kit/gate 와 git-hooks 는 킷 소유라 통째로 교체한다. identity 와 gate.conf(게이트 설정)는 그 아래
@@ -183,7 +183,7 @@ if [ "$DO_HOOKS" = 1 ]; then
     mkdir -p "$v"
     cp -R "$KIT_ROOT/common/gate" "$KIT_ROOT/common/git-hooks" "$v/"
     # 활성화 절차가 레포 안에 있어야 한다 — install.sh 는 킷 레포에만 있으므로
-    # 이 레포만 clone 한 사람은 훅을 켜는 방법을 알 길이 없다.
+    # 이 레포만 클론한 사람은 훅을 켜는 방법을 알 길이 없다.
     cp "$KIT_ROOT/common/gate/VENDOR-README.md" "$v/README.md"
     rm -f "$v/gate/VENDOR-README.md"
     # 고르지 않은 언어의 어댑터는 복사하지 않는다.
@@ -253,7 +253,7 @@ if [ "$DO_HOOKS" = 1 ]; then
   # 두 벌이 되고, 두 벌은 반드시 서로 달라진다 — 위 주석에 적은 실제 사례 둘이 그것이다.
   # 보고는 dry-run 에서도 한다 — 안 그러면 예고한 건수와 실제 건수가 어긋난다.
 
-  # 훅은 .git/hooks 에 두지 않는다 — 그 디렉터리는 clone 되지 않으므로
+  # 훅은 .git/hooks 에 두지 않는다 — 그 디렉터리는 클론되지 않으므로
   # 레포를 새로 받은 사람에게는 강제가 통째로 사라진다.
   # 대신 커밋되는 .kit/git-hooks/ 를 core.hooksPath 로 가리킨다.
   [ "$DRY_RUN" = 1 ] || git -C "$TARGET" config core.hooksPath .kit/git-hooks
@@ -317,7 +317,7 @@ if [ "$DO_AGENT" = 1 ] || [ "$DO_TEMPLATES" = 1 ]; then
   # 실제로 그랬다 — 한 레포에서 콜드 리뷰어 정의가 읽으라는 절이 그 레포 문서에 없었다.
   # 프로젝트가 자기 사정을 적을 자리는 CLAUDE.md 이지 이 문서들이 아니다.
   # 설계 근거 문서는 프로젝트와 함께 다녀야 한다 — CLAUDE.md 가 이것을 인용하는데
-  # 킷 레포 경로로 가리키면 레포만 clone 한 사람은 따라갈 수 없다.
+  # 킷 레포 경로로 가리키면 레포만 클론한 사람은 따라갈 수 없다.
   # kit-guide 는 설치 직후 한 번 읽는 문서다. 나머지 설계 근거 문서와 같은 자리에 둔다.
   for d in "$KIT_ROOT"/common/docs/*.md; do
     [ -f "$d" ] || continue

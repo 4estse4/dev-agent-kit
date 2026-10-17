@@ -57,7 +57,7 @@
     "없으면 대조할 기록이 없어 라운드 코멘트를 막는다.",
     "post_length.sh 도 막는 훅이다. GitHub 에 올리는 글(PR 본문 · PR 코멘트 · 이슈 본문 · 이슈 코멘트)을 GitHub 이",
     "그린 글자로 세어, 접히지 않은 부분의 총량이나 한 줄이 상한을 넘으면 그 게시를 막는다. 상한은 hooks/kit/post_length.py 머리에 있다.",
-    "hooks_path.sh 도 막는 훅이다. 레포에 .kit/git-hooks/ 가 있는데 core.hooksPath 가 그 자리가 아니면(clone 에는",
+    "hooks_path.sh 도 막는 훅이다. 레포에 .kit/git-hooks/ 가 있는데 core.hooksPath 가 그 자리가 아니면(클론에는",
     "그 설정이 따라오지 않는다) SessionStart 에서 그렇다고 알리고, PreToolUse 에서 세션을 연 프로젝트의 레포에",
     "입력한 git commit · git push 를 켤 때까지 막는다.",
     "킷은 봇과 함께 쓴다. 레포에 봇 설정(.claude/bot.json)이 있으면 훅이 넷 더 동작한다. SessionStart 의",

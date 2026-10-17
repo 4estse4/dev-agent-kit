@@ -8,7 +8,7 @@
 # 커밋을 빼면 base 가 아닌 브랜치를 합친 머지에서 그 브랜치의 커밋까지 빠진다.
 #
 # 스킬 글에서 명령(fetch · 나열 · 머지 커밋 보기)을 꺼내, 라운드 head 뒤에 base 를 네 번 합치고 base 가 아닌
-# 브랜치를 한 번 합친 브랜치에서 실행한다. 실행하는 clone 은 base 를 둘째 커밋까지만 받아 두고 PR 브랜치의
+# 브랜치를 한 번 합친 브랜치에서 실행한다. 실행하는 클론은 base 를 둘째 커밋까지만 받아 두고 PR 브랜치의
 # 객체는 없어서, base 의 셋째 · 넷째 커밋과 PR 브랜치는 스킬의 fetch 로만 받는다. 스킬의 명령은 빈 HOME 에서
 # 실행한다 — 사람의 git 설정(`core.quotePath` 등)이 결과를 바꾸지 않게 한다. 보는 것:
 #   · base 로 들어온 커밋은 나열에 나오지 않는다. 받아 둔 옛 base 에 없던 커밋도 나오지 않는다
@@ -38,7 +38,7 @@ SHOW=$(grep -E '^ +git( -c [^ ]+)* show .*<머지 커밋>' "$SK" | head -1 | sed
 [ "$fail" = 0 ] || exit 1
 [ -n "$SHOW" ] || bad "2절에서 머지 커밋 보기 명령(git show … <머지 커밋>)을 찾지 못했다"
 
-# ── setup: bare origin · 작업 clone · 실행할 clone(base 를 합치기 전에 main 만 받는다)
+# ── setup: bare origin · 작업 클론 · 실행할 클론(base 를 합치기 전에 main 만 받는다)
 O="$T/origin.git"; W="$T/work"; C="$T/check"
 git init -q --bare -b main "$O"
 git clone -q "$O" "$W" 2>/dev/null

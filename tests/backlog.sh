@@ -82,7 +82,7 @@ chmod +x "$T/bin/gh"
 export PATH="$T/bin:$PATH"
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.com GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.com
 
-# 원격(bare)에서 clone 한 체크아웃이 이 세션이다. 다른 worktree 는 다른 세션의 일인 것과, 끝났거나 하는 일이
+# 원격(bare)에서 클론한 체크아웃이 이 세션이다. 다른 worktree 는 다른 세션의 일인 것과, 끝났거나 하는 일이
 # 없어 다른 세션의 일로 내지 않는 것을 섞어 둔다
 git init -q --bare -b main "$T/remote.git"
 git clone -q "$T/remote.git" "$T/self" 2>/dev/null

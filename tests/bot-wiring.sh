@@ -427,7 +427,7 @@ guard "하위 디렉터리에서 입력한 사람 계정 게시" deny "bash .cla
 # `.claude/hooks/` 밖에 둔 레포에서 설치 경로를 알려 주면 그대로 입력해도 다시 막힌다
 REL=$(python3 -c 'import os, sys; print(os.path.relpath(os.path.realpath(sys.argv[1]), os.path.realpath(sys.argv[2])))' "$H/human_comment.sh" "$R")
 guard "거절 사유가 레포 루트에서의 실제 경로를 알려 준다" deny "bash .claude/hooks/human_comment.sh 155" "$R/sub" "bash $REL <PR 번호>"
-# 셸이 프로젝트 안의 다른 레포(따로 clone 한 것)에 있다. 그 레포에도 봇 설정이 있다. 거절 사유는 그 레포가 아니라
+# 셸이 프로젝트 안의 다른 레포(따로 클론한 것)에 있다. 그 레포에도 봇 설정이 있다. 거절 사유는 그 레포가 아니라
 # 세션을 연 프로젝트의 루트로 옮겨 입력하라고 알린다 — 그 레포의 루트 기준 경로(`../../…`)는 allow 에 맞지 않고, 게시
 # 스크립트는 셸이 있는 레포에서 기록을 읽는다(이슈 #199)
 CIN="$R/scratch/clone-in"; mkdir -p "$CIN/.claude"; git init -q "$CIN"; cp "$R/.claude/bot.json" "$CIN/.claude/"

@@ -4,7 +4,7 @@
 #     bash <open-pr 스킬 디렉터리>/drafts.sh <이름>
 #
 # 자리는 레포 루트(worktree 면 그 worktree 의 루트)의 `.kit/drafts/<이름>.XXXXXX` 다. 처음 부를 때
-# `.kit/drafts/.gitignore` 를 `*` 한 줄로 만든다 — 그 파일까지 git 이 무시해서 커밋할 것이 없고, 어느 clone ·
+# `.kit/drafts/.gitignore` 를 `*` 한 줄로 만든다 — 그 파일까지 git 이 무시해서 커밋할 것이 없고, 어느 클론 ·
 # worktree 에서도 처음 부를 때 생긴다.
 #
 # **왜 git 디렉터리가 아닌가.** 조각을 레포의 git 디렉터리 안에 두었더니 그 자리가 Claude Code 의 보호 경로라,

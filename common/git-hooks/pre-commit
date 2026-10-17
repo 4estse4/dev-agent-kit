@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 활성화: `git config core.hooksPath .kit/git-hooks` (clone 마다 필요하다).
+# 활성화: `git config core.hooksPath .kit/git-hooks` (클론마다 필요하다).
 # 막는 것: (1) 보호 브랜치 직접 커밋  (2) 잘못된 신원  (3) 충돌 마커  (4) 커밋에 안 들어간 게이트 설정  (5) 시크릿  (6) 린트
 #
 # 주의: `git commit --no-verify` 로 우회 가능하다. 그래서 이 훅은 실수만 막고,
@@ -55,7 +55,7 @@ done
 
 # ── 신원 검증 ──
 # .kit/identity 가 있으면 그 이메일로만 커밋할 수 있다.
-# includeIf 설정을 잊거나 새 머신에서 clone 했을 때 잘못된 신원으로
+# includeIf 설정을 잊거나 새 머신에서 클론했을 때 잘못된 신원으로
 # 커밋이 쌓이는 것을 막는다. 기억에 의존하지 않는다.
 idfile="$REPO/.kit/identity"
 if [ -f "$idfile" ]; then

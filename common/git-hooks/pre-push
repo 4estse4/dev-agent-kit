@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 활성화: `git config core.hooksPath .kit/git-hooks` (clone 마다 필요하다).
+# 활성화: `git config core.hooksPath .kit/git-hooks` (클론마다 필요하다).
 # 푸시되는 범위에 대해 게이트(포맷·린트·타입·테스트)와 시크릿 스캔을 실행하고,
 # 브랜치를 올리는 푸시면 요구 추적(trace.sh)도 본다.
 # 에이전트 훅과 달리 사람이 손으로 푸시해도, 다른 에이전트를 써도 작동한다.
