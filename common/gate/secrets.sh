@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# 시크릿 스캔. staged 내용(기본) 또는 지정 ref 범위를 검사한다.
+# 시크릿 스캔. 스테이지된 내용(기본) 또는 지정 ref 범위를 검사한다.
 # 오탐을 줄이려 시크릿이 거의 확실한 패턴만 본다 — 엔트로피 추정은 하지 않는다.
 # 정당한 테스트 픽스처는 같은 줄에 secret-ok 마커를 달아 면제한다.
 #
-#   secrets.sh              staged 내용 검사 (pre-commit)
+#   secrets.sh              스테이지된 내용 검사 (pre-commit)
 #   secrets.sh --range A..B 커밋 범위 검사 (pre-push / CI)
 #   secrets.sh --range REV   리비전 하나 — 거기서 도달 가능한 **모든** 커밋을 검사한다.
 #                            기준점이 없을 때 쓴다(고아 브랜치, 기본 브랜치의 첫 푸시).

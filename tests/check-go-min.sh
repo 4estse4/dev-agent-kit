@@ -18,7 +18,7 @@
 #     줄이 아니라 go install 이 나온 자리마다 본다 — 한 줄에 `&&` 로 둘을 이으면 앞의 것이 빠졌다(PR #108 2라운드
 #     콜드 리뷰). 높은 go 를 줄의 앞 도구에도, 뒤 도구에도 둔다
 #   · 도구의 go.mod 를 못 받거나 go_min 이 없으면 rc=2
-#   · 모듈 경로는 패키지 경로의 뒤를 떼며 찾는다(가짜 proxy 에는 모듈 경로에만 둔다)
+#   · 모듈 경로는 패키지 경로의 뒤를 떼며 찾는다(가짜 프록시에는 모듈 경로에만 둔다)
 #   · 도구 모듈이 gofumpt 를 require 하면 그 기준 Go(gofumpt zip 의 internal/govendor/version.txt)도
 #     go_min 과 견준다. gofumpt 는 자기 안에 둔 gofmt 로 포맷해서, 그보다 낮은 Go 의 gofmt 와 서로 다른
 #     모양을 요구하는 코드가 생긴다(PR #137 1라운드 콜드 리뷰). zip 이나 그 파일을 못 읽으면 rc=2
@@ -56,7 +56,7 @@ yml() {
     { print }' "$KIT/common/ci/gates.yml" > "$T/kit/common/ci/gates.yml"
 }
 
-# 도구마다 가짜 proxy 에 go.mod 를 둔다. $1=$hi 의 go 줄  $2=나머지의 go 줄  $3=빼 둘 도구 키(없으면 비움)
+# 도구마다 가짜 프록시에 go.mod 를 둔다. $1=$hi 의 go 줄  $2=나머지의 go 줄  $3=빼 둘 도구 키(없으면 비움)
 # $4=golangci_lint 의 gofumpt. 비우면 require 하지 않는다. 버전(예: 1.27.0)이면 v0.99.0 을 require 하고, 그
 # zip 의 version.txt 를 go<버전> 으로 둔다. nozip 이면 zip 을 두지 않고, nofile 이면 version.txt 없는 zip 을 둔다.
 proxy() {

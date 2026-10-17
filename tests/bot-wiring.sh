@@ -603,7 +603,7 @@ guard "만료된 토큰으로 명령 치환 안의 git push" pass "out=\$(git pu
 ok "명령 치환 안의 git push 앞에서도 토큰을 새로 받는다" 'grep -qF access_tokens "$T/curl-log" && grep -qF 2099 "$BOTDIR/expires"'
 
 echo "── 동시에 토큰을 새로 받음"
-# 병렬 Bash 호출이나 여러 워크트리의 세션이 같은 봇 디렉터리의 토큰을 동시에 새로 받는다.
+# 병렬 Bash 호출이나 여러 worktree 의 세션이 같은 봇 디렉터리의 토큰을 동시에 새로 받는다.
 input=$(python3 -c 'import json,sys; print(json.dumps({"session_id": "s1", "cwd": sys.argv[1],
   "hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": "gh pr comment 1 --body-file /tmp/x.md"}}))' "$R")
 : > "$T/curl-log"; rm -f "$T"/par.*

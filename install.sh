@@ -382,7 +382,7 @@ if [ "$DO_LINT" = 1 ]; then
   # eslintConfig 를 찾는다. .eslintrc* · eslintConfig 를 둔 프로젝트는 옛 설정 방식을 쓰므로 건드리지 않는다.
   # eslint.config.js 를 만나면 ESLint 처럼 거기서 멈추고 놓는다. 같은 디렉터리의 것이면 place() 가 프로젝트 것을 두고
   # .kit-new 로 옆에 놓는다. 조상의 것은 킷의 것과 내용이 같을 때만 그렇게 하고, 다르면 프로젝트 설정이라 놓지 않는다.
-  # 킷 설정의 ignores · files 글롭(dist/** · vite.config.* 등)은 그 설정 파일의 디렉터리를 기준으로 읽히므로, 조상에만
+  # 킷 설정의 ignores · files glob(dist/** · vite.config.* 등)은 그 설정 파일의 디렉터리를 기준으로 읽히므로, 조상에만
   # 있으면 패키지의 파일에 맞지 않아 게이트가 실패한다. 이 실행이 루트에 먼저 쓴 파일도 킷의 것과 같으므로 find 가
   # 어느 쪽을 먼저 내놓든 예고와 실제가 같다.
   ESLINT_KIT_CONFIG="$KIT_ROOT/common/lint/ts/eslint.config.js"

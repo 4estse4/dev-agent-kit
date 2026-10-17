@@ -44,9 +44,9 @@ independently."), `git fetch` 는 설치되는 `settings.json` 의 `allow` 에 �
 
     git push origin --delete <headRefName>
 
-fork 에서 온 PR 의 head 브랜치는 fork 에 있다. origin 에 같은 이름의 브랜치가 있으면 그것은 base
+포크에서 온 PR 의 head 브랜치는 포크에 있다. origin 에 같은 이름의 브랜치가 있으면 그것은 base
 레포의 다른 브랜치다. gh 도 이 경우 원격 삭제를 건너뛰었다(v2.92.0 `deleteRemoteBranch` 의
-`crossRepoPR`). 그때는 명령을 실행하지 않고 5절에 「fork PR 이라 원격 브랜치를 지우지 않았다」고 적는다.
+`crossRepoPR`). 그때는 명령을 실행하지 않고 5절에 「포크 PR 이라 원격 브랜치를 지우지 않았다」고 적는다.
 
 `remote ref does not exist` 로 실패하면 이미 지워진 것이다. 레포가 머지 뒤 원격 브랜치를
 자동으로 지우는 설정이면 그렇다. 그 밖의 실패는 5절의 보고에 한 줄 덧붙인다. 이 명령은

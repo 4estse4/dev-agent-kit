@@ -37,7 +37,7 @@ request that contains the commit will not be listed as a linked pull request" �
 **4절의 삭제 명령 둘도 같이 보인다.** 원격 브랜치를 지우는 `git push origin --delete
 <headRefName>` 과 로컬 브랜치를 지우는 `git branch -D <headRefName>` 이다. 머지 명령이
 브랜치를 지우지 않으므로(아래 머지 명령 뒤의 설명) 이 둘은 머지 뒤에 따로 실행되지만, 승인은
-머지와 함께 여기서 받는다. 원격 삭제는 레포 밖으로 나가는 행동이고, 둘 다 되돌리기 어렵다. fork 에서 온 PR 이면 원격 삭제는
+머지와 함께 여기서 받는다. 원격 삭제는 레포 밖으로 나가는 행동이고, 둘 다 되돌리기 어렵다. 포크에서 온 PR 이면 원격 삭제는
 하지 않으므로(4절) 로컬 삭제 하나만 보인다. auto-merge 로 머지하면 원격 브랜치는 레포 설정 「Automatically
 delete head branches」가 지우고, 4절은 머지 뒤 다음 작업을 시작할 때 실행한다(아래 「봇 설정이 있을 때」).
 

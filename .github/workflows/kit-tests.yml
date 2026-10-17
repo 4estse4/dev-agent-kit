@@ -145,8 +145,8 @@ jobs:
         run: bash tests/merge-pr-listing.sh
 
       # go_min 이 핀한 Go 도구가 요구하는 go 와 그 도구가 쓰는 gofumpt 의 기준 Go 가운데 가장 높은 것과
-      # 같은지. 진짜 모듈 proxy 에 묻는다 — 핀을 올리는 그 PR 에서 찾아내게 PR 마다 실행된다. 아래 스텝이
-      # 같은 검사를 가짜 proxy 로 네트워크 없이 시험한다.
+      # 같은지. 진짜 모듈 프록시에 묻는다 — 핀을 올리는 그 PR 에서 찾아내게 PR 마다 실행된다. 아래 스텝이
+      # 같은 검사를 가짜 프록시로 네트워크 없이 시험한다.
       - name: go_min matches the Go the pinned tools and gofumpt need
         id: gominpins
         continue-on-error: true

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 단일 게이트 정의. agent hook · git hook · CI가 모두 이것을 호출한다.
+# 단일 게이트 정의. 에이전트 훅 · git 훅 · CI가 모두 이것을 호출한다.
 # 명령을 곳곳에 복사해 두면 모르는 사이에 서로 달라지므로 정의는 여기 한 곳에만 둔다.
 #
 #   gate.sh              변경 영역만 검사 (기본: main/master merge-base 기준)

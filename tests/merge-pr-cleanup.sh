@@ -11,7 +11,7 @@
 #   · 3절의 머지 명령에 --delete-branch 가 없다
 #   · 4절의 명령 가운데 브랜치를 지우는 것(git push · git branch -D)은 킷 settings.json 의 ask 규칙에
 #     맞는다. 원격 삭제가 gh pr merge 의 ask 밖으로 나오므로 따로 사람을 거쳐야 한다
-#   · fork 에서 온 PR 이면 원격 삭제를 하지 않는다. 조건이 글에 있어 실행으로는 못 보므로, 2절이
+#   · 포크에서 온 PR 이면 원격 삭제를 하지 않는다. 조건이 글에 있어 실행으로는 못 보므로, 2절이
 #     isCrossRepository 를 받고 4절이 그것을 쓰는지 글자로 본다
 #   · 4절의 명령을 bare origin 이 있는 스크래치 레포에서 원래 체크아웃과 worktree 의 여러 상태로 실행하면
 #     끝 상태가 맞다. 원격 브랜치 · 로컬 브랜치 · HEAD · 원래 체크아웃을 본다
@@ -47,7 +47,7 @@ else
   esac
 fi
 
-# ── fork 에서 온 PR ── origin 의 같은 이름 브랜치는 base 레포의 다른 브랜치다. gh 도 이 경우 원격
+# ── 포크에서 온 PR ── origin 의 같은 이름 브랜치는 base 레포의 다른 브랜치다. gh 도 이 경우 원격
 # 삭제를 건너뛰었다(v2.92.0 `deleteRemoteBranch` 의 crossRepoPR).
 v=$(grep -E '^- `gh pr view <N> --json [A-Za-z,]*`' "$SK")
 s4=$(awk '/^## 4\./{s=1} /^## 5\./{s=0} s' "$SK")

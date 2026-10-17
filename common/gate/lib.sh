@@ -126,7 +126,7 @@ gate_go_min_check() {
 # 레포 루트에 .nvmrc 가 있는지 본다. 없으면 GitHub 주석(::error)으로 이유를 말하고 실패한다.
 # CI 의 setup-node 가 그 파일로 node 를 설치한다. node 는 잡 하나에 하나라 py 의 .python-version 처럼
 # 루트에 둔다. setup-node 를 쓰는 잡이 모두 그 앞에서 부른다. 한때 setup-node 가 루트의 .nvmrc 와
-# lockfile 을 가정하고, continue-on-error 때문에 setup-node 스텝이 실패해도 잡은 통과했다.
+# 락파일을 가정하고, continue-on-error 때문에 setup-node 스텝이 실패해도 잡은 통과했다.
 gate_nvmrc_check() {
   local found
   [ -f .nvmrc ] && return 0

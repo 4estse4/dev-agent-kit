@@ -77,7 +77,7 @@ mk packages/b   '{ "name": "b", "scripts": { "lint": "eslint ." } }'
 check "" ". packages/b"
 
 # 워크스페이스: 루트에 eslint 의존성만 있고 설정이 없으면 루트와 패키지 양쪽에 놓는다. 킷 설정의 ignores · files
-# 글롭(dist/** · vite.config.* 등)은 그 설정 파일의 디렉터리를 기준으로 읽히므로, 루트에만 놓으면 패키지의 파일에
+# glob(dist/** · vite.config.* 등)은 그 설정 파일의 디렉터리를 기준으로 읽히므로, 루트에만 놓으면 패키지의 파일에
 # 맞지 않아 게이트가 실패한다(PR #184 2라운드 콜드 리뷰가 패키지 디렉터리에서 실행한 eslint 9 로 재현했다).
 # find 가 루트를 먼저 내놓으면 실제 설치는 패키지를 볼 때 방금 루트에 쓴 킷 설정을 만난다 — 그것을 프로젝트 설정으로
 # 세면 예고와 실제가 어긋난다.
@@ -116,7 +116,7 @@ printf '%s\n' 'export default [];' > "$R/packages/f/eslint.config.js"
 check "" "." "packages/f"
 
 # 워크스페이스: 중간 디렉터리에 킷과 같은 eslint.config.js 가 있고 루트에 eslint.config.mjs 가 있다(루트 설정을 설치
-# 뒤에 더한 레포). ESLint 는 중간 디렉터리의 킷 설정에서 멈추고, 그 글롭은 중간 디렉터리를 기준으로 읽힌다 — 패키지에 놓는다.
+# 뒤에 더한 레포). ESLint 는 중간 디렉터리의 킷 설정에서 멈추고, 그 glob 은 중간 디렉터리를 기준으로 읽힌다 — 패키지에 놓는다.
 new_repo ws-mid
 mk .            '{ "name": "root", "private": true, "workspaces": ["apps/*"], "devDependencies": { "eslint": "^10.0.0" } }' eslint.config.mjs
 mkdir -p "$R/apps" && cp "$KIT/common/lint/ts/eslint.config.js" "$R/apps/eslint.config.js"

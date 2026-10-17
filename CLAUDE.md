@@ -131,7 +131,7 @@ v1.0 이 되어 킷을 다른 프로젝트에 적용할 일이 생기면 그 원
 
 | 규칙 | 누가 막나 |
 | --- | --- |
-| 브랜치 → PR → 콜드 리뷰 → 머지. `main` 직접 커밋 금지. 근거는 `docs/adr/0002-kit-goes-through-pr-and-cold-review.md` | `main` 룰셋(PR 없는 push · `tests` 검사가 실패한 채로 하는 머지 · 스쿼시 아닌 머지 · 사람의 Approve 없는 머지를 막는다) · `에이전트 훅`(라운드 코멘트를 올릴 때 `round_comment_cold.sh` 가 그 head 의 `cold-reviewer` 기록을 요구한다. 이 레포는 봇 디렉터리의 deny 가 없어 도구로 기록을 쓸 수 있다 — ADR-0002 「결과」) |
+| 브랜치 → PR → 콜드 리뷰 → 머지. `main` 직접 커밋 금지. 근거는 `docs/adr/0002-kit-goes-through-pr-and-cold-review.md` | `main` 룰셋(PR 없는 푸시 · `tests` 검사가 실패한 채로 하는 머지 · 스쿼시 아닌 머지 · 사람의 Approve 없는 머지를 막는다) · `에이전트 훅`(라운드 코멘트를 올릴 때 `round_comment_cold.sh` 가 그 head 의 `cold-reviewer` 기록을 요구한다. 이 레포는 봇 디렉터리의 deny 가 없어 도구로 기록을 쓸 수 있다 — ADR-0002 「결과」) |
 | 커밋 트레일러는 `Co-Authored-By: Claude <모델> (<effort>) <noreply@anthropic.com>` 한 줄 | `리뷰` |
 | 셸 스크립트를 고치면 `bash -n` 과 **실제 실행**으로 확인한다 | 구문은 `CI` · `main` 룰셋 · **실제 실행은 `막는 것 없음`** — 아래 |
 | 설치기를 고치면 **깨끗한 데모 레포에 설치해** 미리보기와 실제를 대조한다 | `CI`(`tests/install-deletions.sh`) · `main` 룰셋 |
@@ -193,7 +193,7 @@ git log --format='%(trailers:key=Co-Authored-By,valueonly)' | sed -n 's/.*(\([^)
 (로컬 백업 브랜치에만 남아 있고 원격에는 없다).
 
 한 번 남에게 준 뒤로는 재작성하지 않는다. 재작성이 불가피하면 **옛 커밋에 태그를 붙여
-push 해서** 설치된 프로젝트들이 대조할 대상을 잃지 않게 한다.
+푸시해서** 설치된 프로젝트들이 대조할 대상을 잃지 않게 한다.
 
 ## 산출물 규칙
 

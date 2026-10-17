@@ -7,7 +7,7 @@
 #     통과한 레포가 그 도구의 설치에서 「requires go >= …」로 실패한다. 한때 goimports 와 govulncheck 만 보고
 #     1.25 로 정했다가 1.26 을 요구하는 golangci-lint 가 러너에서 실패했다(이슈 #98). 두 값을 맞추는 것이
 #     주석뿐이었다.
-#   · 그 도구 모듈이 require 하는 gofumpt(golangci-lint 의 formatter)의 기준 Go. gofumpt 는 자기 안에 둔
+#   · 그 도구 모듈이 require 하는 gofumpt(golangci-lint 의 포매터)의 기준 Go. gofumpt 는 자기 안에 둔
 #     gofmt 로 포맷해서, 그보다 낮은 Go 의 gofmt 와 서로 다른 모양을 요구하는 코드가 생긴다. 그 코드는
 #     게이트의 gofmt · goimports 와 golangci-lint 가운데 한쪽에서 늘 실패한다. golangci-lint v2.14.0 의
 #     gofumpt v0.12.0 이 Go 1.27 을 기준으로 해서, go 1.26 모듈에서 여러 줄 composite literal 둘을 반환하는
@@ -26,12 +26,12 @@
 # 도구 목록은 gates.yml 의 `go install [플래그…] <패키지>@${{ steps.tv.outputs.<키> }}` 에서
 # 읽는다 — CI 가 실제로 설치하는 목록이라 따로 적지 않는다. 주석이 아닌 줄에 이 모양으로 못 읽은
 # go install 이 있으면 판정하지 않는다. 도구 일부만 보고 내린 판정이 이슈 #98 의 모양이다.
-# 모듈의 go 줄은 Go 모듈 proxy 의 <모듈>/@v/<버전>.mod 에 있고, 모듈 경로는 패키지 경로의 뒤를
-# 하나씩 떼며 처음 받아지는 것이다. gofumpt 는 그 .mod 의 require 에서 버전을 읽고, 같은 proxy 의
-# mvdan.cc/gofumpt/@v/<버전>.zip 을 받아 unzip 으로 version.txt 만 꺼낸다. proxy 의 그 파일들은 버전마다
+# 모듈의 go 줄은 Go 모듈 프록시의 <모듈>/@v/<버전>.mod 에 있고, 모듈 경로는 패키지 경로의 뒤를
+# 하나씩 떼며 처음 받아지는 것이다. gofumpt 는 그 .mod 의 require 에서 버전을 읽고, 같은 프록시의
+# mvdan.cc/gofumpt/@v/<버전>.zip 을 받아 unzip 으로 version.txt 만 꺼낸다. 프록시의 그 파일들은 버전마다
 # 바뀌지 않으므로 결과가 달라지는 것은 핀이나 go install 줄이 바뀔 때뿐이다.
 #
-#   check-go-min.sh        KIT_GOPROXY 로 proxy 주소를 바꾼다(기본 https://proxy.golang.org)
+#   check-go-min.sh        KIT_GOPROXY 로 프록시 주소를 바꾼다(기본 https://proxy.golang.org)
 #
 # 종료코드: 0 맞음 · 1 어긋남 · 2 판정 못 함(조회 실패 · 키 없음 · go install 줄 없음 · 못 읽은 go install ·
 # gofumpt 의 zip 이나 version.txt 를 못 읽음).
