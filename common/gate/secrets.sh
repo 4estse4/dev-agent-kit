@@ -20,7 +20,7 @@ ALLOWED_NAMES='(\.env\.example|\.env\.sample|\.env\.template)$'
 # git 실패를 무시하면 DIFF 가 비어 "매치 없음 = 통과" 가 된다.
 # 범위 해석 실패(shallow clone·사라진 SHA·잘못된 인자)는 검사 불능이지 통과가 아니다.
 #
-# core.quotePath 기본값(true)은 비ASCII 경로를 octal 로 이스케이프해 따옴표째 내보낸다.
+# core.quotePath 기본값(true)은 비ASCII 경로를 8진수로 이스케이프해 따옴표째 내보낸다.
 # 그 문자열은 끝이 `"` 라 FORBIDDEN_NAMES 의 `$` 에 안 맞고, 한글 디렉터리 아래의
 # .env 나 키 파일이 이름 검사를 그대로 통과한다(실제로 확인함). 두 모드 다 같은 자리다.
 if [ "$MODE" = staged ]; then

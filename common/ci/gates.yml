@@ -308,7 +308,7 @@ jobs:
             d=$(dirname "$f")          # xargs 를 쓰지 않는다 — 공백 있는 경로를 둘로 나눈다
             echo "── $d ──"
             ( cd "$d"
-              # $GITHUB_PATH 에 venv 를 얹지 않는다. 그것은 잡 전체에 prepend 되므로
+              # $GITHUB_PATH 에 venv 를 얹지 않는다. 그것은 잡 전체의 PATH 앞에 붙으므로
               # 패키지가 여럿이면 **어느 하나의 venv 가 모든 패키지에 쓰인다** — 남의 의존성으로
               # 테스트가 실행되고, 어느 패키지의 도구가 쓰일지도 순서에 따라 달라진다.
               # 대신 어댑터가 자기 디렉터리의 .venv/bin 을 먼저 본다(adapters/py.sh).
