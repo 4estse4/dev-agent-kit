@@ -90,6 +90,26 @@ run 막힘 cold-reviewer '/usr/bin/env gh pr comment 1 -b x'
 run 막힘 cold-reviewer '{ gh pr comment 7 -b x; }'
 run 막힘 cold-reviewer 'if true; then gh pr comment 7 -b x; fi'
 run 막힘 cold-reviewer 'for i in 1; do git push; done'
+# 낱말 안의 따옴표 · \ 는 bash 처럼 떼고 본다
+run 막힘 cold-reviewer 'g"h" pr comment 1 -b x'
+run 막힘 cold-reviewer '\gh pr comment 1 -b x'
+run 막힘 cold-reviewer "git 'push' origin HEAD"
+run 막힘 cold-reviewer "\$'g\\x68' pr comment 1 -b x"
+run 막힘 cold-reviewer '$"gh" pr comment 1 -b x'
+# 예약어 · function · coproc 뒤의 묶음도 읽는다
+run 막힘 cold-reviewer 'if true; then { gh pr comment 1 -b x; }; fi'
+run 막힘 cold-reviewer 'function f { gh pr comment 1 -b x; }; f'
+run 막힘 cold-reviewer 'coproc gh pr comment 1 -b x'
+run 막힘 cold-reviewer $'time { bash; } <<\'EOF\'\ngh pr comment 1 -b x\nEOF'
+run 막힘 cold-reviewer $'time -p ( bash ) <<\'EOF\'\ngh pr comment 1 -b x\nEOF'
+run 막힘 cold-reviewer $'{ echo }; bash; } <<\'EOF\'\ngh pr comment 1 -b x\nEOF'
+run 막힘 cold-reviewer $'> /tmp/o bash <<\'EOF\'\ngh pr comment 1 -b x\nEOF'
+run 통과 cold-reviewer $'cat > /tmp/s.sh <<\'EOF\' && bash -n /tmp/s.sh\ngh pr comment 1 -b x\nEOF'
+# 낱말 가운데의 \ 줄 잇기 · 치환 안의 괄호 · \ 로 막은 치환
+run 막힘 cold-reviewer $'g\\\nh pr comment 1 -b x'
+run 막힘 cold-reviewer 'echo "$( (true); gh pr comment 1 -b x )"'
+run 통과 cold-reviewer 'echo "\$(gh pr comment 1 -b x)"'
+run 통과 cold-reviewer $'cat > /tmp/s.sh <<EOF\n\\$(gh pr comment 1 -b x)\nEOF'
 # heredoc 을 닫는 자리는 bash 가 닫는 자리와 같다 — 끝말에 낱말 글자 밖의 글자가 있거나 앞에 \ 를 붙인 꼴
 run 막힘 cold-reviewer $'cat > /tmp/s.sh <<E-1\nx\nE-1\ngh pr comment 1 -b x'
 run 통과 cold-reviewer $'cat > /tmp/s.sh <<\\EOF\ngh pr comment 1 -b x\nEOF'
@@ -99,8 +119,37 @@ run 통과 cold-reviewer $'cat > /tmp/s.sh <<"END.1"\ngit push\nEND.1\nbash -n /
 run 막힘 cold-reviewer $'cat > /dev/null <<E"O"F\nx\nEOF\ngh pr comment 1 -b x'
 run 막힘 cold-reviewer $'cat <<EOF |\ngh pr comment 1 -b x\nEOF\nbash'
 run 통과 cold-reviewer $'cat <<EOF |\ngh pr comment 1 -b x\nEOF\ngrep -c gh'
-# 끝말 줄 없이 끝난 heredoc 은 어디서 닫히는지 판정하지 못한 것이라 막는다
+# bash 는 `|` · `&&` · `||` 뒤의 빈 줄 · 주석 줄을 건너뛰며 명령이 끝날 때까지 읽는다(사람이 PR 을 열기 전에 짚었다)
+run 막힘 cold-reviewer $'cat <<EOF | # c\ngh pr comment 1 -b x\nEOF\nbash'
+run 막힘 cold-reviewer $'cat <<EOF |\ngh pr comment 1 -b x\nEOF\n\nbash'
+run 막힘 cold-reviewer $'cat <<EOF |\ngh pr comment 1 -b x\nEOF\n# c\nbash'
+run 막힘 cold-reviewer $'cat <<EOF |\ngh pr comment 1 -b x\nEOF\ntee /dev/null |\nbash'
+run 막힘 cold-reviewer $'cat <<EOF \\\n| bash\ngh pr comment 1 -b x\nEOF'
+run 막힘 cold-reviewer $'{ cat <<\'EOF\'; } | bash\ngh pr comment 1 -b x\nEOF'
+# 명령 치환 · 프로세스 치환 안도 명령이다 — 따옴표 안 · 백틱 · 따옴표 없는 끝말의 heredoc 본문에서도
+run 막힘 cold-reviewer 'echo "$(gh pr comment 1 -b x)"'
+run 막힘 cold-reviewer 'echo `gh pr comment 1 -b x`'
+run 막힘 cold-reviewer 'cat <(gh pr comment 1 -b x)'
+run 막힘 cold-reviewer $'cat > /tmp/s.sh <<EOF\n$(gh pr comment 1 -b x)\nEOF'
+run 막힘 cold-reviewer $'bash <(cat <<\'EOF\'\ngh pr comment 1 -b x\nEOF\n)'
+# 출력을 셸에 보내는 프로세스 치환이 있으면 heredoc 을 그 셸이 받을 수 있다
+run 막힘 cold-reviewer $'cat <<\'EOF\' > >(bash)\ngh pr comment 1 -b x\nEOF'
+run 막힘 cold-reviewer $'exec > >(bash); cat <<\'EOF\'\ngh pr comment 1 -b x\nEOF'
+run 통과 cold-reviewer $'cat > /tmp/s.sh <<\'EOF\'\n$(gh pr comment 1 -b x)\nEOF'
+run 통과 cold-reviewer 'echo `gh pr view 1 --json title`'
+run 통과 cold-reviewer 'diff <(gh pr view 1) /tmp/a'
+# 셸에 준 here-string 도 명령으로 본다
+run 막힘 cold-reviewer "bash <<< 'gh pr comment 1 -b x'"
+run 통과 cold-reviewer "grep -c x <<< 'gh pr comment 1 -b x'"
+# 끝말 줄 없이 끝난 heredoc 과 뒤에 명령이 없는 `|` 는 어디까지가 명령인지 판정하지 못한 것이라 막는다
 run 막힘 cold-reviewer $'cat > /tmp/s.sh <<EOF\ngh pr view 1'
+run 막힘 cold-reviewer "cat > /tmp/s.sh <<'EOF'"
+run 막힘 cold-reviewer $'cat <<EOF |\ngh pr view 1\nEOF'
+run 막힘 cold-reviewer 'echo $(gh pr view 1'
+# 읽다가 예외가 나도 막는다 — 훅이 0이 아닌 코드로 끝나면 명령이 실행된다. 치환을 깊이 겹치면 파이썬의 재귀 한도에 닿는다
+deep=$(python3 -I -c 'print("echo " + "$(" * 1100 + "x" + ")" * 1100)')
+run 막힘 cold-reviewer "$deep"
+run 통과 cold-reviewer "echo \$'\\U7fffffff'"
 # 따옴표 안의 << 는 heredoc 이 아니다 — 리뷰어가 heredoc 꼴을 검색한다
 run 통과 cold-reviewer "grep -n \"<<'EOF'\" claude-code/skills/open-pr/body.md"
 run 통과 cold-reviewer "grep -c '<<EOF' tests/pr-evidence.sh # <<X 는 주석"
