@@ -183,6 +183,7 @@ diff 가 길면 `KIT_DIFF_MAX_LINES`·`KIT_DIFF_MAX_TOTAL` 로 조절한다.
 | 대상 | 갱신 방식 |
 |---|---|
 | `.kit/gate/` · `git-hooks/` | 킷 소유 — 통째로 교체 |
+| `.kit/drafts/` | 세션이 PR 본문 · 코멘트 조각을 두는 자리 — git 이 무시하고 재설치가 남긴다 |
 | `CLAUDE.md` · `.claude/settings.json` · CI · 린터 · 템플릿으로 놓는 `docs/` 문서와 PR 템플릿 | 프로젝트 소유 — 건드리지 않고 킷의 것을 `<파일>.kit-new` 로 옆에 둔다 |
 | 킷이 `.claude/` 에 놓는 파일(`settings.json` 은 빼고) · `docs/process` | **킷 소유 — 재설치가 덮어쓴다** |
 

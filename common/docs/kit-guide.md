@@ -133,7 +133,7 @@ version … used to build golangci-lint is lower than the targeted Go version」
 
 `.kit/**` 와 킷이 `.claude/` 에 놓는 파일(`settings.json` 은 빼고), `docs/process/**` 는 킷 소유라
 **재설치가 덮어쓴다** — 여기 손댄 것은 다음 설치에서 사라진다. `.kit/` 아래에서 `identity` 와 `gate.conf` 는
-프로젝트 소유라 재설치가 남긴다. 고칠 것이 있으면 킷 레포에
+프로젝트 소유라 재설치가 남긴다. `drafts/` 는 세션이 PR 본문 · 코멘트 조각을 두는 자리라(git 이 무시한다) 재설치가 남긴다. 고칠 것이 있으면 킷 레포에
 이슈나 PR 로 올려라. `CLAUDE.md`·`.claude/settings.json`·CI·린터 설정과 템플릿으로 놓는 `docs/` 문서 · PR
 템플릿은 **프로젝트 소유**라 건드리지 않는다 — 킷의 것과 다르면 킷의 것을 `<파일>.kit-new` 로 옆에 두고,
 가져올지는 사람이 정한다. **자동 병합은 하지 않는다.**
