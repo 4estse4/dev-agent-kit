@@ -11,7 +11,7 @@
 #   · 킷의 어댑터 언어(install.sh 의 ALL_LANGS)마다 주석 블록이 있고, 그 주석을 풀면 YAML 로 읽히며 그
 #     생태계가 updates 에 들어간다. 주석을 푸는 사람이 받는 것이 그대로 쓸 수 있는 설정이어야 한다
 #   · updates 안의 2칸 주석을 모두 풀어도 파일이 읽힌다. 에디터로 블록을 고를 때 곁의 줄까지 함께 풀려도
-#     파일이 깨지지 않아야 한다
+#     파일이 YAML 로 읽혀야 한다
 #   · 두 경우 모두 항목마다 Dependabot 의 필수 키(directory 또는 directories · schedule.interval)가 있다
 #
 # 주석 블록은 `  # - package-ecosystem: …` 와 그 아래 `  #   <키>: …` 줄이다. 앞의 `  # ` 를 `  ` 로 바꾸면
@@ -23,7 +23,7 @@ T=$(mktemp -d)
 fail=0
 ok() { echo "  ✓ $1"; }
 bad() { echo "  ✗ $1"; fail=1; }
-python3 -c 'import yaml' 2>/dev/null || { bad "python3 의 yaml 모듈이 없다 — 설치본을 YAML 로 읽을 수 없다"; exit 1; }
+python3 -c 'import yaml' 2>/dev/null || { bad "python3 의 yaml 모듈이 없다 — 설치된 파일을 YAML 로 읽을 수 없다"; exit 1; }
 
 cat > "$T/check.py" <<'PY'
 import re, sys, yaml
@@ -110,7 +110,7 @@ for keep in "" go ts py jvm py,ts go,jvm,py,ts; do
   else bad "$label: 켜진 생태계가 github-actions 하나가 아니다 — $out"; fi
 done
 
-# 주석 블록은 --lang 과 상관없이 같은 파일이다. 한 설치본으로 본다.
+# 주석 블록은 --lang 과 상관없이 같은 파일이다. 설치 하나로 본다.
 y="$T/repo-all/.github/dependabot.yml"
 all=$(sed -n 's/^ALL_LANGS="\(.*\)"$/\1/p' "$KIT/install.sh")
 [ -n "$all" ] || bad "install.sh 에서 ALL_LANGS 를 읽지 못했다"

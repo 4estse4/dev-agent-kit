@@ -15,7 +15,7 @@
 # 두면 모델이 안 따를 때 사라지므로 모델 밖인 여기 둔다. 근거는
 # `docs/process/verification-stages.md` 6.3.
 #
-# **명령 글자 어디에든 `gh pr comment` 가 보이면 한 줄 정규형만 받는다.**
+# **명령 문자열 어디에든 `gh pr comment` 가 보이면 한 줄 정규형만 받는다.**
 #
 #     gh pr comment <N> [-R <레포>] --body-file <절대 경로>
 #

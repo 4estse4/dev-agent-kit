@@ -305,7 +305,7 @@ jobs:
           # 나머지는 도구 없이 검사되거나 남의 의존성으로 테스트가 실행된다.
           # 바로 아래 node 단계도 같은 이유로 전부 순회한다.
           while IFS= read -r f; do
-            d=$(dirname "$f")          # xargs 를 쓰지 않는다 — 공백 있는 경로에서 깨진다
+            d=$(dirname "$f")          # xargs 를 쓰지 않는다 — 공백 있는 경로를 둘로 나눈다
             echo "── $d ──"
             ( cd "$d"
               # $GITHUB_PATH 에 venv 를 얹지 않는다. 그것은 잡 전체에 prepend 되므로

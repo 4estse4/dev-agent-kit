@@ -36,7 +36,7 @@ fi
 [ "${GATE_LINT_ONLY:-0}" = 1 ] && { return 0 2>/dev/null || exit 0; }
 
 # 래퍼가 있으면 래퍼를 쓴다. 프로젝트가 래퍼를 커밋하는 이유가 버전 고정인데
-# 시스템 설치본을 쓰면 그 고정이 무의미해지고, 사람마다 다른 버전으로 검사하게 된다.
+# 시스템에 설치된 Gradle 을 쓰면 그 고정이 무의미해지고, 사람마다 다른 버전으로 검사하게 된다.
 if [ -x ./gradlew ]; then
   _jvm_cmd=(./gradlew)
 elif [ -f build.gradle ] || [ -f build.gradle.kts ] || [ -f settings.gradle ] || [ -f settings.gradle.kts ]; then

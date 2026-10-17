@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 창 기록 훅(`window_record.sh`)이 사람 계정으로 올릴 결정만, 고른 보기 글자 그대로 기록하는가.
+# 질문 창 기록 훅(`window_record.sh`)이 사람 계정으로 올릴 결정만, 고른 보기 글자 그대로 기록하는가.
 #
 # 사람 계정 코멘트는 세션이 쓰지 않는다. 결정 창에서 사람이 고른 보기로 이 훅이 `- <머리말>: <보기>` 줄을 만들어
 # 봇 디렉터리(`<git 공통 디렉터리>/kit-bot/windows/<PR>.jsonl`)에 적고, `human_comment.sh <PR>` 이 그 기록만
@@ -149,7 +149,7 @@ cp "$T/bot/.claude/bot.json" "$T/x/repo/.claude/"
 PROJ="$T/x/repo" ask "$T/x/repo/sub/deep" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
 check "cwd 가 하위 디렉터리여도 레포의 git 디렉터리에 기록한다" "있음" "$([ -s "$T/x/repo/.git/kit-bot/windows/7.jsonl" ] && echo 있음 || echo 없음)"
 check "레포 밖에 git 디렉터리를 만들지 않는다" "없음" "$([ -e "$T/.git" ] && echo 있음 || echo 없음)"
-# 막기 훅과 allow 는 레포 루트에서 입력한 게시 명령만 받는다 — 하위 디렉터리면 루트로 옮기라고 안내한다
+# 가드 훅과 allow 는 레포 루트에서 입력한 게시 명령만 받는다 — 하위 디렉터리면 루트로 옮기라고 안내한다
 REPO_ABS=$(cd "$T/x/repo" && pwd -P)
 case "$OUT" in *"cd $REPO_ABS"*) echo "  ✓ 하위 디렉터리면 레포 루트로 옮긴 뒤 올리라고 안내한다" ;;
   *) echo "  ✗ 하위 디렉터리에서 레포 루트로 옮기라는 안내가 없다: $OUT"; fail=1 ;; esac
@@ -256,7 +256,7 @@ rm -rf "$W"
 ask "$T/plain" "[$Q1]" "{\"PR #7 1라운드 코멘트를 보고 무엇을 할까요? $MARK\": \"제안대로 고치고 2라운드 (추천)\"}"
 check "봇 설정이 없으면 기록하지 않는다" "없음" "$([ -d "$T/plain/.git/kit-bot/windows" ] && echo 있음 || echo 없음)"
 
-# 세션이 기록을 만들거나 고칠 수 없어야 한다. 셸 명령은 막기 훅이 봇 디렉터리 이름으로 막고, Read · Write ·
+# 세션이 기록을 만들거나 고칠 수 없어야 한다. 셸 명령은 가드 훅이 봇 디렉터리 이름으로 막고, Read · Write ·
 # Edit 도구는 설치되는 settings.json 의 deny 가 막는다. Write 도구는 Edit 규칙이 막는다 — Claude Code 는 파일
 # 경로 규칙을 Read · Edit 로만 본다(tests/settings-path-rules.sh).
 for rule in 'Read(//**/kit-bot/**)' 'Edit(//**/kit-bot/**)'; do
@@ -270,5 +270,5 @@ if python3 -c 'import json, sys; sys.exit(0 if sys.argv[1] in json.load(open(sys
   "$rule" "$KIT/claude-code/settings.json"; then echo "  ✓ settings.json 이 게시 명령을 허용한다: $rule"
 else echo "  ✗ settings.json 의 allow 에 없다: $rule"; fail=1; fi
 
-[ "$fail" = 0 ] && echo "  ✓ 창 기록 훅은 사람이 고른 보기만 사람 계정으로 올릴 결정으로 기록한다"
+[ "$fail" = 0 ] && echo "  ✓ 질문 창 기록 훅은 사람이 고른 보기만 사람 계정으로 올릴 결정으로 기록한다"
 exit "$fail"

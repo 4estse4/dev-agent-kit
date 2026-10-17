@@ -312,7 +312,7 @@ check "두 번 준 --body-file" deny \
 check "편집기로 쓰는 -e" deny "gh pr comment 89 -e" "" "절대 경로 파일 하나로만"
 check "웹으로 쓰는 -w" deny "gh pr comment 89 -w" "" "절대 경로 파일 하나로만"
 
-# ── 막아야 하는 것: 명령 글자 어디에든 게시 명령이 보이면 ──
+# ── 막아야 하는 것: 명령 문자열 어디에든 게시 명령이 보이면 ──
 # 앞에 무엇이 오든, 따옴표 · heredoc 안이든 정규형이 아니면 막는다. 「명령 자리」를 목록으로
 # 정해 알아보던 동안 목록 밖(`if` · `timeout` · `bash -lc` …)의 게시 명령을 훅이 대조 없이 통과시켰다.
 check "if 조건 자리" deny "if $(post onechar.md); then echo ok; fi" "" "정규형"
@@ -334,7 +334,7 @@ check "find -exec" deny \
   "find $T -name onechar.md -exec gh pr comment 89 --body-file {} \\;" "" "정규형"
 check "xargs" deny "echo $T/onechar.md | xargs gh pr comment 89 --body-file" "" "정규형"
 check "백틱 명령 치환" deny "echo \`$(post onechar.md)\`" "" "정규형"
-check "따옴표 안의 게시 명령 글자" deny "echo 'gh pr comment 89 --body-file x' && gh pr view 89" "" "정규형"
+check "따옴표 안의 게시 명령 문자열" deny "echo 'gh pr comment 89 --body-file x' && gh pr view 89" "" "정규형"
 check "sed 로 스킬의 게시 줄을 찾는 명령" deny \
   "sed -n '/^머지/,/^    gh pr comment <N> --body-file <파일>/p' claude-code/skills/merge-pr/SKILL.md" "" \
   "\`pr comment\` 로 찾고"

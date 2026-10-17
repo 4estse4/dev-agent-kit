@@ -52,7 +52,7 @@ if '-w' in a:
 EOF
 chmod +x "$T/bin/curl"
 # git 의 자격 증명 도우미로 불릴 가짜 gh. 세션 환경에서 git 이 봇(gh)에게 자격 증명을 받는지 본다.
-# 막기 훅이 auto-merge 를 판정하려고 부르는 `gh pr view` · `gh pr list` 에는 STUB_PR_VIEW · STUB_PR_LIST 를
+# 가드 훅이 auto-merge 를 판정하려고 부르는 `gh pr view` · `gh pr list` 에는 STUB_PR_VIEW · STUB_PR_LIST 를
 # 돌려준다. STUB_GH_FAIL 이 있으면 그 조회가 실패하고, STUB_GH_LOG 가 있으면 받은 인자를 적는다.
 # STUB_GH_SLEEP 이 있으면 그 초만큼 답하지 않는다(네트워크가 멈춘 조회). `exec` 로 기다려서, 조회를 끝내면
 # 기다리던 프로세스도 함께 끝난다.
@@ -121,7 +121,7 @@ guard() {
 ok() { if eval "$2" 2>/dev/null; then echo "  ✓ $1"; else echo "  ✗ $1"; fail=1; fi; }
 no_token_in_out() { ok "$1 — 출력에 토큰이 없다" '! printf "%s" "$OUT" | grep -qF ghs_stubtoken'; }
 
-# 막기 훅이 부르는 GitHub 조회가 멈추면 훅은 settings 의 timeout 에 닿는다. Claude Code 는 그렇게 취소한 훅의
+# 가드 훅이 부르는 GitHub 조회가 멈추면 훅은 settings 의 timeout 에 닿는다. Claude Code 는 그렇게 취소한 훅의
 # 판정 없이 명령을 진행한다(공식 문서 hooks 「Timeouts」) — `git push` 는 allow 라서 검사 없이 푸시된다.
 # 하네스는 Claude Code 처럼 settings 의 timeout 에서 훅을 끝내고, 그렇게 끝난 것을 판정 없음으로 적는다.
 # 훅이 판정을 낼 때까지 기다리므로 여기서 백그라운드로 시작해 다른 검사와 겹치고, 결과는 끝에서 본다.
@@ -130,7 +130,7 @@ LIMIT=$(python3 -c 'import json, sys
 s = json.load(open(sys.argv[1]))
 print(min(h["timeout"] for g in s["hooks"]["PreToolUse"] for h in g["hooks"] if "bot_guard.sh" in h["command"]))' \
   "$KIT/claude-code/settings.json" 2>/dev/null)
-[ -n "$LIMIT" ] || { echo "  ✗ settings.json 에서 막기 훅의 timeout 을 읽지 못했다"; exit 1; }
+[ -n "$LIMIT" ] || { echo "  ✗ settings.json 에서 가드 훅의 timeout 을 읽지 못했다"; exit 1; }
 cat > "$T/slow.py" <<'EOF'
 import json, os, signal, subprocess, sys, time
 limit, hook, d, cmd = float(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4]
@@ -244,7 +244,7 @@ session "CLAUDE_ENV_FILE 없음" "$R" no
 ok "CLAUDE_ENV_FILE 이 없으면 연결하지 못했다고 알린다" 'printf "%s" "$OUT" | grep -qF CLAUDE_ENV_FILE && [ ! -f "$BOTDIR/wired/s1" ]'
 no_token_in_out "CLAUDE_ENV_FILE 없음"
 
-echo "── gh 명령 막기(bot_guard.sh)"
+echo "── gh 명령 가드 훅(bot_guard.sh)"
 repo "$R" "" no
 guard "봇 설정이 없으면 막지 않는다" pass "gh pr comment 1 --body-file /tmp/x.md"
 guard "봇 설정이 없으면 사람 계정 게시 명령도 막지 않는다(스크립트가 봇 설정이 없다며 끝난다)" pass "bash $H/human_comment.sh 1"
@@ -399,7 +399,7 @@ STUB_GH_LOG="$T/gh-log" guard "PR 이 없는 브랜치에 푸시" pass "git push
 ok "푸시 판정은 푸시가 나갈 레포의 PR 을 조회한다" 'grep -E "^pr list( |$)" "$T/gh-log" | grep -qE -- "-R o/r( |$)"'
 
 echo "── 사람 계정으로 올리는 명령(human_comment.sh)"
-# 올리는 글은 창 기록 훅이 적은 기록뿐이라(사람이 창에서 고른 보기) 권한 프롬프트 없이 올린다. 한 줄 정규형만
+# 올리는 글은 질문 창 기록 훅이 적은 기록뿐이라(사람이 창에서 고른 보기) 권한 프롬프트 없이 올린다. 한 줄 정규형만
 # 받고, 스크립트 경로는 훅과 같은 디렉터리의 것이다.
 P="$H/human_comment.sh"
 guard "사람 계정 게시는 한 줄 정규형이면 묻지 않고 통과한다" pass "bash $P 155"
@@ -464,17 +464,17 @@ RWT3="$RW/.claude/worktrees/w3"; git -C "$RW" worktree add -q "$RWT3"
 mkdir -p "$RWT3/.claude/hooks" "$RWT3/sub"; cp "$H"/*.sh "$H"/*.py "$RWT3/.claude/hooks/"
 GUARD_PROJ="$RWT3" GUARD_HOOKS="$RWT3/.claude/hooks" guard "claude -w 세션의 프로젝트 루트에서 입력한 사람 계정 게시" pass "bash .claude/hooks/human_comment.sh 155" "$RWT3"
 GUARD_PROJ="$RWT3" GUARD_HOOKS="$RWT3/.claude/hooks" guard "claude -w 세션의 하위 디렉터리에서 입력한 사람 계정 게시는 프로젝트 루트의 사유를 낸다" deny "bash .claude/hooks/human_comment.sh 155" "$RWT3/sub" "세션을 연 프로젝트의 레포 루트("
-# 창 기록은 창 기록 훅이 사람이 고른 창에서만 만든다. 세션이 그 훅을 직접 실행하면 지어낸 창 결과로 기록이 생겨
+# 창 기록은 질문 창 기록 훅이 사람이 고른 창에서만 만든다. 세션이 그 훅을 직접 실행하면 지어낸 창 결과로 기록이 생겨
 # 사람이 고르지 않은 결정이 사람 계정으로 올라간다
 W="$H/window_record.sh"
-guard "창 기록 훅을 직접 실행(표준입력)" deny "bash $W < /tmp/fake-window.json" "$R" "창 기록 훅"
+guard "질문 창 기록 훅을 직접 실행(표준입력)" deny "bash $W < /tmp/fake-window.json" "$R" "질문 창 기록 훅"
 # 거절 사유가 시키는 일은 open-pr 3.5 와 같다 — 게시 표지부터 보고, 맞으면 PR 웹으로 받는다
-guard "창 기록 훅 직접 실행의 거절 사유가 3.5 와 같은 할 일을 적는다" deny "bash $W < /tmp/fake-window.json" "$R" "게시 표지"
-guard "파이프로 창 기록 훅을 실행" deny "printf '{}' | bash $W"
-guard "bash 없이 창 기록 훅을 실행" deny "$W < /tmp/fake-window.json"
-guard "bash -c 안의 창 기록 훅" deny "bash -c 'bash $W < /tmp/fake-window.json'"
-guard "창 기록 훅의 구문 검사" pass "bash -n $W"
-guard "창 기록 훅을 읽음" pass "sed -n 1,20p $W"
+guard "질문 창 기록 훅 직접 실행의 거절 사유가 3.5 와 같은 할 일을 적는다" deny "bash $W < /tmp/fake-window.json" "$R" "게시 표지"
+guard "파이프로 질문 창 기록 훅을 실행" deny "printf '{}' | bash $W"
+guard "bash 없이 질문 창 기록 훅을 실행" deny "$W < /tmp/fake-window.json"
+guard "bash -c 안의 질문 창 기록 훅" deny "bash -c 'bash $W < /tmp/fake-window.json'"
+guard "질문 창 기록 훅의 구문 검사" pass "bash -n $W"
+guard "질문 창 기록 훅을 읽음" pass "sed -n 1,20p $W"
 # 창 기록은 봇 디렉터리에 있다. 세션이 셸로 읽거나 고치지 못한다
 guard "창 기록을 읽는 명령" deny "cat .git/kit-bot/windows/155.jsonl"
 guard "창 기록을 고치는 명령" deny "printf x >> .git/kit-bot/windows/155.jsonl"
@@ -552,7 +552,7 @@ guard "App 이름 앞이 붙은 다른 디렉터리의 key.pem" pass "ls certs/o
 guard "다른 도구의 설정 파일과 프로젝트 인증서" pass "npx vite --config vite.config.ts --https.key certs/key.pem"
 guard ".config 뒤가 붙은 다른 디렉터리와 프로젝트 인증서" pass "ls ~/.config-backup && ls certs/key.pem"
 guard "~/.config 와 이름 앞이 붙은 key.pem" pass "ls ~/.config/nvim && cat certs/dev-key.pem"
-# 셋째 꼴은 App 이름이 필요 없다. 봇 설정에 App 이름이 없거나 깨져도 판정한다
+# 셋째 꼴은 App 이름이 필요 없다. 봇 설정에 App 이름이 없거나 봇 설정을 읽지 못해도 판정한다
 mkdir -p "$T/noapp/.claude"; git -C "$T/noapp" init -q; printf '{"app_id": 1}\n' > "$T/noapp/.claude/bot.json"
 guard "App 이름이 없는 봇 설정에서 glob 으로 읽음" deny "cat ~/.config/*/key.pem" "$T/noapp"
 # Read 도구는 이 훅(Bash)을 거치지 않는다. 설치되는 settings.json 의 deny 가 막는다.
@@ -589,7 +589,7 @@ ok "git push 앞에서도 토큰을 새로 받는다" 'grep -qF access_tokens "$
 printf '2000-01-01T00:00:00Z\n' > "$BOTDIR/expires"
 STUB_CURL_EXIT=28 guard "네트워크가 멈춘 뒤의 게시" deny "gh pr comment 1 --body-file /tmp/x.md" "$R" "네트워크"
 ok "curl 이 기다리는 시간에 끝이 있다" 'grep -qF -- "--max-time" "$T/curl-log"'
-# merge-pr 2절이 부르는 판정 스크립트는 안에서 gh 를 부른다. 명령 글자에 gh 가 없어도 새로 받아야 한다.
+# merge-pr 2절이 부르는 판정 스크립트는 안에서 gh 를 부른다. 명령 문자열에 gh 가 없어도 새로 받아야 한다.
 printf '2000-01-01T00:00:00Z\n' > "$BOTDIR/expires"
 guard "만료된 토큰으로 판정 스크립트" pass "bash .claude/hooks/human_review.sh approved 1"
 ok "판정 스크립트 앞에서도 토큰을 새로 받는다" 'grep -qF access_tokens "$T/curl-log" && grep -qF 2099 "$BOTDIR/expires"'
@@ -627,8 +627,8 @@ for n in "${!SLOW_NAMES[@]}"; do
   case "$out" in
     cancel*) echo "  ✗ 막기: ${name} — settings 의 timeout(${LIMIT}초)에 닿아 취소됐다. Claude Code 는 판정 없이 명령을 진행한다"; fail=1 ;;
     *'"permissionDecision": "deny"'*)
-      if ! printf '%s' "$out" | grep -qF -- "${SLOW_MUST[$n]}" || ! printf '%s' "$out" | grep -qE "막기 훅이 실행된 지 [0-9]+초가 지나도"; then
-        echo "  ✗ 막기: ${name} — 사유에 「${SLOW_MUST[$n]}」나 「막기 훅이 실행된 지 N초가 지나도」가 없다: ${out}"; fail=1
+      if ! printf '%s' "$out" | grep -qF -- "${SLOW_MUST[$n]}" || ! printf '%s' "$out" | grep -qE "가드 훅이 실행된 지 [0-9]+초가 지나도"; then
+        echo "  ✗ 막기: ${name} — 사유에 「${SLOW_MUST[$n]}」나 「가드 훅이 실행된 지 N초가 지나도」가 없다: ${out}"; fail=1
       else
         echo "  ✓ 막기: ${name} (deny, ${took#done }초 · settings 의 timeout ${LIMIT}초)"
       fi ;;

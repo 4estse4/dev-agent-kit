@@ -21,16 +21,16 @@
 # **어디에.** 세션을 연 프로젝트(`CLAUDE_PROJECT_DIR`)의 `<git 공통 디렉터리>/kit-bot/windows/<PR>.jsonl` 에 기록
 # 하나를 한 줄로 더한다. 훅 입력의 `cwd` 는 세션의 셸이 `cd` 한 자리를 따라가서, 그것으로 정하면 프로젝트 안의
 # 다른 레포에 `cd` 해 있을 때 기록이 그 레포에 생긴다. git 공통 디렉터리는 절대 경로로 받는다. 세션은 봇
-# 디렉터리를 읽지도 쓰지도 못한다 — 셸 명령은 막기 훅(`bot_guard.sh`)이, Read · Write · Edit 도구는 설치되는
+# 디렉터리를 읽지도 쓰지도 못한다 — 셸 명령은 가드 훅(`bot_guard.sh`)이, Read · Write · Edit 도구는 설치되는
 # `settings.json` 의 deny 가 막는다. 봇 설정이 있는 레포 안에서 세션이 이 훅을 직접 실행해 지어낸 창 결과로
-# 기록을 만드는 명령도 막기 훅이 막는다.
+# 기록을 만드는 명령도 가드 훅이 막는다.
 #
 # 입력의 `tool_response` 는 세션 기록에 남는 창의 결과와 같은 모양이다: `questions` 와, 질문 글자에서 고른
 # 보기로 가는 `answers`, 질문 글자에서 메모로 가는 `annotations`. 백그라운드 세션에서 이 이벤트의 실제 입력을
 # 기록해 확인했다(2026-09-29). 여러 보기 답의 모양과 `response` · `afkTimeoutMs` · `followUp` 은 Claude Code
 # 2.1.283 · 2.1.284 의 코드에서 읽었다.
 #
-# **올리는 명령의 안내.** 막기 훅과 설치되는 `settings.json` 의 allow 는 레포 루트에서 입력한
+# **올리는 명령의 안내.** 가드 훅과 설치되는 `settings.json` 의 allow 는 레포 루트에서 입력한
 # `bash .claude/hooks/human_comment.sh <PR>` 만 받고, 게시 스크립트는 셸이 있는 레포에서 기록을 읽는다. 그래서
 # 세션의 셸(`cwd`)이 프로젝트의 레포 루트가 아니면 먼저 그 루트로 옮기라고 적는다. 셸이 세션 도중 들어간
 # worktree 에 있으면(아래 「올릴 자리」) 옮기라고 하지 않고, 그 worktree 루트에서 이 훅의 스크립트까지의 경로를
@@ -164,14 +164,14 @@ if worktree:
 # 둘 다 실제 경로로 바꿔 견준다 — 훅의 자리는 논리 경로이고 git 이 낸 루트는 실제 경로라, 레포 경로에 심링크가
 # 있으면 그대로 견준 상대 경로가 레포 밖을 돌아온다
 script = os.path.relpath(os.path.realpath(os.path.join(here, 'human_comment.sh')), post)
-# 막기 훅은 게시 명령의 경로를 cwd 기준으로 푼다
+# 가드 훅은 게시 명령의 경로를 cwd 기준으로 푼다
 move = '' if os.path.realpath(cwd or os.getcwd()) == post else '먼저 `cd %s` 로 옮긴 뒤(한 줄로 잇지 않는다) ' % post
-# worktree 의 `.claude/hooks/` 는 이 훅이 실행되는 디렉터리가 아니라 막기 훅이 받지 않으므로 이 훅의 스크립트까지
+# worktree 의 `.claude/hooks/` 는 이 훅이 실행되는 디렉터리가 아니라 가드 훅이 받지 않으므로 이 훅의 스크립트까지
 # 경로로 부른다. 그 명령은 설치되는 settings.json 의 allow 와 모양이 달라 권한 검사를 거친다 — default 모드에서는
 # 권한 프롬프트가 표시되고 auto 모드에서는 분류기가 정한다
 prompt = (' 이 명령은 설치되는 settings.json 의 allow(`bash .claude/hooks/human_comment.sh <PR>`)와 모양이 달라 '
           '권한 검사를 거친다 — default 모드에서는 권한 프롬프트가 한 번 표시되고 auto 모드에서는 분류기가 정한다. '
-          '셸이 있는 worktree 의 `.claude/hooks/` 는 이 훅이 실행되는 디렉터리가 아니라 막기 훅이 받지 않는다.'
+          '셸이 있는 worktree 의 `.claude/hooks/` 는 이 훅이 실행되는 디렉터리가 아니라 가드 훅이 받지 않는다.'
           ) if worktree else ''
 notes = []
 for pr, rec in got.items():

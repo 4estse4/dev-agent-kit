@@ -3,7 +3,7 @@
 # GitHub 에 쓰는 것을 막는다. 필요: python3 · git(토큰을 새로 받을 때 openssl · curl)
 #
 # **무엇을 막나.**
-# - gh 와 git 의 신원을 바꾸거나 토큰을 꺼내는 명령. 명령 글자에 `GH_CONFIG_DIR` · `GH_TOKEN` ·
+# - gh 와 git 의 신원을 바꾸거나 토큰을 꺼내는 명령. 명령 문자열에 `GH_CONFIG_DIR` · `GH_TOKEN` ·
 #   `GITHUB_TOKEN` · `GH_ENTERPRISE_TOKEN` · `GH_HOST` · `GIT_CONFIG_COUNT` · `GIT_CONFIG_KEY_N` ·
 #   `GIT_CONFIG_VALUE_N` · `GIT_CONFIG_PARAMETERS` · `credential.…helper` · `oauth_token` 이 있거나,
 #   `gh auth` 명령. `oauth_token` 은 `gh config get -h github.com oauth_token` 이 토큰 전체를 출력해서다.
@@ -19,13 +19,13 @@
 #   (`//**/…`) 작업 디렉터리 밖에 있는 worktree 세션의 봇 디렉터리도 막는다. 연결된 세션의 git 은 github.com 자격 증명을
 #   봇(gh)에게서 받으므로 `git credential fill` 이 봇 토큰 전체를 출력한다. 연결되지 않은 세션에서는 사람의
 #   토큰을 출력한다
-# - App 개인키를 가리키는 명령. 명령 글자에 `.config/<App 이름>` 이나 `<App 이름>/key.pem` 이 온전한 이름으로
+# - App 개인키를 가리키는 명령. 명령 문자열에 `.config/<App 이름>` 이나 `<App 이름>/key.pem` 이 온전한 이름으로
 #   있거나, `.config` 와 `key.pem` 이 함께 있으면(`cat ~/.config/*/key.pem` · `find ~/.config -name key.pem`)
 #   막는다. App 이름은 봇 설정에서 읽고, 앞뒤 경계는 봇 디렉터리 이름과 같다. 셋째 꼴은 App 이름 없이 판정한다.
 #   거절 사유는 해당한 꼴과, 키를 다루는 일은 사람이 터미널에서 한다는 것을 적는다. 설치되는 `settings.json` 의
 #   deny `Read(~/.config/*/key.pem)` 은 Read 도구와 `cat` 같은 파일 명령을 막고, 스크립트가 여는 경우와 파일
 #   명령으로 인식되지 않는 명령은 덮지 않는다(Claude Code 권한 문서). `cd` 뒤의 상대 경로와 glob 인자를 덮는지는
-#   문서에 없다. 명령 글자로 알아보므로 디렉터리 단위로 읽는 명령(`grep -r … ~/.config`)과 스크립트 파일 안의
+#   문서에 없다. 명령 문자열로 알아보므로 디렉터리 단위로 읽는 명령(`grep -r … ~/.config`)과 스크립트 파일 안의
 #   경로는 이 훅도 못 막는다
 # - 연결되지 않은 세션의 쓰기. 세션 시작 훅(`bot_session.sh`)이 이 세션을 봇 계정에 연결하지
 #   못했으면 그 세션의 gh 와 git 은 사람 계정이다. gh 의 읽기 명령이 아닌 것과 `git push` 를 막는다.
@@ -47,7 +47,7 @@
 # - 봇 토큰이 끝나 가는데 새로 받지 못한 뒤의 쓰기
 #
 # **사람 계정으로 올리는 명령은 모양만 본다.** 사람의 결정은 사람 계정 코멘트로 남는다. 그 길은
-# `human_comment.sh <PR>` 하나이고, 그 스크립트가 올리는 글은 창 기록 훅(`window_record.sh`)이 봇 디렉터리에
+# `human_comment.sh <PR>` 하나이고, 그 스크립트가 올리는 글은 질문 창 기록 훅(`window_record.sh`)이 봇 디렉터리에
 # 적은 기록뿐이다 — 사람이 창에서 고른 보기다. 세션은 그 기록을 읽지도 쓰지도 못하고(위의 봇 디렉터리 막음),
 # 창에서 고른 것이 게시 동의라서 권한 프롬프트를 내지 않는다. 한 줄 정규형이 아니거나, 스크립트가 이 훅과
 # 같은 디렉터리의 것이 아니거나(세션이 레포의 하위 디렉터리에서 입력한 경우도 여기 든다 — 경로를 cwd 기준으로
@@ -57,7 +57,7 @@
 # 거친다(default 모드는 권한 프롬프트, auto 모드는 분류기). worktree 로 보는 것은 git 공통 디렉터리가 같고 루트가
 # 프로젝트 루트 안이나 원래 체크아웃의 `.claude` 아래 `worktrees` 에 있는 체크아웃뿐이다.
 #
-# **창 기록 훅을 세션이 직접 실행하면 막는다.** 그 훅에 지어낸 창 결과를 표준입력으로 주면 사람이 고르지 않은
+# **질문 창 기록 훅을 세션이 직접 실행하면 막는다.** 그 훅에 지어낸 창 결과를 표준입력으로 주면 사람이 고르지 않은
 # 결정이 기록되고, 게시 스크립트는 그 기록을 권한 프롬프트 없이 사람 계정으로 올린다. 사람이 정했다 — 일부러 하는
 # 우회만이 아니라, 훅이 등록되지 않은 세션이 사람이 창에서 고른 것을 되살리려는 실수도 이 모양이다. 구문 검사
 # (`bash -n`)와 읽기는 실행이 아니라 막지 않는다. 이 훅은 cwd 가 봇 설정이 있는 레포 안일 때만 판정하므로, 레포
@@ -80,9 +80,9 @@
 # `BUDGET` 에 포함된다. 토큰 스크립트는 끊지 않는다. 끊으면(SIGKILL) `trap` 이 실행되지 않아 JWT 임시 파일이
 # 남는다.
 #
-# **무엇을 못 막나.** 명령 글자로 알아보므로, 스크립트 파일 안이나 인라인 인터프리터
+# **무엇을 못 막나.** 명령 문자열로 알아보므로, 스크립트 파일 안이나 인라인 인터프리터
 # (`python3 -c` 등) 안의 호출은 못 본다 — 세션이 봇 연결을 지우는 스크립트를 새로 써서 실행하면 사람
-# 계정으로 올라간다. 명령 글자에 위 낱말이 있으면 검색이나 커밋 메시지도 막힌다 — 그 글자를 파일로
+# 계정으로 올라간다. 명령 문자열에 위 낱말이 있으면 검색이나 커밋 메시지도 막힌다 — 그 글자를 파일로
 # 옮겨 전달한다. 이 훅은 형식대로 입력한 명령의 실수를 막고, 일부러 하는 우회는 막으려 하지 않는다. 일부러
 # 하는 우회를 막는 것은 CI 와 브랜치 보호다.
 input=$(cat)
@@ -355,7 +355,7 @@ HUMAN_CANON = "`bash .claude/hooks/human_comment.sh <PR 번호> [-R <owner/repo>
 def human_comment():
     """사람 계정으로 올리는 명령이 한 줄 정규형이고 이 훅과 같은 디렉터리의 스크립트인지 본다.
 
-    그 스크립트가 올리는 글은 창 기록 훅(`window_record.sh`)이 적은 기록뿐이다 — 사람이 창에서 고른 보기로
+    그 스크립트가 올리는 글은 질문 창 기록 훅(`window_record.sh`)이 적은 기록뿐이다 — 사람이 창에서 고른 보기로
     만든 줄이고, 세션은 그 기록을 읽지도 쓰지도 못한다. 창에서 고른 것이 게시 동의라서 권한 프롬프트를 내지
     않는다. 다른 명령과 이으면 무엇이 실행되는지 이 훅이 다 알지 못하므로 한 줄 정규형만 받는다."""
     line = cmd.strip()
@@ -428,7 +428,7 @@ try:
     app = str(json.load(open(os.path.join(top.stdout.strip(), '.claude', 'bot.json'), encoding='utf-8'))['app'])
 except (OSError, ValueError, KeyError, TypeError):
     app = ''
-# 셋째 꼴은 App 이름이 필요 없다 — 봇 설정에 App 이름이 없거나 깨져도 판정한다.
+# 셋째 꼴은 App 이름이 필요 없다 — 봇 설정에 App 이름이 없거나 봇 설정을 읽지 못해도 판정한다.
 keyhits = []
 if re.match(r'^[A-Za-z0-9-]+$', app):
     if re.search(r'\.config/' + re.escape(app) + r'(?![\w-])', cmd):
@@ -447,8 +447,8 @@ if any(clears_env(s) for s in segs):
          "막는다. 그 뒤의 gh 와 git 은 봇 계정 연결을 잃고 사람 계정으로 쓴다. 사람 계정으로 올릴 결정은 "
          "human_comment.sh 로 올린다.")
 if any(runs(s, 'window_record.sh') or wraps(s, 'window_record.sh') for s in segs):
-    deny("창 기록 훅(window_record.sh)은 Claude Code 가 질문 창이 끝날 때 실행한다. 세션이 직접 실행하면 사람이 "
-         "고르지 않은 결정이 기록돼 사람 계정으로 올라가므로 막는다. 창 뒤에 창 기록 훅의 안내가 오지 않았으면 "
+    deny("질문 창 기록 훅(window_record.sh)은 Claude Code 가 질문 창이 끝날 때 실행한다. 세션이 직접 실행하면 사람이 "
+         "고르지 않은 결정이 기록돼 사람 계정으로 올라가므로 막는다. 창 뒤에 질문 창 기록 훅의 안내가 오지 않았으면 "
          "open-pr 3.5 대로 한다 — 질문의 게시 표지가 글자 그대로가 아니면 고쳐 같은 창을 다시 띄우고, 표지가 "
          "맞으면 훅이 실행되지 않은 것이라 PR 링크와 쓸 글을 적어 PR 웹에 써 달라고 요청한다.")
 if any(runs(s, 'review_record.sh') or wraps(s, 'review_record.sh') for s in segs):
@@ -462,7 +462,7 @@ if any(runs(s, 'human_comment.sh') for s in segs):
     human_comment()
 
 # 판정 스크립트(`merge-pr` 2절)와 「다음 일」 목록 스크립트(`merge-pr` 의 「다음 일」 문단)는 안에서 gh 를 부른다.
-# 명령 글자에 gh 가 없어도 토큰이 살아 있어야 한다 — 오래 쉰 세션에서는 목록 스크립트가 첫 조회일 수 있다.
+# 명령 문자열에 gh 가 없어도 토큰이 살아 있어야 한다 — 오래 쉰 세션에서는 목록 스크립트가 첫 조회일 수 있다.
 remote = any(s in GIT_REMOTE for s in git_subs) or any(runs(s, n) for s in segs
                                                         for n in ('human_review.sh', 'backlog.sh'))
 if not gh_calls and not remote:
@@ -549,7 +549,7 @@ def session_run(prog, *a):
              os.path.join(botdir, 'session-env'), prog, *a], cwd=cwd, capture_output=True, text=True,
             timeout=START + BUDGET - time.monotonic())
     except subprocess.TimeoutExpired:
-        deny("막기 훅이 실행된 지 %d초가 지나도 `%s` 이 끝나지 않아 막았다. GitHub 이 응답하지 않는 것 같으니 잠시 "
+        deny("가드 훅이 실행된 지 %d초가 지나도 `%s` 이 끝나지 않아 막았다. GitHub 이 응답하지 않는 것 같으니 잠시 "
              "뒤 다시 실행한다." % (BUDGET, ' '.join((prog,) + a)))
 
 
@@ -702,7 +702,7 @@ for a in git_calls:
         continue
     urls = push_urls(a)
     if not urls:
-        deny("이 푸시의 주소를 풀지 못해 막는다. 막기 훅은 푸시 주소가 github.com 의 SSH 주소가 아닌지, "
+        deny("이 푸시의 주소를 풀지 못해 막는다. 가드 훅은 푸시 주소가 github.com 의 SSH 주소가 아닌지, "
              "곧 사람 계정으로 푸시하지 않는지 확인한 뒤에 푸시를 통과시킨다. 원격 이름이나 URL 을 적어 다시 "
              "실행한다.")
     for u in urls:

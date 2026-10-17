@@ -61,7 +61,7 @@ run "$T/multi.part" $'echo one\necho two'
 grep -qxF '$ echo one' "$T/multi.part" 2>/dev/null && grep -qxF '> echo two' "$T/multi.part" \
   && grep -qx 'two' "$T/multi.part" && ok "여러 줄 명령" || bad "여러 줄 명령"
 
-# ── 출력에 ``` 가 들어도 블록이 안 깨진다 ──
+# ── 출력에 ``` 가 들어도 블록이 중간에 닫히지 않는다 ──
 run "$T/fence.part" "printf '%s\\n' 'a' '\`\`\`' 'b'"
 open=$(head -1 "$T/fence.part" 2>/dev/null); close=$(tail -1 "$T/fence.part" 2>/dev/null)
 [ "$open" = "$close" ] && [ "${#open}" -gt 3 ] && grep -qxF '```' "$T/fence.part" \
