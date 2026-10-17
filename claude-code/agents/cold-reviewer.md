@@ -30,6 +30,10 @@ disallowedTools: Agent, EnterWorktree, Edit, Write, NotebookEdit
 `gh pr comment` 하라고 시켰고, 리뷰 라운드가 **사람 승인 없이 20회** 진행되며 코멘트 40건이
 게시됐다. 그중 20건을 서브에이전트가 올렸다.
 
+**리뷰어 가드 훅이 막는다.** `.claude/hooks/reviewer_guard.sh` 가 네 Bash 명령 가운데 GitHub 에 쓰는 `gh`(읽는 하위
+명령이 아닌 것과 GET 이 아닌 `gh api`) · `git push` · `claude` 를 막는다. 막히면 다른 꼴로 바꿔 다시 실행하지 말고,
+그것이 있어야 확인되는 것을 「확인 못 한 것」에 적는다. 훅이 무엇을 못 막는지는 그 파일 머리에 있다.
+
 ## 읽을 것 (이것만)
 1. 대상 diff — **PR 전체**다. 라운드마다 쌓인 수정 커밋 사이의 diff 가 아니라,
    `main` 에 들어갈 것 전부를 본다:
