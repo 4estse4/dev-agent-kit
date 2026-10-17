@@ -68,6 +68,14 @@ run 통과 cold-reviewer 'bash tests/post-length.sh'
 run 통과 cold-reviewer $'cat > /tmp/s.sh <<\'EOF\'\ngit push origin HEAD\ngh pr comment 7 -b "x\nEOF\nbash -n /tmp/s.sh'
 run 통과 cold-reviewer $'cat > /tmp/s.sh <<-EOF\n\tclaude -p x\n\tEOF'
 run 막힘 cold-reviewer $'cat > /tmp/s.sh <<EOF\nx\nEOF\ngh pr comment 7 -b x'
+# 셸이 heredoc 을 받으면 본문이 그대로 실행된다 — 본문도 명령으로 본다(사람이 PR 을 열기 전에 짚었다)
+run 막힘 cold-reviewer $'bash <<\'EOF\'\ngh pr comment 1 --body x\nEOF'
+run 막힘 cold-reviewer $'sh <<\'EOF\'\ngit push origin HEAD\nEOF'
+run 막힘 cold-reviewer $'cat <<\'EOF\' | bash\ngh pr comment 1 -b x\nEOF'
+run 막힘 cold-reviewer $'/bin/zsh -s <<-EOF\n\tclaude -p x\n\tEOF'
+run 막힘 cold-reviewer $'cd /tmp && bash <<EOF\ngh issue comment 1 -b x\nEOF'
+run 통과 cold-reviewer $'bash <<\'EOF\'\ngh pr view 1 --json title\ngit -C /tmp/r log -1\nEOF'
+run 통과 cold-reviewer $'bash -n /tmp/a.sh; cat > /tmp/s.sh <<\'EOF\'\ngh pr comment 1 -b x\nEOF'
 
 # 메인 세션과 다른 에이전트는 이 가드가 보지 않는다
 run 통과 '' 'gh pr comment 7 --body-file /tmp/x.md'

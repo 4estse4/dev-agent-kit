@@ -15,15 +15,18 @@
 # - `claude`(경로를 붙인 것 포함)
 # 명령 앞의 변수 대입(`FOO=1`)과 `env` · `command` · `exec` · `nohup` · `time` · `timeout <시간>` 은 건너뛰고 본다.
 #
-# **heredoc 의 본문은 보지 않는다.** 리뷰어는 `Write` 를 못 써서 스크래치 스크립트를 heredoc 으로 쓴다. 본문은 실행되는
-# 명령이 아니다. 그 스크립트를 실행하면 이 훅은 안을 보지 않는다(아래).
+# **heredoc 의 본문은 셸이 받을 때만 명령으로 본다.** 리뷰어는 `Write` 를 못 써서 스크래치 스크립트를 heredoc 으로
+# 쓴다(`cat > 파일 <<EOF`). 그 본문은 실행되는 명령이 아니라 보지 않고, 그 스크립트를 실행하면 이 훅은 안을 보지 않는다
+# (아래). heredoc 을 받는 명령이나 같은 줄의 파이프 뒤 명령이 셸(`bash` · `sh` · `zsh` · `dash` · `ksh`, 경로를 붙인 것
+# 포함)이면 본문이 그대로 실행되므로 본문 줄도 명령으로 본다(`bash <<'EOF'` · `cat <<'EOF' | bash`). 한때 본문을 늘
+# 보지 않아 그 두 꼴로 준 게시 명령이 통과했고, 사람이 PR 을 열기 전에 짚었다.
 #
 # **판정 못 하면 막는다.** 훅 입력을 못 읽음 · 따옴표가 닫히지 않아 명령을 나누지 못함.
 #
 # **무엇을 못 막나.** 형식대로 입력한 명령의 실수를 막는다. 명령 이름을 꾸민 것(변수 · 별칭 · 낱말 안의 따옴표나 `\`),
-# 스크립트 파일 안의 명령, `bash -c` · `eval` 안의 명령, 인라인 인터프리터가 실행하는 명령은 못 막는다. 부른 세션의
-# 체크아웃에서 ref 를 바꾸는 명령(`git fetch` · `checkout` · `commit`)은 보지 않는다 — 명령이 어느 레포를 가리키는지
-# 가리려면 `cd` · `-C` 를 풀어야 한다. 그 길은 정의의 「실험할 자리」 절이 막는다.
+# 스크립트 파일 안의 명령, `bash -c` · `eval` 안의 명령, 셸에 here-string(`<<<`)으로 준 명령, 인라인 인터프리터가 실행하는
+# 명령은 못 막는다. 부른 세션의 체크아웃에서 ref 를 바꾸는 명령(`git fetch` · `checkout` · `commit`)은 보지 않는다 —
+# 명령이 어느 레포를 가리키는지 가리려면 `cd` · `-C` 를 풀어야 한다. 그 길은 정의의 「실험할 자리」 절이 막는다.
 input=$(cat)
 case "$input" in
   *cold-reviewer*) ;;
@@ -43,6 +46,7 @@ READ = {
     'label': {'list'},
 }
 WRAPPERS = {'env', 'command', 'exec', 'nohup', 'time'}
+SHELLS = {'bash', 'sh', 'zsh', 'dash', 'ksh'}
 CONTROL = set(';&|()\n')
 
 
@@ -61,18 +65,65 @@ if data.get('agent_type') != 'cold-reviewer':
 cmd = (data.get('tool_input') or {}).get('command') or ''
 
 
+def head(words):
+    """명령 앞의 변수 대입과 감싸는 명령(env · timeout <시간> 등)을 건너뛴 낱말들."""
+    w = list(words)
+    while w and re.match(r'[A-Za-z_][A-Za-z0-9_]*=', w[0]):
+        w.pop(0)
+    while w and (w[0] in WRAPPERS or w[0] == 'timeout'):
+        name = w.pop(0)
+        while w and (w[0].startswith('-') or re.match(r'[A-Za-z_][A-Za-z0-9_]*=', w[0])):
+            w.pop(0)
+        if name == 'timeout' and w:
+            w.pop(0)              # 시간
+    return w
+
+
+def feeds_shell(line):
+    """heredoc 을 여는 줄에서, heredoc 을 받는 명령이나 같은 파이프의 그 뒤 명령이 셸인가. 나누지 못하면 셸로 본다."""
+    lex = shlex.shlex(line, posix=True, punctuation_chars=';&|()<>')
+    lex.whitespace = ' \t\r'
+    lex.whitespace_split = True
+    try:
+        tokens = list(lex)
+    except ValueError:
+        return True
+    pipes, cmds, cur, takes = [], [], [], False
+    for t in tokens + [';']:
+        if t in ('|', '|&'):
+            cmds.append((cur, takes))
+            cur, takes = [], False
+        elif t and set(t) <= set(';&()'):
+            cmds.append((cur, takes))
+            pipes.append(cmds)
+            cmds, cur, takes = [], [], False
+        elif t.startswith('<<') and not t.startswith('<<<'):
+            takes = True
+        else:
+            cur.append(t)
+    for cmds in pipes:
+        for i, (_, took) in enumerate(cmds):
+            if took and any((head(w) or [''])[0].rsplit('/', 1)[-1] in SHELLS for w, _ in cmds[i:]):
+                return True
+    return False
+
+
 def drop_heredocs(text):
-    """heredoc 본문 줄을 뺀다. 여는 줄과 그 뒤의 명령은 남긴다."""
+    """heredoc 본문 줄을 뺀다. 여는 줄과 그 뒤의 명령은 남긴다. 셸이 받는 heredoc 은 본문이 실행되므로 남긴다."""
     out, waiting = [], []
     for line in text.split('\n'):
         if waiting:
-            tabs, word = waiting[0]
+            tabs, word, keep = waiting[0]
             if (line.lstrip('\t') if tabs else line) == word:
                 waiting.pop(0)
+            elif keep:
+                out.append(line)
             continue
         out.append(line)
-        for m in re.finditer(r'<<(-?)\s*([\'"]?)([A-Za-z_][A-Za-z0-9_]*)\2', line):
-            waiting.append((m.group(1) == '-', m.group(3)))
+        opened = list(re.finditer(r'<<(-?)\s*([\'"]?)([A-Za-z_][A-Za-z0-9_]*)\2', line))
+        keep = bool(opened) and feeds_shell(line)
+        for m in opened:
+            waiting.append((m.group(1) == '-', m.group(3), keep))
     return '\n'.join(out)
 
 
@@ -100,15 +151,7 @@ commands.append(cur)
 
 
 def why(words):
-    w = list(words)
-    while w and re.match(r'[A-Za-z_][A-Za-z0-9_]*=', w[0]):
-        w.pop(0)
-    while w and (w[0] in WRAPPERS or w[0] == 'timeout'):
-        head = w.pop(0)
-        while w and (w[0].startswith('-') or re.match(r'[A-Za-z_][A-Za-z0-9_]*=', w[0])):
-            w.pop(0)
-        if head == 'timeout' and w:
-            w.pop(0)              # 시간
+    w = head(words)
     if not w:
         return None
     name = os.path.basename(w[0])
