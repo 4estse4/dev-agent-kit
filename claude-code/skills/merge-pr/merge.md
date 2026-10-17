@@ -56,7 +56,7 @@ delete head branches」가 지우고, 4절은 머지 뒤 다음 작업을 시작
 
     bash <스킬 디렉터리>/../open-pr/drafts.sh decision
 
-출력은 그 디렉터리의 조각에 이렇게 덧붙인다:
+명령 출력은 그 디렉터리의 조각에 이렇게 덧붙인다:
 
     bash <스킬 디렉터리>/../open-pr/evidence.sh --fold "<결과 한 줄>" <디렉터리>/<NN-이름>.part <<'CMD'
     <명령>

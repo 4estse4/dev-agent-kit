@@ -78,7 +78,7 @@ echo "install: 킷   $KIT_ROOT"
 # 킷이 놓은 것인지는 install-manifest 로 가린다. dry-run 도 같은 판정을 내야 하므로 임시 트리를 만들기 전에 본다.
 # .kit/drafts 는 세서 안 된다 — 세션이 PR 본문 조각을 두는 자리라(open-pr 스킬의 drafts.sh) --agent 만 설치한 레포에도
 # 생기고, 세면 그 레포에 --hooks 를 설치할 때 멈춘다(실제로 확인함). 아래 삭제 집계처럼 레포 루트로 옮겨 상대 경로로
-# 찾는다 — -path 는 패턴이라, 절대 경로를 넣으면 레포 경로의 `[` · `*` · `?` 를 글자로 읽지 않아 조각 자리를 빼지 못했다.
+# 찾는다 — -path 는 패턴이라, 절대 경로를 넣으면 레포 경로에 `[` 가 있을 때 그 글자를 패턴으로 읽어 조각 자리를 빼지 못했다.
 if [ "$DO_HOOKS" = 1 ] && [ ! -f "$TARGET/.kit/install-manifest" ] \
    && [ -n "$(cd "$TARGET" 2>/dev/null && find .kit -path .kit/drafts -prune -o -type f -print 2>/dev/null | head -1)" ]; then
   echo "install: $TARGET/.kit 이 이미 있고 킷이 설치한 것이 아닙니다(.kit/install-manifest 없음)." >&2
