@@ -15,7 +15,7 @@ fail=0
 ok() { echo "  ✓ $1"; }
 bad() { echo "  ✗ $1"; fail=1; }
 
-mkrepo() { local d; d=$(mktemp -d)/repo; mkdir -p "$d"
+mkrepo() { local d; d=$(mktemp -d)/${1:-repo}; mkdir -p "$d"
   git init -q "$d"; git -C "$d" config user.email t@example.com; git -C "$d" config user.name T
   printf '%s' "$d"; }
 # 설치된 drafts.sh 로 조각 자리를 만들고 조각 하나를 쓴다. 조각 디렉터리를 낸다
@@ -73,6 +73,30 @@ for mode in 미리보기 실제; do
       bad "$mode: .kit/$f 가 있는데 rc=$rc · 내용=[$(cat "$k" 2>/dev/null)]"
     fi
   done
+done
+
+# 4. 레포 경로에 find 패턴 글자(`[` 등)가 있어도 판정이 조각 자리를 빼고, 다른 파일에는 그대로 발동한다.
+# 한때 판정만 절대 경로를 `-path` 패턴으로 써서, `proj[1]` 같은 경로에서 조각 자리를 빼지 못해 멈췄다(PR #246 1라운드 콜드 리뷰).
+for mode in 미리보기 실제; do
+  flag=""; [ "$mode" = 미리보기 ] && flag=--dry-run
+  R=$(mkrepo 'proj[1]'); bash "$KIT/install.sh" --agent "$R" >/dev/null 2>&1
+  if d=$(draft "$R"); then
+    out=$(bash "$KIT/install.sh" --hooks $flag "$R" 2>&1); rc=$?
+    if [ "$rc" = 0 ] && [ -f "$d/10-head.part" ] && ! printf '%s' "$out" | grep -qF '킷이 설치한 것이 아닙니다'; then
+      ok "$mode: 경로에 [1] 이 든 레포도 --agent 뒤 조각이 있을 때 --hooks 설치가 멈추지 않는다"
+    else
+      bad "$mode: 경로에 [1] 이 든 레포에서 --hooks → rc=$rc · 조각 $([ -f "$d/10-head.part" ] && echo 있음 || echo 없음)"
+    fi
+  else
+    bad "$mode: 경로에 [1] 이 든 레포에서 설치된 drafts.sh 로 조각 자리를 만들지 못했다"
+  fi
+  R=$(mkrepo 'proj[1]'); mkdir -p "$R/.kit/drafts"; echo keep > "$R/.kit/drafts/x"; echo keep > "$R/.kit/local.conf"
+  out=$(bash "$KIT/install.sh" --hooks $flag "$R" 2>&1); rc=$?
+  if [ "$rc" -ne 0 ] && [ "$(cat "$R/.kit/local.conf")" = keep ] && printf '%s' "$out" | grep -qF '킷이 설치한 것이 아닙니다'; then
+    ok "$mode: 경로에 [1] 이 든 레포도 .kit/local.conf 가 있으면 지우지 않고 멈춘다"
+  else
+    bad "$mode: 경로에 [1] 이 든 레포에서 .kit/local.conf 가 있는데 rc=$rc · 내용=[$(cat "$R/.kit/local.conf" 2>/dev/null)]"
+  fi
 done
 
 exit $fail

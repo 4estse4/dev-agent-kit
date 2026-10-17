@@ -68,7 +68,7 @@ KIT_PRUNE_DIRS=.git node_modules .venv .tox __pycache__
 
 ## `drafts/` — 세션의 PR 본문 · 코멘트 조각
 
-Claude Code 세션이 PR 본문과 코멘트의 조각을 두는 자리다(`.claude/skills/open-pr/drafts.sh` 가 처음 부를 때 만든다).
+Claude Code 세션이 PR 본문과 코멘트의 조각을 두는 자리다(`.claude/skills/open-pr/drafts.sh` 가 처음 불릴 때 만든다).
 그 안의 `.gitignore` 가 디렉터리 전체를 무시해 커밋되지 않고, `install.sh` 를 다시 실행해도 지우지 않는다.
 
 ## 고쳐도 된다. 대신 고친 것을 킷에도 올려라
