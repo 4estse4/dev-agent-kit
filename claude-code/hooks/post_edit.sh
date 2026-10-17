@@ -10,6 +10,12 @@ file=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty')
 [ -z "$file" ] && exit 0
 [ -f "$file" ] || exit 0
 
+# 세션이 PR 본문 · 코멘트 조각을 두는 자리(`open-pr` 스킬의 `drafts.sh`)는 포맷하지 않는다. 조각은 사람이 창에서
+# 본 글자 그대로 GitHub 에 올라가야 하고, git 이 무시해 게이트도 보지 않는다. 이 줄이 없을 때 그 자리의 `.md` 를
+# ruff 는 이름을 받은 파일이라 그 자리의 `.gitignore` 로 빼지 않고 고쳤고, prettier 는 `.prettierignore` 에 `.kit/` 가
+# 없으면 고쳤다(실제로 확인함).
+case "$file" in */.kit/drafts/*) exit 0 ;; esac
+
 root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 
 # 게이트와 같은 방식으로 PATH 를 넓힌다.
