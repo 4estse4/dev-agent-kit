@@ -40,7 +40,7 @@ v3=$(git -C "$K" rev-parse --short HEAD)
 out=$(hook)
 want="dev-agent-kit: 설치된 킷이 2개 커밋 낡았습니다 — $v1 ("
 if [ "${out#"$want"}" != "$out" ] && printf '%s' "$out" | grep -qF "→ $v3 (" && printf '%s' "$out" | grep -qF "확인: $K/install.sh . --dry-run"; then
-  ok "킷 클론이 두 커밋 앞서면 설치본이 낡았다고 알린다"
+  ok "킷 클론이 두 커밋 앞서면 설치된 킷이 낡았다고 알린다"
 else bad "킷 클론이 두 커밋 앞섰는데 「${want}…→ $v3 (…」로 알리지 않았다: [$out]"; fi
 
 sed -i.bak 's/^kit_rev=.*/kit_rev=0000000/' "$R/.kit/install-manifest"

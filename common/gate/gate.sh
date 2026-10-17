@@ -52,7 +52,7 @@ done
 export GATE_LINT_ONLY
 # Claude Code 가 띄운 프로세스(세션의 Bash 도구 · 훅)에는 CLAUDE_CODE_CHILD_SESSION=1 이 있다. 그 안에서는
 # KIT_ALLOW_MISSING_TOOLS 도, GATE_STRICT 를 낮추는 것도 받지 않는다 — 세션이 스스로 붙여도 묻는 것이 없다. 권한
-# 규칙은 세션이 쓴 명령 글자에만 맞춰 보므로, 세션이 스크립트 파일 안에서 이 변수를 두면 명령 글자에 그것이 없어 규칙이
+# 규칙은 세션이 쓴 명령 문자열에만 맞춰 보므로, 세션이 스크립트 파일 안에서 이 변수를 두면 명령 문자열에 그것이 없어 규칙이
 # 보지 못한다. 사람의 터미널에는 CLAUDE_CODE_CHILD_SESSION 이 없어 이전처럼 받는다. 세션이 띄운 screen 같은 데서
 # 그것을 물려받은 터미널은 예외라, 메시지에 그 변수 이름을 적어 원인을 알 수 있게 한다.
 if [ "${CLAUDE_CODE_CHILD_SESSION:-}" = "1" ]; then

@@ -271,9 +271,9 @@ if grep -qF 'GH_REPO=4estse4/other' "$T/gh-args" && ! grep -q '^GH_REPO= ' "$T/g
   echo "  ✓ Approve: -R 을 모든 gh 호출에 GH_REPO 로 전달한다"
 else echo "  ✗ Approve: -R 을 GH_REPO 로 전달하지 않은 호출이 있다: $(cat "$T/gh-args")"; fail=1; fi
 
-echo "── 사람 계정으로 올리는 스크립트 — 창 기록 훅이 적은 기록만 올린다"
+echo "── 사람 계정으로 올리는 스크립트 — 질문 창 기록 훅이 적은 기록만 올린다"
 WIN="$T/bot/.git/kit-bot/windows"
-# rec <줄…> — PR 89 의 기록 하나를 더한다(창 기록 훅이 쓰는 모양). FREE 가 있으면 그 머리말을 직접 쓴 말로 표시한다
+# rec <줄…> — PR 89 의 기록 하나를 더한다(질문 창 기록 훅이 쓰는 모양). FREE 가 있으면 그 머리말을 직접 쓴 말로 표시한다
 rec() {
   mkdir -p "$WIN"
   python3 -c 'import json, os, sys
@@ -301,7 +301,7 @@ if grep -q "^GH_REPO= GH_CONFIG_DIR= GH_TOKEN= pr comment 89 --body-file " "$T/g
 else echo "  ✗ 올리기: 봇 연결을 지우지 않았거나 명령이 다르다: $(cat "$T/gh-args")"; fail=1; fi
 post "올린 기록은 다시 올리지 않는다" 1
 no_gh "올릴 것이 없으면 gh 를 부르지 않는다"
-# 기록이 아예 없을 때(창 기록 훅이 실행되지 않았다)와 모두 올렸을 때를 세션이 다르게 다뤄야 한다
+# 기록이 아예 없을 때(질문 창 기록 훅이 실행되지 않았다)와 모두 올렸을 때를 세션이 다르게 다뤄야 한다
 case "$OUT" in *'모두 올렸다'*) echo "  ✓ 올리기: 모두 올린 뒤에는 모두 올렸다고 알린다" ;;
   *) echo "  ✗ 올리기: 모두 올린 뒤인데 그렇게 알리지 않았다: $OUT"; fail=1 ;; esac
 rec '- 3라운드 코멘트: 고치지 않고 멈춘다'

@@ -5,7 +5,7 @@
 #     bash .claude/hooks/bot_token.sh
 #
 # 성공하면 봇 디렉터리의 경로를 한 줄 출력하고 0 으로 끝낸다. 실패하면 무엇을 어디서 고칠지
-# 출력하고 1 로 끝낸다. 세션 시작 훅(`bot_session.sh`)과 gh 명령 막기 훅(`bot_guard.sh`)이 부른다.
+# 출력하고 1 로 끝낸다. 세션 시작 훅(`bot_session.sh`)과 gh 명령 가드 훅(`bot_guard.sh`)이 부른다.
 #
 # **봇 설정.** `{"app_id": <App ID>, "app": "<App 이름>"}`. 커밋한다 — 이 레포를 clone 한 사람
 # 모두의 세션이 봇 계정으로 쓰고, 사람의 결정은 사람 계정으로 남는다. 개인키는 커밋하지 않고 머신마다
@@ -60,7 +60,7 @@ trap 'rm -f "$auth"' EXIT
 printf 'Authorization: Bearer %s.%s.%s\n' "$hdr" "$pld" "$sig" > "$auth"
 
 # api <URL> [curl 인자…] — 본문 뒤 마지막 줄에 HTTP 상태를 붙여 출력한다.
-# 막기 훅이 명령 앞에서 이 스크립트를 부르므로, 네트워크가 멈춰도 한 호출이 20초를 넘지 않게 한다.
+# 가드 훅이 명령 앞에서 이 스크립트를 부르므로, 네트워크가 멈춰도 한 호출이 20초를 넘지 않게 한다.
 api() {
   local u=$1; shift
   curl -sS --max-time 20 -w '\n%{http_code}' -H 'Accept: application/vnd.github+json' -H @"$auth" \

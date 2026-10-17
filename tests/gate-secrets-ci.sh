@@ -31,7 +31,7 @@ git -C "$R0" commit -q --allow-empty -m init
 bash "$KIT/install.sh" "$R0" > "$T/install.log" 2>&1 || { echo "  ✗ 설치가 실패했다:"; tail -5 "$T/install.log" | sed 's/^/      /'; exit 1; }
 Y="$R0/.github/workflows/gates.yml"
 [ -f "$Y" ] || { echo "  ✗ $Y 가 없다 — 설치 경로가 바뀌었나"; exit 1; }
-# 설치본을 커밋해 둔다. 스텝이 `.kit/gate/secrets.sh` 를 체크아웃에서 찾는다. 훅은 끈다 — 이 테스트는
+# 설치한 파일을 커밋해 둔다. 스텝이 `.kit/gate/secrets.sh` 를 체크아웃에서 찾는다. 훅은 끈다 — 이 테스트는
 # 훅을 건너뛴 푸시를 흉내 낸다.
 git -C "$R0" add -A && git -C "$R0" -c core.hooksPath=/dev/null commit -qm install
 
@@ -60,7 +60,7 @@ ok() { echo "  ✓ $1"; }
 bad() { echo "  ✗ $1"; fail=1; }
 
 n=0
-new_case() { # 설치본을 복제해 그 경우의 레포를 만든다. 훅은 복제되지 않는다
+new_case() { # 설치한 레포를 복제해 그 경우의 레포를 만든다. 훅은 복제되지 않는다
   n=$((n + 1)); C="$T/case$n"
   git clone -q "$R0" "$C"
   git -C "$C" config user.email t@example.com; git -C "$C" config user.name T
