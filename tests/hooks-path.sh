@@ -49,7 +49,7 @@ bash "$KIT/install.sh" "$N" --agent > "$T/install-n.log" 2>&1 || { bad "--agent 
 
 H="$C/.claude/hooks/hooks_path.sh"
 if [ ! -f "$H" ]; then
-  bad "설치한 레포의 clone 에 .claude/hooks/hooks_path.sh 가 없다"
+  bad "설치한 레포의 클론에 .claude/hooks/hooks_path.sh 가 없다"
   exit 1
 fi
 ENABLE='git config core.hooksPath .kit/git-hooks'
@@ -83,7 +83,7 @@ session "$R"
 session "$N"
 [ -z "$out" ] && ok ".kit/git-hooks 가 없는 레포에서는 아무것도 출력하지 않는다" || bad ".kit/git-hooks 가 없는 레포에서 출력했다: [$out]"
 
-echo "── 에이전트 훅 — 훅이 꺼진 clone"
+echo "── 에이전트 훅 — 훅이 꺼진 클론"
 blocks "git commit 을 막는다" "$C" "$C" "git commit -qm x"
 blocks "git push 를 막는다" "$C" "$C" "git push origin main"
 pre "$C" "$C" "git commit -qm x"
@@ -135,8 +135,8 @@ blocks "while 뒤의 git push 를 막는다" "$C" "$C" "while ! git push origin 
 blocks "until 뒤의 git push 를 막는다" "$C" "$C" "until git push origin main; do sleep 1; done"
 blocks "{ 뒤의 git commit 을 막는다" "$C" "$C" '{ git commit -qm x; echo rc=$?; }'
 # 판정하는 것은 세션을 연 프로젝트의 레포다. 같은 git 공통 디렉터리를 쓰는 worktree 는 그 레포다
-passes "프로젝트 밖의 실험용 clone 에 git -C 로 커밋하는 것은 막지 않는다" "$C" "$C" "git -C $X commit -qm x"
-passes "프로젝트 밖의 실험용 clone 에서 입력한 커밋은 막지 않는다" "$C" "$X" "git commit -qm x"
+passes "프로젝트 밖의 실험용 클론에 git -C 로 커밋하는 것은 막지 않는다" "$C" "$C" "git -C $X commit -qm x"
+passes "프로젝트 밖의 실험용 클론에서 입력한 커밋은 막지 않는다" "$C" "$X" "git commit -qm x"
 git -C "$C" worktree add -q "$T/wt" -b wt-branch
 blocks "프로젝트의 worktree 에서 입력한 git commit 을 막는다" "$C" "$T/wt" "git commit -qm x"
 
@@ -146,17 +146,17 @@ passes ".kit/git-hooks 가 없는 레포의 git commit 은 막지 않는다" "$N
 
 echo "── core.hooksPath 의 값"
 git -C "$C" config core.hooksPath "$C/.kit/git-hooks"
-passes "절대 경로로 켠 clone 의 git commit 은 막지 않는다" "$C" "$C" "git commit -qm x"
+passes "절대 경로로 켠 클론의 git commit 은 막지 않는다" "$C" "$C" "git commit -qm x"
 git -C "$C" config core.hooksPath .githooks
-blocks "다른 디렉터리를 가리키는 clone 의 git commit 은 막는다" "$C" "$C" "git commit -qm x"
+blocks "다른 디렉터리를 가리키는 클론의 git commit 은 막는다" "$C" "$C" "git commit -qm x"
 git -C "$C" config core.hooksPath .kit/git-hooks
-passes "켠 clone 의 git push 는 막지 않는다" "$C" "$C" "git push origin main"
+passes "켠 클론의 git push 는 막지 않는다" "$C" "$C" "git push origin main"
 # 상대 경로는 레포 루트 기준이다. 하위 디렉터리에서 입력해야 훅이 실행된 디렉터리 기준으로 푸는 실수가 드러난다
-passes "켠 clone 의 하위 디렉터리에서 입력한 git commit 은 막지 않는다" "$C" "$C/sub" "git commit -qm x"
+passes "켠 클론의 하위 디렉터리에서 입력한 git commit 은 막지 않는다" "$C" "$C/sub" "git commit -qm x"
 
 echo "── 등록"
 for s in "$KIT/claude-code/settings.json" "$C/.claude/settings.json"; do
-  case "$s" in "$KIT"/*) name="킷의 ${s#"$KIT"/}" ;; *) name="설치한 레포의 clone 의 .claude/settings.json" ;; esac
+  case "$s" in "$KIT"/*) name="킷의 ${s#"$KIT"/}" ;; *) name="설치한 레포의 클론의 .claude/settings.json" ;; esac
   if python3 - "$s" <<'PY'
 import json, sys
 h = json.load(open(sys.argv[1]))['hooks']

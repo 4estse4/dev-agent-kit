@@ -733,14 +733,14 @@ if [ "$DO_HOOKS" = 1 ] && [ "$DRY_RUN" = 0 ]; then
   ✓ 훅을 켰습니다 (core.hooksPath → .kit/git-hooks)
 
 ── 이제 할 일 ──
-  1. .kit/ 을 커밋하세요. 커밋하지 않으면 CI 도, 이 레포를 clone 한 사람도
+  1. .kit/ 을 커밋하세요. 커밋하지 않으면 CI 도, 이 레포를 클론한 사람도
      게이트를 갖지 못합니다.
   2. docs/process/kit-guide.md 를 읽으세요. 무엇이 자동으로 실행되고, CLAUDE.md 에서
      무엇을 채워야 하고, 킷이 무엇을 안 하는지 적혀 있습니다.
 
 ── 참고 ──
-  core.hooksPath 는 git 이 clone 에 담지 않는 로컬 설정입니다(보안상 의도된 동작).
-  나중에 이 레포를 새로 clone 하는 사람은 한 줄이 필요합니다:
+  core.hooksPath 는 git 이 클론에 담지 않는 로컬 설정입니다(보안상 의도된 동작).
+  나중에 이 레포를 새로 클론하는 사람은 한 줄이 필요합니다:
 
       git config core.hooksPath .kit/git-hooks
 

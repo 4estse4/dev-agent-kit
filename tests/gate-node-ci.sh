@@ -72,7 +72,7 @@ case "$report" in
   none) bad "setup-node 를 쓰는 스텝을 하나도 찾지 못했다 — gates.yml 이 바뀌었나" ;;
   *)
     while IFS=$'\t' read -r st job msg; do
-      if [ "$st" = ok ]; then ok "$job 잡의 setup-node 는 앞에서 루트 .nvmrc 를 보고, 실패하면 잡도 실패하고, lockfile 을 루트에서만 찾지 않는다"
+      if [ "$st" = ok ]; then ok "$job 잡의 setup-node 는 앞에서 루트 .nvmrc 를 보고, 실패하면 잡도 실패하고, 락파일을 루트에서만 찾지 않는다"
       else bad "$job 잡의 setup-node:$msg"; fi
     done <<< "$report"
     ;;

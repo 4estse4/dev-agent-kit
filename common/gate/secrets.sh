@@ -25,7 +25,7 @@ ALLOWED_NAMES='(\.env\.example|\.env\.sample|\.env\.template)$'
 # .env 나 키 파일이 이름 검사를 그대로 통과한다(실제로 확인함). 두 모드 다 같은 자리다.
 if [ "$MODE" = staged ]; then
   FILES=$(git -c core.quotePath=false diff --cached --name-only --diff-filter=ACM) || {
-    echo "시크릿 스캔 오류: staged 목록을 읽지 못했습니다." >&2; exit 2; }
+    echo "시크릿 스캔 오류: 스테이지된 목록을 읽지 못했습니다." >&2; exit 2; }
 else
   # `git diff A..B` 는 두 끝점만 비교한다 — 넣었다 지운 시크릿이 안 보이는데,
   # 지우는 것이 사람이 하는 가장 흔한 복구 동작이다. 그래서 커밋 단위로 훑는다.
@@ -69,7 +69,7 @@ PATTERNS="${P_PRIVKEY}|${P_JSONKEY}|${P_AWS}|${P_GH}|${P_SLACK}|${P_GCP}|${P_OPE
 
 if [ "$MODE" = staged ]; then
   DIFF=$(git diff --cached -U0) || {
-    echo "시크릿 스캔 오류: staged diff 를 읽지 못했습니다." >&2; exit 2; }
+    echo "시크릿 스캔 오류: 스테이지된 diff 를 읽지 못했습니다." >&2; exit 2; }
 else
   DIFF=$(git log -p -U0 --diff-merges=cc --pretty=format: "$RANGE") || {
     echo "시크릿 스캔 오류: 범위 '$RANGE' diff 를 읽지 못했습니다." >&2; exit 2; }

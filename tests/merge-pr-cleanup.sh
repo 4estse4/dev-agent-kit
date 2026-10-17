@@ -54,10 +54,10 @@ s4=$(awk '/^## 4\./{s=1} /^## 5\./{s=0} s' "$SK")
 case "$v" in
   *isCrossRepository*)
     case "$s4" in
-      *isCrossRepository*) ok "2절이 isCrossRepository 를 받고 4절이 그것으로 fork PR 의 원격 삭제 여부를 정한다" ;;
+      *isCrossRepository*) ok "2절이 isCrossRepository 를 받고 4절이 그것으로 포크 PR 의 원격 삭제 여부를 정한다" ;;
       *) bad "2절은 isCrossRepository 를 받지만 4절이 그것을 쓰지 않는다" ;;
     esac ;;
-  *) bad "2절의 gh pr view 가 isCrossRepository 를 받지 않는다 — fork PR 이면 base 레포의 같은 이름 브랜치를 지운다" ;;
+  *) bad "2절의 gh pr view 가 isCrossRepository 를 받지 않는다 — 포크 PR 이면 base 레포의 같은 이름 브랜치를 지운다" ;;
 esac
 
 # ── 4절: 명령 ── `## 4.` 부터 `## 5.` 앞까지, 4칸 들여쓴 줄 가운데 `$` 로 시작하지 않는 것

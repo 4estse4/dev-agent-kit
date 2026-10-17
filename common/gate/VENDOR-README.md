@@ -33,7 +33,7 @@ git config core.hooksPath .kit/git-hooks
 bash .kit/gate/gate.sh          # 변경 영역만
 bash .kit/gate/gate.sh --all    # 전체 (CI 와 동일)
 bash .kit/gate/trace.sh         # SPEC ↔ 추적 매트릭스 정합
-bash .kit/gate/secrets.sh       # staged 시크릿 스캔
+bash .kit/gate/secrets.sh       # 스테이지된 내용의 시크릿 스캔
 ```
 
 위 `gate.sh` 두 명령 모두 도구가 없는 검사를 실패로 처리한다. 불가피하게 건너뛰려면

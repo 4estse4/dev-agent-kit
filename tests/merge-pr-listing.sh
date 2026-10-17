@@ -63,7 +63,7 @@ gc commit -qm 'Merge base: conflict'; M_CONFLICT=$(git rev-parse HEAD)
 echo f2 > f.txt; gc commit -qam 'x: after merge'
 base 'base two (#2)' h.txt 'h1\n'
 gc merge -q --no-edit -m 'Merge base: clean' origin/main; M_CLEAN=$(git rev-parse HEAD)
-git -C "$C" fetch -q origin main 2>/dev/null   # 실행할 clone 이 받아 둔 base 는 여기까지다
+git -C "$C" fetch -q origin main 2>/dev/null   # 실행할 클론이 받아 둔 base 는 여기까지다
 BASE_SEEN=$(git rev-parse origin/main)
 base 'base three (#3)' g.txt 'g1\n'
 gc merge -q --no-commit origin/main 2>/dev/null; echo f3 > f.txt; git add f.txt
@@ -77,7 +77,7 @@ git switch -q feat/x && gc merge -q --no-edit -m 'Merge side' side
 git push -q origin feat/x 2>/dev/null
 HEAD_OID=$(git rev-parse HEAD)
 if [ "$(git -C "$C" rev-parse origin/main)" != "$BASE_SEEN" ] || git -C "$C" cat-file -e "$HEAD_OID" 2>/dev/null; then
-  bad "setup: 실행할 clone 이 base 를 둘째 커밋까지만 받고 PR 브랜치의 객체는 없어야 한다"; exit 1
+  bad "setup: 실행할 클론이 base 를 둘째 커밋까지만 받고 PR 브랜치의 객체는 없어야 한다"; exit 1
 fi
 
 sub() { # $1=스킬의 명령 $2=머지 커밋 — 자리 표시를 이 레포의 값으로 바꾼다
