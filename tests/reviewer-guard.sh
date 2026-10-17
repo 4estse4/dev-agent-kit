@@ -14,9 +14,9 @@ fail=0
 ok() { echo "  ✓ $1"; }
 bad() { echo "  ✗ $1"; fail=1; }
 
-# $1=기대(통과|막힘) $2=에이전트 종류(비우면 메인 세션) $3=명령
+# $1=기대(통과|막힘) $2=에이전트 종류(비우면 메인 세션) $3=명령 $4=출력할 이름(비우면 명령)
 run() {
-  local want=$1 kind=$2 cmd=$3 out got
+  local want=$1 kind=$2 cmd=$3 label=${4:-$3} out got
   out=$(python3 -I -c '
 import json, sys
 d = {"tool_name": "Bash", "cwd": "/tmp", "tool_input": {"command": sys.argv[2]}}
@@ -25,8 +25,8 @@ if sys.argv[1]:
     d["agent_id"] = "a1"
 print(json.dumps(d))' "$kind" "$cmd" | bash "$HOOK" 2>&1)
   if printf '%s' "$out" | grep -q '"permissionDecision": *"deny"'; then got=막힘; else got=통과; fi
-  if [ "$got" = "$want" ]; then ok "${kind:-메인} · $cmd → $got"
-  else bad "${kind:-메인} · $cmd → $got (기대 $want)"; printf '%s\n' "$out" | sed 's/^/      /'; fi
+  if [ "$got" = "$want" ]; then ok "${kind:-메인} · $label → $got"
+  else bad "${kind:-메인} · $label → $got (기대 $want)"; printf '%s\n' "$out" | sed 's/^/      /'; fi
 }
 
 # 콜드 리뷰어의 쓰기는 막힌다
@@ -148,7 +148,7 @@ run 막힘 cold-reviewer $'cat <<EOF |\ngh pr view 1\nEOF'
 run 막힘 cold-reviewer 'echo $(gh pr view 1'
 # 읽다가 예외가 나도 막는다 — 훅이 0이 아닌 코드로 끝나면 명령이 실행된다. 치환을 깊이 겹치면 파이썬의 재귀 한도에 닿는다
 deep=$(python3 -I -c 'print("echo " + "$(" * 1100 + "x" + ")" * 1100)')
-run 막힘 cold-reviewer "$deep"
+run 막힘 cold-reviewer "$deep" 'echo $( 를 1100겹 겹친 치환'
 run 통과 cold-reviewer "echo \$'\\U7fffffff'"
 # 따옴표 안의 << 는 heredoc 이 아니다 — 리뷰어가 heredoc 꼴을 검색한다
 run 통과 cold-reviewer "grep -n \"<<'EOF'\" claude-code/skills/open-pr/body.md"
